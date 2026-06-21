@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ana Sayfa | Yedi Cihan</title>
+  <meta name="description" content="Yedi Cihan Uluslararası Yardımlaşma Derneği frontend UI." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="assets/tailwind.config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+<header class="sticky top-0 z-50 text-white bg-deep backdrop-blur border-b border-white/10">
+  <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+    <a href="index.html" class="flex flex-col leading-none">
+      <span class="text-2xl font-extrabold tracking-tight">YediCihan <span class="align-top rounded bg-burgundy px-1.5 py-0.5 text-[10px] text-white">1961</span></span>
+      <span class="mt-1 text-[9px] font-medium tracking-[.22em] opacity-80">ULUSLARARASI YARDIMLAŞMA DERNEĞİ</span>
+    </a>
+    <nav class="hidden items-center gap-8 text-sm font-medium lg:flex">
+      <a href="donation.html" class="hover:text-gold">Bağış Yap</a>
+      <a href="projects.html" class="hover:text-gold">Projeler</a>
+      <a href="trust.html" class="hover:text-gold">Kurumsal</a>
+      <a href="reports.html" class="hover:text-gold">Raporlar</a>
+      <a href="bank-faq.html" class="hover:text-gold">İletişim</a>
+    </nav>
+    <div class="hidden items-center gap-4 lg:flex">
+      <span class="text-xs opacity-80">TR / AR / EN</span>
+      <a href="donation.html" class="shape-button bg-burgundy px-5 py-3 text-sm font-semibold text-white shadow-soft">Hemen Bağış Yap</a>
+    </div>
+    <button data-menu-button="#mobile-menu" class="shape-button bg-burgundy px-4 py-2 text-sm font-semibold text-white lg:hidden">Menü</button>
+  </div>
+  <div id="mobile-menu" class="mobile-menu border-t border-white/10 px-5 py-4 lg:hidden">
+    <div class="grid gap-3 text-sm font-medium">
+      <a href="donation.html">Bağış Yap</a><a href="projects.html">Projeler</a><a href="trust.html">Kurumsal</a><a href="reports.html">Raporlar</a><a href="bank-faq.html">İletişim</a>
+    </div>
+  </div>
+</header>
+<main>
+  <section class="hero-pattern text-white">
+    <div class="mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 lg:grid-cols-[1fr_.85fr] lg:px-8 lg:py-28">
+      <div>
+        <span class="shape-chip bg-burgundy px-4 py-2 text-xs font-bold">Resmi kayıtlı kamu yararına dernek</span>
+        <h1 class="mt-8 max-w-3xl text-5xl font-extrabold leading-tight lg:text-7xl">Yedi Cihan ile iyiliği güvenle ulaştırın</h1>
+        <p class="mt-6 max-w-2xl text-lg leading-8 text-ice">Acil yardım, zekat, gıda, barınma, sağlık, yetim ve kurban desteklerinizi ihtiyaç sahiplerine ulaştırın.</p>
+        <div class="mt-9 flex flex-wrap gap-4"><a href="donation.html" class="shape-button bg-burgundy px-6 py-4 font-semibold text-white">Hemen Bağış Yap</a><a href="projects.html" class="shape-button bg-white px-6 py-4 font-semibold text-deep">Projeleri İncele</a></div>
+        <div class="mt-12 grid max-w-2xl grid-cols-3 gap-4 text-sm"><div><b class="block text-lg">1961’den beri</b><span class="text-ice">Köklü iyilik mirası</span></div><div><b class="block text-lg">Kamu yararına</b><span class="text-ice">Resmi kayıtlı dernek</span></div><div><b class="block text-lg">Güvenli bağış</b><span class="text-ice">Şeffaf süreç</span></div></div>
+      </div>
+      <div class="relative">
+        <div class="shape-card-alt overflow-hidden bg-navy shadow-lift"><img src="https://scontent.fist7-1.fna.fbcdn.net/v/t39.30808-6/488181220_122176481084305260_5255618954565814911_n.jpg?stp=dst-jpg_tt6&cstp=mx2460x936&ctp=s2460x936&_nc_cat=111&ccb=1-7&_nc_sid=cc71e4&_nc_ohc=WydGqedbIgEQ7kNvwHSsX0B&_nc_oc=Adry69rbQCwFZxRFkXseN0p4kME6b4sdddjk2nc9v_mF-bp595JJNoWnkzTXnCQYF9nxM0tr4DZJXXbIfUfKwwBr&_nc_zt=23&_nc_ht=scontent.fist7-1.fna&_nc_gid=72kheFrwoPnHiFQd4MJ-nQ&_nc_ss=7b2a8&oh=00_Af8x_nsrCB1Zh0htQxtkeQGTUXtdjX2SuGX2arze7z8pOQ&oe=6A2A0AEB" alt="Yedi Cihan yardım çalışmaları" class="h-[390px] w-full object-cover" referrerpolicy="no-referrer" /></div>
+        <div class="absolute -bottom-10 left-8 right-8"><div class="shape-card bg-white p-6 shadow-lift" data-amount-group>
+  <div class="mb-5 flex items-center justify-between"><h3 class="text-xl font-bold text-deep">Hızlı Bağış</h3><div class="gold-mark"></div></div>
+  <label class="text-sm font-semibold text-muted">Bağış alanı</label>
+  <div class="mt-3 grid grid-cols-3 gap-2"><button class="shape-chip bg-burgundy px-3 py-2 text-sm font-semibold text-white">Gazze</button><button class="shape-chip border border-gray-200 px-3 py-2 text-sm font-semibold">Zekat</button><button class="shape-chip border border-gray-200 px-3 py-2 text-sm font-semibold">Gıda</button></div>
+  <label class="mt-5 block text-sm font-semibold text-muted">Tutar</label>
+  <div class="mt-3 grid grid-cols-3 gap-2"><button data-amount class="shape-chip border border-gray-200 bg-white px-3 py-2 text-sm font-semibold">250₺</button><button data-amount class="shape-chip border border-burgundy bg-burgundy px-3 py-2 text-sm font-semibold text-white">500₺</button><button data-amount class="shape-chip border border-gray-200 bg-white px-3 py-2 text-sm font-semibold">1000₺</button></div>
+  <a href="donation.html" class="shape-button mt-6 block bg-burgundy px-5 py-3 text-center font-semibold text-white">Güvenli Bağış Yap</a>
+</div></div>
+      </div>
+    </div>
+  </section>
+  <section class="mx-auto max-w-7xl px-5 py-24 lg:px-8">
+    <div class="mb-10 flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div class="gold-mark mb-4"></div><h2 class="text-4xl font-extrabold text-deep">Öne çıkan yardım alanları</h2><p class="mt-3 text-muted">Bağış alanını seçin, önerilen tutarı belirleyin ve güvenle destek olun.</p></div><a href="projects.html" class="shape-button bg-deep px-5 py-3 font-semibold text-white">Tüm projeler</a></div>
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3"><article class="project-card shape-card overflow-hidden bg-white shadow-soft">
+  <div class="relative h-64 overflow-hidden">
+    <img src="https://scontent.fist20-1.fna.fbcdn.net/v/t39.30808-6/641592449_122221741640305260_7694643118799035908_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1350&ctp=s1080x1350&_nc_cat=104&ccb=1-7&_nc_sid=127cfc&_nc_ohc=xx5Qtc40St0Q7kNvwGrokMx&_nc_oc=Adop6XQFx9UBIaCL01dkIJ1VU5hztz7YU50xfmG0o22ojr4icT3rKyTgfdsMJUPsVf1pfKyojSZG_P6LAdqadOI3&_nc_zt=23&_nc_ht=scontent.fist20-1.fna&_nc_gid=qJOYRFxm8S-AdT8rK4cfdg&_nc_ss=7b2a8&oh=00_Af9tkDINM6iV5Av-nFa4L3i914Z7vno9VHnb51y6LnOO3A&oe=6A2A11F1" alt="Gazze Acil Yardım" class="cover-img" referrerpolicy="no-referrer" />
+    <div class="image-overlay absolute inset-x-0 bottom-0 h-28"></div>
+    <span class="absolute left-5 top-5 text-xs font-bold text-white">Acil</span>
+    <div class="absolute bottom-6 left-5 right-5">
+      <div class="gold-mark mb-3"></div>
+      <h3 class="text-2xl font-extrabold leading-tight text-white">Gazze Acil Yardım</h3>
+    </div>
+  </div>
+  <div class="space-y-4 p-5">
+    <p class="text-xs font-semibold text-muted">Önerilen tutarlar</p>
+    <div data-amount-group class="grid grid-cols-3 gap-2"><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">250₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-burgundy bg-burgundy text-white">500₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">1000₺</button></div>
+    <div class="flex items-center justify-between pt-2">
+      <a href="campaign-detail.html" class="shape-button border border-gray-200 px-4 py-2 text-sm font-semibold text-navy">Detay</a>
+      <a href="donation.html" class="shape-button bg-burgundy px-5 py-2.5 text-sm font-semibold text-white">Bağış Yap</a>
+    </div>
+  </div>
+</article><article class="project-card shape-card overflow-hidden bg-white shadow-soft">
+  <div class="relative h-64 overflow-hidden">
+    <img src="https://scontent.fist20-2.fna.fbcdn.net/v/t39.30808-6/643873520_122222189720305260_7434180672795792862_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1350&ctp=s1080x1350&_nc_cat=110&ccb=1-7&_nc_sid=127cfc&_nc_ohc=aVlqiS410REQ7kNvwEnndvn&_nc_oc=AdpuEsbhU4IMCEfFBE3rH6xY0UEDeNC75Km78_DeDgRfHMO3zTVrOIQxNaD-0ftkYcRv4YpEjklikxjt1yGcNS9o&_nc_zt=23&_nc_ht=scontent.fist20-2.fna&_nc_gid=xWIOFxcJWKeUnfIMfne4hA&_nc_ss=7b2a8&oh=00_Af9dvymgIyxYBB4VCcBXkLp4ZI6ucKoEUO0o7dGmwS2KpA&oe=6A2A01E7" alt="Sudan Çadır Projesi" class="cover-img" referrerpolicy="no-referrer" />
+    <div class="image-overlay absolute inset-x-0 bottom-0 h-28"></div>
+    <span class="absolute left-5 top-5 text-xs font-bold text-white">Barınma</span>
+    <div class="absolute bottom-6 left-5 right-5">
+      <div class="gold-mark mb-3"></div>
+      <h3 class="text-2xl font-extrabold leading-tight text-white">Sudan Çadır Projesi</h3>
+    </div>
+  </div>
+  <div class="space-y-4 p-5">
+    <p class="text-xs font-semibold text-muted">Önerilen tutarlar</p>
+    <div data-amount-group class="grid grid-cols-3 gap-2"><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">1000₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-burgundy bg-burgundy text-white">2500₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">5000₺</button></div>
+    <div class="flex items-center justify-between pt-2">
+      <a href="campaign-detail.html" class="shape-button border border-gray-200 px-4 py-2 text-sm font-semibold text-navy">Detay</a>
+      <a href="donation.html" class="shape-button bg-burgundy px-5 py-2.5 text-sm font-semibold text-white">Bağış Yap</a>
+    </div>
+  </div>
+</article><article class="project-card shape-card overflow-hidden bg-white shadow-soft">
+  <div class="relative h-64 overflow-hidden">
+    <img src="https://scontent.fist7-2.fna.fbcdn.net/v/t39.30808-6/640058912_122221495952305260_5642274063703312253_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1350&ctp=s1080x1350&_nc_cat=102&ccb=1-7&_nc_sid=127cfc&_nc_ohc=wHf_ddxrQ2UQ7kNvwEFR3FM&_nc_oc=Ado3xgNfm5cCRO2dQTpV7xt46DXhRTdiW-DeNr1fbY1VkHDanTHFQuhjXZXRbKaa85ewEvI5gfpsHt5wFmfx4BNV&_nc_zt=23&_nc_ht=scontent.fist7-2.fna&_nc_gid=VT1xjS9sOvHE_9f3UELbtw&_nc_ss=7b2a8&oh=00_Af-kYSsl_DqQqZHUZKNiJPiPsJFU-sTpaKv3FOU8VbbOHA&oe=6A2A173F" alt="Zekat Bağışı" class="cover-img" referrerpolicy="no-referrer" />
+    <div class="image-overlay absolute inset-x-0 bottom-0 h-28"></div>
+    <span class="absolute left-5 top-5 text-xs font-bold text-white">Zekat</span>
+    <div class="absolute bottom-6 left-5 right-5">
+      <div class="gold-mark mb-3"></div>
+      <h3 class="text-2xl font-extrabold leading-tight text-white">Zekat Bağışı</h3>
+    </div>
+  </div>
+  <div class="space-y-4 p-5">
+    <p class="text-xs font-semibold text-muted">Önerilen tutarlar</p>
+    <div data-amount-group class="grid grid-cols-3 gap-2"><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">500₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-burgundy bg-burgundy text-white">1000₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">2500₺</button></div>
+    <div class="flex items-center justify-between pt-2">
+      <a href="campaign-detail.html" class="shape-button border border-gray-200 px-4 py-2 text-sm font-semibold text-navy">Detay</a>
+      <a href="donation.html" class="shape-button bg-burgundy px-5 py-2.5 text-sm font-semibold text-white">Bağış Yap</a>
+    </div>
+  </div>
+</article><article class="project-card shape-card overflow-hidden bg-white shadow-soft">
+  <div class="relative h-64 overflow-hidden">
+    <img src="https://scontent.fist7-2.fna.fbcdn.net/v/t39.30808-6/626945051_122219468684305260_658209799827043669_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1350&ctp=s1080x1350&_nc_cat=103&ccb=1-7&_nc_sid=127cfc&_nc_ohc=REYp1BI7TrwQ7kNvwEbbFz3&_nc_oc=AdrVSVXFhF2jTn0fYjRVptAcuYivj9CliOQW6Gmelo0uYT2F-JzHhlhI6ia5CWeW5rTgOiAUrH007bYvNo7SbNfH&_nc_zt=23&_nc_ht=scontent.fist7-2.fna&_nc_gid=rYwyi8P8QGCJjURk6fvydA&_nc_ss=7b2a8&oh=00_Af8p4ufJ5-9MAjVJA1DP3IPadoP4-eWtPFBq1sSpEqh8ig&oe=6A2A0BBF" alt="Gıda Paketi" class="cover-img" referrerpolicy="no-referrer" />
+    <div class="image-overlay absolute inset-x-0 bottom-0 h-28"></div>
+    <span class="absolute left-5 top-5 text-xs font-bold text-white">Gıda</span>
+    <div class="absolute bottom-6 left-5 right-5">
+      <div class="gold-mark mb-3"></div>
+      <h3 class="text-2xl font-extrabold leading-tight text-white">Gıda Paketi</h3>
+    </div>
+  </div>
+  <div class="space-y-4 p-5">
+    <p class="text-xs font-semibold text-muted">Önerilen tutarlar</p>
+    <div data-amount-group class="grid grid-cols-3 gap-2"><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">250₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-burgundy bg-burgundy text-white">750₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">1500₺</button></div>
+    <div class="flex items-center justify-between pt-2">
+      <a href="campaign-detail.html" class="shape-button border border-gray-200 px-4 py-2 text-sm font-semibold text-navy">Detay</a>
+      <a href="donation.html" class="shape-button bg-burgundy px-5 py-2.5 text-sm font-semibold text-white">Bağış Yap</a>
+    </div>
+  </div>
+</article><article class="project-card shape-card overflow-hidden bg-white shadow-soft">
+  <div class="relative h-64 overflow-hidden">
+    <img src="https://scontent.fist7-1.fna.fbcdn.net/v/t39.30808-6/626988294_122219468630305260_3359805357491696658_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1350&ctp=s1080x1350&_nc_cat=106&ccb=1-7&_nc_sid=127cfc&_nc_ohc=pPvNOG4QqvUQ7kNvwE1fgz7&_nc_oc=Adqw8QfIli2bjpwycMqikRchR3jfu7cXxrmOMM39ZWQFfhMjx2SDWqfgRfsYDzR24ChV4kdwAYBx8ZwmgYxqAq6q&_nc_zt=23&_nc_ht=scontent.fist7-1.fna&_nc_gid=bA_ET_Bhby-fXEYP5eHfMQ&_nc_ss=7b2a8&oh=00_Af82JMLZKWHCMf65uRfyCkqTsC1O4iDNvdc4HGhjP0ppiw&oe=6A2A0107" alt="Yetim Desteği" class="cover-img" referrerpolicy="no-referrer" />
+    <div class="image-overlay absolute inset-x-0 bottom-0 h-28"></div>
+    <span class="absolute left-5 top-5 text-xs font-bold text-white">Yetim</span>
+    <div class="absolute bottom-6 left-5 right-5">
+      <div class="gold-mark mb-3"></div>
+      <h3 class="text-2xl font-extrabold leading-tight text-white">Yetim Desteği</h3>
+    </div>
+  </div>
+  <div class="space-y-4 p-5">
+    <p class="text-xs font-semibold text-muted">Önerilen tutarlar</p>
+    <div data-amount-group class="grid grid-cols-3 gap-2"><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">300₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-burgundy bg-burgundy text-white">600₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">1200₺</button></div>
+    <div class="flex items-center justify-between pt-2">
+      <a href="campaign-detail.html" class="shape-button border border-gray-200 px-4 py-2 text-sm font-semibold text-navy">Detay</a>
+      <a href="donation.html" class="shape-button bg-burgundy px-5 py-2.5 text-sm font-semibold text-white">Bağış Yap</a>
+    </div>
+  </div>
+</article><article class="project-card shape-card overflow-hidden bg-white shadow-soft">
+  <div class="relative h-64 overflow-hidden">
+    <img src="https://scontent.fist7-2.fna.fbcdn.net/v/t39.30808-6/491709770_122178005018305260_8917116282063773344_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1350&ctp=s1080x1350&_nc_cat=102&ccb=1-7&_nc_sid=127cfc&_nc_ohc=erXuZoZ3QvUQ7kNvwGNjJcG&_nc_oc=AdqDz_bziqX8Bmy2LNryP9b2ZOGGo0c7xl8zlrgyzif6cSDg7TDFecfZXlYCIsNik5zs1HjSOF1D6HeEui9L7qxN&_nc_zt=23&_nc_ht=scontent.fist7-2.fna&_nc_gid=66YrHrCIQrnzec2mALbdVg&_nc_ss=7b2a8&oh=00_Af8SnGwnjtQEAjieXxUd7u4A6j08FA1tKMebVRMQET-Jrw&oe=6A2A18F5" alt="Sağlık Yardımı" class="cover-img" referrerpolicy="no-referrer" />
+    <div class="image-overlay absolute inset-x-0 bottom-0 h-28"></div>
+    <span class="absolute left-5 top-5 text-xs font-bold text-white">Sağlık</span>
+    <div class="absolute bottom-6 left-5 right-5">
+      <div class="gold-mark mb-3"></div>
+      <h3 class="text-2xl font-extrabold leading-tight text-white">Sağlık Yardımı</h3>
+    </div>
+  </div>
+  <div class="space-y-4 p-5">
+    <p class="text-xs font-semibold text-muted">Önerilen tutarlar</p>
+    <div data-amount-group class="grid grid-cols-3 gap-2"><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">250₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-burgundy bg-burgundy text-white">850₺</button><button data-amount class="shape-chip border px-3 py-2 text-xs font-semibold border-gray-200 bg-white text-textdark">1700₺</button></div>
+    <div class="flex items-center justify-between pt-2">
+      <a href="campaign-detail.html" class="shape-button border border-gray-200 px-4 py-2 text-sm font-semibold text-navy">Detay</a>
+      <a href="donation.html" class="shape-button bg-burgundy px-5 py-2.5 text-sm font-semibold text-white">Bağış Yap</a>
+    </div>
+  </div>
+</article></div>
+  </section>
+  <section class="bg-white py-20"><div class="mx-auto grid max-w-7xl gap-6 px-5 lg:grid-cols-4 lg:px-8"><div class="shape-card bg-offwhite p-6"><div class="gold-mark mb-5"></div><h3 class="text-xl font-bold text-deep">Güvenli ödeme</h3><p class="mt-3 text-sm leading-7 text-muted">Kart ve banka destekli bağış altyapısı.</p></div><div class="shape-card bg-offwhite p-6"><div class="gold-mark mb-5"></div><h3 class="text-xl font-bold text-deep">Şeffaf süreç</h3><p class="mt-3 text-sm leading-7 text-muted">Bağış süreci ve bilgilendirme akışı.</p></div><div class="shape-card bg-offwhite p-6"><div class="gold-mark mb-5"></div><h3 class="text-xl font-bold text-deep">Kamu yararına</h3><p class="mt-3 text-sm leading-7 text-muted">Resmi kayıtlı kamu yararına dernek vurgusu.</p></div><div class="shape-card bg-offwhite p-6"><div class="gold-mark mb-5"></div><h3 class="text-xl font-bold text-deep">Saha çalışmaları</h3><p class="mt-3 text-sm leading-7 text-muted">Saha fotoğrafları ve raporlarla görünür etki.</p></div></div></section>
+</main>
+<footer class="bg-deep text-white">
+  <div class="mx-auto grid max-w-7xl gap-10 px-5 py-14 lg:grid-cols-[1.3fr_.7fr_.7fr_.7fr_.7fr] lg:px-8">
+    <div>
+      <div class="gold-mark mb-6"></div>
+      <a href="index.html" class="flex flex-col leading-none">
+      <span class="text-2xl font-extrabold tracking-tight">YediCihan <span class="align-top rounded bg-burgundy px-1.5 py-0.5 text-[10px] text-white">1961</span></span>
+      <span class="mt-1 text-[9px] font-medium tracking-[.22em] opacity-80">ULUSLARARASI YARDIMLAŞMA DERNEĞİ</span>
+    </a>
+      <p class="mt-6 max-w-sm text-sm leading-7 text-ice">Kamu yararına dernek olarak bağış süreçlerinde güven, şeffaflık ve sorumluluk ilkeleriyle hareket ederiz.</p>
+    </div>
+    <div><h4 class="font-bold">Bağış</h4><ul class="mt-5 space-y-3 text-sm text-ice"><li><a href="donation.html">Hemen Bağış Yap</a></li><li><a href="projects.html">Projeler</a></li><li><a href="donation.html">Zekat</a></li></ul></div>
+    <div><h4 class="font-bold">Kurumsal</h4><ul class="mt-5 space-y-3 text-sm text-ice"><li><a href="trust.html">Güven</a></li><li><a href="reports.html">Raporlar</a></li><li><a href="bank-faq.html">KVKK</a></li></ul></div>
+    <div><h4 class="font-bold">Destek</h4><ul class="mt-5 space-y-3 text-sm text-ice"><li><a href="bank-faq.html">SSS</a></li><li><a href="bank-faq.html">Banka Hesapları</a></li><li><a href="bank-faq.html">İletişim</a></li></ul></div>
+    <div><h4 class="font-bold">Sosyal</h4><ul class="mt-5 space-y-3 text-sm text-ice"><li><a href="https://www.facebook.com/yedicihan">Facebook TR</a></li><li><a href="https://www.facebook.com/yedicihan.org.ar">Facebook AR</a></li><li><a href="https://yedicihan.org/">Website</a></li></ul></div>
+  </div>
+  <div class="border-t border-white/10 py-5 text-center text-xs text-ice">© 2026 Yedi Cihan. Resmi kayıtlı kamu yararına dernek.</div>
+</footer><script src="assets/app.js"></script>
+</body>
+</html>

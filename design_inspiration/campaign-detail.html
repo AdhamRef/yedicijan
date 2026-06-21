@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gazze Acil Yardım | Yedi Cihan</title>
+  <meta name="description" content="Yedi Cihan Uluslararası Yardımlaşma Derneği frontend UI." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="assets/tailwind.config.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+<header class="sticky top-0 z-50 text-white bg-deep backdrop-blur border-b border-white/10">
+  <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+    <a href="index.html" class="flex flex-col leading-none">
+      <span class="text-2xl font-extrabold tracking-tight">YediCihan <span class="align-top rounded bg-burgundy px-1.5 py-0.5 text-[10px] text-white">1961</span></span>
+      <span class="mt-1 text-[9px] font-medium tracking-[.22em] opacity-80">ULUSLARARASI YARDIMLAŞMA DERNEĞİ</span>
+    </a>
+    <nav class="hidden items-center gap-8 text-sm font-medium lg:flex">
+      <a href="donation.html" class="hover:text-gold">Bağış Yap</a>
+      <a href="projects.html" class="hover:text-gold">Projeler</a>
+      <a href="trust.html" class="hover:text-gold">Kurumsal</a>
+      <a href="reports.html" class="hover:text-gold">Raporlar</a>
+      <a href="bank-faq.html" class="hover:text-gold">İletişim</a>
+    </nav>
+    <div class="hidden items-center gap-4 lg:flex">
+      <span class="text-xs opacity-80">TR / AR / EN</span>
+      <a href="donation.html" class="shape-button bg-burgundy px-5 py-3 text-sm font-semibold text-white shadow-soft">Hemen Bağış Yap</a>
+    </div>
+    <button data-menu-button="#mobile-menu" class="shape-button bg-burgundy px-4 py-2 text-sm font-semibold text-white lg:hidden">Menü</button>
+  </div>
+  <div id="mobile-menu" class="mobile-menu border-t border-white/10 px-5 py-4 lg:hidden">
+    <div class="grid gap-3 text-sm font-medium">
+      <a href="donation.html">Bağış Yap</a><a href="projects.html">Projeler</a><a href="trust.html">Kurumsal</a><a href="reports.html">Raporlar</a><a href="bank-faq.html">İletişim</a>
+    </div>
+  </div>
+</header>
+<main>
+  <section class="hero-pattern text-white"><div class="mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 lg:grid-cols-[1fr_.85fr] lg:px-8">
+    <div><span class="shape-chip bg-burgundy px-4 py-2 text-xs font-bold">Acil Yardım</span><h1 class="mt-8 text-5xl font-extrabold leading-tight lg:text-6xl">Gazze Acil Yardım Kampanyası</h1><p class="mt-6 max-w-2xl text-lg leading-8 text-ice">Gıda, hijyen ve temel ihtiyaç desteklerini güvenle ihtiyaç sahiplerine ulaştırıyoruz.</p><div class="mt-8 flex gap-4"><a href="donation.html" class="shape-button bg-burgundy px-6 py-4 font-semibold text-white">Hemen Bağış Yap</a><a href="#process" class="shape-button bg-white px-6 py-4 font-semibold text-deep">Süreci İncele</a></div></div>
+    <div class="shape-card-alt overflow-hidden bg-navy"><img src="https://scontent.fist7-2.fna.fbcdn.net/v/t39.30808-6/491709770_122178005018305260_8917116282063773344_n.jpg?stp=dst-jpg_tt6&cstp=mx1080x1350&ctp=s1080x1350&_nc_cat=102&ccb=1-7&_nc_sid=127cfc&_nc_ohc=erXuZoZ3QvUQ7kNvwGNjJcG&_nc_oc=AdqDz_bziqX8Bmy2LNryP9b2ZOGGo0c7xl8zlrgyzif6cSDg7TDFecfZXlYCIsNik5zs1HjSOF1D6HeEui9L7qxN&_nc_zt=23&_nc_ht=scontent.fist7-2.fna&_nc_gid=66YrHrCIQrnzec2mALbdVg&_nc_ss=7b2a8&oh=00_Af8SnGwnjtQEAjieXxUd7u4A6j08FA1tKMebVRMQET-Jrw&oe=6A2A18F5" class="h-[430px] w-full object-cover" referrerpolicy="no-referrer" alt="Gazze acil yardım" /></div>
+  </div></section>
+  <section class="mx-auto grid max-w-7xl gap-10 px-5 py-20 lg:grid-cols-[1fr_420px] lg:px-8"><div><div class="gold-mark mb-5"></div><h2 class="text-4xl font-extrabold text-deep">Kampanya hakkında</h2><p class="mt-5 text-lg leading-8 text-muted">Bu kampanya, kriz bölgesindeki ailelerin temel ihtiyaçlarına destek olmak için hazırlanmıştır. Bağışınız saha ekipleri tarafından planlanan ihtiyaçlara göre ulaştırılır.</p></div><div class="shape-card bg-white p-6 shadow-lift" data-amount-group>
+  <div class="mb-5 flex items-center justify-between"><h3 class="text-xl font-bold text-deep">Hızlı Bağış</h3><div class="gold-mark"></div></div>
+  <label class="text-sm font-semibold text-muted">Bağış alanı</label>
+  <div class="mt-3 grid grid-cols-3 gap-2"><button class="shape-chip bg-burgundy px-3 py-2 text-sm font-semibold text-white">Gazze</button><button class="shape-chip border border-gray-200 px-3 py-2 text-sm font-semibold">Zekat</button><button class="shape-chip border border-gray-200 px-3 py-2 text-sm font-semibold">Gıda</button></div>
+  <label class="mt-5 block text-sm font-semibold text-muted">Tutar</label>
+  <div class="mt-3 grid grid-cols-3 gap-2"><button data-amount class="shape-chip border border-gray-200 bg-white px-3 py-2 text-sm font-semibold">250₺</button><button data-amount class="shape-chip border border-burgundy bg-burgundy px-3 py-2 text-sm font-semibold text-white">500₺</button><button data-amount class="shape-chip border border-gray-200 bg-white px-3 py-2 text-sm font-semibold">1000₺</button></div>
+  <a href="donation.html" class="shape-button mt-6 block bg-burgundy px-5 py-3 text-center font-semibold text-white">Güvenli Bağış Yap</a>
+</div></section>
+  <section id="process" class="bg-white py-20"><div class="mx-auto max-w-7xl px-5 lg:px-8"><h2 class="text-4xl font-extrabold text-deep">Yardım süreci</h2><div class="mt-10 grid gap-6 lg:grid-cols-4"><div class="shape-card bg-offwhite p-6"><span class="text-3xl font-extrabold text-burgundy">01</span><h3 class="mt-4 text-xl font-bold">Bağış alınır</h3><p class="mt-3 text-sm leading-7 text-muted">Süreç şeffaf ve takip edilebilir şekilde yürütülür.</p></div><div class="shape-card bg-offwhite p-6"><span class="text-3xl font-extrabold text-burgundy">02</span><h3 class="mt-4 text-xl font-bold">İhtiyaç planlanır</h3><p class="mt-3 text-sm leading-7 text-muted">Süreç şeffaf ve takip edilebilir şekilde yürütülür.</p></div><div class="shape-card bg-offwhite p-6"><span class="text-3xl font-extrabold text-burgundy">03</span><h3 class="mt-4 text-xl font-bold">Saha ekibi ulaştırır</h3><p class="mt-3 text-sm leading-7 text-muted">Süreç şeffaf ve takip edilebilir şekilde yürütülür.</p></div><div class="shape-card bg-offwhite p-6"><span class="text-3xl font-extrabold text-burgundy">04</span><h3 class="mt-4 text-xl font-bold">Bilgilendirme paylaşılır</h3><p class="mt-3 text-sm leading-7 text-muted">Süreç şeffaf ve takip edilebilir şekilde yürütülür.</p></div></div></div></section>
+</main>
+<footer class="bg-deep text-white">
+  <div class="mx-auto grid max-w-7xl gap-10 px-5 py-14 lg:grid-cols-[1.3fr_.7fr_.7fr_.7fr_.7fr] lg:px-8">
+    <div>
+      <div class="gold-mark mb-6"></div>
+      <a href="index.html" class="flex flex-col leading-none">
+      <span class="text-2xl font-extrabold tracking-tight">YediCihan <span class="align-top rounded bg-burgundy px-1.5 py-0.5 text-[10px] text-white">1961</span></span>
+      <span class="mt-1 text-[9px] font-medium tracking-[.22em] opacity-80">ULUSLARARASI YARDIMLAŞMA DERNEĞİ</span>
+    </a>
+      <p class="mt-6 max-w-sm text-sm leading-7 text-ice">Kamu yararına dernek olarak bağış süreçlerinde güven, şeffaflık ve sorumluluk ilkeleriyle hareket ederiz.</p>
+    </div>
+    <div><h4 class="font-bold">Bağış</h4><ul class="mt-5 space-y-3 text-sm text-ice"><li><a href="donation.html">Hemen Bağış Yap</a></li><li><a href="projects.html">Projeler</a></li><li><a href="donation.html">Zekat</a></li></ul></div>
+    <div><h4 class="font-bold">Kurumsal</h4><ul class="mt-5 space-y-3 text-sm text-ice"><li><a href="trust.html">Güven</a></li><li><a href="reports.html">Raporlar</a></li><li><a href="bank-faq.html">KVKK</a></li></ul></div>
+    <div><h4 class="font-bold">Destek</h4><ul class="mt-5 space-y-3 text-sm text-ice"><li><a href="bank-faq.html">SSS</a></li><li><a href="bank-faq.html">Banka Hesapları</a></li><li><a href="bank-faq.html">İletişim</a></li></ul></div>
+    <div><h4 class="font-bold">Sosyal</h4><ul class="mt-5 space-y-3 text-sm text-ice"><li><a href="https://www.facebook.com/yedicihan">Facebook TR</a></li><li><a href="https://www.facebook.com/yedicihan.org.ar">Facebook AR</a></li><li><a href="https://yedicihan.org/">Website</a></li></ul></div>
+  </div>
+  <div class="border-t border-white/10 py-5 text-center text-xs text-ice">© 2026 Yedi Cihan. Resmi kayıtlı kamu yararına dernek.</div>
+</footer><script src="assets/app.js"></script>
+</body>
+</html>
