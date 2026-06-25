@@ -273,19 +273,20 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
           ) : (
             /* No fixed goal (open goal / shares) — branded "ongoing support" panel
                so the body is never visually empty between the image and the buttons. */
-            <div className="flex items-center justify-between gap-3 shape-chip border border-gray-100 bg-offwhite px-3.5 py-2.5">
-              <div className="min-w-0 max-sm:flex max-sm:justify-between max-sm:items-center max-sm:w-full">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{t("raised") || "جُمع"}</p>
-                <p className="text-deep font-black leading-none mt-1 text-lg whitespace-nowrap tabular-nums">{symbol}{formatNumber(raised)}</p>
-              </div>
-              {/* Shares / open-goal label — hidden on small screens to keep cards compact */}
-              <span className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-burgundy/[0.07] px-3 py-1.5 text-[11px] font-bold text-burgundy">
-                <Heart className="w-3.5 h-3.5 fill-burgundy/30" />
-                {campaign.fundraisingMode === "SHARES"
-                  ? resolveSharePlural(campaign.shareLabels ?? null, locale) ?? t("sharesCampaignLabel")
-                  : t("openGoalLabel")}
-              </span>
-            </div>
+            // <div className="flex items-center justify-between gap-3 shape-chip border border-gray-100 bg-offwhite px-3.5 py-2.5">
+            //   <div className="min-w-0 max-sm:flex max-sm:justify-between max-sm:items-center max-sm:w-full">
+            //     <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{t("raised") || "جُمع"}</p>
+            //     <p className="text-deep font-black leading-none mt-1 text-lg whitespace-nowrap tabular-nums">{symbol}{formatNumber(raised)}</p>
+            //   </div>
+            //   {/* Shares / open-goal label — hidden on small screens to keep cards compact */}
+            //   <span className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-burgundy/[0.07] px-3 py-1.5 text-[11px] font-bold text-burgundy">
+            //     <Heart className="w-3.5 h-3.5 fill-burgundy/30" />
+            //     {campaign.fundraisingMode === "SHARES"
+            //       ? resolveSharePlural(campaign.shareLabels ?? null, locale) ?? t("sharesCampaignLabel")
+            //       : t("openGoalLabel")}
+            //   </span>
+            // </div>
+            <></>
           )}
 
           {/* Action row — Detail + Donate, with cart secondary (design: Detay / Bağış Yap).
