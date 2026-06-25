@@ -474,6 +474,23 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
 
                 {/* Tab content */}
                 <div className="p-5 sm:p-7">
+                  {/* Section header — reflects the active tab */}
+                  {(() => {
+                    const meta = tabs.find((tb) => tb.id === activeTab);
+                    if (!meta) return null;
+                    const SectionIcon = meta.icon;
+                    return (
+                      <div className="mb-6 flex items-center gap-3">
+                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-burgundy/10 text-burgundy">
+                          <SectionIcon className="w-[18px] h-[18px]" />
+                        </span>
+                        <div>
+                          <h2 className="text-base sm:text-lg font-extrabold text-deep leading-none">{t(meta.labelKey)}</h2>
+                          <div className="gold-mark-sm mt-2" />
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <AnimatePresence mode="wait">
 
                     {/* Description */}
@@ -496,9 +513,11 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                             } catch {}
                           }
                           return (
-                            <p className="text-gray-700 text-sm sm:text-base leading-relaxed sm:leading-loose whitespace-pre-line">
-                              {desc}
-                            </p>
+                            <div className="relative ps-5 border-s-[3px] border-gold/50">
+                              <p className="text-gray-700 text-sm sm:text-base leading-relaxed sm:leading-loose whitespace-pre-line">
+                                {desc}
+                              </p>
+                            </div>
                           );
                         })()}
                       </motion.div>
@@ -506,13 +525,13 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
 
                     {/* Updates */}
                     {activeTab === "updates" && (
-                      <motion.div key="updates" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-5">
+                      <motion.div key="updates" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-3.5">
                         {campaign.updates?.length > 0 ? campaign.updates.map((update, i) => (
                           <motion.div key={update.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
-                            className="flex gap-4 pb-5 border-b border-gray-100 last:border-0 last:pb-0">
+                            className="flex gap-4 p-4 rounded-2xl bg-offwhite/60 border border-gray-100 hover:border-burgundy/20 transition-colors">
                             <div className="flex-shrink-0">
-                              <div className="w-9 h-9 rounded-full bg-[#A5243D]/10 flex items-center justify-center">
-                                <Bell className="w-4 h-4 text-[#A5243D]" />
+                              <div className="w-9 h-9 rounded-full bg-burgundy/10 flex items-center justify-center ring-4 ring-burgundy/5">
+                                <Bell className="w-4 h-4 text-burgundy" />
                               </div>
                             </div>
                             <div className="flex-1 min-w-0">
@@ -663,19 +682,23 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                       <motion.div key="info" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-6">
                         {/* Stats grid */}
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-[#A5243D]/6 rounded-xl p-4 flex flex-col gap-1">
-                            <div className="flex items-center gap-1.5 text-[#A5243D] mb-1">
-                              <Users className="w-4 h-4" />
-                              <span className="text-xs font-semibold uppercase tracking-wide">{t("donor")}</span>
+                          <div className="relative overflow-hidden rounded-2xl border border-burgundy/10 bg-gradient-to-br from-burgundy/[0.07] to-burgundy/[0.02] p-4 flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-burgundy/10 text-burgundy">
+                                <Users className="w-4 h-4" />
+                              </span>
+                              <span className="text-[11px] font-bold uppercase tracking-wide text-burgundy">{t("donor")}</span>
                             </div>
-                            <span className="text-2xl sm:text-3xl font-extrabold text-gray-900">{campaign.donationCount.toLocaleString()}</span>
+                            <span className="text-2xl sm:text-3xl font-extrabold text-deep tabular-nums">{campaign.donationCount.toLocaleString()}</span>
                           </div>
-                          <div className="bg-[#A5243D]/6 rounded-xl p-4 flex flex-col gap-1">
-                            <div className="flex items-center gap-1.5 text-[#D8AA55] mb-1">
-                              <TrendingUp className="w-4 h-4" />
-                              <span className="text-xs font-semibold uppercase tracking-wide">{t("completed")}</span>
+                          <div className="relative overflow-hidden rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/[0.12] to-gold/[0.03] p-4 flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gold/20" style={{ color: "#9a7727" }}>
+                                <TrendingUp className="w-4 h-4" />
+                              </span>
+                              <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "#9a7727" }}>{t("completed")}</span>
                             </div>
-                            <span className="text-2xl sm:text-3xl font-extrabold text-gray-900">{campaign.progress.toFixed(0)}%</span>
+                            <span className="text-2xl sm:text-3xl font-extrabold text-deep tabular-nums">{campaign.progress.toFixed(0)}%</span>
                           </div>
                         </div>
 
