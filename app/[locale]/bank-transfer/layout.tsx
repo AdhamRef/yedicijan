@@ -3,7 +3,7 @@ import { buildPageMetadata, LOCALE_SEO, type Locale } from "@/lib/seo";
 
 const BANK_TRANSFER_SEO: Record<Locale, { title: string; description: string }> = {
   ar: {
-    title: "التبرع عبر التحويل البنكي | جمعية يدي چيهان للإغاثة والتكافل",
+    title: "التبرع عبر التحويل البنكي | جمعية يدي چيهان",
     description: "اطّلع على حسابات جمعية يدي چيهان البنكية وتبرع بأمان عبر التحويل البنكي لدعم المشاريع الإنسانية والطبية والتعليمية.",
   },
   en: {

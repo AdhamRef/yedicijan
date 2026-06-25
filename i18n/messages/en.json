@@ -424,7 +424,17 @@
     "home": "Home",
     "heroDescription": "Support meaningful causes and make a lasting difference in people's lives.",
     "resultsFound": "projects found",
-    "featuredBadge": "Urgent Project"
+    "featuredBadge": "Urgent Project",
+    "categoryHubTitle": "Category & project hub",
+    "categoryHubSubtitle": "Active projects · quick donation",
+    "publicBenefitAssociation": "Public benefit association",
+    "categoriesLabel": "Categories",
+    "filterTitle": "Filter",
+    "searchLabel": "Search",
+    "applyFilters": "Apply filters",
+    "ctaTitle": "Not sure which project to support?",
+    "ctaSubtitle": "Your general donation is directed according to priority of need.",
+    "ctaButton": "Make a general donation"
   },
   "Campaign": {
     "story": "Description",

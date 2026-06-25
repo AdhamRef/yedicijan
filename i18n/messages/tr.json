@@ -424,7 +424,17 @@
     "resultsFound": "proje bulundu",
     "featuredBadge": "Acil Proje",
     "openGoalLabel": "Açık hedef",
-    "sharesCampaignLabel": "Hisse"
+    "sharesCampaignLabel": "Hisse",
+    "categoryHubTitle": "Kategori ve proje merkezi",
+    "categoryHubSubtitle": "Aktif projeler · hızlı bağış",
+    "publicBenefitAssociation": "Kamu yararına dernek",
+    "categoriesLabel": "Kategoriler",
+    "filterTitle": "Filtrele",
+    "searchLabel": "Arama",
+    "applyFilters": "Filtreleri uygula",
+    "ctaTitle": "Hangi projeye destek olacağınızdan emin değil misiniz?",
+    "ctaSubtitle": "Genel bağışınız ihtiyaç önceliğine göre yönlendirilir.",
+    "ctaButton": "Genel Bağış Yap"
   },
   "Campaign": {
     "story": "Açıklama",

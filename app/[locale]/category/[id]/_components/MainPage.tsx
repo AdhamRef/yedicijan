@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import axios from "axios";
-import { Search, HandHeart, ChevronRight, X, ArrowRight } from "lucide-react"; // Search used conditionally via SHOW_SEARCH
+import { Search, HandHeart, ChevronRight, X, ArrowRight } from "lucide-react";
 import { Link } from "@/i18n/routing";
 import CampaignCard from "@/app/[locale]/_components/CampaignCard";
 import { useLocale, useTranslations } from "next-intl";
@@ -31,7 +31,6 @@ interface Category {
   image: string;
 }
 
-const SHOW_SEARCH = false;
 const FALLBACK_IMAGE = "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg";
 
 const MainPage = ({ id, locale: localeProp }: { id: string; locale?: string }) => {
@@ -157,95 +156,111 @@ const MainPage = ({ id, locale: localeProp }: { id: string; locale?: string }) =
         </div>
       </section>
 
-      {/* ── Search bar — floats between hero and grid ── */}
-      {SHOW_SEARCH && (
-        <div className="relative z-30 max-w-2xl mx-auto px-4 -mt-6">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-2 flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 ${isRTL ? "right-3" : "left-3"}`} />
-              <input
-                type="text"
-                placeholder={t("searchPlaceholder") || "Search campaigns..."}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full ${isRTL ? "pr-9 pl-3" : "pl-9 pr-3"} py-2.5 rounded-xl text-sm text-gray-800 bg-gray-50 outline-none focus:bg-white transition-colors`}
-              />
+      {/* ── Sidebar + Grid ── */}
+      <section className="max-w-7xl mx-auto px-4 lg:px-8 py-10 grid gap-8 lg:gap-10 md:grid-cols-[260px_1fr]">
+        {/* Filter sidebar — search is the only available filter for a single category */}
+        <aside className="h-fit md:sticky md:top-24">
+          <div className="shape-card bg-white p-6 shadow-soft">
+            <div className="shape-chip w-fit bg-burgundy px-6 py-3 text-sm font-extrabold text-white">
+              {t("filterTitle")}
+            </div>
+            <div className="mt-6 space-y-7">
+              <div>
+                <label className="mb-3 block text-sm font-extrabold text-deep">{t("searchLabel")}</label>
+                <div className="relative">
+                  <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 ${isRTL ? "right-3" : "left-3"}`} />
+                  <input
+                    type="search"
+                    placeholder={t("searchPlaceholder") || "Search campaigns..."}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className={`h-11 w-full ${isRTL ? "pr-9 pl-3" : "pl-9 pr-3"} rounded-lg border border-gray-200 text-sm text-ink outline-none transition focus:border-burgundy focus:ring-2 focus:ring-burgundy/10`}
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => setSearchQuery("")}
+                disabled={!searchQuery}
+                className="shape-chip w-full bg-offwhite py-3 text-sm font-extrabold text-deep border border-gray-200 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                {t("resetFilters") || "Reset"}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Results column */}
+        <div>
+          <div className="mb-8">
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-deep">{category.name}</h2>
+            {filteredCampaigns.length > 0 && (
+              <p className="mt-2 text-sm font-medium text-gray-500">
+                <span className="font-semibold text-gray-800">{filteredCampaigns.length}</span>{" "}
+                {t("resultsFound") || "projects found"}
+              </p>
+            )}
+          </div>
+
+          {filteredCampaigns.length === 0 && !isLoadingMore ? (
+            <div className="text-center py-20">
+              <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                <HandHeart className="w-9 h-9 text-gray-300" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-700 mb-1">
+                {searchQuery ? t("noResults") : t("noCampaigns")}
+              </h3>
+              <p className="text-gray-400 text-sm">
+                {searchQuery ? t("tryDifferentSearch") : t("checkBackLater")}
+              </p>
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className={`absolute top-1/2 -translate-y-1/2 ${isRTL ? "left-3" : "right-3"} text-gray-400 hover:text-gray-600`}
+                  className="mt-4 text-burgundy text-sm font-semibold hover:underline"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  {t("clearSearch") || "Clear search"}
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Campaign Grid ── */}
-      <section className={`max-w-7xl mx-auto px-4 ${SHOW_SEARCH ? "py-10" : "pt-6 pb-10"}`}>
-        {/* Results count */}
-        {filteredCampaigns.length > 0 && (
-          <div className="flex items-center justify-between mb-6">
-            <p className="text-sm text-gray-500">
-              <span className="font-semibold text-gray-800">{filteredCampaigns.length}</span>{" "}
-              {t("resultsFound") || "campaigns found"}
-            </p>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="flex items-center gap-1 text-xs text-[#D8AA55] font-semibold hover:underline"
-              >
-                <X className="w-3 h-3" /> {t("clearSearch") || "Clear search"}
-              </button>
-            )}
-          </div>
-        )}
-
-        {filteredCampaigns.length === 0 && !isLoadingMore ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <HandHeart className="w-9 h-9 text-gray-300" />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filteredCampaigns.map((campaign) => (
+                <CampaignCard key={campaign.id} campaign={campaign} />
+              ))}
+              {isLoadingMore && Array.from({ length: 3 }).map((_, i) => (
+                <CardSkeleton key={`more-${i}`} />
+              ))}
             </div>
-            <h3 className="text-lg font-bold text-gray-700 mb-1">
-              {searchQuery ? t("noResults") : t("noCampaigns")}
-            </h3>
-            <p className="text-gray-400 text-sm">
-              {searchQuery ? t("tryDifferentSearch") : t("checkBackLater")}
-            </p>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="mt-4 text-[#A5243D] text-sm font-semibold hover:underline"
-              >
-                {t("clearSearch") || "Clear search"}
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredCampaigns.map((campaign) => (
-              <CampaignCard key={campaign.id} campaign={campaign} />
-            ))}
-            {isLoadingMore && Array.from({ length: 3 }).map((_, i) => (
-              <CardSkeleton key={`more-${i}`} />
-            ))}
-          </div>
-        )}
+          )}
 
-        {/* Load more */}
-        {hasMore && !isLoadingMore && filteredCampaigns.length > 0 && (
-          <div className="text-center mt-12">
-            <button
-              onClick={() => fetchData(cursor)}
-              className="inline-flex items-center gap-2 bg-[#A5243D] hover:bg-[#7D1830] text-white font-semibold px-8 py-3 rounded-xl transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5"
-            >
-              {t("loadMore") || "Load More"}
-              <ArrowRight className="w-4 h-4" />
-            </button>
+          {/* Load more */}
+          {hasMore && !isLoadingMore && filteredCampaigns.length > 0 && (
+            <div className="text-center mt-12">
+              <button
+                onClick={() => fetchData(cursor)}
+                className="shape-button inline-flex items-center gap-2 bg-burgundy hover:bg-burgundyDark text-white font-semibold px-8 py-3 transition-all shadow-soft hover:shadow-lift hover:-translate-y-0.5"
+              >
+                {t("loadMore") || "Load More"}
+                <ArrowRight className={`w-4 h-4 ${isRTL ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── General donation CTA ── */}
+      <section className="bg-deep text-white">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="max-w-xl text-2xl sm:text-3xl font-extrabold leading-tight">{t("ctaTitle")}</h2>
+            <p className="mt-2 text-sm font-medium text-white/65">{t("ctaSubtitle")}</p>
           </div>
-        )}
+          <Link
+            href="/"
+            className="shape-button inline-flex w-fit items-center justify-center bg-burgundy hover:bg-burgundyDark px-10 py-4 text-sm font-extrabold text-white transition-colors"
+          >
+            {t("ctaButton")}
+          </Link>
+        </div>
       </section>
     </main>
   );
@@ -284,13 +299,12 @@ const LoadingSkeleton = () => (
         <div className="h-3 w-48 bg-white/15 rounded animate-pulse" />
       </div>
     </div>
-    {/* Search skeleton */}
-    <div className="max-w-2xl mx-auto px-4 -mt-6 relative z-10">
-      <div className="h-14 bg-white rounded-2xl shadow-xl animate-pulse" />
-    </div>
-    {/* Grid skeleton */}
-    <div className="max-w-7xl mx-auto px-4 py-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-      {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
+    {/* Sidebar + Grid skeleton */}
+    <div className="max-w-7xl mx-auto px-4 lg:px-8 py-10 grid gap-8 lg:gap-10 md:grid-cols-[260px_1fr]">
+      <div className="h-64 bg-white shape-card shadow-soft animate-pulse" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+        {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
+      </div>
     </div>
   </div>
 );

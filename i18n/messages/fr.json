@@ -424,7 +424,17 @@
     "resultsFound": "projets trouvés",
     "featuredBadge": "Projet urgent",
     "openGoalLabel": "Objectif ouvert",
-    "sharesCampaignLabel": "Parts"
+    "sharesCampaignLabel": "Parts",
+    "categoryHubTitle": "Centre des catégories et projets",
+    "categoryHubSubtitle": "Projets actifs · don rapide",
+    "publicBenefitAssociation": "Association d'utilité publique",
+    "categoriesLabel": "Catégories",
+    "filterTitle": "Filtrer",
+    "searchLabel": "Recherche",
+    "applyFilters": "Appliquer les filtres",
+    "ctaTitle": "Vous ne savez pas quel projet soutenir ?",
+    "ctaSubtitle": "Votre don général est dirigé selon la priorité des besoins.",
+    "ctaButton": "Faire un don général"
   },
   "Campaign": {
     "story": "Description",

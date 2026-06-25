@@ -424,7 +424,17 @@
     "home": "Startseite",
     "heroDescription": "Unterstütze sinnvolle Projekte und bewirke einen nachhaltigen Unterschied im Leben von Menschen.",
     "resultsFound": "Projekte gefunden",
-    "featuredBadge": "Dringendes Projekt"
+    "featuredBadge": "Dringendes Projekt",
+    "categoryHubTitle": "Kategorie- und Projektzentrum",
+    "categoryHubSubtitle": "Aktive Projekte · schnelle Spende",
+    "publicBenefitAssociation": "Gemeinnütziger Verein",
+    "categoriesLabel": "Kategorien",
+    "filterTitle": "Filtern",
+    "searchLabel": "Suche",
+    "applyFilters": "Filter anwenden",
+    "ctaTitle": "Nicht sicher, welches Projekt Sie unterstützen sollen?",
+    "ctaSubtitle": "Ihre allgemeine Spende wird nach Dringlichkeit des Bedarfs verteilt.",
+    "ctaButton": "Allgemeine Spende"
   },
   "Campaign": {
     "story": "Beschreibung",

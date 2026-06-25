@@ -22,14 +22,14 @@ const tajawal = Tajawal({
 });
 
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.gozbebekleri.org";
-const OG_IMAGE = `/circle-logo.png`;
+const OG_IMAGE = `/yedicijan_logo.png`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
 
   title: {
-    default: "جمعية يدي چيهان للإغاثة والتكافل | زكاة، تبرع، صدقة، إغاثة إنسانية",
-    template: "%s | جمعية يدي چيهان للإغاثة والتكافل",
+    default: "جمعية يدي چيهان | زكاة، تبرع، صدقة، إغاثة إنسانية",
+    template: "%s | جمعية يدي چيهان",
   },
 
   description:
@@ -93,7 +93,7 @@ export const metadata: Metadata = {
     type: "website",
     url: SITE,
     siteName: "Yedicihan | يدي چيهان",
-    title: "جمعية يدي چيهان للإغاثة والتكافل | زكاة، تبرع، صدقة، إغاثة إنسانية",
+    title: "جمعية يدي چيهان | زكاة، تبرع، صدقة، إغاثة إنسانية",
     description:
       "منصة تبرعات خيرية موثوقة منذ 2011 — تبرع لعمليات طبية عاجلة وكفالة أيتام وإغاثة إنسانية في سوريا. Trusted Islamic charity for Syrian medical aid, zakat & sadaqah since 2011.",
     images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Yedicihan – يدي چيهان Charity" }],
@@ -131,17 +131,17 @@ const organizationSchema = {
   "@type": ["Organization", "NGO"],
   "@id": `${SITE}/#organization`,
   name: "Yedicihan",
-  alternateName: ["يدي چيهان", "Gozbebekleri Derneği", "يدي چيهان للإغاثة والتكافل"],
+  alternateName: ["يدي چيهان", "Yedicihan Derneği", "يدي چيهان"],
   url: SITE,
   logo: {
     "@type": "ImageObject",
-    url: "circle-logo.png",
+    url: "/yedicijan_logo.png",
     width: 374,
     height: 206,
   },
   image: OG_IMAGE,
   description:
-    "Yedicihan – يدي چيهان is a trusted humanitarian charity providing urgent medical aid, orphan sponsorship, and humanitarian relief for Syrian children and families since 2011.",
+    "Yedicihan is a trusted humanitarian charity providing urgent medical aid, orphan sponsorship, and humanitarian relief for Syrian children and families since 2011.",
   foundingDate: "2011",
   areaServed: ["Syria", "Turkey", "Global"],
   knowsLanguage: ["ar", "en", "fr", "tr", "id", "pt", "es", "de"],

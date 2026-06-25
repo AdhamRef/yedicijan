@@ -424,7 +424,17 @@
     "resultsFound": "proyek ditemukan",
     "featuredBadge": "Proyek Mendesak",
     "openGoalLabel": "Target terbuka",
-    "sharesCampaignLabel": "Paket donasi"
+    "sharesCampaignLabel": "Paket donasi",
+    "categoryHubTitle": "Pusat kategori & proyek",
+    "categoryHubSubtitle": "Proyek aktif · donasi cepat",
+    "publicBenefitAssociation": "Lembaga kepentingan publik",
+    "categoriesLabel": "Kategori",
+    "filterTitle": "Saring",
+    "searchLabel": "Pencarian",
+    "applyFilters": "Terapkan filter",
+    "ctaTitle": "Tidak yakin proyek mana yang ingin didukung?",
+    "ctaSubtitle": "Donasi umum Anda diarahkan sesuai prioritas kebutuhan.",
+    "ctaButton": "Donasi umum"
   },
   "Campaign": {
     "story": "Deskripsi",

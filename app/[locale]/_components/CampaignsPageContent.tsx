@@ -2,8 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { Search, HandHeart, ArrowRight, SlidersHorizontal, X, ChevronRight } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Search, HandHeart, ArrowRight, X, ChevronRight, Check } from "lucide-react";
 import CampaignCard from "@/app/[locale]/_components/CampaignCard";
 import { useDebounce } from "use-debounce";
 import { useLocale, useTranslations } from "next-intl";
@@ -283,125 +282,49 @@ const CampaignsPage = ({
   return (
     <main className="min-h-screen bg-offwhite" dir={isRTL ? "rtl" : "ltr"}>
       {/* ── Hero Header ── */}
-      <section className="relative hero-pattern text-white">
-        <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-8 pt-12 pb-24">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-1.5 text-ice/70 text-xs mb-8">
-            <Link href="/" className="hover:text-white transition-colors">{t("home") || "Home"}</Link>
-            <ChevronRight className={`w-3 h-3 ${isRTL ? "rotate-180" : ""}`} />
-            <span className="text-white/90 font-medium">{t("campaigns") || "Campaigns"}</span>
-          </div>
+      <section className="relative hero-pattern text-white overflow-hidden">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-8 pt-10 pb-16 grid gap-10 md:grid-cols-[1fr_420px] md:items-center">
+          <div>
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-1.5 text-ice/70 text-xs mb-8">
+              <Link href="/" className="hover:text-white transition-colors">{t("home") || "Home"}</Link>
+              <ChevronRight className={`w-3 h-3 ${isRTL ? "rotate-180" : ""}`} />
+              <span className="text-white/90 font-medium">{t("campaigns") || "Campaigns"}</span>
+            </div>
 
-          {/* Title */}
-          <div className="max-w-2xl">
             <div className="gold-mark mb-6" />
             <h1 className="text-4xl sm:text-5xl font-extrabold text-white leading-tight">
               {t("campaigns") || "Projeler"}
             </h1>
-            <p className="mt-5 text-lg leading-8 text-ice">
+            <p className="mt-5 max-w-xl text-lg leading-8 text-ice">
               {t("heroDescription") || "Support meaningful causes and make a lasting difference in people's lives."}
             </p>
           </div>
+
+          {/* Info aside card */}
+          <aside className="shape-card border border-white/15 bg-white/10 p-8 backdrop-blur">
+            <div className="gold-mark" />
+            <div className="mt-8 flex items-center justify-between gap-6">
+              <div>
+                <h2 className="text-2xl font-extrabold leading-tight">{t("categoryHubTitle")}</h2>
+                <p className="mt-2 text-sm font-medium text-white/70">{t("categoryHubSubtitle")}</p>
+              </div>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gold text-deep">
+                <Check className="w-6 h-6" strokeWidth={3} />
+              </div>
+            </div>
+            <p className="mt-6 text-sm font-medium text-white/75">{t("publicBenefitAssociation")}</p>
+          </aside>
         </div>
       </section>
 
-      {/* ── Search bar — floats between hero and tabs ── */}
-      <div className="relative z-30 max-w-2xl mx-auto px-4 -mt-8">
-        <div className="bg-white shape-card shadow-lift p-2 flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 ${isRTL ? "right-3" : "left-3"}`} />
-            <input
-              type="text"
-              placeholder={t("searchPlaceholder") || "Search campaigns..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full ${isRTL ? "pr-9 pl-3" : "pl-9 pr-3"} py-2.5 shape-chip text-sm text-ink bg-offwhite outline-none focus:bg-white transition-colors`}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className={`absolute top-1/2 -translate-y-1/2 ${isRTL ? "left-3" : "right-3"} text-gray-400 hover:text-gray-600`}
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+      {/* ── Categories bar ── */}
+      <section className="max-w-7xl mx-auto px-4 lg:px-8 -mt-8 relative z-30">
+        <div className="shape-card flex flex-col gap-5 bg-white p-5 shadow-lift md:flex-row md:items-center">
+          <div className="shape-chip w-fit bg-deep px-7 py-3.5 text-sm font-extrabold text-white flex-shrink-0">
+            {t("categoriesLabel")}
           </div>
-              <Sheet>
-                <SheetTrigger asChild>
-                  <button className={`shape-button relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors flex-shrink-0 text-white ${hasActiveFilters ? "bg-gold text-deep" : "bg-burgundy hover:bg-burgundyDark"}`}>
-                    <SlidersHorizontal className="w-4 h-4" />
-                    <span className="hidden sm:inline">{t("filter") || "Filter"}</span>
-                    {hasActiveFilters && (
-                      <span className="absolute -top-1.5 -end-1.5 w-4 h-4 rounded-full bg-deep text-gold text-[10px] font-bold flex items-center justify-center">!</span>
-                    )}
-                  </button>
-                </SheetTrigger>
-                <SheetContent dir={isRTL ? "rtl" : "ltr"} className="w-full sm:max-w-sm">
-                  <SheetHeader className="pb-4 border-b border-gray-100">
-                    <SheetTitle className="flex items-center gap-2 text-start">
-                      <SlidersHorizontal className="w-4 h-4 text-[#A5243D]" />
-                      {t("filterOptions") || "Filter Options"}
-                    </SheetTitle>
-                  </SheetHeader>
-                  <div className="mt-6 space-y-6">
-                    <div>
-                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{t("sortBy") || "Sort By"}</h3>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { value: "newest", label: t("newest") || "Newest" },
-                          { value: "amount-high", label: t("amountHigh") || "Highest Goal" },
-                          { value: "amount-low", label: t("amountLow") || "Lowest Goal" },
-                          { value: "progress", label: t("progress") || "Progress" },
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => handleFilterChange("sortBy", opt.value)}
-                            className={`shape-chip px-3 py-2 text-xs font-semibold border transition-colors ${filters.sortBy === opt.value ? "bg-burgundy text-white border-burgundy" : "bg-white text-gray-600 border-gray-200 hover:border-burgundy/50"}`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{t("targetAmountRange") || "Target Amount"}</h3>
-                      <div className="flex gap-3">
-                        <div className="flex-1">
-                          <label className="text-xs text-gray-500 mb-1 block">{t("minAmount") || "Min"}</label>
-                          <input
-                            type="number"
-                            value={filters.minAmount}
-                            onChange={(e) => handleFilterChange("minAmount", Number(e.target.value))}
-                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/20 outline-none transition-all"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <label className="text-xs text-gray-500 mb-1 block">{t("maxAmount") || "Max"}</label>
-                          <input
-                            type="number"
-                            value={filters.maxAmount}
-                            onChange={(e) => handleFilterChange("maxAmount", Number(e.target.value))}
-                            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/20 outline-none transition-all"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setFilters({ sortBy: "newest", minAmount: 0, maxAmount: 100000000 })}
-                      className="w-full shape-button py-2.5 border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-offwhite transition-colors"
-                    >
-                      {t("resetFilters") || "Reset Filters"}
-                    </button>
-                  </div>
-                </SheetContent>
-              </Sheet>
-        </div>
-      </div>
-
-      {/* ── Category tabs ── */}
-      <div className="bg-offwhite border-b border-gray-200/70 shadow-sm sticky top-16 lg:top-[104px] z-20">
-        <div className="max-w-7xl mx-auto px-4 pt-6 pb-3">
-          <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-hide pb-1 md:flex-wrap md:overflow-visible md:pb-0">
             <button
               onClick={() => handleCategoryChange("all")}
               className={`shape-chip flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 border ${
@@ -435,101 +358,200 @@ const CampaignsPage = ({
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── Campaign Grid ── */}
-      <section className="max-w-7xl mx-auto px-4 py-10">
-        {/* Results count */}
-        {!loading && sortedCampaigns.length > 0 && (
-          <div className="flex items-center justify-between mb-6">
-            <p className="text-sm text-gray-500">
-              <span className="font-semibold text-gray-800">{isRefreshingList ? "..." : resultCountLabel}</span>{" "}
-              {t("resultsFound") || "campaigns found"}
-            </p>
-            {hasActiveFilters && (
-              <button
-                onClick={() => setFilters({ sortBy: "newest", minAmount: 0, maxAmount: 100000000 })}
-                className="flex items-center gap-1 text-xs text-[#A5243D] font-semibold hover:underline"
-              >
-                <X className="w-3 h-3" /> {t("clearFilters") || "Clear filters"}
-              </button>
-            )}
-          </div>
-        )}
-
-        {error && sortedCampaigns.length > 0 && (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            {t("errorTitle") || "Something went wrong"}. {t("retry") || "Try again"}
-          </div>
-        )}
-
-        {isRefreshingList && (
-          <div className="mb-5 shape-card border border-gray-100 bg-white px-4 py-3 text-sm font-semibold text-burgundy shadow-soft">
-            {t("loading") || "Loading campaigns..."}
-          </div>
-        )}
-
-        {showEmptyState ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-              <HandHeart className="w-9 h-9 text-gray-300" />
+      {/* ── Sidebar + Grid ── */}
+      <section className="max-w-7xl mx-auto px-4 lg:px-8 py-10 grid gap-8 lg:gap-10 md:grid-cols-[260px_1fr]">
+        {/* Filter sidebar */}
+        <aside className="h-fit md:sticky md:top-24">
+          <div className="shape-card bg-white p-6 shadow-soft">
+            <div className="shape-chip w-fit bg-burgundy px-6 py-3 text-sm font-extrabold text-white">
+              {t("filterTitle")}
             </div>
-            <h3 className="text-lg font-bold text-gray-700 mb-1">
-              {searchQuery ? t("noResults") : t("noCampaigns")}
-            </h3>
-            <p className="text-gray-400 text-sm">
-              {searchQuery ? t("tryDifferentSearch") : t("checkBackLater")}
-            </p>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="mt-4 text-[#A5243D] text-sm font-semibold hover:underline"
-              >
-                {t("clearSearch") || "Clear search"}
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="relative">
-            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity ${isRefreshingList ? "opacity-50" : "opacity-100"}`}>
-              {sortedCampaigns.map((campaign) => (
-                <CampaignCard key={campaign.id} campaign={campaign} />
-              ))}
-              {/* Inline loading more skeletons */}
-              {isLoadingMore && sortedCampaigns.length > 0 && Array.from({ length: 3 }).map((_, i) => (
-                <CardSkeleton key={`more-${i}`} />
-              ))}
-            </div>
-            {isRefreshingList && sortedCampaigns.length === 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={`refresh-${i}`} />)}
+
+            <div className="mt-6 space-y-7">
+              {/* Search */}
+              <div>
+                <label className="mb-3 block text-sm font-extrabold text-deep">{t("searchLabel")}</label>
+                <div className="relative">
+                  <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 ${isRTL ? "right-3" : "left-3"}`} />
+                  <input
+                    type="search"
+                    placeholder={t("searchPlaceholder") || "Search campaigns..."}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className={`h-11 w-full ${isRTL ? "pr-9 pl-3" : "pl-9 pr-3"} rounded-lg border border-gray-200 text-sm text-ink outline-none transition focus:border-burgundy focus:ring-2 focus:ring-burgundy/10`}
+                  />
+                </div>
               </div>
-            )}
+
+              {/* Sort */}
+              <div>
+                <p className="mb-3 text-sm font-extrabold text-deep">{t("sortBy") || "Sort by"}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: "newest", label: t("newest") || "Newest" },
+                    { value: "amount-high", label: t("amountHigh") || "Highest" },
+                    { value: "amount-low", label: t("amountLow") || "Lowest" },
+                    { value: "progress", label: t("progress") || "Progress" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleFilterChange("sortBy", opt.value)}
+                      className={`shape-chip px-3 py-2 text-xs font-semibold border transition-colors ${filters.sortBy === opt.value ? "bg-burgundy text-white border-burgundy" : "bg-white text-gray-600 border-gray-200 hover:border-burgundy/50"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Amount range */}
+              <div>
+                <p className="mb-3 text-sm font-extrabold text-deep">{t("targetAmountRange") || "Target amount"}</p>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 mb-1 block">{t("minAmount") || "Min"}</label>
+                    <input
+                      type="number"
+                      value={filters.minAmount}
+                      onChange={(e) => handleFilterChange("minAmount", Number(e.target.value))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 mb-1 block">{t("maxAmount") || "Max"}</label>
+                    <input
+                      type="number"
+                      value={filters.maxAmount}
+                      onChange={(e) => handleFilterChange("maxAmount", Number(e.target.value))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => { setFilters({ sortBy: "newest", minAmount: 0, maxAmount: 100000000 }); setSearchQuery(""); }}
+                className="shape-chip w-full bg-offwhite py-3 text-sm font-extrabold text-deep border border-gray-200 transition-colors hover:bg-gray-50"
+              >
+                {hasActiveFilters || searchQuery ? (t("resetFilters") || "Reset") : (t("applyFilters") || "Apply filters")}
+              </button>
+            </div>
           </div>
-        )}
+        </aside>
 
-        {hasMore && sortedCampaigns.length > 0 && !isRefreshingList && (
-          <div ref={loadMoreRef} className="h-1" aria-hidden="true" />
-        )}
+        {/* Results column */}
+        <div>
+          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-deep">{t("allCampaigns") || "All projects"}</h2>
+              <p className="mt-2 text-sm font-medium text-gray-500">
+                <span className="font-semibold text-gray-800">{isRefreshingList ? "..." : resultCountLabel}</span>{" "}
+                {t("resultsFound") || "projects found"}
+              </p>
+            </div>
 
-        {/* Load more */}
-        {hasMore && !isLoadingMore && !isRefreshingList && sortedCampaigns.length > 0 && (
-          <div className="text-center mt-12">
-            <button
-              onClick={loadMore}
-              className="shape-button inline-flex items-center gap-2 bg-burgundy hover:bg-burgundyDark text-white font-semibold px-8 py-3 transition-all shadow-soft hover:shadow-lift hover:-translate-y-0.5"
+            <select
+              value={filters.sortBy}
+              onChange={(e) => handleFilterChange("sortBy", e.target.value)}
+              className="shape-chip h-11 w-full border border-gray-200 bg-white px-4 text-sm font-semibold text-deep outline-none sm:w-[200px]"
             >
-              {t("loadMore") || "Load More"}
-              <ArrowRight className="w-4 h-4" />
-            </button>
+              <option value="newest">{t("newest") || "Newest"}</option>
+              <option value="amount-high">{t("amountHigh") || "Highest"}</option>
+              <option value="amount-low">{t("amountLow") || "Lowest"}</option>
+              <option value="progress">{t("progress") || "Progress"}</option>
+            </select>
           </div>
-        )}
 
-        {isLoadingMore && sortedCampaigns.length === 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
+          {error && sortedCampaigns.length > 0 && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {t("errorTitle") || "Something went wrong"}. {t("retry") || "Try again"}
+            </div>
+          )}
+
+          {isRefreshingList && (
+            <div className="mb-5 shape-card border border-gray-100 bg-white px-4 py-3 text-sm font-semibold text-burgundy shadow-soft">
+              {t("loading") || "Loading campaigns..."}
+            </div>
+          )}
+
+          {showEmptyState ? (
+            <div className="text-center py-20">
+              <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                <HandHeart className="w-9 h-9 text-gray-300" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-700 mb-1">
+                {searchQuery ? t("noResults") : t("noCampaigns")}
+              </h3>
+              <p className="text-gray-400 text-sm">
+                {searchQuery ? t("tryDifferentSearch") : t("checkBackLater")}
+              </p>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="mt-4 text-burgundy text-sm font-semibold hover:underline"
+                >
+                  {t("clearSearch") || "Clear search"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="relative">
+              <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 transition-opacity ${isRefreshingList ? "opacity-50" : "opacity-100"}`}>
+                {sortedCampaigns.map((campaign) => (
+                  <CampaignCard key={campaign.id} campaign={campaign} />
+                ))}
+                {isLoadingMore && sortedCampaigns.length > 0 && Array.from({ length: 3 }).map((_, i) => (
+                  <CardSkeleton key={`more-${i}`} />
+                ))}
+              </div>
+              {isRefreshingList && sortedCampaigns.length === 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={`refresh-${i}`} />)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {hasMore && sortedCampaigns.length > 0 && !isRefreshingList && (
+            <div ref={loadMoreRef} className="h-1" aria-hidden="true" />
+          )}
+
+          {hasMore && !isLoadingMore && !isRefreshingList && sortedCampaigns.length > 0 && (
+            <div className="text-center mt-12">
+              <button
+                onClick={loadMore}
+                className="shape-button inline-flex items-center gap-2 bg-burgundy hover:bg-burgundyDark text-white font-semibold px-8 py-3 transition-all shadow-soft hover:shadow-lift hover:-translate-y-0.5"
+              >
+                {t("loadMore") || "Load More"}
+                <ArrowRight className={`w-4 h-4 ${isRTL ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+          )}
+
+          {isLoadingMore && sortedCampaigns.length === 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── General donation CTA ── */}
+      <section className="bg-deep text-white">
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="max-w-xl text-2xl sm:text-3xl font-extrabold leading-tight">{t("ctaTitle")}</h2>
+            <p className="mt-2 text-sm font-medium text-white/65">{t("ctaSubtitle")}</p>
           </div>
-        )}
+          <Link
+            href="/"
+            className="shape-button inline-flex w-fit items-center justify-center bg-burgundy hover:bg-burgundyDark px-10 py-4 text-sm font-extrabold text-white transition-colors"
+          >
+            {t("ctaButton")}
+          </Link>
+        </div>
       </section>
     </main>
   );

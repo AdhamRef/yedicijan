@@ -424,7 +424,17 @@
     "resultsFound": "proyectos encontrados",
     "featuredBadge": "Proyecto urgente",
     "openGoalLabel": "Meta abierta",
-    "sharesCampaignLabel": "Cuotas"
+    "sharesCampaignLabel": "Cuotas",
+    "categoryHubTitle": "Centro de categorías y proyectos",
+    "categoryHubSubtitle": "Proyectos activos · donación rápida",
+    "publicBenefitAssociation": "Asociación de utilidad pública",
+    "categoriesLabel": "Categorías",
+    "filterTitle": "Filtrar",
+    "searchLabel": "Búsqueda",
+    "applyFilters": "Aplicar filtros",
+    "ctaTitle": "¿No sabes qué proyecto apoyar?",
+    "ctaSubtitle": "Tu donación general se dirige según la prioridad de necesidad.",
+    "ctaButton": "Hacer una donación general"
   },
   "Campaign": {
     "story": "Descripción",
