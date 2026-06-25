@@ -169,11 +169,9 @@ function VideoEmbed({ rawUrl, title, className }: { rawUrl: string; title?: stri
 
 const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale?: string }) => {
   const t = useTranslations("Campaign");
-  const tNav = useTranslations("CampaignsPage");
   const tTrust = useTranslations("SignInDialog");
   const localeFromHook = useLocale() as "ar" | "en" | "fr";
   const locale = (propLocale as any) || localeFromHook;
-  const isRTL = locale === "ar";
   const { data: session } = useSession();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -188,7 +186,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState<{ type: "image" | "video"; src: string; alt?: string } | null>(null);
   const [selectedImage, setSelectedImage] = useState(0);
-  const [activeSection, setActiveSection] = useState<string>("description");
+  const [activeTab, setActiveTab] = useState<"description" | "updates" | "comments" | "info">("description");
   const [isSignInOpen, setIsSignInOpen] = useState(false);
 
   const getLocalizedProperty = (obj: any, key: string) => {
@@ -228,28 +226,6 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
       .catch(() => toast.error(t("failedToLoadComments")));
   }, [id, campaign]);
 
-  // Scroll-spy: highlight the section nav item for whichever section is in view.
-  useEffect(() => {
-    if (!campaign) return;
-    const ids = ["description", "updates", "comments", "info"];
-    const els = ids
-      .map((sid) => document.getElementById(`section-${sid}`))
-      .filter((el): el is HTMLElement => Boolean(el));
-    if (!els.length) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActiveSection(visible[0].target.id.replace("section-", ""));
-      },
-      { rootMargin: "-140px 0px -55% 0px", threshold: 0 }
-    );
-    els.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [campaign, comments.length]);
-
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) return;
@@ -285,13 +261,12 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
     } catch { toast.error(t("failedToDeleteComment")); }
   };
 
-  const scrollToEl = (elId: string) =>
-    document.getElementById(elId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-
-  const scrollToSection = (sid: string) => {
-    setActiveSection(sid);
-    scrollToEl(`section-${sid}`);
-  };
+  const tabs = [
+    { id: "description", labelKey: "story" as const, icon: Book },
+    { id: "updates", labelKey: "updates" as const, icon: Bell, badge: campaign?.updates?.length ?? 0 },
+    { id: "comments", labelKey: "comments" as const, icon: MessageCircle, badge: comments.length },
+    { id: "info", labelKey: "info" as const, icon: Info },
+  ];
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(locale === "ar" ? "ar-SA" : locale === "fr" ? "fr-FR" : "en-US", {
@@ -302,14 +277,14 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
 
   if (error || !campaign) {
     return (
-      <div className="min-h-screen bg-offwhite/60 flex items-center justify-center px-4">
-        <div className="text-center max-w-md bg-white shape-card shadow-soft p-10">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Info className="w-8 h-8 text-red-500" />
           </div>
-          <h2 className="text-2xl font-bold text-deep mb-2">{t("campaignNotFound")}</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">{t("campaignNotFound")}</h2>
           <p className="text-gray-500 mb-6">{error || t("campaignNotFoundDescription")}</p>
-          <Button onClick={() => window.history.back()} className="shape-button bg-burgundy hover:bg-burgundyDark">
+          <Button onClick={() => window.history.back()} className="bg-[#A5243D] hover:bg-[#7D1830]">
             {t("goBack")}
           </Button>
         </div>
@@ -318,116 +293,19 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
   }
 
   const currentImg = campaign.images[selectedImage] || FALLBACK;
-  const updatesCount = campaign.updates?.length ?? 0;
-
-  const sections: { id: string; label: string; icon: typeof Book; badge?: number }[] = [
-    { id: "description", label: t("story"), icon: Book },
-    { id: "updates", label: t("updates"), icon: Bell, badge: updatesCount },
-    { id: "comments", label: t("comments"), icon: MessageCircle, badge: comments.length },
-    { id: "info", label: t("info"), icon: Info },
-  ];
-
-  // RTL-aware gallery navigation
-  const atStart = selectedImage === 0;
-  const atEnd = selectedImage === campaign.images.length - 1;
-  const goPrev = () => setSelectedImage((i) => (isRTL ? Math.min(campaign.images.length - 1, i + 1) : Math.max(0, i - 1)));
-  const goNext = () => setSelectedImage((i) => (isRTL ? Math.max(0, i - 1) : Math.min(campaign.images.length - 1, i + 1)));
-
-  const SectionHeading = ({ icon: Icon, label, count }: { icon: typeof Book; label: string; count?: number }) => (
-    <div className="mb-5">
-      <div className="flex items-center gap-2.5">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-burgundy/10 text-burgundy">
-          <Icon className="w-4 h-4" />
-        </span>
-        <h2 className="text-lg sm:text-xl font-extrabold text-deep">{label}</h2>
-        {count !== undefined && count > 0 && (
-          <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{count}</span>
-        )}
-      </div>
-      <div className="gold-mark-sm mt-3" />
-    </div>
-  );
 
   return (
     <>
-      <main className="min-h-screen bg-offwhite/60 pb-28 lg:pb-16" dir={isRTL ? "rtl" : "ltr"}>
+      <main className="min-h-screen bg-offwhite/60 pb-28 sm:pb-12">
+        <div className="max-w-7xl mx-auto px-0 sm:px-4 sm:py-8">
+          <div className="grid lg:grid-cols-12 gap-0 lg:gap-8">
 
-        {/* ── Immersive full-bleed hero ── */}
-        <section className="relative w-full">
-          <div className="relative h-[58vh] min-h-[440px] max-h-[660px] w-full overflow-hidden bg-deep">
-            {/* Blurred fill for letterboxed images */}
-            <Image
-              src={currentImg}
-              alt=""
-              aria-hidden
-              fill
-              sizes="100vw"
-              className="object-cover scale-110 blur-2xl opacity-30 pointer-events-none"
-            />
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={selectedImage}
-                initial={{ opacity: 0, scale: 1.05 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.4 }}
-                className="absolute inset-0"
-              >
-                <Image
-                  src={currentImg}
-                  alt={getLocalizedProperty(campaign, "title")}
-                  fill
-                  priority
-                  sizes="100vw"
-                  className="object-cover"
-                />
-              </motion.div>
-            </AnimatePresence>
+            {/* ── Left: editorial header + media + tabs ── */}
+            <div className="lg:col-span-8 flex flex-col gap-4 sm:gap-6">
 
-            {/* Cinematic gradient */}
-            <div className="absolute inset-0 bg-gradient-to-t from-deep via-deep/65 to-deep/15 pointer-events-none" />
-
-            {/* Image counter */}
-            {campaign.images.length > 1 && (
-              <div className="absolute top-4 end-4 z-10 rounded-full bg-black/40 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 tabular-nums">
-                {selectedImage + 1} / {campaign.images.length}
-              </div>
-            )}
-
-            {/* Gallery arrows */}
-            {campaign.images.length > 1 && (
-              <>
-                <button
-                  onClick={goPrev}
-                  disabled={isRTL ? atEnd : atStart}
-                  aria-label="Previous image"
-                  className="absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/85 hover:bg-white text-deep shadow-md flex items-center justify-center transition-all disabled:opacity-0"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  onClick={goNext}
-                  disabled={isRTL ? atStart : atEnd}
-                  aria-label="Next image"
-                  className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white/85 hover:bg-white text-deep shadow-md flex items-center justify-center transition-all disabled:opacity-0"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </>
-            )}
-
-            {/* Hero content */}
-            <div className="absolute inset-x-0 bottom-0 z-10">
-              <div className="max-w-7xl mx-auto px-4 lg:px-8 pb-8 lg:pb-12">
-                {/* Breadcrumb */}
-                <nav className="flex items-center gap-1.5 text-white/70 text-xs mb-4">
-                  <Link href="/" className="hover:text-white transition-colors">{tNav("home")}</Link>
-                  <ChevronRight className={`w-3 h-3 ${isRTL ? "rotate-180" : ""}`} />
-                  <Link href="/campaigns" className="hover:text-white transition-colors">{tNav("campaigns")}</Link>
-                </nav>
-
-                {/* Badges */}
-                <div className="flex flex-wrap items-center gap-2 mb-4">
+              {/* ── Editorial header (title above image) ── */}
+              <div className="px-4 pt-5 pb-2 sm:px-0 sm:pt-0">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
                   <Link
                     href={`/category/${campaign.category.slug || campaign.category.id}`}
                     className="inline-flex items-center gap-1.5 shape-chip bg-burgundy hover:bg-burgundyDark text-white text-[11px] sm:text-xs font-bold px-3 py-1.5 uppercase tracking-wide transition-colors"
@@ -435,334 +313,422 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                     <CategoryIcon name={campaign.category.icon} className="w-3.5 h-3.5" />
                     {getLocalizedProperty(campaign.category, "name")}
                   </Link>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 backdrop-blur-sm text-white text-[11px] sm:text-xs font-bold px-3 py-1.5 border border-white/25">
-                    <ShieldCheck className="w-3.5 h-3.5 text-gold" />
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] sm:text-xs font-bold px-3 py-1.5 border border-emerald-100">
+                    <ShieldCheck className="w-3.5 h-3.5" />
                     {tTrust("trusted")}
                   </span>
                 </div>
 
                 <div className="gold-mark mb-4" />
-                <h1 className="max-w-3xl text-2xl sm:text-4xl lg:text-[2.75rem] font-extrabold text-white leading-[1.13] tracking-tight">
+                <h1 className="text-2xl sm:text-3xl lg:text-[2.6rem] font-extrabold text-deep leading-[1.12] tracking-tight">
                   {getLocalizedProperty(campaign, "title")}
                 </h1>
+              </div>
 
-                {/* Proof chips + CTA */}
-                <div className="mt-5 flex flex-wrap items-center gap-2.5">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur-md text-deep text-xs sm:text-sm font-bold px-3.5 py-2 shadow-sm">
-                    <Heart className="w-4 h-4 text-burgundy" fill="currentColor" />
-                    {campaign.donationCount.toLocaleString()} {t("donor")}
-                  </span>
-                  {campaign.showProgress !== false && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 backdrop-blur-md text-deep text-xs sm:text-sm font-bold px-3.5 py-2 shadow-sm tabular-nums">
-                      <TrendingUp className="w-4 h-4 text-gold" />
-                      {campaign.progress.toFixed(0)}% {t("completed")}
+              {/* ── Cinematic gallery ── */}
+              <div className="px-4 sm:px-0">
+                <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] overflow-hidden rounded-[26px] sm:rounded-[32px] shadow-soft ring-1 ring-black/5 bg-deep">
+                  {/* Blurred background fill for portrait images */}
+                  <Image
+                    src={currentImg}
+                    alt=""
+                    aria-hidden
+                    fill
+                    sizes="100vw"
+                    className="object-cover blur-2xl scale-110 opacity-40 pointer-events-none"
+                  />
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={selectedImage}
+                      initial={{ opacity: 0, scale: 1.03 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="absolute inset-0"
+                    >
+                      <Image
+                        src={currentImg}
+                        alt={getLocalizedProperty(campaign, "title")}
+                        fill
+                        priority={selectedImage === 0}
+                        sizes="(max-width: 1024px) 100vw, 66vw"
+                        className="object-contain"
+                      />
+                    </motion.div>
+                  </AnimatePresence>
+
+                  {/* Soft bottom gradient for the floating proof bar */}
+                  <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/55 to-transparent pointer-events-none" />
+
+                  {/* Image counter */}
+                  {campaign.images.length > 1 && (
+                    <div className="absolute top-3 end-3 z-10 rounded-full bg-black/45 backdrop-blur-sm text-white text-xs font-semibold px-2.5 py-1 tabular-nums">
+                      {selectedImage + 1} / {campaign.images.length}
+                    </div>
+                  )}
+
+                  {/* Floating social-proof bar */}
+                  <div className="absolute bottom-3.5 inset-x-3.5 z-10 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md text-deep text-xs sm:text-sm font-bold px-3.5 py-2 shadow-sm ring-1 ring-black/5">
+                      <Heart className="w-4 h-4 text-burgundy" fill="currentColor" />
+                      {campaign.donationCount.toLocaleString()} {t("donor")}
                     </span>
-                  )}
-                  <button
-                    onClick={() => scrollToEl("donation-rail")}
-                    className="hidden lg:inline-flex items-center gap-2 shape-button bg-gold hover:bg-gold/90 text-deep text-sm font-extrabold px-6 py-2.5 transition-colors shadow-soft"
-                  >
-                    <Heart className="w-4 h-4" fill="currentColor" />
-                    {t("donateNow")}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Thumbnail filmstrip — overlaps the hero base */}
-          {campaign.images.length > 1 && (
-            <div className="max-w-7xl mx-auto px-4 lg:px-8">
-              <div className="relative z-20 -mt-7 flex gap-2.5 overflow-x-auto scrollbar-hide pb-2">
-                {campaign.images.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedImage(i)}
-                    aria-label={`${t("image")} ${i + 1}`}
-                    className={`relative flex-shrink-0 rounded-xl overflow-hidden shadow-md transition-all duration-200 ${
-                      selectedImage === i
-                        ? "ring-2 ring-gold scale-105"
-                        : "ring-2 ring-white/80 opacity-80 hover:opacity-100"
-                    }`}
-                  >
-                    <Image
-                      src={img}
-                      alt=""
-                      width={88}
-                      height={62}
-                      className="w-[68px] h-12 sm:w-[88px] sm:h-[62px] object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* ── Body: content + donation rail ── */}
-        <div className="max-w-7xl mx-auto px-4 lg:px-8 mt-6 lg:mt-10">
-          <div className="grid lg:grid-cols-12 gap-6 lg:gap-10">
-
-            {/* Left: sticky section nav + stacked content */}
-            <div className="lg:col-span-8 min-w-0">
-
-              {/* Sticky anchor nav */}
-              <div className="sticky top-12 lg:top-[88px] z-30 -mx-4 lg:mx-0 px-4 lg:px-0 py-2 lg:py-0">
-                <div className="flex gap-1 sm:gap-1.5 overflow-x-auto scrollbar-hide bg-white shape-card shadow-soft p-1.5">
-                  {sections.map(({ id: sid, label, icon: Icon, badge }) => {
-                    const active = activeSection === sid;
-                    return (
-                      <button
-                        key={sid}
-                        onClick={() => scrollToSection(sid)}
-                        className={`relative flex items-center justify-center gap-1.5 flex-1 min-w-fit whitespace-nowrap px-3 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                          active ? "bg-burgundy text-white shadow-sm" : "text-gray-500 hover:text-deep hover:bg-offwhite"
-                        }`}
-                      >
-                        <Icon className="w-4 h-4 flex-shrink-0" />
-                        <span>{label}</span>
-                        {badge !== undefined && badge > 0 && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
-                            active ? "bg-white/25 text-white" : "bg-gray-100 text-gray-500"
-                          }`}>
-                            {badge}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-5 sm:space-y-6">
-
-                {/* Story */}
-                <section id="section-description" className="scroll-mt-32 lg:scroll-mt-44 bg-white shape-card shadow-soft p-5 sm:p-7">
-                  <SectionHeading icon={Book} label={t("story")} />
-                  {(() => {
-                    const desc = getLocalizedProperty(campaign, "description") as string;
-                    if (!desc) return <p className="text-gray-400 text-sm">—</p>;
-                    const trimmed = desc.trim();
-                    if (trimmed.startsWith("{")) {
-                      try {
-                        const parsed = JSON.parse(trimmed);
-                        if (parsed?.type === "doc") {
-                          return (
-                            <div className="prose max-w-none [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:p-0 [&_.ProseMirror]:focus:outline-none">
-                              <WysiwygEditor defaultValue={parsed} isEditable={false} className="border-0 shadow-none p-0 min-h-0" />
-                            </div>
-                          );
-                        }
-                      } catch {}
-                    }
-                    return (
-                      <p className="text-gray-700 text-sm sm:text-base leading-relaxed sm:leading-loose whitespace-pre-line">
-                        {desc}
-                      </p>
-                    );
-                  })()}
-
-                  {/* Campaign video lives inside the story */}
-                  {campaign.videoUrl && (
-                    <VideoEmbed
-                      rawUrl={campaign.videoUrl}
-                      title={String(campaign.title ?? "")}
-                      className="mt-6 rounded-2xl overflow-hidden shadow-soft ring-1 ring-black/5 bg-black"
-                    />
-                  )}
-                </section>
-
-                {/* Updates */}
-                <section id="section-updates" className="scroll-mt-32 lg:scroll-mt-44 bg-white shape-card shadow-soft p-5 sm:p-7">
-                  <SectionHeading icon={Bell} label={t("updates")} count={updatesCount} />
-                  {updatesCount > 0 ? (
-                    <div className="space-y-5">
-                      {campaign.updates.map((update, i) => (
-                        <motion.div
-                          key={update.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true }}
-                          transition={{ delay: Math.min(i * 0.06, 0.3) }}
-                          className="flex gap-4 pb-5 border-b border-gray-100 last:border-0 last:pb-0"
-                        >
-                          <div className="flex-shrink-0">
-                            <div className="w-9 h-9 rounded-full bg-burgundy/10 flex items-center justify-center">
-                              <Bell className="w-4 h-4 text-burgundy" />
-                            </div>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-sm sm:text-base font-bold text-deep mb-0.5">
-                              {getLocalizedProperty(update, "title")}
-                            </h3>
-                            <p className="text-xs text-gray-400 flex items-center gap-1 mb-2">
-                              <Clock className="w-3 h-3" />
-                              {fmtDate(update.createdAt)}
-                            </p>
-                            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line mb-3">
-                              {getLocalizedProperty(update, "description")}
-                            </p>
-                            {update.videoUrl && (
-                              <VideoEmbed
-                                rawUrl={update.videoUrl}
-                                title={getLocalizedProperty(update, "title") || "video"}
-                                className="rounded-xl overflow-hidden bg-black mb-3"
-                              />
-                            )}
-                            {update.image && (
-                              <button
-                                onClick={() => { setModalContent({ type: "image", src: update.image!, alt: getLocalizedProperty(update, "title") }); setIsModalOpen(true); }}
-                                className="group relative rounded-xl overflow-hidden ring-1 ring-gray-200 hover:ring-burgundy transition-all"
-                              >
-                                <Image src={update.image} alt="" width={96} height={96} className="w-24 h-24 object-cover group-hover:scale-105 transition-transform duration-300" />
-                              </button>
-                            )}
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-10">
-                      <Bell className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                      <p className="text-gray-400 text-sm">{t("noUpdates")}</p>
-                    </div>
-                  )}
-                </section>
-
-                {/* Comments */}
-                <section id="section-comments" className="scroll-mt-32 lg:scroll-mt-44 bg-white shape-card shadow-soft p-5 sm:p-7">
-                  <SectionHeading icon={MessageCircle} label={t("comments")} count={comments.length} />
-
-                  <div className="mb-5">
-                    {session ? (
-                      <form onSubmit={handleAddComment} className="flex gap-3 bg-offwhite/70 rounded-2xl p-3 border border-gray-200 focus-within:border-burgundy/40 focus-within:ring-2 focus-within:ring-burgundy/10 transition-all">
-                        <Avatar className="w-8 h-8 flex-shrink-0 mt-0.5">
-                          <AvatarImage src={session.user?.image || ""} />
-                          <AvatarFallback className="bg-burgundy/10 text-burgundy text-xs font-bold">
-                            {session.user?.name?.[0] || "U"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <Textarea
-                            value={newComment}
-                            onChange={e => setNewComment(e.target.value)}
-                            placeholder={t("commentPlaceholder")}
-                            className="w-full resize-none border-none shadow-none focus-visible:ring-0 text-sm bg-transparent p-0 min-h-[40px]"
-                            rows={2}
-                          />
-                          <div className="flex justify-end mt-2">
-                            <Button type="submit" disabled={!newComment.trim() || isSubmitting} size="sm"
-                              className="shape-button bg-burgundy hover:bg-burgundyDark text-white h-8 gap-1.5">
-                              {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                              {t("send")}
-                            </Button>
-                          </div>
-                        </div>
-                      </form>
-                    ) : (
-                      <button onClick={() => setIsSignInOpen(true)}
-                        className="w-full flex items-center gap-3 bg-offwhite/70 hover:bg-offwhite border border-gray-200 rounded-2xl p-3.5 text-sm text-gray-500 transition-colors">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                          <MessageCircle className="w-4 h-4 text-gray-400" />
-                        </div>
-                        <span>{t("signInToComment")}</span>
-                      </button>
+                    {campaign.showProgress !== false && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md text-deep text-xs sm:text-sm font-bold px-3.5 py-2 shadow-sm ring-1 ring-black/5 tabular-nums">
+                        <TrendingUp className="w-4 h-4 text-gold" />
+                        {campaign.progress.toFixed(0)}% {t("completed")}
+                      </span>
                     )}
                   </div>
 
-                  <div className="space-y-1">
-                    {comments.length > 0 ? comments.map((comment, i) => (
-                      <motion.div key={comment.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.04, 0.25) }}
-                        className="flex gap-3 p-3 rounded-xl hover:bg-offwhite/60 transition-colors group">
-                        <Avatar className="w-8 h-8 flex-shrink-0">
-                          <AvatarImage src={comment.user.image} />
-                          <AvatarFallback className="text-xs font-bold bg-gray-100 text-gray-600">
-                            {comment.user.name[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-sm font-semibold text-deep">{comment.user.name}</span>
-                              <span className="text-[11px] text-gray-400">{new Date(comment.createdAt).toLocaleDateString(locale === "ar" ? "ar-SA" : locale === "fr" ? "fr-FR" : "en-US")}</span>
-                            </div>
-                            {session?.user?.email === comment.user.email && (
-                              <div className="relative flex-shrink-0">
-                                <button onClick={() => setOpenDropdownId(openDropdownId === comment.id ? null : comment.id)}
-                                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-all">
-                                  <MoreHorizontal className="w-4 h-4" />
-                                </button>
-                                {openDropdownId === comment.id && (
-                                  <div className="absolute end-0 mt-1 w-40 bg-white border border-gray-100 rounded-xl shadow-lg z-20 overflow-hidden">
-                                    <button onClick={() => { setEditingComment(comment.id); setEditText(comment.text); setOpenDropdownId(null); }}
-                                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                                      <Edit2 className="w-3.5 h-3.5" />{t("edit")}
-                                    </button>
-                                    <button onClick={() => { handleDeleteComment(comment.id); setOpenDropdownId(null); }}
-                                      className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                                      <Trash2 className="w-3.5 h-3.5" />{t("delete")}
-                                    </button>
+                  {/* RTL-aware nav arrows */}
+                  {campaign.images.length > 1 && (() => {
+                    const isRTL = locale === "ar";
+                    const atStart = selectedImage === 0;
+                    const atEnd = selectedImage === campaign.images.length - 1;
+                    const leftDisabled  = isRTL ? atEnd   : atStart;
+                    const rightDisabled = isRTL ? atStart : atEnd;
+                    const onLeft  = () => setSelectedImage(i => isRTL ? Math.min(campaign.images.length - 1, i + 1) : Math.max(0, i - 1));
+                    const onRight = () => setSelectedImage(i => isRTL ? Math.max(0, i - 1) : Math.min(campaign.images.length - 1, i + 1));
+                    return (
+                      <>
+                        <button
+                          onClick={onLeft}
+                          disabled={leftDisabled}
+                          aria-label="Previous image"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/85 hover:bg-white text-deep shadow-md flex items-center justify-center transition-all disabled:opacity-0 disabled:cursor-not-allowed"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={onRight}
+                          disabled={rightDisabled}
+                          aria-label="Next image"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/85 hover:bg-white text-deep shadow-md flex items-center justify-center transition-all disabled:opacity-0 disabled:cursor-not-allowed"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
+
+                {/* Thumbnail strip */}
+                {campaign.images.length > 1 && (
+                  <div className="flex gap-2.5 mt-3 overflow-x-auto scrollbar-hide p-2">
+                    {campaign.images.map((img, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setSelectedImage(i)}
+                        aria-label={`${t("image")} ${i + 1}`}
+                        className={`relative flex-shrink-0 rounded-xl overflow-hidden transition-all duration-200 ${
+                          selectedImage === i
+                            ? "ring-2 ring-gold scale-[1.03] shadow-md"
+                            : "ring-1 ring-gray-200 opacity-60 hover:opacity-100 hover:ring-gray-300"
+                        }`}
+                      >
+                        <Image
+                          src={img}
+                          alt=""
+                          width={72}
+                          height={56}
+                          className="w-16 h-12 sm:w-[72px] sm:h-14 object-cover"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Tabs card (no overflow-clip so the inner tab bar can stick) ── */}
+              <div className="bg-white rounded-[26px] sm:rounded-[32px] border border-gray-100 shadow-soft mx-4 sm:mx-0">
+                {/* Sticky segmented tab bar */}
+                <div className="sticky top-12 lg:top-[88px] z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2.5 sm:px-3 py-2.5 rounded-t-[26px] sm:rounded-t-[32px]">
+                  <div className="grid grid-cols-4 gap-1 rounded-2xl bg-offwhite p-1">
+                    {tabs.map(({ id: tabId, labelKey, icon: Icon, badge }) => {
+                      const active = activeTab === tabId;
+                      return (
+                        <button
+                          key={tabId}
+                          onClick={() => setActiveTab(tabId as "description" | "updates" | "comments" | "info")}
+                          className={`relative flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 py-2.5 px-1 sm:px-3 rounded-xl text-[11px] sm:text-sm font-semibold transition-all ${
+                            active
+                              ? "bg-white text-burgundy shadow-soft ring-1 ring-black/5"
+                              : "text-gray-500 hover:text-deep"
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 flex-shrink-0 ${active ? "text-burgundy" : ""}`} />
+                          <span className="truncate">{t(labelKey)}</span>
+                          {badge !== undefined && badge > 0 && (
+                            <span className={`absolute top-1 right-1 sm:static sm:ms-1 text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
+                              active ? "bg-burgundy text-white" : "bg-gray-200 text-gray-500"
+                            }`}>
+                              {badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Tab content */}
+                <div className="p-5 sm:p-7">
+                  <AnimatePresence mode="wait">
+
+                    {/* Description */}
+                    {activeTab === "description" && (
+                      <motion.div key="desc" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                        {(() => {
+                          const desc = getLocalizedProperty(campaign, "description") as string;
+                          if (!desc) return null;
+                          const trimmed = desc.trim();
+                          if (trimmed.startsWith("{")) {
+                            try {
+                              const parsed = JSON.parse(trimmed);
+                              if (parsed?.type === "doc") {
+                                return (
+                                  <div className="prose max-w-none [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:p-0 [&_.ProseMirror]:focus:outline-none">
+                                    <WysiwygEditor defaultValue={parsed} isEditable={false} className="border-0 shadow-none p-0 min-h-0" />
                                   </div>
+                                );
+                              }
+                            } catch {}
+                          }
+                          return (
+                            <p className="text-gray-700 text-sm sm:text-base leading-relaxed sm:leading-loose whitespace-pre-line">
+                              {desc}
+                            </p>
+                          );
+                        })()}
+                      </motion.div>
+                    )}
+
+                    {/* Updates */}
+                    {activeTab === "updates" && (
+                      <motion.div key="updates" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-5">
+                        {campaign.updates?.length > 0 ? campaign.updates.map((update, i) => (
+                          <motion.div key={update.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
+                            className="flex gap-4 pb-5 border-b border-gray-100 last:border-0 last:pb-0">
+                            <div className="flex-shrink-0">
+                              <div className="w-9 h-9 rounded-full bg-[#A5243D]/10 flex items-center justify-center">
+                                <Bell className="w-4 h-4 text-[#A5243D]" />
+                              </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-0.5">
+                                {getLocalizedProperty(update, "title")}
+                              </h3>
+                              <p className="text-xs text-gray-400 flex items-center gap-1 mb-2">
+                                <Clock className="w-3 h-3" />
+                                {fmtDate(update.createdAt)}
+                              </p>
+                              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line mb-3">
+                                {getLocalizedProperty(update, "description")}
+                              </p>
+                              {/* Inline video embed */}
+                              {update.videoUrl && (
+                                <VideoEmbed
+                                  rawUrl={update.videoUrl}
+                                  title={getLocalizedProperty(update, "title") || "video"}
+                                  className="rounded-xl overflow-hidden bg-black mb-3"
+                                />
+                              )}
+                              {/* Image thumbnail */}
+                              {update.image && (
+                                <button
+                                  onClick={() => { setModalContent({ type: "image", src: update.image!, alt: getLocalizedProperty(update, "title") }); setIsModalOpen(true); }}
+                                  className="group relative rounded-xl overflow-hidden ring-1 ring-gray-200 hover:ring-[#A5243D] transition-all"
+                                >
+                                  <Image src={update.image} alt="" width={96} height={96} className="w-24 h-24 object-cover group-hover:scale-105 transition-transform duration-300" />
+                                </button>
+                              )}
+                            </div>
+                          </motion.div>
+                        )) : (
+                          <div className="text-center py-12">
+                            <Bell className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                            <p className="text-gray-400 text-sm">{t("noUpdates")}</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+
+                    {/* Comments */}
+                    {activeTab === "comments" && (
+                      <motion.div key="comments" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+                        {/* Add comment */}
+                        <div className="mb-5">
+                          {session ? (
+                            <form onSubmit={handleAddComment} className="flex gap-3 bg-gray-50 rounded-xl p-3 border border-gray-200 focus-within:border-[#A5243D]/40 focus-within:ring-2 focus-within:ring-[#A5243D]/10 transition-all">
+                              <Avatar className="w-8 h-8 flex-shrink-0 mt-0.5">
+                                <AvatarImage src={session.user?.image || ""} />
+                                <AvatarFallback className="bg-[#A5243D]/10 text-[#A5243D] text-xs font-bold">
+                                  {session.user?.name?.[0] || "U"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <Textarea
+                                  value={newComment}
+                                  onChange={e => setNewComment(e.target.value)}
+                                  placeholder={t("commentPlaceholder")}
+                                  className="w-full resize-none border-none shadow-none focus-visible:ring-0 text-sm bg-transparent p-0 min-h-[40px]"
+                                  rows={2}
+                                />
+                                <div className="flex justify-end mt-2">
+                                  <Button type="submit" disabled={!newComment.trim() || isSubmitting} size="sm"
+                                    className="bg-[#A5243D] hover:bg-[#7D1830] text-white h-8 gap-1.5 rounded-lg">
+                                    {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                    {t("send")}
+                                  </Button>
+                                </div>
+                              </div>
+                            </form>
+                          ) : (
+                            <button onClick={() => setIsSignInOpen(true)}
+                              className="w-full flex items-center gap-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl p-3.5 text-sm text-gray-500 transition-colors">
+                              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                                <MessageCircle className="w-4 h-4 text-gray-400" />
+                              </div>
+                              <span>{t("signInToComment")}</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Comments list */}
+                        <div className="space-y-1">
+                          {comments.length > 0 ? comments.map((comment, i) => (
+                            <motion.div key={comment.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                              className="flex gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors group">
+                              <Avatar className="w-8 h-8 flex-shrink-0">
+                                <AvatarImage src={comment.user.image} />
+                                <AvatarFallback className="text-xs font-bold bg-gray-100 text-gray-600">
+                                  {comment.user.name[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-sm font-semibold text-gray-900">{comment.user.name}</span>
+                                    <span className="text-[11px] text-gray-400">{new Date(comment.createdAt).toLocaleDateString(locale === "ar" ? "ar-SA" : locale === "fr" ? "fr-FR" : "en-US")}</span>
+                                  </div>
+                                  {session?.user?.email === comment.user.email && (
+                                    <div className="relative flex-shrink-0">
+                                      <button onClick={() => setOpenDropdownId(openDropdownId === comment.id ? null : comment.id)}
+                                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-all">
+                                        <MoreHorizontal className="w-4 h-4" />
+                                      </button>
+                                      {openDropdownId === comment.id && (
+                                        <div className="absolute end-0 mt-1 w-40 bg-white border border-gray-100 rounded-xl shadow-lg z-20 overflow-hidden">
+                                          <button onClick={() => { setEditingComment(comment.id); setEditText(comment.text); setOpenDropdownId(null); }}
+                                            className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                                            <Edit2 className="w-3.5 h-3.5" />{t("edit")}
+                                          </button>
+                                          <button onClick={() => { handleDeleteComment(comment.id); setOpenDropdownId(null); }}
+                                            className="flex items-center gap-2 w-full px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                                            <Trash2 className="w-3.5 h-3.5" />{t("delete")}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                {editingComment === comment.id ? (
+                                  <div>
+                                    <Textarea value={editText} onChange={e => setEditText(e.target.value)} className="mb-2 text-sm" rows={2} />
+                                    <div className="flex gap-2">
+                                      <Button onClick={() => handleEditComment(comment.id)} disabled={isSubmitting} size="sm" className="bg-[#A5243D] hover:bg-[#7D1830] text-white h-8">
+                                        {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("save")}
+                                      </Button>
+                                      <Button variant="outline" size="sm" onClick={() => setEditingComment(null)} className="h-8">{t("cancel")}</Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-gray-700 leading-relaxed">{comment.text}</p>
                                 )}
                               </div>
-                            )}
-                          </div>
-                          {editingComment === comment.id ? (
-                            <div>
-                              <Textarea value={editText} onChange={e => setEditText(e.target.value)} className="mb-2 text-sm" rows={2} />
-                              <div className="flex gap-2">
-                                <Button onClick={() => handleEditComment(comment.id)} disabled={isSubmitting} size="sm" className="shape-button bg-burgundy hover:bg-burgundyDark text-white h-8">
-                                  {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("save")}
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={() => setEditingComment(null)} className="h-8">{t("cancel")}</Button>
-                              </div>
+                            </motion.div>
+                          )) : (
+                            <div className="text-center py-12">
+                              <MessageCircle className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                              <p className="text-gray-400 text-sm">{t("noComments")}</p>
                             </div>
-                          ) : (
-                            <p className="text-sm text-gray-700 leading-relaxed">{comment.text}</p>
                           )}
                         </div>
                       </motion.div>
-                    )) : (
-                      <div className="text-center py-10">
-                        <MessageCircle className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                        <p className="text-gray-400 text-sm">{t("noComments")}</p>
-                      </div>
                     )}
-                  </div>
-                </section>
 
-                {/* Info */}
-                <section id="section-info" className="scroll-mt-32 lg:scroll-mt-44 bg-white shape-card shadow-soft p-5 sm:p-7">
-                  <SectionHeading icon={Info} label={t("info")} />
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-burgundy/[0.06] p-4 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 text-burgundy mb-1">
-                        <Users className="w-4 h-4" />
-                        <span className="text-xs font-semibold uppercase tracking-wide">{t("donor")}</span>
-                      </div>
-                      <span className="text-2xl sm:text-3xl font-extrabold text-deep">{campaign.donationCount.toLocaleString()}</span>
-                    </div>
-                    <div className="rounded-2xl bg-gold/10 p-4 flex flex-col gap-1">
-                      <div className="flex items-center gap-1.5 mb-1" style={{ color: "#9a7727" }}>
-                        <TrendingUp className="w-4 h-4" />
-                        <span className="text-xs font-semibold uppercase tracking-wide">{t("completed")}</span>
-                      </div>
-                      <span className="text-2xl sm:text-3xl font-extrabold text-deep">{campaign.progress.toFixed(0)}%</span>
-                    </div>
-                  </div>
-                </section>
+                    {/* Info */}
+                    {activeTab === "info" && (
+                      <motion.div key="info" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-6">
+                        {/* Stats grid */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-[#A5243D]/6 rounded-xl p-4 flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 text-[#A5243D] mb-1">
+                              <Users className="w-4 h-4" />
+                              <span className="text-xs font-semibold uppercase tracking-wide">{t("donor")}</span>
+                            </div>
+                            <span className="text-2xl sm:text-3xl font-extrabold text-gray-900">{campaign.donationCount.toLocaleString()}</span>
+                          </div>
+                          <div className="bg-[#A5243D]/6 rounded-xl p-4 flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 text-[#D8AA55] mb-1">
+                              <TrendingUp className="w-4 h-4" />
+                              <span className="text-xs font-semibold uppercase tracking-wide">{t("completed")}</span>
+                            </div>
+                            <span className="text-2xl sm:text-3xl font-extrabold text-gray-900">{campaign.progress.toFixed(0)}%</span>
+                          </div>
+                        </div>
+
+                        {/* Top donors */}
+                        {/* {campaign.donationStats && (campaign.donationStats.first || campaign.donationStats.largest || campaign.donationStats.last) && (
+                          <div>
+                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-3">{t("topDonors")}</h3>
+                            <div className="space-y-2">
+                              {[
+                                { stat: campaign.donationStats.first, label: t("firstDonor"), icon: Star, color: "text-amber-500 bg-amber-50" },
+                                { stat: campaign.donationStats.largest, label: t("largestDonor"), icon: Trophy, color: "text-[#A5243D] bg-[#A5243D]/8" },
+                                { stat: campaign.donationStats.last, label: t("latestDonor"), icon: Heart, color: "text-rose-500 bg-rose-50" },
+                              ].filter(d => d.stat).map(({ stat, label, icon: Icon, color }) => (
+                                <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+                                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${color}`}>
+                                    <Icon className="w-4 h-4" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[11px] text-gray-400 font-medium">{label}</p>
+                                    <p className="text-sm font-bold text-gray-900 truncate">{stat!.donor}</p>
+                                  </div>
+                                  <span className="text-sm font-bold text-[#A5243D] flex-shrink-0">{stat!.amount.toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )} */}
+                      </motion.div>
+                    )}
+
+                  </AnimatePresence>
+                </div>
               </div>
+
+              {/* ── Campaign video ── */}
+              {campaign.videoUrl && (
+                <VideoEmbed
+                  rawUrl={campaign.videoUrl}
+                  title={String(campaign.title ?? "")}
+                  className="mx-4 sm:mx-0 rounded-2xl sm:rounded-3xl overflow-hidden shadow-soft ring-1 ring-black/5 bg-black"
+                />
+              )}
             </div>
 
-            {/* Right: donation rail (desktop) */}
-            <div id="donation-rail" className="lg:col-span-4 max-lg:hidden">
+            {/* ── Right sidebar (desktop + tablet stacked) ── */}
+            <div className="lg:col-span-4 max-sm:hidden px-4 sm:px-0 mt-2 lg:mt-0">
               <DonationSidebar campaign={campaign} />
             </div>
           </div>
 
-          {/* Suggested campaigns from the same category */}
+          {/* ── Suggested campaigns from the same category ── */}
           {campaign.category?.id && (
-            <div className="mt-8 sm:mt-12">
+            <div className="mt-6 sm:mt-10">
               <SuggestedCampaigns
                 categoryId={campaign.category.id}
                 currentCampaignId={campaign.id}
@@ -774,8 +740,8 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
           )}
         </div>
 
-        {/* Mobile / tablet sticky donate bar */}
-        <div className="lg:hidden">
+        {/* Mobile sticky donate bar */}
+        <div className="sm:hidden">
           <DonationSidebar campaign={campaign} isMobileSticky />
         </div>
       </main>
@@ -788,39 +754,44 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
 
 // Loading Skeleton
 const LoadingSkeleton = () => (
-  <div className="min-h-screen bg-offwhite/60 pb-28 lg:pb-16">
-    {/* Hero skeleton */}
-    <div className="relative h-[58vh] min-h-[440px] max-h-[660px] w-full bg-deep overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-[shimmer_1.8s_infinite] -translate-x-full" />
-      <div className="absolute inset-x-0 bottom-0">
-        <div className="max-w-7xl mx-auto px-4 lg:px-8 pb-10 space-y-4">
-          <div className="flex gap-2">
-            <div className="h-7 w-28 bg-white/20 rounded-full animate-pulse" />
-            <div className="h-7 w-24 bg-white/15 rounded-full animate-pulse" />
-          </div>
-          <div className="h-10 w-3/4 bg-white/20 rounded-xl animate-pulse" />
-          <div className="h-10 w-1/2 bg-white/15 rounded-xl animate-pulse" />
-          <div className="flex gap-2.5 pt-2">
-            <div className="h-9 w-28 bg-white/20 rounded-full animate-pulse" />
-            <div className="h-9 w-28 bg-white/15 rounded-full animate-pulse" />
-          </div>
-        </div>
-      </div>
-    </div>
+  <div className="min-h-screen bg-offwhite/60 pb-28 sm:pb-12">
+    <div className="max-w-7xl mx-auto px-4 sm:py-8">
+      <div className="grid lg:grid-cols-12 gap-6 lg:gap-8">
 
-    {/* Body skeleton */}
-    <div className="max-w-7xl mx-auto px-4 lg:px-8 mt-6 lg:mt-10">
-      <div className="grid lg:grid-cols-12 gap-6 lg:gap-10">
-        <div className="lg:col-span-8 space-y-5">
-          <div className="h-14 bg-white shape-card shadow-soft animate-pulse" />
-          <div className="bg-white shape-card shadow-soft p-7 space-y-3">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className={`h-3.5 bg-gray-100 rounded-full animate-pulse ${
-                i === 3 ? "w-4/5" : i === 5 ? "w-2/3" : i === 6 ? "w-3/4" : "w-full"
-              }`} />
-            ))}
+        {/* Left column */}
+        <div className="lg:col-span-8 flex flex-col gap-5 sm:gap-6 pt-5 sm:pt-0">
+
+          {/* Editorial header skeleton */}
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <div className="h-7 w-24 bg-gray-200 rounded-full animate-pulse" />
+              <div className="h-7 w-20 bg-gray-200 rounded-full animate-pulse" />
+            </div>
+            <div className="h-9 w-11/12 bg-gray-200 rounded-lg animate-pulse" />
+            <div className="h-9 w-3/4 bg-gray-200 rounded-lg animate-pulse" />
+          </div>
+
+          {/* Hero image skeleton */}
+          <div className="rounded-2xl sm:rounded-3xl overflow-hidden bg-gray-200 animate-pulse aspect-[4/3] sm:aspect-[16/10] w-full" />
+
+          {/* Tabs card skeleton */}
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-soft overflow-hidden">
+            <div className="grid grid-cols-4 gap-1 p-2 sm:p-3 border-b border-gray-100">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-9 bg-gray-100 rounded-xl animate-pulse" />
+              ))}
+            </div>
+            <div className="p-5 sm:p-7 space-y-3">
+              {[1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className={`h-3.5 bg-gray-100 rounded-full animate-pulse ${
+                  i === 3 ? "w-4/5" : i === 5 ? "w-2/3" : i === 6 ? "w-3/4" : "w-full"
+                }`} />
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Sidebar skeleton */}
         <div className="lg:col-span-4 hidden lg:block">
           <div className="bg-white rounded-3xl border border-gray-100 shadow-soft overflow-hidden">
             <div className="h-1.5 w-full bg-gray-200" />
@@ -833,6 +804,7 @@ const LoadingSkeleton = () => (
             </div>
           </div>
         </div>
+
       </div>
     </div>
   </div>
