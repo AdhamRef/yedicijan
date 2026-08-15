@@ -44,13 +44,17 @@ for (const [name, path] of ROUTES) {
   page.on("response", (r) => {
     if (r.url() === BASE + path) status = r.status();
   });
+  let navErr = "";
   try {
     await page.goto(BASE + path, { waitUntil: "networkidle2", timeout: 120000 });
-  } catch {}
+  } catch (e) {
+    navErr = String(e).slice(0, 80);
+  }
   await page.waitForFunction(() => document.querySelectorAll(".animate-pulse").length === 0, { timeout: 20000 }).catch(() => {});
   await new Promise((r) => setTimeout(r, 1200));
 
   const s = await page.evaluate(() => {
+    if (!document.body) return { noBody: true };
     const painted = new Set();
     for (const el of document.querySelectorAll("*")) {
       const cs = getComputedStyle(el);
@@ -68,13 +72,18 @@ for (const [name, path] of ROUTES) {
     };
   });
 
-  await page.screenshot({ path: `${OUT}/${name}.png` });
-  const flag = s.oldBlue || s.oldOrange ? "  <<< OLD BRAND COLOUR" : "";
-  if (s.oldBlue || s.oldOrange) bad.push(name);
-  console.log(
-    `${name.padEnd(20)} http=${String(status).padEnd(4)} burgundy=${s.burgundy ? "Y" : "-"} gold=${s.gold ? "Y" : "-"} deep=${s.deep ? "Y" : "-"} ` +
-      `oldBlue=${s.oldBlue ? "Y" : "-"} oldOrange=${s.oldOrange ? "Y" : "-"} text=${String(s.text).padEnd(6)}${flag}`
-  );
+  await page.screenshot({ path: `${OUT}/${name}.png` }).catch(() => {});
+  if (s.noBody) {
+    bad.push(`${name} (no body)`);
+    console.log(`${name.padEnd(20)} http=${String(status).padEnd(4)} NO BODY ${navErr}`);
+  } else {
+    const flag = s.oldBlue || s.oldOrange ? "  <<< OLD BRAND COLOUR" : "";
+    if (s.oldBlue || s.oldOrange) bad.push(name);
+    console.log(
+      `${name.padEnd(20)} http=${String(status).padEnd(4)} burgundy=${s.burgundy ? "Y" : "-"} gold=${s.gold ? "Y" : "-"} deep=${s.deep ? "Y" : "-"} ` +
+        `oldBlue=${s.oldBlue ? "Y" : "-"} oldOrange=${s.oldOrange ? "Y" : "-"} text=${String(s.text).padEnd(6)}${flag} ${navErr}`
+    );
+  }
   await page.close();
 }
 
