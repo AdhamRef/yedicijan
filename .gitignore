@@ -43,3 +43,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .qodo
+
+# local scratch space (debug scripts, screenshots)
+/tmp/
+
+# integration test build output
+/.integration-test-build/
