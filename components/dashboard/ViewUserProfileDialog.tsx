@@ -37,10 +37,9 @@ import {
   Check,
   TrendingUp,
   Cake,
-  Mars,
-  Venus,
   CircleHelp,
 } from "lucide-react";
+import type { LucideProps } from "lucide-react";
 import ReactCountryFlag from "react-country-flag";
 import { useCurrency } from "@/context/CurrencyContext";
 import { cn } from "@/lib/utils";
@@ -56,6 +55,37 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SendTemplateDialog } from "@/components/dashboard/SendTemplateDialog";
+
+// lucide-react is pinned at 0.474, which predates its `Mars`/`Venus` icons.
+// They are redrawn here with lucide's own geometry and default attributes so
+// they sit beside `CircleHelp` unchanged, without moving the whole icon set.
+const lucideDefaults = {
+  xmlns: "http://www.w3.org/2000/svg",
+  width: 24,
+  height: 24,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+} as const;
+
+const Mars = ({ size, ...props }: LucideProps) => (
+  <svg {...lucideDefaults} {...props} width={size ?? props.width ?? 24} height={size ?? props.height ?? 24}>
+    <path d="M16 3h5v5" />
+    <path d="m21 3-6.75 6.75" />
+    <circle cx="10" cy="14" r="6" />
+  </svg>
+);
+
+const Venus = ({ size, ...props }: LucideProps) => (
+  <svg {...lucideDefaults} {...props} width={size ?? props.width ?? 24} height={size ?? props.height ?? 24}>
+    <path d="M12 15v7" />
+    <path d="M9 19h6" />
+    <circle cx="12" cy="9" r="6" />
+  </svg>
+);
 import { DonorAttributionJourney } from "@/components/dashboard/DonorAttributionJourney";
 
 const CLARITY_PROJECT_ID =
