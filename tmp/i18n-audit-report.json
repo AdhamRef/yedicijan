@@ -1,0 +1,5432 @@
+{
+  "generatedAt": "2026-08-15T08:20:15.411Z",
+  "locales": [
+    "ar",
+    "en",
+    "fr",
+    "tr",
+    "id",
+    "pt",
+    "es",
+    "de"
+  ],
+  "referenceLocale": "en",
+  "summary": {
+    "ar": {
+      "totalStringKeys": 905,
+      "totalLeafKeys": 905,
+      "missingKeys": 0,
+      "emptyStrings": 0,
+      "unresolvedMacros": 0,
+      "identicalToEnglish": 8,
+      "englishLeakCandidates": 2
+    },
+    "en": {
+      "totalStringKeys": 905,
+      "totalLeafKeys": 905,
+      "missingKeys": 0,
+      "emptyStrings": 0,
+      "unresolvedMacros": 0,
+      "identicalToEnglish": 0,
+      "englishLeakCandidates": 0
+    },
+    "fr": {
+      "totalStringKeys": 905,
+      "totalLeafKeys": 905,
+      "missingKeys": 0,
+      "emptyStrings": 0,
+      "unresolvedMacros": 0,
+      "identicalToEnglish": 170,
+      "englishLeakCandidates": 62
+    },
+    "tr": {
+      "totalStringKeys": 905,
+      "totalLeafKeys": 905,
+      "missingKeys": 0,
+      "emptyStrings": 0,
+      "unresolvedMacros": 0,
+      "identicalToEnglish": 154,
+      "englishLeakCandidates": 51
+    },
+    "id": {
+      "totalStringKeys": 905,
+      "totalLeafKeys": 905,
+      "missingKeys": 0,
+      "emptyStrings": 0,
+      "unresolvedMacros": 0,
+      "identicalToEnglish": 170,
+      "englishLeakCandidates": 66
+    },
+    "pt": {
+      "totalStringKeys": 905,
+      "totalLeafKeys": 905,
+      "missingKeys": 0,
+      "emptyStrings": 0,
+      "unresolvedMacros": 0,
+      "identicalToEnglish": 160,
+      "englishLeakCandidates": 52
+    },
+    "es": {
+      "totalStringKeys": 905,
+      "totalLeafKeys": 905,
+      "missingKeys": 0,
+      "emptyStrings": 0,
+      "unresolvedMacros": 0,
+      "identicalToEnglish": 158,
+      "englishLeakCandidates": 50
+    },
+    "de": {
+      "totalStringKeys": 905,
+      "totalLeafKeys": 905,
+      "missingKeys": 0,
+      "emptyStrings": 0,
+      "unresolvedMacros": 0,
+      "identicalToEnglish": 164,
+      "englishLeakCandidates": 53
+    }
+  },
+  "missingKeys": {
+    "ar": [],
+    "en": [],
+    "fr": [],
+    "tr": [],
+    "id": [],
+    "pt": [],
+    "es": [],
+    "de": []
+  },
+  "emptyStrings": {
+    "ar": [],
+    "en": [],
+    "fr": [],
+    "tr": [],
+    "id": [],
+    "pt": [],
+    "es": [],
+    "de": []
+  },
+  "unresolvedMacros": {
+    "ar": [],
+    "en": [],
+    "fr": [],
+    "tr": [],
+    "id": [],
+    "pt": [],
+    "es": [],
+    "de": []
+  },
+  "englishLeakCandidates": {
+    "ar": [
+      {
+        "key": "ContactUs.emailPlaceholder",
+        "value": "example@email.com"
+      },
+      {
+        "key": "SignInDialog.emailPlaceholder",
+        "value": "example@email.com"
+      }
+    ],
+    "en": [],
+    "fr": [
+      {
+        "key": "AboutUs.contactUs",
+        "value": "Contact"
+      },
+      {
+        "key": "ContactUs.contactForm",
+        "value": "Formulaire de contact"
+      },
+      {
+        "key": "ContactUs.emailPlaceholder",
+        "value": "exemple@email.com"
+      },
+      {
+        "key": "ContactUs.message",
+        "value": "Message"
+      },
+      {
+        "key": "ContactUs.messageLabel",
+        "value": "Votre message"
+      },
+      {
+        "key": "ContactUs.messageTypeLabel",
+        "value": "Type de message"
+      },
+      {
+        "key": "ContactUs.pageTitle",
+        "value": "Contact"
+      },
+      {
+        "key": "ContactUs.sendMessage",
+        "value": "Envoyer le message"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "Footer.contactUs",
+        "value": "Contact"
+      },
+      {
+        "key": "Footer.messageLabel",
+        "value": "Message"
+      },
+      {
+        "key": "Footer.messageTitle",
+        "value": "Envoyez-nous un message"
+      },
+      {
+        "key": "Navbar.contact",
+        "value": "Contact"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      }
+    ],
+    "tr": [
+      {
+        "key": "ContactUs.emailPlaceholder",
+        "value": "ornek@email.com"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      }
+    ],
+    "id": [
+      {
+        "key": "ContactUs.email",
+        "value": "Email"
+      },
+      {
+        "key": "ContactUs.emailLabel",
+        "value": "Email"
+      },
+      {
+        "key": "ContactUs.emailPlaceholder",
+        "value": "contoh@email.com"
+      },
+      {
+        "key": "DonationDialog.certificateNoteBody",
+        "value": "Masukkan email asli Anda agar kami dapat mengirimkan sertifikat donasi resmi dan kuitansi kepada Anda."
+      },
+      {
+        "key": "DonationDialog.email",
+        "value": "Email"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "Footer.emailPlaceholder",
+        "value": "Email (untuk tamu)"
+      },
+      {
+        "key": "Profile.account.email",
+        "value": "Email"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.settings.emailNotifications",
+        "value": "Notifikasi Email"
+      },
+      {
+        "key": "Profile.settings.emailNotificationsDesc",
+        "value": "Terima pembaruan melalui email"
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      },
+      {
+        "key": "SignInDialog.checkYourEmail",
+        "value": "Periksa email Anda"
+      },
+      {
+        "key": "SignInDialog.emailAddress",
+        "value": "Alamat Email"
+      },
+      {
+        "key": "SignInDialog.emailAlreadyExists",
+        "value": "Email sudah terdaftar"
+      },
+      {
+        "key": "SignInDialog.invalidCredentials",
+        "value": "Email atau kata sandi salah"
+      },
+      {
+        "key": "SignInDialog.invalidEmail",
+        "value": "Alamat email tidak valid"
+      },
+      {
+        "key": "SignInDialog.signInWithEmail",
+        "value": "Masuk dengan Email"
+      },
+      {
+        "key": "SignInDialog.verifyEmail",
+        "value": "Verifikasi Email Anda"
+      }
+    ],
+    "pt": [
+      {
+        "key": "ContactUs.emailPlaceholder",
+        "value": "exemplo@email.com"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "Footer.newsletterTitle",
+        "value": "Assine nossa newsletter"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      }
+    ],
+    "es": [
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      }
+    ],
+    "de": [
+      {
+        "key": "ContactUs.emailPlaceholder",
+        "value": "beispiel@email.com"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "Footer.newsletterTitle",
+        "value": "Abonniere unseren Newsletter"
+      },
+      {
+        "key": "Navbar.dashboard",
+        "value": "Dashboard"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      }
+    ]
+  },
+  "identicalToEnglish": {
+    "ar": [
+      {
+        "key": "ContactUs.emailPlaceholder",
+        "value": "example@email.com"
+      },
+      {
+        "key": "ContactUs.phonePlaceholder",
+        "value": "+90 XXX XXX XX XX"
+      },
+      {
+        "key": "DonationDialog.cardNumberPlaceholder",
+        "value": "0000 0000 0000 0000"
+      },
+      {
+        "key": "DonationDialog.expiryDatePlaceholder",
+        "value": "MM/YY"
+      },
+      {
+        "key": "DonationDialog.securityCodePlaceholder",
+        "value": "CVV"
+      },
+      {
+        "key": "Profile.donations.noCampaignTitle",
+        "value": "—"
+      },
+      {
+        "key": "Profile.donations.paymentMethodPaypal",
+        "value": "PayPal"
+      },
+      {
+        "key": "Profile.receipts.downloadPdfShort",
+        "value": "PDF"
+      }
+    ],
+    "en": [],
+    "fr": [
+      {
+        "key": "Blog.article",
+        "value": "Article"
+      },
+      {
+        "key": "Blog.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Blog.metaTitleSuffix",
+        "value": " - Qurrat Al-Ayun"
+      },
+      {
+        "key": "Blog.ourBlog",
+        "value": "Articles"
+      },
+      {
+        "key": "Campaign.image",
+        "value": "Image"
+      },
+      {
+        "key": "Campaign.story",
+        "value": "Description"
+      },
+      {
+        "key": "CampaignsPage.maxAmount",
+        "value": "Maximum ($)"
+      },
+      {
+        "key": "CampaignsPage.minAmount",
+        "value": "Minimum ($)"
+      },
+      {
+        "key": "CartSheet.total",
+        "value": "Total"
+      },
+      {
+        "key": "ContactUs.message",
+        "value": "Message"
+      },
+      {
+        "key": "ContactUs.phonePlaceholder",
+        "value": "+90 XXX XXX XX XX"
+      },
+      {
+        "key": "ContactUs.whatsapp",
+        "value": "WhatsApp"
+      },
+      {
+        "key": "DonationDialog.cardNumberPlaceholder",
+        "value": "0000 0000 0000 0000"
+      },
+      {
+        "key": "DonationDialog.confirmation",
+        "value": "Confirmation"
+      },
+      {
+        "key": "DonationDialog.securityCodePlaceholder",
+        "value": "CVV"
+      },
+      {
+        "key": "DonationDialog.total",
+        "value": "Total"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.reason",
+        "value": "Your bank's 3-D Secure verification didn't go through. This usually means the SMS/app code was wrong or timed out."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.title",
+        "value": "3-D Secure check failed"
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.reason",
+        "value": "Your card issuer refused this transaction. This is the bank's call, not ours — they don't always share the exact reason."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.title",
+        "value": "Your bank declined the card"
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipRetry",
+        "value": "Try the same card again — temporary errors usually clear within a few minutes."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.fix",
+        "value": "Switch the currency from the top-right of the site, or use a card that supports international payments."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.title",
+        "value": "Currency not supported by your card"
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.reason",
+        "value": "Your bank refused the transaction without telling us exactly why. This is often a fraud-prevention block on cross-border donations."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.title",
+        "value": "Generic decline by your bank"
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.fix",
+        "value": "Switch to a valid card. Your bank can issue a replacement if needed."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.reason",
+        "value": "The card you used is past its expiry date. Banks won't process payments on expired cards."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.title",
+        "value": "The card has expired"
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.fix",
+        "value": "Call the number on the back of your card, confirm it's really you, and ask them to whitelist this merchant."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.title",
+        "value": "Blocked as suspected fraud"
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.reason",
+        "value": "The card number we sent didn't match a valid card at your bank."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.title",
+        "value": "The card number looks wrong"
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.title",
+        "value": "Insufficient funds"
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.reason",
+        "value": "The 3- or 4-digit CVV/CVC didn't match what your bank has on file."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.title",
+        "value": "The security code (CVV) was wrong"
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.title",
+        "value": "Your bank's system is unavailable"
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.reason",
+        "value": "Your card's daily spend limit or transaction count for the month has been exceeded."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.title",
+        "value": "Daily or monthly limit reached"
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.reason",
+        "value": "Your bank flagged this card as lost or stolen and won't allow new payments on it."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.title",
+        "value": "Card reported lost or stolen"
+      },
+      {
+        "key": "DonationFailed.errors.networkError.fix",
+        "value": "Check your internet connection, then retry. The exact same card will most likely succeed."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.title",
+        "value": "Connection problem"
+      },
+      {
+        "key": "DonationFailed.errors.processingError.fix",
+        "value": "Wait a minute and retry. Most processing errors clear by themselves."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.title",
+        "value": "Temporary processing error"
+      },
+      {
+        "key": "DonationFailed.howToFixTitle",
+        "value": "How to fix it"
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.rawCodeLabel",
+        "value": "Code"
+      },
+      {
+        "key": "DonationFailed.rawMessageToggle",
+        "value": "Technical details from the bank"
+      },
+      {
+        "key": "DonationFailed.reassurance",
+        "value": "You haven't been charged for the attempt. Let's get this fixed."
+      },
+      {
+        "key": "DonationFailed.retry.amountLabel",
+        "value": "Amount"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.ctaMonthly",
+        "value": "Continue to monthly checkout"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.monthly",
+        "value": "Monthly"
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.oneTime",
+        "value": "One-time"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.perMonth",
+        "value": "/ month"
+      },
+      {
+        "key": "DonationFailed.retry.securedBy",
+        "value": "Secure checkout powered by Stripe."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "DonationFailed.severityHard",
+        "value": "Bank declined"
+      },
+      {
+        "key": "DonationFailed.severitySoft",
+        "value": "Card issue"
+      },
+      {
+        "key": "Footer.messageLabel",
+        "value": "Message"
+      },
+      {
+        "key": "HomePage.stat4Label",
+        "value": "Continents"
+      },
+      {
+        "key": "Navbar.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Profile.account.addressTitle",
+        "value": "Address"
+      },
+      {
+        "key": "Profile.account.namePlaceholder",
+        "value": "Your name"
+      },
+      {
+        "key": "Profile.avatar.change",
+        "value": "Change photo"
+      },
+      {
+        "key": "Profile.avatar.failed",
+        "value": "Could not update your photo"
+      },
+      {
+        "key": "Profile.avatar.notImage",
+        "value": "Please pick an image file"
+      },
+      {
+        "key": "Profile.avatar.remove",
+        "value": "Remove photo"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.tooLarge",
+        "value": "Image must be smaller than 2 MB"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.none",
+        "value": "Not specified"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.countryPicker.title",
+        "value": "Choose your country"
+      },
+      {
+        "key": "Profile.donations.actions",
+        "value": "Actions"
+      },
+      {
+        "key": "Profile.donations.date",
+        "value": "Date"
+      },
+      {
+        "key": "Profile.donations.noCampaignTitle",
+        "value": "—"
+      },
+      {
+        "key": "Profile.donations.paymentMethodPaypal",
+        "value": "PayPal"
+      },
+      {
+        "key": "Profile.donations.total",
+        "value": "Total"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.acrossSubs",
+        "value": "across {count} subscription(s)"
+      },
+      {
+        "key": "Profile.impact.badgesEarned",
+        "value": "{count} badge(s) earned"
+      },
+      {
+        "key": "Profile.impact.badgesHint",
+        "value": "View your badges on the homepage donor board"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.monthlyMrr",
+        "value": "Monthly giving"
+      },
+      {
+        "key": "Profile.impact.monthsStreak",
+        "value": "{count} month(s) in a row"
+      },
+      {
+        "key": "Profile.impact.noStreak",
+        "value": "Start a streak"
+      },
+      {
+        "key": "Profile.impact.streak",
+        "value": "Streak"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.impact.totalGiven",
+        "value": "Total given"
+      },
+      {
+        "key": "Profile.nav.settingsDesc",
+        "value": "Security, password and notification preferences"
+      },
+      {
+        "key": "Profile.nav.support",
+        "value": "Support"
+      },
+      {
+        "key": "Profile.password.cancel",
+        "value": "Cancel"
+      },
+      {
+        "key": "Profile.password.change",
+        "value": "Change password"
+      },
+      {
+        "key": "Profile.password.confirmLabel",
+        "value": "Confirm new password"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.password.errorMinLength",
+        "value": "Password must be at least 8 characters"
+      },
+      {
+        "key": "Profile.password.errorMismatch",
+        "value": "New passwords do not match"
+      },
+      {
+        "key": "Profile.password.failed",
+        "value": "Could not update your password"
+      },
+      {
+        "key": "Profile.password.hide",
+        "value": "Hide password"
+      },
+      {
+        "key": "Profile.password.hint",
+        "value": "At least 8 characters. Mix letters, numbers and a symbol for a strong password."
+      },
+      {
+        "key": "Profile.password.label",
+        "value": "Password"
+      },
+      {
+        "key": "Profile.password.newLabel",
+        "value": "New password"
+      },
+      {
+        "key": "Profile.password.save",
+        "value": "Save password"
+      },
+      {
+        "key": "Profile.password.set",
+        "value": "Set a password"
+      },
+      {
+        "key": "Profile.password.show",
+        "value": "Show password"
+      },
+      {
+        "key": "Profile.password.strengthOk",
+        "value": "OK"
+      },
+      {
+        "key": "Profile.password.strengthStrong",
+        "value": "Strong"
+      },
+      {
+        "key": "Profile.password.strengthWeak",
+        "value": "Weak"
+      },
+      {
+        "key": "Profile.password.success",
+        "value": "Password updated"
+      },
+      {
+        "key": "Profile.receipts.downloadPdfShort",
+        "value": "PDF"
+      },
+      {
+        "key": "Profile.settings.notifications",
+        "value": "Notifications"
+      },
+      {
+        "key": "Profile.settings.securityTitle",
+        "value": "Security & password"
+      },
+      {
+        "key": "Profile.support.bodyHint",
+        "value": "{remaining} characters remaining"
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.bodyPlaceholder",
+        "value": "Tell us what's going on…"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.historyEmpty",
+        "value": "You haven't sent any support messages yet."
+      },
+      {
+        "key": "Profile.support.historySubtitle",
+        "value": "The last 50 messages you've sent through this form."
+      },
+      {
+        "key": "Profile.support.historyTitle",
+        "value": "Your previous requests"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.newTitle",
+        "value": "Open a support request"
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjectLabel",
+        "value": "Topic"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.COMPLAINT",
+        "value": "Complaint"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      },
+      {
+        "key": "Profile.support.subjects.GENERAL",
+        "value": "General"
+      },
+      {
+        "key": "Profile.support.subjects.PARTNERSHIP",
+        "value": "Partnership"
+      },
+      {
+        "key": "Profile.support.subjects.VOLUNTEERING",
+        "value": "Volunteering"
+      },
+      {
+        "key": "Profile.support.submit",
+        "value": "Send request"
+      },
+      {
+        "key": "Profile.toast.notificationsUpdated",
+        "value": "Notification preferences saved"
+      },
+      {
+        "key": "SharePopup.facebook",
+        "value": "Facebook"
+      },
+      {
+        "key": "SharePopup.telegram",
+        "value": "Telegram"
+      },
+      {
+        "key": "SharePopup.twitter",
+        "value": "Twitter"
+      },
+      {
+        "key": "SharePopup.whatsapp",
+        "value": "WhatsApp"
+      }
+    ],
+    "tr": [
+      {
+        "key": "Blog.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "CampaignsPage.minAmount",
+        "value": "Minimum ($)"
+      },
+      {
+        "key": "ContactUs.phonePlaceholder",
+        "value": "+90 XXX XXX XX XX"
+      },
+      {
+        "key": "ContactUs.whatsapp",
+        "value": "WhatsApp"
+      },
+      {
+        "key": "DonationDialog.cardNumberPlaceholder",
+        "value": "0000 0000 0000 0000"
+      },
+      {
+        "key": "DonationDialog.securityCodePlaceholder",
+        "value": "CVV"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.reason",
+        "value": "Your bank's 3-D Secure verification didn't go through. This usually means the SMS/app code was wrong or timed out."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.title",
+        "value": "3-D Secure check failed"
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.reason",
+        "value": "Your card issuer refused this transaction. This is the bank's call, not ours — they don't always share the exact reason."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.title",
+        "value": "Your bank declined the card"
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipRetry",
+        "value": "Try the same card again — temporary errors usually clear within a few minutes."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.fix",
+        "value": "Switch the currency from the top-right of the site, or use a card that supports international payments."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.title",
+        "value": "Currency not supported by your card"
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.reason",
+        "value": "Your bank refused the transaction without telling us exactly why. This is often a fraud-prevention block on cross-border donations."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.title",
+        "value": "Generic decline by your bank"
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.fix",
+        "value": "Switch to a valid card. Your bank can issue a replacement if needed."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.reason",
+        "value": "The card you used is past its expiry date. Banks won't process payments on expired cards."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.title",
+        "value": "The card has expired"
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.fix",
+        "value": "Call the number on the back of your card, confirm it's really you, and ask them to whitelist this merchant."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.title",
+        "value": "Blocked as suspected fraud"
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.reason",
+        "value": "The card number we sent didn't match a valid card at your bank."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.title",
+        "value": "The card number looks wrong"
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.title",
+        "value": "Insufficient funds"
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.reason",
+        "value": "The 3- or 4-digit CVV/CVC didn't match what your bank has on file."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.title",
+        "value": "The security code (CVV) was wrong"
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.title",
+        "value": "Your bank's system is unavailable"
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.reason",
+        "value": "Your card's daily spend limit or transaction count for the month has been exceeded."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.title",
+        "value": "Daily or monthly limit reached"
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.reason",
+        "value": "Your bank flagged this card as lost or stolen and won't allow new payments on it."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.title",
+        "value": "Card reported lost or stolen"
+      },
+      {
+        "key": "DonationFailed.errors.networkError.fix",
+        "value": "Check your internet connection, then retry. The exact same card will most likely succeed."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.title",
+        "value": "Connection problem"
+      },
+      {
+        "key": "DonationFailed.errors.processingError.fix",
+        "value": "Wait a minute and retry. Most processing errors clear by themselves."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.title",
+        "value": "Temporary processing error"
+      },
+      {
+        "key": "DonationFailed.howToFixTitle",
+        "value": "How to fix it"
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.rawCodeLabel",
+        "value": "Code"
+      },
+      {
+        "key": "DonationFailed.rawMessageToggle",
+        "value": "Technical details from the bank"
+      },
+      {
+        "key": "DonationFailed.reassurance",
+        "value": "You haven't been charged for the attempt. Let's get this fixed."
+      },
+      {
+        "key": "DonationFailed.retry.amountLabel",
+        "value": "Amount"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.ctaMonthly",
+        "value": "Continue to monthly checkout"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.monthly",
+        "value": "Monthly"
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.oneTime",
+        "value": "One-time"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.perMonth",
+        "value": "/ month"
+      },
+      {
+        "key": "DonationFailed.retry.securedBy",
+        "value": "Secure checkout powered by Stripe."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "DonationFailed.severityHard",
+        "value": "Bank declined"
+      },
+      {
+        "key": "DonationFailed.severitySoft",
+        "value": "Card issue"
+      },
+      {
+        "key": "Navbar.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Profile.account.addressTitle",
+        "value": "Address"
+      },
+      {
+        "key": "Profile.account.namePlaceholder",
+        "value": "Your name"
+      },
+      {
+        "key": "Profile.avatar.change",
+        "value": "Change photo"
+      },
+      {
+        "key": "Profile.avatar.failed",
+        "value": "Could not update your photo"
+      },
+      {
+        "key": "Profile.avatar.notImage",
+        "value": "Please pick an image file"
+      },
+      {
+        "key": "Profile.avatar.remove",
+        "value": "Remove photo"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.tooLarge",
+        "value": "Image must be smaller than 2 MB"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.none",
+        "value": "Not specified"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.countryPicker.title",
+        "value": "Choose your country"
+      },
+      {
+        "key": "Profile.donations.noCampaignTitle",
+        "value": "—"
+      },
+      {
+        "key": "Profile.donations.paymentMethodPaypal",
+        "value": "PayPal"
+      },
+      {
+        "key": "Profile.donations.referenceShort",
+        "value": "Ref."
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.acrossSubs",
+        "value": "across {count} subscription(s)"
+      },
+      {
+        "key": "Profile.impact.badgesEarned",
+        "value": "{count} badge(s) earned"
+      },
+      {
+        "key": "Profile.impact.badgesHint",
+        "value": "View your badges on the homepage donor board"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.monthlyMrr",
+        "value": "Monthly giving"
+      },
+      {
+        "key": "Profile.impact.monthsStreak",
+        "value": "{count} month(s) in a row"
+      },
+      {
+        "key": "Profile.impact.noStreak",
+        "value": "Start a streak"
+      },
+      {
+        "key": "Profile.impact.streak",
+        "value": "Streak"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.impact.totalGiven",
+        "value": "Total given"
+      },
+      {
+        "key": "Profile.nav.settingsDesc",
+        "value": "Security, password and notification preferences"
+      },
+      {
+        "key": "Profile.password.cancel",
+        "value": "Cancel"
+      },
+      {
+        "key": "Profile.password.change",
+        "value": "Change password"
+      },
+      {
+        "key": "Profile.password.confirmLabel",
+        "value": "Confirm new password"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.password.errorMinLength",
+        "value": "Password must be at least 8 characters"
+      },
+      {
+        "key": "Profile.password.errorMismatch",
+        "value": "New passwords do not match"
+      },
+      {
+        "key": "Profile.password.failed",
+        "value": "Could not update your password"
+      },
+      {
+        "key": "Profile.password.hide",
+        "value": "Hide password"
+      },
+      {
+        "key": "Profile.password.hint",
+        "value": "At least 8 characters. Mix letters, numbers and a symbol for a strong password."
+      },
+      {
+        "key": "Profile.password.label",
+        "value": "Password"
+      },
+      {
+        "key": "Profile.password.newLabel",
+        "value": "New password"
+      },
+      {
+        "key": "Profile.password.save",
+        "value": "Save password"
+      },
+      {
+        "key": "Profile.password.set",
+        "value": "Set a password"
+      },
+      {
+        "key": "Profile.password.show",
+        "value": "Show password"
+      },
+      {
+        "key": "Profile.password.strengthOk",
+        "value": "OK"
+      },
+      {
+        "key": "Profile.password.strengthStrong",
+        "value": "Strong"
+      },
+      {
+        "key": "Profile.password.strengthWeak",
+        "value": "Weak"
+      },
+      {
+        "key": "Profile.password.success",
+        "value": "Password updated"
+      },
+      {
+        "key": "Profile.receipts.downloadPdfShort",
+        "value": "PDF"
+      },
+      {
+        "key": "Profile.settings.securityTitle",
+        "value": "Security & password"
+      },
+      {
+        "key": "Profile.support.bodyHint",
+        "value": "{remaining} characters remaining"
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.bodyPlaceholder",
+        "value": "Tell us what's going on…"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.historyEmpty",
+        "value": "You haven't sent any support messages yet."
+      },
+      {
+        "key": "Profile.support.historySubtitle",
+        "value": "The last 50 messages you've sent through this form."
+      },
+      {
+        "key": "Profile.support.historyTitle",
+        "value": "Your previous requests"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.newTitle",
+        "value": "Open a support request"
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjectLabel",
+        "value": "Topic"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.COMPLAINT",
+        "value": "Complaint"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      },
+      {
+        "key": "Profile.support.subjects.GENERAL",
+        "value": "General"
+      },
+      {
+        "key": "Profile.support.subjects.PARTNERSHIP",
+        "value": "Partnership"
+      },
+      {
+        "key": "Profile.support.subjects.VOLUNTEERING",
+        "value": "Volunteering"
+      },
+      {
+        "key": "Profile.support.submit",
+        "value": "Send request"
+      },
+      {
+        "key": "Profile.toast.notificationsUpdated",
+        "value": "Notification preferences saved"
+      },
+      {
+        "key": "SharePopup.facebook",
+        "value": "Facebook"
+      },
+      {
+        "key": "SharePopup.telegram",
+        "value": "Telegram"
+      },
+      {
+        "key": "SharePopup.twitter",
+        "value": "Twitter"
+      },
+      {
+        "key": "SharePopup.whatsapp",
+        "value": "WhatsApp"
+      }
+    ],
+    "id": [
+      {
+        "key": "Blog.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Blog.metaTitleSuffix",
+        "value": " - Qurrat Al-Ayun"
+      },
+      {
+        "key": "Campaign.edit",
+        "value": "Edit"
+      },
+      {
+        "key": "Campaign.info",
+        "value": "Info"
+      },
+      {
+        "key": "CampaignsPage.filter",
+        "value": "Filter"
+      },
+      {
+        "key": "CampaignsPage.minAmount",
+        "value": "Minimum ($)"
+      },
+      {
+        "key": "CartSheet.item",
+        "value": "item"
+      },
+      {
+        "key": "CartSheet.subtotal",
+        "value": "Subtotal"
+      },
+      {
+        "key": "CartSheet.total",
+        "value": "Total"
+      },
+      {
+        "key": "ContactUs.email",
+        "value": "Email"
+      },
+      {
+        "key": "ContactUs.emailLabel",
+        "value": "Email"
+      },
+      {
+        "key": "ContactUs.phonePlaceholder",
+        "value": "+90 XXX XXX XX XX"
+      },
+      {
+        "key": "ContactUs.whatsapp",
+        "value": "WhatsApp"
+      },
+      {
+        "key": "DonationDialog.cardNumberPlaceholder",
+        "value": "0000 0000 0000 0000"
+      },
+      {
+        "key": "DonationDialog.email",
+        "value": "Email"
+      },
+      {
+        "key": "DonationDialog.expiryDatePlaceholder",
+        "value": "MM/YY"
+      },
+      {
+        "key": "DonationDialog.securityCodePlaceholder",
+        "value": "CVV"
+      },
+      {
+        "key": "DonationDialog.total",
+        "value": "Total"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.reason",
+        "value": "Your bank's 3-D Secure verification didn't go through. This usually means the SMS/app code was wrong or timed out."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.title",
+        "value": "3-D Secure check failed"
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.reason",
+        "value": "Your card issuer refused this transaction. This is the bank's call, not ours — they don't always share the exact reason."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.title",
+        "value": "Your bank declined the card"
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipRetry",
+        "value": "Try the same card again — temporary errors usually clear within a few minutes."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.fix",
+        "value": "Switch the currency from the top-right of the site, or use a card that supports international payments."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.title",
+        "value": "Currency not supported by your card"
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.reason",
+        "value": "Your bank refused the transaction without telling us exactly why. This is often a fraud-prevention block on cross-border donations."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.title",
+        "value": "Generic decline by your bank"
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.fix",
+        "value": "Switch to a valid card. Your bank can issue a replacement if needed."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.reason",
+        "value": "The card you used is past its expiry date. Banks won't process payments on expired cards."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.title",
+        "value": "The card has expired"
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.fix",
+        "value": "Call the number on the back of your card, confirm it's really you, and ask them to whitelist this merchant."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.title",
+        "value": "Blocked as suspected fraud"
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.reason",
+        "value": "The card number we sent didn't match a valid card at your bank."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.title",
+        "value": "The card number looks wrong"
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.title",
+        "value": "Insufficient funds"
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.reason",
+        "value": "The 3- or 4-digit CVV/CVC didn't match what your bank has on file."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.title",
+        "value": "The security code (CVV) was wrong"
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.title",
+        "value": "Your bank's system is unavailable"
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.reason",
+        "value": "Your card's daily spend limit or transaction count for the month has been exceeded."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.title",
+        "value": "Daily or monthly limit reached"
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.reason",
+        "value": "Your bank flagged this card as lost or stolen and won't allow new payments on it."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.title",
+        "value": "Card reported lost or stolen"
+      },
+      {
+        "key": "DonationFailed.errors.networkError.fix",
+        "value": "Check your internet connection, then retry. The exact same card will most likely succeed."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.title",
+        "value": "Connection problem"
+      },
+      {
+        "key": "DonationFailed.errors.processingError.fix",
+        "value": "Wait a minute and retry. Most processing errors clear by themselves."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.title",
+        "value": "Temporary processing error"
+      },
+      {
+        "key": "DonationFailed.howToFixTitle",
+        "value": "How to fix it"
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.rawCodeLabel",
+        "value": "Code"
+      },
+      {
+        "key": "DonationFailed.rawMessageToggle",
+        "value": "Technical details from the bank"
+      },
+      {
+        "key": "DonationFailed.reassurance",
+        "value": "You haven't been charged for the attempt. Let's get this fixed."
+      },
+      {
+        "key": "DonationFailed.retry.amountLabel",
+        "value": "Amount"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.ctaMonthly",
+        "value": "Continue to monthly checkout"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.monthly",
+        "value": "Monthly"
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.oneTime",
+        "value": "One-time"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.perMonth",
+        "value": "/ month"
+      },
+      {
+        "key": "DonationFailed.retry.securedBy",
+        "value": "Secure checkout powered by Stripe."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "DonationFailed.severityHard",
+        "value": "Bank declined"
+      },
+      {
+        "key": "DonationFailed.severitySoft",
+        "value": "Card issue"
+      },
+      {
+        "key": "Navbar.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Profile.account.addressTitle",
+        "value": "Address"
+      },
+      {
+        "key": "Profile.account.email",
+        "value": "Email"
+      },
+      {
+        "key": "Profile.account.namePlaceholder",
+        "value": "Your name"
+      },
+      {
+        "key": "Profile.avatar.change",
+        "value": "Change photo"
+      },
+      {
+        "key": "Profile.avatar.failed",
+        "value": "Could not update your photo"
+      },
+      {
+        "key": "Profile.avatar.notImage",
+        "value": "Please pick an image file"
+      },
+      {
+        "key": "Profile.avatar.remove",
+        "value": "Remove photo"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.tooLarge",
+        "value": "Image must be smaller than 2 MB"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.none",
+        "value": "Not specified"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.countryPicker.title",
+        "value": "Choose your country"
+      },
+      {
+        "key": "Profile.donations.noCampaignTitle",
+        "value": "—"
+      },
+      {
+        "key": "Profile.donations.paymentMethodPaypal",
+        "value": "PayPal"
+      },
+      {
+        "key": "Profile.donations.referenceShort",
+        "value": "Ref."
+      },
+      {
+        "key": "Profile.donations.status",
+        "value": "Status"
+      },
+      {
+        "key": "Profile.donations.total",
+        "value": "Total"
+      },
+      {
+        "key": "Profile.editDialog.editTitle",
+        "value": "Edit {title}"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.acrossSubs",
+        "value": "across {count} subscription(s)"
+      },
+      {
+        "key": "Profile.impact.badgesEarned",
+        "value": "{count} badge(s) earned"
+      },
+      {
+        "key": "Profile.impact.badgesHint",
+        "value": "View your badges on the homepage donor board"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.monthlyMrr",
+        "value": "Monthly giving"
+      },
+      {
+        "key": "Profile.impact.monthsStreak",
+        "value": "{count} month(s) in a row"
+      },
+      {
+        "key": "Profile.impact.noStreak",
+        "value": "Start a streak"
+      },
+      {
+        "key": "Profile.impact.streak",
+        "value": "Streak"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.impact.totalGiven",
+        "value": "Total given"
+      },
+      {
+        "key": "Profile.nav.settingsDesc",
+        "value": "Security, password and notification preferences"
+      },
+      {
+        "key": "Profile.password.cancel",
+        "value": "Cancel"
+      },
+      {
+        "key": "Profile.password.change",
+        "value": "Change password"
+      },
+      {
+        "key": "Profile.password.confirmLabel",
+        "value": "Confirm new password"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.password.errorMinLength",
+        "value": "Password must be at least 8 characters"
+      },
+      {
+        "key": "Profile.password.errorMismatch",
+        "value": "New passwords do not match"
+      },
+      {
+        "key": "Profile.password.failed",
+        "value": "Could not update your password"
+      },
+      {
+        "key": "Profile.password.hide",
+        "value": "Hide password"
+      },
+      {
+        "key": "Profile.password.hint",
+        "value": "At least 8 characters. Mix letters, numbers and a symbol for a strong password."
+      },
+      {
+        "key": "Profile.password.label",
+        "value": "Password"
+      },
+      {
+        "key": "Profile.password.newLabel",
+        "value": "New password"
+      },
+      {
+        "key": "Profile.password.save",
+        "value": "Save password"
+      },
+      {
+        "key": "Profile.password.set",
+        "value": "Set a password"
+      },
+      {
+        "key": "Profile.password.show",
+        "value": "Show password"
+      },
+      {
+        "key": "Profile.password.strengthOk",
+        "value": "OK"
+      },
+      {
+        "key": "Profile.password.strengthStrong",
+        "value": "Strong"
+      },
+      {
+        "key": "Profile.password.strengthWeak",
+        "value": "Weak"
+      },
+      {
+        "key": "Profile.password.success",
+        "value": "Password updated"
+      },
+      {
+        "key": "Profile.receipts.downloadPdfShort",
+        "value": "PDF"
+      },
+      {
+        "key": "Profile.settings.securityTitle",
+        "value": "Security & password"
+      },
+      {
+        "key": "Profile.support.bodyHint",
+        "value": "{remaining} characters remaining"
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.bodyPlaceholder",
+        "value": "Tell us what's going on…"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.historyEmpty",
+        "value": "You haven't sent any support messages yet."
+      },
+      {
+        "key": "Profile.support.historySubtitle",
+        "value": "The last 50 messages you've sent through this form."
+      },
+      {
+        "key": "Profile.support.historyTitle",
+        "value": "Your previous requests"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.newTitle",
+        "value": "Open a support request"
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjectLabel",
+        "value": "Topic"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.COMPLAINT",
+        "value": "Complaint"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      },
+      {
+        "key": "Profile.support.subjects.GENERAL",
+        "value": "General"
+      },
+      {
+        "key": "Profile.support.subjects.PARTNERSHIP",
+        "value": "Partnership"
+      },
+      {
+        "key": "Profile.support.subjects.VOLUNTEERING",
+        "value": "Volunteering"
+      },
+      {
+        "key": "Profile.support.submit",
+        "value": "Send request"
+      },
+      {
+        "key": "Profile.toast.notificationsUpdated",
+        "value": "Notification preferences saved"
+      },
+      {
+        "key": "SharePopup.facebook",
+        "value": "Facebook"
+      },
+      {
+        "key": "SharePopup.telegram",
+        "value": "Telegram"
+      },
+      {
+        "key": "SharePopup.twitter",
+        "value": "Twitter"
+      },
+      {
+        "key": "SharePopup.whatsapp",
+        "value": "WhatsApp"
+      }
+    ],
+    "pt": [
+      {
+        "key": "Blog.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Blog.metaTitleSuffix",
+        "value": " - Qurrat Al-Ayun"
+      },
+      {
+        "key": "CartSheet.item",
+        "value": "item"
+      },
+      {
+        "key": "CartSheet.subtotal",
+        "value": "Subtotal"
+      },
+      {
+        "key": "CartSheet.total",
+        "value": "Total"
+      },
+      {
+        "key": "ContactUs.phonePlaceholder",
+        "value": "+90 XXX XXX XX XX"
+      },
+      {
+        "key": "ContactUs.whatsapp",
+        "value": "WhatsApp"
+      },
+      {
+        "key": "DonationDialog.cardNumberPlaceholder",
+        "value": "0000 0000 0000 0000"
+      },
+      {
+        "key": "DonationDialog.securityCodePlaceholder",
+        "value": "CVV"
+      },
+      {
+        "key": "DonationDialog.total",
+        "value": "Total"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.reason",
+        "value": "Your bank's 3-D Secure verification didn't go through. This usually means the SMS/app code was wrong or timed out."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.title",
+        "value": "3-D Secure check failed"
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.reason",
+        "value": "Your card issuer refused this transaction. This is the bank's call, not ours — they don't always share the exact reason."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.title",
+        "value": "Your bank declined the card"
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipRetry",
+        "value": "Try the same card again — temporary errors usually clear within a few minutes."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.fix",
+        "value": "Switch the currency from the top-right of the site, or use a card that supports international payments."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.title",
+        "value": "Currency not supported by your card"
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.reason",
+        "value": "Your bank refused the transaction without telling us exactly why. This is often a fraud-prevention block on cross-border donations."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.title",
+        "value": "Generic decline by your bank"
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.fix",
+        "value": "Switch to a valid card. Your bank can issue a replacement if needed."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.reason",
+        "value": "The card you used is past its expiry date. Banks won't process payments on expired cards."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.title",
+        "value": "The card has expired"
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.fix",
+        "value": "Call the number on the back of your card, confirm it's really you, and ask them to whitelist this merchant."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.title",
+        "value": "Blocked as suspected fraud"
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.reason",
+        "value": "The card number we sent didn't match a valid card at your bank."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.title",
+        "value": "The card number looks wrong"
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.title",
+        "value": "Insufficient funds"
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.reason",
+        "value": "The 3- or 4-digit CVV/CVC didn't match what your bank has on file."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.title",
+        "value": "The security code (CVV) was wrong"
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.title",
+        "value": "Your bank's system is unavailable"
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.reason",
+        "value": "Your card's daily spend limit or transaction count for the month has been exceeded."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.title",
+        "value": "Daily or monthly limit reached"
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.reason",
+        "value": "Your bank flagged this card as lost or stolen and won't allow new payments on it."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.title",
+        "value": "Card reported lost or stolen"
+      },
+      {
+        "key": "DonationFailed.errors.networkError.fix",
+        "value": "Check your internet connection, then retry. The exact same card will most likely succeed."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.title",
+        "value": "Connection problem"
+      },
+      {
+        "key": "DonationFailed.errors.processingError.fix",
+        "value": "Wait a minute and retry. Most processing errors clear by themselves."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.title",
+        "value": "Temporary processing error"
+      },
+      {
+        "key": "DonationFailed.howToFixTitle",
+        "value": "How to fix it"
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.rawCodeLabel",
+        "value": "Code"
+      },
+      {
+        "key": "DonationFailed.rawMessageToggle",
+        "value": "Technical details from the bank"
+      },
+      {
+        "key": "DonationFailed.reassurance",
+        "value": "You haven't been charged for the attempt. Let's get this fixed."
+      },
+      {
+        "key": "DonationFailed.retry.amountLabel",
+        "value": "Amount"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.ctaMonthly",
+        "value": "Continue to monthly checkout"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.monthly",
+        "value": "Monthly"
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.oneTime",
+        "value": "One-time"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.perMonth",
+        "value": "/ month"
+      },
+      {
+        "key": "DonationFailed.retry.securedBy",
+        "value": "Secure checkout powered by Stripe."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "DonationFailed.severityHard",
+        "value": "Bank declined"
+      },
+      {
+        "key": "DonationFailed.severitySoft",
+        "value": "Card issue"
+      },
+      {
+        "key": "Navbar.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Profile.account.addressTitle",
+        "value": "Address"
+      },
+      {
+        "key": "Profile.account.namePlaceholder",
+        "value": "Your name"
+      },
+      {
+        "key": "Profile.avatar.change",
+        "value": "Change photo"
+      },
+      {
+        "key": "Profile.avatar.failed",
+        "value": "Could not update your photo"
+      },
+      {
+        "key": "Profile.avatar.notImage",
+        "value": "Please pick an image file"
+      },
+      {
+        "key": "Profile.avatar.remove",
+        "value": "Remove photo"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.tooLarge",
+        "value": "Image must be smaller than 2 MB"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.none",
+        "value": "Not specified"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.countryPicker.title",
+        "value": "Choose your country"
+      },
+      {
+        "key": "Profile.donations.noCampaignTitle",
+        "value": "—"
+      },
+      {
+        "key": "Profile.donations.paymentMethodPaypal",
+        "value": "PayPal"
+      },
+      {
+        "key": "Profile.donations.referenceShort",
+        "value": "Ref."
+      },
+      {
+        "key": "Profile.donations.status",
+        "value": "Status"
+      },
+      {
+        "key": "Profile.donations.total",
+        "value": "Total"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.acrossSubs",
+        "value": "across {count} subscription(s)"
+      },
+      {
+        "key": "Profile.impact.badgesEarned",
+        "value": "{count} badge(s) earned"
+      },
+      {
+        "key": "Profile.impact.badgesHint",
+        "value": "View your badges on the homepage donor board"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.monthlyMrr",
+        "value": "Monthly giving"
+      },
+      {
+        "key": "Profile.impact.monthsStreak",
+        "value": "{count} month(s) in a row"
+      },
+      {
+        "key": "Profile.impact.noStreak",
+        "value": "Start a streak"
+      },
+      {
+        "key": "Profile.impact.streak",
+        "value": "Streak"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.impact.totalGiven",
+        "value": "Total given"
+      },
+      {
+        "key": "Profile.nav.settingsDesc",
+        "value": "Security, password and notification preferences"
+      },
+      {
+        "key": "Profile.password.cancel",
+        "value": "Cancel"
+      },
+      {
+        "key": "Profile.password.change",
+        "value": "Change password"
+      },
+      {
+        "key": "Profile.password.confirmLabel",
+        "value": "Confirm new password"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.password.errorMinLength",
+        "value": "Password must be at least 8 characters"
+      },
+      {
+        "key": "Profile.password.errorMismatch",
+        "value": "New passwords do not match"
+      },
+      {
+        "key": "Profile.password.failed",
+        "value": "Could not update your password"
+      },
+      {
+        "key": "Profile.password.hide",
+        "value": "Hide password"
+      },
+      {
+        "key": "Profile.password.hint",
+        "value": "At least 8 characters. Mix letters, numbers and a symbol for a strong password."
+      },
+      {
+        "key": "Profile.password.label",
+        "value": "Password"
+      },
+      {
+        "key": "Profile.password.newLabel",
+        "value": "New password"
+      },
+      {
+        "key": "Profile.password.save",
+        "value": "Save password"
+      },
+      {
+        "key": "Profile.password.set",
+        "value": "Set a password"
+      },
+      {
+        "key": "Profile.password.show",
+        "value": "Show password"
+      },
+      {
+        "key": "Profile.password.strengthOk",
+        "value": "OK"
+      },
+      {
+        "key": "Profile.password.strengthStrong",
+        "value": "Strong"
+      },
+      {
+        "key": "Profile.password.strengthWeak",
+        "value": "Weak"
+      },
+      {
+        "key": "Profile.password.success",
+        "value": "Password updated"
+      },
+      {
+        "key": "Profile.receipts.downloadPdfShort",
+        "value": "PDF"
+      },
+      {
+        "key": "Profile.settings.securityTitle",
+        "value": "Security & password"
+      },
+      {
+        "key": "Profile.support.bodyHint",
+        "value": "{remaining} characters remaining"
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.bodyPlaceholder",
+        "value": "Tell us what's going on…"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.historyEmpty",
+        "value": "You haven't sent any support messages yet."
+      },
+      {
+        "key": "Profile.support.historySubtitle",
+        "value": "The last 50 messages you've sent through this form."
+      },
+      {
+        "key": "Profile.support.historyTitle",
+        "value": "Your previous requests"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.newTitle",
+        "value": "Open a support request"
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjectLabel",
+        "value": "Topic"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.COMPLAINT",
+        "value": "Complaint"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      },
+      {
+        "key": "Profile.support.subjects.GENERAL",
+        "value": "General"
+      },
+      {
+        "key": "Profile.support.subjects.PARTNERSHIP",
+        "value": "Partnership"
+      },
+      {
+        "key": "Profile.support.subjects.VOLUNTEERING",
+        "value": "Volunteering"
+      },
+      {
+        "key": "Profile.support.submit",
+        "value": "Send request"
+      },
+      {
+        "key": "Profile.toast.notificationsUpdated",
+        "value": "Notification preferences saved"
+      },
+      {
+        "key": "SharePopup.facebook",
+        "value": "Facebook"
+      },
+      {
+        "key": "SharePopup.telegram",
+        "value": "Telegram"
+      },
+      {
+        "key": "SharePopup.twitter",
+        "value": "Twitter"
+      },
+      {
+        "key": "SharePopup.whatsapp",
+        "value": "WhatsApp"
+      }
+    ],
+    "es": [
+      {
+        "key": "Blog.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Blog.metaTitleSuffix",
+        "value": " - Qurrat Al-Ayun"
+      },
+      {
+        "key": "CartSheet.subtotal",
+        "value": "Subtotal"
+      },
+      {
+        "key": "CartSheet.total",
+        "value": "Total"
+      },
+      {
+        "key": "ContactUs.phonePlaceholder",
+        "value": "+90 XXX XXX XX XX"
+      },
+      {
+        "key": "ContactUs.whatsapp",
+        "value": "WhatsApp"
+      },
+      {
+        "key": "DonationDialog.cardNumberPlaceholder",
+        "value": "0000 0000 0000 0000"
+      },
+      {
+        "key": "DonationDialog.securityCodePlaceholder",
+        "value": "CVV"
+      },
+      {
+        "key": "DonationDialog.total",
+        "value": "Total"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.reason",
+        "value": "Your bank's 3-D Secure verification didn't go through. This usually means the SMS/app code was wrong or timed out."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.title",
+        "value": "3-D Secure check failed"
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.reason",
+        "value": "Your card issuer refused this transaction. This is the bank's call, not ours — they don't always share the exact reason."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.title",
+        "value": "Your bank declined the card"
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipRetry",
+        "value": "Try the same card again — temporary errors usually clear within a few minutes."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.fix",
+        "value": "Switch the currency from the top-right of the site, or use a card that supports international payments."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.title",
+        "value": "Currency not supported by your card"
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.reason",
+        "value": "Your bank refused the transaction without telling us exactly why. This is often a fraud-prevention block on cross-border donations."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.title",
+        "value": "Generic decline by your bank"
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.fix",
+        "value": "Switch to a valid card. Your bank can issue a replacement if needed."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.reason",
+        "value": "The card you used is past its expiry date. Banks won't process payments on expired cards."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.title",
+        "value": "The card has expired"
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.fix",
+        "value": "Call the number on the back of your card, confirm it's really you, and ask them to whitelist this merchant."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.title",
+        "value": "Blocked as suspected fraud"
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.reason",
+        "value": "The card number we sent didn't match a valid card at your bank."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.title",
+        "value": "The card number looks wrong"
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.title",
+        "value": "Insufficient funds"
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.reason",
+        "value": "The 3- or 4-digit CVV/CVC didn't match what your bank has on file."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.title",
+        "value": "The security code (CVV) was wrong"
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.title",
+        "value": "Your bank's system is unavailable"
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.reason",
+        "value": "Your card's daily spend limit or transaction count for the month has been exceeded."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.title",
+        "value": "Daily or monthly limit reached"
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.reason",
+        "value": "Your bank flagged this card as lost or stolen and won't allow new payments on it."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.title",
+        "value": "Card reported lost or stolen"
+      },
+      {
+        "key": "DonationFailed.errors.networkError.fix",
+        "value": "Check your internet connection, then retry. The exact same card will most likely succeed."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.title",
+        "value": "Connection problem"
+      },
+      {
+        "key": "DonationFailed.errors.processingError.fix",
+        "value": "Wait a minute and retry. Most processing errors clear by themselves."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.title",
+        "value": "Temporary processing error"
+      },
+      {
+        "key": "DonationFailed.howToFixTitle",
+        "value": "How to fix it"
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.rawCodeLabel",
+        "value": "Code"
+      },
+      {
+        "key": "DonationFailed.rawMessageToggle",
+        "value": "Technical details from the bank"
+      },
+      {
+        "key": "DonationFailed.reassurance",
+        "value": "You haven't been charged for the attempt. Let's get this fixed."
+      },
+      {
+        "key": "DonationFailed.retry.amountLabel",
+        "value": "Amount"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.ctaMonthly",
+        "value": "Continue to monthly checkout"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.monthly",
+        "value": "Monthly"
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.oneTime",
+        "value": "One-time"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.perMonth",
+        "value": "/ month"
+      },
+      {
+        "key": "DonationFailed.retry.securedBy",
+        "value": "Secure checkout powered by Stripe."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "DonationFailed.severityHard",
+        "value": "Bank declined"
+      },
+      {
+        "key": "DonationFailed.severitySoft",
+        "value": "Card issue"
+      },
+      {
+        "key": "Navbar.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Profile.account.addressTitle",
+        "value": "Address"
+      },
+      {
+        "key": "Profile.account.namePlaceholder",
+        "value": "Your name"
+      },
+      {
+        "key": "Profile.avatar.change",
+        "value": "Change photo"
+      },
+      {
+        "key": "Profile.avatar.failed",
+        "value": "Could not update your photo"
+      },
+      {
+        "key": "Profile.avatar.notImage",
+        "value": "Please pick an image file"
+      },
+      {
+        "key": "Profile.avatar.remove",
+        "value": "Remove photo"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.tooLarge",
+        "value": "Image must be smaller than 2 MB"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.none",
+        "value": "Not specified"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.countryPicker.title",
+        "value": "Choose your country"
+      },
+      {
+        "key": "Profile.donations.noCampaignTitle",
+        "value": "—"
+      },
+      {
+        "key": "Profile.donations.paymentMethodPaypal",
+        "value": "PayPal"
+      },
+      {
+        "key": "Profile.donations.referenceShort",
+        "value": "Ref."
+      },
+      {
+        "key": "Profile.donations.total",
+        "value": "Total"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.acrossSubs",
+        "value": "across {count} subscription(s)"
+      },
+      {
+        "key": "Profile.impact.badgesEarned",
+        "value": "{count} badge(s) earned"
+      },
+      {
+        "key": "Profile.impact.badgesHint",
+        "value": "View your badges on the homepage donor board"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.monthlyMrr",
+        "value": "Monthly giving"
+      },
+      {
+        "key": "Profile.impact.monthsStreak",
+        "value": "{count} month(s) in a row"
+      },
+      {
+        "key": "Profile.impact.noStreak",
+        "value": "Start a streak"
+      },
+      {
+        "key": "Profile.impact.streak",
+        "value": "Streak"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.impact.totalGiven",
+        "value": "Total given"
+      },
+      {
+        "key": "Profile.nav.settingsDesc",
+        "value": "Security, password and notification preferences"
+      },
+      {
+        "key": "Profile.password.cancel",
+        "value": "Cancel"
+      },
+      {
+        "key": "Profile.password.change",
+        "value": "Change password"
+      },
+      {
+        "key": "Profile.password.confirmLabel",
+        "value": "Confirm new password"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.password.errorMinLength",
+        "value": "Password must be at least 8 characters"
+      },
+      {
+        "key": "Profile.password.errorMismatch",
+        "value": "New passwords do not match"
+      },
+      {
+        "key": "Profile.password.failed",
+        "value": "Could not update your password"
+      },
+      {
+        "key": "Profile.password.hide",
+        "value": "Hide password"
+      },
+      {
+        "key": "Profile.password.hint",
+        "value": "At least 8 characters. Mix letters, numbers and a symbol for a strong password."
+      },
+      {
+        "key": "Profile.password.label",
+        "value": "Password"
+      },
+      {
+        "key": "Profile.password.newLabel",
+        "value": "New password"
+      },
+      {
+        "key": "Profile.password.save",
+        "value": "Save password"
+      },
+      {
+        "key": "Profile.password.set",
+        "value": "Set a password"
+      },
+      {
+        "key": "Profile.password.show",
+        "value": "Show password"
+      },
+      {
+        "key": "Profile.password.strengthOk",
+        "value": "OK"
+      },
+      {
+        "key": "Profile.password.strengthStrong",
+        "value": "Strong"
+      },
+      {
+        "key": "Profile.password.strengthWeak",
+        "value": "Weak"
+      },
+      {
+        "key": "Profile.password.success",
+        "value": "Password updated"
+      },
+      {
+        "key": "Profile.receipts.downloadPdfShort",
+        "value": "PDF"
+      },
+      {
+        "key": "Profile.settings.securityTitle",
+        "value": "Security & password"
+      },
+      {
+        "key": "Profile.support.bodyHint",
+        "value": "{remaining} characters remaining"
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.bodyPlaceholder",
+        "value": "Tell us what's going on…"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.historyEmpty",
+        "value": "You haven't sent any support messages yet."
+      },
+      {
+        "key": "Profile.support.historySubtitle",
+        "value": "The last 50 messages you've sent through this form."
+      },
+      {
+        "key": "Profile.support.historyTitle",
+        "value": "Your previous requests"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.newTitle",
+        "value": "Open a support request"
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjectLabel",
+        "value": "Topic"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.COMPLAINT",
+        "value": "Complaint"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      },
+      {
+        "key": "Profile.support.subjects.GENERAL",
+        "value": "General"
+      },
+      {
+        "key": "Profile.support.subjects.PARTNERSHIP",
+        "value": "Partnership"
+      },
+      {
+        "key": "Profile.support.subjects.VOLUNTEERING",
+        "value": "Volunteering"
+      },
+      {
+        "key": "Profile.support.submit",
+        "value": "Send request"
+      },
+      {
+        "key": "Profile.toast.notificationsUpdated",
+        "value": "Notification preferences saved"
+      },
+      {
+        "key": "SharePopup.facebook",
+        "value": "Facebook"
+      },
+      {
+        "key": "SharePopup.telegram",
+        "value": "Telegram"
+      },
+      {
+        "key": "SharePopup.twitter",
+        "value": "Twitter"
+      },
+      {
+        "key": "SharePopup.whatsapp",
+        "value": "WhatsApp"
+      }
+    ],
+    "de": [
+      {
+        "key": "Blog.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Blog.metaTitleSuffix",
+        "value": " - Qurrat Al-Ayun"
+      },
+      {
+        "key": "Campaign.info",
+        "value": "Info"
+      },
+      {
+        "key": "CampaignsPage.details",
+        "value": "Details"
+      },
+      {
+        "key": "CampaignsPage.filter",
+        "value": "Filter"
+      },
+      {
+        "key": "CampaignsPage.maxAmount",
+        "value": "Maximum ($)"
+      },
+      {
+        "key": "CampaignsPage.minAmount",
+        "value": "Minimum ($)"
+      },
+      {
+        "key": "ContactUs.phonePlaceholder",
+        "value": "+90 XXX XXX XX XX"
+      },
+      {
+        "key": "ContactUs.whatsapp",
+        "value": "WhatsApp"
+      },
+      {
+        "key": "DonationDialog.cardNumberPlaceholder",
+        "value": "0000 0000 0000 0000"
+      },
+      {
+        "key": "DonationDialog.securityCodePlaceholder",
+        "value": "CVV"
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.fix",
+        "value": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.reason",
+        "value": "Your bank's 3-D Secure verification didn't go through. This usually means the SMS/app code was wrong or timed out."
+      },
+      {
+        "key": "DonationFailed.errors.authenticationFailed.title",
+        "value": "3-D Secure check failed"
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.fix",
+        "value": "Try another card, or contact your bank to find out why it was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.reason",
+        "value": "Your card issuer refused this transaction. This is the bank's call, not ours — they don't always share the exact reason."
+      },
+      {
+        "key": "DonationFailed.errors.cardDeclined.title",
+        "value": "Your bank declined the card"
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipCheckBalance",
+        "value": "Make sure your card has enough balance for the donation amount."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipContactBank",
+        "value": "Call your bank to ask why the payment was blocked."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipRetry",
+        "value": "Try the same card again — temporary errors usually clear within a few minutes."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseAnotherCard",
+        "value": "Try a different card or payment method."
+      },
+      {
+        "key": "DonationFailed.errors.commonTips.tipUseTransfer",
+        "value": "Use the bank transfer option below — it always works."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.fix",
+        "value": "Switch the currency from the top-right of the site, or use a card that supports international payments."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.reason",
+        "value": "Your card can't process payments in the donation currency."
+      },
+      {
+        "key": "DonationFailed.errors.currencyNotSupported.title",
+        "value": "Currency not supported by your card"
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.fix",
+        "value": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.reason",
+        "value": "Your bank refused the transaction without telling us exactly why. This is often a fraud-prevention block on cross-border donations."
+      },
+      {
+        "key": "DonationFailed.errors.doNotHonor.title",
+        "value": "Generic decline by your bank"
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.fix",
+        "value": "Switch to a valid card. Your bank can issue a replacement if needed."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.reason",
+        "value": "The card you used is past its expiry date. Banks won't process payments on expired cards."
+      },
+      {
+        "key": "DonationFailed.errors.expiredCard.title",
+        "value": "The card has expired"
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.fix",
+        "value": "Call the number on the back of your card, confirm it's really you, and ask them to whitelist this merchant."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.reason",
+        "value": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time."
+      },
+      {
+        "key": "DonationFailed.errors.fraudSuspected.title",
+        "value": "Blocked as suspected fraud"
+      },
+      {
+        "key": "DonationFailed.errors.generic.fix",
+        "value": "Try again, switch to a different card, or use the bank transfer option below."
+      },
+      {
+        "key": "DonationFailed.errors.generic.reason",
+        "value": "Something stopped the payment from completing. We weren't given a specific reason."
+      },
+      {
+        "key": "DonationFailed.errors.generic.title",
+        "value": "Payment didn't go through"
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.fix",
+        "value": "Re-enter the 16-digit card number carefully and try again."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.reason",
+        "value": "The card number we sent didn't match a valid card at your bank."
+      },
+      {
+        "key": "DonationFailed.errors.incorrectNumber.title",
+        "value": "The card number looks wrong"
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.fix",
+        "value": "Top up your card, lower the donation amount, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.reason",
+        "value": "Your bank reported that the card doesn't have enough balance to complete this donation."
+      },
+      {
+        "key": "DonationFailed.errors.insufficientFunds.title",
+        "value": "Insufficient funds"
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.fix",
+        "value": "Double-check the security code on the back of your card and try again."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.reason",
+        "value": "The 3- or 4-digit CVV/CVC didn't match what your bank has on file."
+      },
+      {
+        "key": "DonationFailed.errors.invalidCvc.title",
+        "value": "The security code (CVV) was wrong"
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.fix",
+        "value": "Wait a few minutes and try again, or use a different card from another bank."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.reason",
+        "value": "Your card issuer's payment system is temporarily down or unreachable."
+      },
+      {
+        "key": "DonationFailed.errors.issuerUnavailable.title",
+        "value": "Your bank's system is unavailable"
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.fix",
+        "value": "Lower the donation amount, wait until tomorrow, or try a different card."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.reason",
+        "value": "Your card's daily spend limit or transaction count for the month has been exceeded."
+      },
+      {
+        "key": "DonationFailed.errors.limitExceeded.title",
+        "value": "Daily or monthly limit reached"
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.fix",
+        "value": "Contact your bank for a replacement, then try a different card here."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.reason",
+        "value": "Your bank flagged this card as lost or stolen and won't allow new payments on it."
+      },
+      {
+        "key": "DonationFailed.errors.lostOrStolen.title",
+        "value": "Card reported lost or stolen"
+      },
+      {
+        "key": "DonationFailed.errors.networkError.fix",
+        "value": "Check your internet connection, then retry. The exact same card will most likely succeed."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.reason",
+        "value": "We couldn't reach the bank to process the payment. This is almost always a transient network issue."
+      },
+      {
+        "key": "DonationFailed.errors.networkError.title",
+        "value": "Connection problem"
+      },
+      {
+        "key": "DonationFailed.errors.processingError.fix",
+        "value": "Wait a minute and retry. Most processing errors clear by themselves."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.reason",
+        "value": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched."
+      },
+      {
+        "key": "DonationFailed.errors.processingError.title",
+        "value": "Temporary processing error"
+      },
+      {
+        "key": "DonationFailed.howToFixTitle",
+        "value": "How to fix it"
+      },
+      {
+        "key": "DonationFailed.loading",
+        "value": "Looking up your donation…"
+      },
+      {
+        "key": "DonationFailed.noDonation.cta",
+        "value": "Browse projects"
+      },
+      {
+        "key": "DonationFailed.noDonation.description",
+        "value": "We couldn't find the failed donation. You can start a new donation from any of our projects."
+      },
+      {
+        "key": "DonationFailed.noDonation.title",
+        "value": "Pick a project to support"
+      },
+      {
+        "key": "DonationFailed.rawCodeLabel",
+        "value": "Code"
+      },
+      {
+        "key": "DonationFailed.rawMessageToggle",
+        "value": "Technical details from the bank"
+      },
+      {
+        "key": "DonationFailed.reassurance",
+        "value": "You haven't been charged for the attempt. Let's get this fixed."
+      },
+      {
+        "key": "DonationFailed.retry.amountLabel",
+        "value": "Amount"
+      },
+      {
+        "key": "DonationFailed.retry.cta",
+        "value": "Retry donation now"
+      },
+      {
+        "key": "DonationFailed.retry.ctaMonthly",
+        "value": "Continue to monthly checkout"
+      },
+      {
+        "key": "DonationFailed.retry.description",
+        "value": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details."
+      },
+      {
+        "key": "DonationFailed.retry.failed",
+        "value": "We couldn't restart your donation. Please try again or use the bank transfer below."
+      },
+      {
+        "key": "DonationFailed.retry.monthly",
+        "value": "Monthly"
+      },
+      {
+        "key": "DonationFailed.retry.moreItems",
+        "value": "+{count} more project(s)"
+      },
+      {
+        "key": "DonationFailed.retry.oneTime",
+        "value": "One-time"
+      },
+      {
+        "key": "DonationFailed.retry.payforHint",
+        "value": "Please re-enter your card on the campaign page to complete the donation."
+      },
+      {
+        "key": "DonationFailed.retry.perMonth",
+        "value": "/ month"
+      },
+      {
+        "key": "DonationFailed.retry.securedBy",
+        "value": "Secure checkout powered by Stripe."
+      },
+      {
+        "key": "DonationFailed.retry.title",
+        "value": "Try this donation again"
+      },
+      {
+        "key": "DonationFailed.severityHard",
+        "value": "Bank declined"
+      },
+      {
+        "key": "DonationFailed.severitySoft",
+        "value": "Card issue"
+      },
+      {
+        "key": "Footer.namePlaceholder",
+        "value": "Name (optional)"
+      },
+      {
+        "key": "Navbar.blog",
+        "value": "Blog"
+      },
+      {
+        "key": "Navbar.dashboard",
+        "value": "Dashboard"
+      },
+      {
+        "key": "Profile.account.addressTitle",
+        "value": "Address"
+      },
+      {
+        "key": "Profile.account.name",
+        "value": "Name"
+      },
+      {
+        "key": "Profile.account.namePlaceholder",
+        "value": "Your name"
+      },
+      {
+        "key": "Profile.avatar.change",
+        "value": "Change photo"
+      },
+      {
+        "key": "Profile.avatar.failed",
+        "value": "Could not update your photo"
+      },
+      {
+        "key": "Profile.avatar.notImage",
+        "value": "Please pick an image file"
+      },
+      {
+        "key": "Profile.avatar.remove",
+        "value": "Remove photo"
+      },
+      {
+        "key": "Profile.avatar.removed",
+        "value": "Profile photo removed"
+      },
+      {
+        "key": "Profile.avatar.tooLarge",
+        "value": "Image must be smaller than 2 MB"
+      },
+      {
+        "key": "Profile.avatar.updated",
+        "value": "Profile photo updated"
+      },
+      {
+        "key": "Profile.countryPicker.none",
+        "value": "Not specified"
+      },
+      {
+        "key": "Profile.countryPicker.noResults",
+        "value": "No countries match your search"
+      },
+      {
+        "key": "Profile.countryPicker.search",
+        "value": "Search countries…"
+      },
+      {
+        "key": "Profile.countryPicker.title",
+        "value": "Choose your country"
+      },
+      {
+        "key": "Profile.donations.noCampaignTitle",
+        "value": "—"
+      },
+      {
+        "key": "Profile.donations.paymentMethodPaypal",
+        "value": "PayPal"
+      },
+      {
+        "key": "Profile.donations.referenceShort",
+        "value": "Ref."
+      },
+      {
+        "key": "Profile.donations.status",
+        "value": "Status"
+      },
+      {
+        "key": "Profile.impact.acrossDonations",
+        "value": "across {count} donation(s)"
+      },
+      {
+        "key": "Profile.impact.acrossSubs",
+        "value": "across {count} subscription(s)"
+      },
+      {
+        "key": "Profile.impact.badgesEarned",
+        "value": "{count} badge(s) earned"
+      },
+      {
+        "key": "Profile.impact.badgesHint",
+        "value": "View your badges on the homepage donor board"
+      },
+      {
+        "key": "Profile.impact.distinctCampaigns",
+        "value": "Distinct projects you've supported"
+      },
+      {
+        "key": "Profile.impact.lastDonation",
+        "value": "Last donation"
+      },
+      {
+        "key": "Profile.impact.monthlyMrr",
+        "value": "Monthly giving"
+      },
+      {
+        "key": "Profile.impact.monthsStreak",
+        "value": "{count} month(s) in a row"
+      },
+      {
+        "key": "Profile.impact.noStreak",
+        "value": "Start a streak"
+      },
+      {
+        "key": "Profile.impact.streak",
+        "value": "Streak"
+      },
+      {
+        "key": "Profile.impact.supportedCampaigns",
+        "value": "Supported projects"
+      },
+      {
+        "key": "Profile.impact.totalGiven",
+        "value": "Total given"
+      },
+      {
+        "key": "Profile.nav.settingsDesc",
+        "value": "Security, password and notification preferences"
+      },
+      {
+        "key": "Profile.nav.support",
+        "value": "Support"
+      },
+      {
+        "key": "Profile.password.cancel",
+        "value": "Cancel"
+      },
+      {
+        "key": "Profile.password.change",
+        "value": "Change password"
+      },
+      {
+        "key": "Profile.password.confirmLabel",
+        "value": "Confirm new password"
+      },
+      {
+        "key": "Profile.password.currentLabel",
+        "value": "Current password"
+      },
+      {
+        "key": "Profile.password.descSet",
+        "value": "Your account is protected with a password. You can change it any time."
+      },
+      {
+        "key": "Profile.password.descUnset",
+        "value": "You signed in with a social provider. Set a password to also sign in with email."
+      },
+      {
+        "key": "Profile.password.errorMinLength",
+        "value": "Password must be at least 8 characters"
+      },
+      {
+        "key": "Profile.password.errorMismatch",
+        "value": "New passwords do not match"
+      },
+      {
+        "key": "Profile.password.failed",
+        "value": "Could not update your password"
+      },
+      {
+        "key": "Profile.password.hide",
+        "value": "Hide password"
+      },
+      {
+        "key": "Profile.password.hint",
+        "value": "At least 8 characters. Mix letters, numbers and a symbol for a strong password."
+      },
+      {
+        "key": "Profile.password.label",
+        "value": "Password"
+      },
+      {
+        "key": "Profile.password.newLabel",
+        "value": "New password"
+      },
+      {
+        "key": "Profile.password.save",
+        "value": "Save password"
+      },
+      {
+        "key": "Profile.password.set",
+        "value": "Set a password"
+      },
+      {
+        "key": "Profile.password.show",
+        "value": "Show password"
+      },
+      {
+        "key": "Profile.password.strengthOk",
+        "value": "OK"
+      },
+      {
+        "key": "Profile.password.strengthStrong",
+        "value": "Strong"
+      },
+      {
+        "key": "Profile.password.strengthWeak",
+        "value": "Weak"
+      },
+      {
+        "key": "Profile.password.success",
+        "value": "Password updated"
+      },
+      {
+        "key": "Profile.receipts.downloadPdfShort",
+        "value": "PDF"
+      },
+      {
+        "key": "Profile.settings.securityTitle",
+        "value": "Security & password"
+      },
+      {
+        "key": "Profile.support.bodyHint",
+        "value": "{remaining} characters remaining"
+      },
+      {
+        "key": "Profile.support.bodyLabel",
+        "value": "Your message"
+      },
+      {
+        "key": "Profile.support.bodyPlaceholder",
+        "value": "Tell us what's going on…"
+      },
+      {
+        "key": "Profile.support.errorMin",
+        "value": "Message must be at least 3 characters"
+      },
+      {
+        "key": "Profile.support.failed",
+        "value": "Could not send your message"
+      },
+      {
+        "key": "Profile.support.historyEmpty",
+        "value": "You haven't sent any support messages yet."
+      },
+      {
+        "key": "Profile.support.historySubtitle",
+        "value": "The last 50 messages you've sent through this form."
+      },
+      {
+        "key": "Profile.support.historyTitle",
+        "value": "Your previous requests"
+      },
+      {
+        "key": "Profile.support.newSubtitle",
+        "value": "Our team will get back to you by email."
+      },
+      {
+        "key": "Profile.support.newTitle",
+        "value": "Open a support request"
+      },
+      {
+        "key": "Profile.support.sent",
+        "value": "Your message was sent"
+      },
+      {
+        "key": "Profile.support.subjectLabel",
+        "value": "Topic"
+      },
+      {
+        "key": "Profile.support.subjects.CAMPAIGN_SUPPORT",
+        "value": "Project / campaign question"
+      },
+      {
+        "key": "Profile.support.subjects.COMPLAINT",
+        "value": "Complaint"
+      },
+      {
+        "key": "Profile.support.subjects.DONATION_ISSUE",
+        "value": "Donation issue"
+      },
+      {
+        "key": "Profile.support.subjects.GENERAL",
+        "value": "General"
+      },
+      {
+        "key": "Profile.support.subjects.PARTNERSHIP",
+        "value": "Partnership"
+      },
+      {
+        "key": "Profile.support.subjects.VOLUNTEERING",
+        "value": "Volunteering"
+      },
+      {
+        "key": "Profile.support.submit",
+        "value": "Send request"
+      },
+      {
+        "key": "Profile.toast.notificationsUpdated",
+        "value": "Notification preferences saved"
+      },
+      {
+        "key": "SharePopup.facebook",
+        "value": "Facebook"
+      },
+      {
+        "key": "SharePopup.telegram",
+        "value": "Telegram"
+      },
+      {
+        "key": "SharePopup.twitter",
+        "value": "Twitter"
+      },
+      {
+        "key": "SharePopup.whatsapp",
+        "value": "WhatsApp"
+      }
+    ]
+  }
+}
