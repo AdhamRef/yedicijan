@@ -170,14 +170,14 @@
     "communityImpact": "Dampak Sosial",
     "faq1Question": "Bagaimana saya bisa bergabung sebagai relawan?",
     "faq1Answer": "Anda dapat mendaftar melalui situs kami dengan mengisi formulir yang tersedia. Setelah itu, Anda akan menerima pesan berisi langkah berikutnya dan informasi orientasi awal.",
-    "faq2Question": "Apakah relawan di tim Gözbebekleri dibayar?",
+    "faq2Question": "Apakah relawan di tim Yedicihan dibayar?",
     "faq2Answer": "Tidak, kegiatan relawan pada dasarnya tidak berbayar. Namun, pada beberapa program, relawan aktif dapat menerima dukungan transportasi atau bentuk apresiasi tertentu.",
     "faq3Question": "Bagaimana relawan dipilih untuk proyek?",
     "faq3Answer": "Pemilihan relawan bergantung pada beberapa faktor, seperti keahlian, lokasi, dan ketersediaan waktu. Kami berupaya menempatkan setiap relawan pada tugas yang paling sesuai.",
     "faq4Question": "Bisakah saya menjadi relawan jarak jauh?",
     "faq4Answer": "Ya. Kami memiliki peluang relawan digital, seperti manajemen konten, desain grafis, pemasaran digital, dan komunikasi dengan para pendukung.",
     "faq5Question": "Bagaimana saya bisa mengusulkan inisiatif sendiri?",
-    "faq5Answer": "Jika Anda memiliki ide proyek kemanusiaan, tim Gözbebekleri dapat membantu mewujudkannya melalui dukungan sumber daya dan logistik.",
+    "faq5Answer": "Jika Anda memiliki ide proyek kemanusiaan, tim Yedicihan dapat membantu mewujudkannya melalui dukungan sumber daya dan logistik.",
     "featuredProjects": "Proyek Unggulan",
     "currentProjects": "Proyek Saat Ini",
     "viewAll": "Lihat Semua",
@@ -199,7 +199,7 @@
   "HeroSlider": {
     "quickDonate": "Donasi Cepat",
     "badge": "Lembaga kemanfaatan publik terdaftar resmi",
-    "title": "Salurkan kebaikan dengan aman bersama Qurrat Al-Ayun",
+    "title": "Salurkan kebaikan dengan aman bersama Yedi Cihan",
     "subtitle": "Salurkan bantuan darurat, zakat, pangan, tempat tinggal, kesehatan, anak yatim, dan qurban Anda kepada yang membutuhkan.",
     "donateNow": "Donasi Sekarang",
     "exploreProjects": "Jelajahi Proyek",
@@ -227,7 +227,7 @@
     "loadError": "Gagal memuat proyek. Silakan coba lagi."
   },
   "QuickDonate": {
-    "associationName": "Asosiasi Bantuan dan Solidaritas Qurrat Al-Ayun",
+    "associationName": "Asosiasi Bantuan dan Solidaritas Yedicihan",
     "hadithQuote": "Rasulullah ﷺ bersabda",
     "hadithText": "Sedekah terbaik adalah yang berkelanjutan, meskipun sedikit.",
     "description": "Jadikan donasi Anda berkelanjutan dan bantu mengubah kehidupan orang-orang yang membutuhkan. Komitmen bulanan Anda memperkuat dampak setiap donasi dan menjaga keberlanjutan kerja kemanusiaan kami.",
@@ -259,7 +259,7 @@
   },
   "Footer": {
     "aboutUsDesc1": "Kami adalah lembaga bantuan dan solidaritas asal Turki yang bergerak di bidang perlindungan serta dukungan anak di berbagai wilayah dunia. Kami berupaya memberikan kehidupan yang lebih baik dan masa depan yang lebih aman bagi anak-anak.",
-    "description": "Qurrat Al-Ayun adalah platform amal yang mendukung anak-anak dan keluarga rentan melalui program kemanusiaan, medis, dan pendidikan di berbagai wilayah dunia.",
+    "description": "Yedicihan adalah platform amal yang mendukung anak-anak dan keluarga rentan melalui program kemanusiaan, medis, dan pendidikan di berbagai wilayah dunia.",
     "messageTitle": "Kirim pesan kepada kami",
     "messageDesc": "Ada pertanyaan atau saran? Hubungi kami dan kami akan segera membalas.",
     "messagePlaceholder": "Tulis pesan Anda di sini...",
@@ -278,12 +278,12 @@
     "quickLinks": "Tautan Cepat",
     "categories": "Kampanye",
     "contactUs": "Hubungi Kami",
-    "copyright": "© {year} Qurrat Al-Ayun. Seluruh hak dilindungi.",
+    "copyright": "© {year} Yedicihan. Seluruh hak dilindungi.",
     "developedBy": "Dikembangkan pada 2026"
   },
   "AboutUs": {
     "pageTitle": "Tentang Kami",
-    "associationName": "Asosiasi Bantuan dan Solidaritas Qurrat Al-Ayun",
+    "associationName": "Asosiasi Bantuan dan Solidaritas Yedicihan",
     "aboutUsTitle": "Siapa Kami?",
     "aboutUsDesc1": "Kami adalah lembaga bantuan dan solidaritas asal Turki yang bergerak dalam perlindungan, pendampingan, dan dukungan bagi anak-anak di seluruh dunia. Kami berupaya memberikan kehidupan yang lebih baik dan masa depan yang lebih aman bagi anak-anak, meringankan penderitaan mereka, serta mendukung akses mereka terhadap hak-hak dasar.",
     "aboutUsDesc2": "Kami juga berupaya membantu anak-anak yang membutuhkan agar dapat berintegrasi dengan masyarakat, memahami hak-hak mereka, serta meningkatkan kondisi sosial, ekonomi, dan psikologis keluarga mereka melalui program yang berkualitas.",
@@ -316,7 +316,7 @@
     "presidentMessageParagraphs": [
       "Di dunia saat ini, khususnya di wilayah yang terdampak krisis, anak-anak termasuk kelompok yang paling rentan akibat konflik, kesulitan ekonomi, perang, dan bencana alam.",
       "Menghadapi kenyataan yang menyakitkan ini, kami menolak untuk hanya menjadi penonton. Kami memilih untuk bergerak dan berkontribusi membangun masa depan yang lebih aman, bermartabat, dan penuh harapan bagi setiap anak yang dapat kami jangkau, terutama anak yatim.",
-      "Sejak tahun 2011, Asosiasi Gözbebekleri menjalankan berbagai proyek untuk mendukung anak-anak yang membutuhkan dan anak yatim, khususnya dalam bidang kesehatan, pendidikan, gizi, dan dukungan sosial.",
+      "Sejak tahun 2011, Asosiasi Yedicihan menjalankan berbagai proyek untuk mendukung anak-anak yang membutuhkan dan anak yatim, khususnya dalam bidang kesehatan, pendidikan, gizi, dan dukungan sosial.",
       "Ketika berbicara tentang anak-anak, teladan dan pembimbing kami adalah Nabi Muhammad ﷺ, yang diutus sebagai rahmat bagi seluruh alam. Kami berusaha meneladani kasih sayang beliau terhadap anak-anak, meringankan penderitaan mereka, dan memenuhi kebutuhan mereka.",
       "Melalui tim khusus dan para relawan di berbagai wilayah, kami berupaya membuat anak-anak merasa bahwa mereka tidak sendirian, memperbaiki kondisi mereka, dan membuka pintu harapan baru bagi mereka.",
       "Lembaga kami terus bekerja tanpa tujuan mencari keuntungan, dengan prinsip: \"Melayani manusia adalah melayani Allah.\" Dengan ketulusan, tanggung jawab, dan dukungan Anda, kami terus menyalurkan kebaikan kepada mereka yang paling membutuhkan."
@@ -355,7 +355,7 @@
     "whatsapp": "WhatsApp"
   },
   "Blog": {
-    "metaTitleSuffix": " - Qurrat Al-Ayun",
+    "metaTitleSuffix": " - Yedicihan",
     "sharePost": "Bagikan Artikel",
     "similarPosts": "Artikel Serupa",
     "relatedCampaign": "Proyek terkait",
@@ -499,7 +499,7 @@
     "viewAllInCategory": "Lihat semua"
   },
   "SignInDialog": {
-    "welcomeTitle": "Selamat datang di Platform Qurrat Al-Ayun",
+    "welcomeTitle": "Selamat datang di Platform Yedicihan",
     "welcomeSubtitle": "Masuk untuk melanjutkan dan berbagi kebaikan.",
     "checkoutTitle": "Satu langkah singkat",
     "checkoutSubtitle": "Masuk sekarang, lalu Anda akan kembali langsung ke proses pembayaran.",

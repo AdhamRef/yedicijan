@@ -170,14 +170,14 @@
     "communityImpact": "Community Impact",
     "faq1Question": "How can I join as a volunteer?",
     "faq1Answer": "You can register through our website by filling out the volunteer form. You will then receive a message with the next steps and initial orientation details.",
-    "faq2Question": "Is volunteering with the Gözbebekleri team paid?",
+    "faq2Question": "Is volunteering with the Yedicihan team paid?",
     "faq2Answer": "No, volunteering is generally unpaid. In some programs, active volunteers may receive transportation support or appreciation rewards.",
     "faq3Question": "How are volunteers selected for projects?",
     "faq3Answer": "Selection depends on factors such as skills, location, and availability. We try to match each volunteer with the most suitable opportunity.",
     "faq4Question": "Can I volunteer remotely?",
     "faq4Answer": "Yes. We have digital volunteering opportunities in areas such as content management, graphic design, digital marketing, and communication with supporters.",
     "faq5Question": "How can I suggest my own initiative?",
-    "faq5Answer": "If you have an idea for a humanitarian project, the Gözbebekleri team can help you bring it to life by providing resources and logistical support.",
+    "faq5Answer": "If you have an idea for a humanitarian project, the Yedicihan team can help you bring it to life by providing resources and logistical support.",
     "featuredProjects": "Featured Projects",
     "currentProjects": "Current Projects",
     "viewAll": "View All",
@@ -199,7 +199,7 @@
   "HeroSlider": {
     "quickDonate": "Quick Donate",
     "badge": "Officially registered public-benefit association",
-    "title": "Deliver goodness safely with Qurrat Al-Ayun",
+    "title": "Deliver goodness safely with Yedi Cihan",
     "subtitle": "Reach those in need with your emergency aid, zakat, food, shelter, health, orphan and qurban support.",
     "donateNow": "Donate Now",
     "exploreProjects": "Explore Projects",
@@ -227,7 +227,7 @@
     "loadError": "Could not load projects. Please try again."
   },
   "QuickDonate": {
-    "associationName": "Qurrat Al-Ayun Relief and Solidarity Association",
+    "associationName": "Yedicihan Relief and Solidarity Association",
     "hadithQuote": "The Messenger of Allah ﷺ said",
     "hadithText": "The best charity is the one that continues, even if it is small.",
     "description": "Make your giving continuous and help change the lives of people in need. Your monthly commitment increases the impact of every donation and sustains our humanitarian work.",
@@ -259,7 +259,7 @@
   },
   "Footer": {
     "aboutUsDesc1": "A Turkish relief and solidarity association working in child care and child support around the world. We work to provide children with a better life and a safer future.",
-    "description": "Qurrat Al-Ayun is a charitable platform that supports vulnerable children and families through humanitarian, medical, and educational programs around the world.",
+    "description": "Yedicihan is a charitable platform that supports vulnerable children and families through humanitarian, medical, and educational programs around the world.",
     "messageTitle": "Send us a message",
     "messageDesc": "Have a question or suggestion? Contact us and we will get back to you soon.",
     "messagePlaceholder": "Write your message here...",
@@ -278,12 +278,12 @@
     "quickLinks": "Quick Links",
     "categories": "Campaigns",
     "contactUs": "Contact Us",
-    "copyright": "© {year} Qurrat Al-Ayun. All rights reserved.",
+    "copyright": "© {year} Yedicihan. All rights reserved.",
     "developedBy": "Developed in 2026"
   },
   "AboutUs": {
     "pageTitle": "About Us",
-    "associationName": "Qurrat Al-Ayun Relief and Solidarity Association",
+    "associationName": "Yedicihan Relief and Solidarity Association",
     "aboutUsTitle": "Who Are We?",
     "aboutUsDesc1": "We are a Turkish relief and solidarity association working in child care and child support around the world. We strive to provide children with a better life and a safer future, ease their suffering, support their access to basic rights, and help develop their mental and physical abilities.",
     "aboutUsDesc2": "We also work to integrate children in need into society, raise their awareness of their rights, and improve the social, economic, and psychological conditions of their families through meaningful, high-quality programs and projects.",
@@ -316,7 +316,7 @@
     "presidentMessageParagraphs": [
       "In today's world, especially in regions affected by crises, children are among the groups most affected by conflict, economic hardship, wars, and natural disasters.",
       "In the face of this painful reality, we refused to remain mere spectators. Instead, we took action to help build a safer, more hopeful, and more dignified future for every child we can reach, especially orphaned children.",
-      "Since 2011, Gözbebekleri Association has carried out various projects to support children in need and orphans, particularly in healthcare, education, nutrition, and social support.",
+      "Since 2011, Yedicihan Association has carried out various projects to support children in need and orphans, particularly in healthcare, education, nutrition, and social support.",
       "When it comes to children, our guide and example is Prophet Muhammad ﷺ, who was sent as a mercy to all worlds. We seek to follow his compassion toward children by easing their pain, meeting their needs, and bringing hope to their lives.",
       "Through our specialized teams and volunteers in different regions, we work to make children feel that they are not alone. We strive to touch their lives, improve their conditions, and open new doors of hope before them.",
       "Our association continues its work without any profit motive, guided by the principle: \"Serving people is serving Allah.\" With sincerity, responsibility, and through your support and trust, we continue delivering goodness to those who need it most."
@@ -355,7 +355,7 @@
     "whatsapp": "WhatsApp"
   },
   "Blog": {
-    "metaTitleSuffix": " - Qurrat Al-Ayun",
+    "metaTitleSuffix": " - Yedicihan",
     "sharePost": "Share Post",
     "similarPosts": "Similar Posts",
     "relatedCampaign": "Related Project",
@@ -499,7 +499,7 @@
     "viewAllInCategory": "View all"
   },
   "SignInDialog": {
-    "welcomeTitle": "Welcome to Qurrat Al-Ayun Platform",
+    "welcomeTitle": "Welcome to Yedicihan Platform",
     "welcomeSubtitle": "Sign in to continue and share goodness.",
     "checkoutTitle": "Just one quick step",
     "checkoutSubtitle": "Sign in now, then you'll return right back to payment.",

@@ -34,7 +34,7 @@ function ChevronDown() {
   );
 }
 
-const LOGO_URL = "/logo-white.png";
+const LOGO_URL = "/yedicijan_logo.png";
 
 export default function CompleteProfilePage() {
   const { data: session, status } = useSession();

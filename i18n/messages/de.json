@@ -170,14 +170,14 @@
     "communityImpact": "Gesellschaftliche Wirkung",
     "faq1Question": "Wie kann ich mich als Freiwillige oder Freiwilliger anmelden?",
     "faq1Answer": "Du kannst dich über unsere Website registrieren, indem du das Mitgliedschaftsformular ausfüllst. Danach erhältst du eine Nachricht mit den nächsten Schritten, etwa einer ersten Orientierung und weiteren Informationen.",
-    "faq2Question": "Ist die Freiwilligenarbeit im Gözbebekleri-Team bezahlt?",
+    "faq2Question": "Ist die Freiwilligenarbeit im Yedicihan-Team bezahlt?",
     "faq2Answer": "Nein, die Freiwilligenarbeit ist grundsätzlich unbezahlt. In manchen Programmen können jedoch Fahrtkostenzuschüsse oder Anerkennungen für aktive Freiwillige angeboten werden.",
     "faq3Question": "Wie werden Freiwillige für Projekte ausgewählt?",
     "faq3Answer": "Die Auswahl hängt von mehreren Faktoren ab, darunter Fachgebiet, Standort und zeitliche Verfügbarkeit. Wir versuchen, jede Person der passenden Aufgabe zuzuordnen.",
     "faq4Question": "Kann ich auch aus der Ferne freiwillig helfen?",
     "faq4Answer": "Ja. Wir bieten digitale Freiwilligenmöglichkeiten an, zum Beispiel Content-Management, Grafikdesign, digitales Marketing und Kommunikation mit unterstützenden Partnern.",
     "faq5Question": "Wie kann ich eine eigene Initiative vorschlagen?",
-    "faq5Answer": "Wenn du eine Idee für ein humanitäres Projekt hast, kann das Gözbebekleri-Team dich bei der Umsetzung unterstützen, etwa durch Ressourcen und logistische Hilfe.",
+    "faq5Answer": "Wenn du eine Idee für ein humanitäres Projekt hast, kann das Yedicihan-Team dich bei der Umsetzung unterstützen, etwa durch Ressourcen und logistische Hilfe.",
     "featuredProjects": "Ausgewählte Projekte",
     "currentProjects": "Aktuelle Projekte",
     "viewAll": "Alle anzeigen",
@@ -199,7 +199,7 @@
   "HeroSlider": {
     "quickDonate": "Schnell spenden",
     "badge": "Offiziell registrierter gemeinnütziger Verein",
-    "title": "Mit Qurrat Al-Ayun Gutes sicher übermitteln",
+    "title": "Mit Yedi Cihan Gutes sicher übermitteln",
     "subtitle": "Bringen Sie Ihre Unterstützung für Nothilfe, Zakat, Nahrung, Unterkunft, Gesundheit, Waisen und Qurban zu den Bedürftigen.",
     "donateNow": "Jetzt spenden",
     "exploreProjects": "Projekte entdecken",
@@ -227,7 +227,7 @@
     "loadError": "Projekte konnten nicht geladen werden. Bitte versuche es erneut."
   },
   "QuickDonate": {
-    "associationName": "Qurrat Al-Ayun Hilfs- und Solidaritätsverein",
+    "associationName": "Yedicihan Hilfs- und Solidaritätsverein",
     "hadithQuote": "Der Gesandte Allahs ﷺ sagte",
     "hadithText": "Die beste Spende ist die, die dauerhaft ist, selbst wenn sie klein ist.",
     "description": "Mache deine Spende dauerhaft und hilf, das Leben bedürftiger Menschen zu verändern. Deine monatliche Unterstützung stärkt die Wirkung jeder Spende und macht unsere Hilfe nachhaltiger.",
@@ -259,7 +259,7 @@
   },
   "Footer": {
     "aboutUsDesc1": "Ein türkischer Hilfs- und Solidaritätsverein, der weltweit in der Kinderfürsorge tätig ist. Wir setzen uns dafür ein, Kindern ein besseres Leben und eine sichere Zukunft zu ermöglichen.",
-    "description": "Qurrat Al-Ayun ist eine gemeinnützige Plattform, die gefährdete Kinder und Familien durch humanitäre, medizinische und Bildungsprogramme weltweit unterstützt.",
+    "description": "Yedicihan ist eine gemeinnützige Plattform, die gefährdete Kinder und Familien durch humanitäre, medizinische und Bildungsprogramme weltweit unterstützt.",
     "messageTitle": "Sende uns eine Nachricht",
     "messageDesc": "Hast du eine Frage oder einen Vorschlag? Kontaktiere uns, wir melden uns bald bei dir.",
     "messagePlaceholder": "Schreibe deine Nachricht hier...",
@@ -278,12 +278,12 @@
     "quickLinks": "Schnellzugriff",
     "categories": "Kampagnen",
     "contactUs": "Kontakt",
-    "copyright": "© {year} Qurrat Al-Ayun. Alle Rechte vorbehalten.",
+    "copyright": "© {year} Yedicihan. Alle Rechte vorbehalten.",
     "developedBy": "Entwickelt 2026"
   },
   "AboutUs": {
     "pageTitle": "Über uns",
-    "associationName": "Qurrat Al-Ayun Hilfs- und Solidaritätsverein",
+    "associationName": "Yedicihan Hilfs- und Solidaritätsverein",
     "aboutUsTitle": "Wer sind wir?",
     "aboutUsDesc1": "Wir sind ein türkischer Hilfs- und Solidaritätsverein, der Kinder und Familien weltweit unterstützt. Unser Ziel ist es, Kindern ein besseres Leben, eine sichere Zukunft und Zugang zu grundlegenden Rechten zu ermöglichen.",
     "aboutUsDesc2": "Wir arbeiten außerdem daran, bedürftige Kinder in die Gesellschaft zu integrieren, ihr Bewusstsein für ihre Rechte zu stärken und die sozialen, wirtschaftlichen und psychologischen Bedingungen ihrer Familien durch hochwertige Programme zu verbessern.",
@@ -316,7 +316,7 @@
     "presidentMessageParagraphs": [
       "In der heutigen Welt sind Kinder, besonders in Krisenregionen, oft am stärksten von politischen Konflikten, wirtschaftlicher Not, Kriegen und Naturkatastrophen betroffen.",
       "Angesichts dieser schmerzhaften Realität wollten wir nicht nur zuschauen. Wir haben gehandelt, um für jedes Kind, das wir erreichen können, eine sicherere, hoffnungsvollere und würdevollere Zukunft mitzugestalten.",
-      "Seit 2011 setzt der Gözbebekleri-Verein verschiedene Projekte zur Unterstützung bedürftiger Kinder und Waisen um, insbesondere in den Bereichen Gesundheit, Bildung, Ernährung und soziale Hilfe.",
+      "Seit 2011 setzt der Yedicihan-Verein verschiedene Projekte zur Unterstützung bedürftiger Kinder und Waisen um, insbesondere in den Bereichen Gesundheit, Bildung, Ernährung und soziale Hilfe.",
       "Wenn es um Kinder geht, ist unser Vorbild der Prophet Muhammad ﷺ, der als Barmherzigkeit für alle Welten gesandt wurde. Wir bemühen uns, seiner Barmherzigkeit gegenüber Kindern zu folgen, ihre Schmerzen zu lindern und ihnen Hoffnung zu schenken.",
       "Durch unsere spezialisierten Teams und Freiwilligen in verschiedenen Regionen arbeiten wir daran, Kindern zu zeigen, dass sie nicht allein sind. Wir möchten ihr Leben berühren, ihre Lage verbessern und neue Türen der Hoffnung öffnen.",
       "Unser Verein arbeitet ohne Gewinnabsicht und nach dem Grundsatz: \"Den Menschen zu dienen bedeutet, Allah zu dienen.\" Mit Aufrichtigkeit, Verantwortung und eurer Unterstützung bringen wir Hilfe dorthin, wo sie am dringendsten gebraucht wird."
@@ -355,7 +355,7 @@
     "whatsapp": "WhatsApp"
   },
   "Blog": {
-    "metaTitleSuffix": " - Qurrat Al-Ayun",
+    "metaTitleSuffix": " - Yedicihan",
     "sharePost": "Beitrag teilen",
     "similarPosts": "Ähnliche Beiträge",
     "relatedCampaign": "Verwandte Projekte",
@@ -499,7 +499,7 @@
     "viewAllInCategory": "Alle anzeigen"
   },
   "SignInDialog": {
-    "welcomeTitle": "Willkommen auf der Qurrat Al-Ayun Plattform",
+    "welcomeTitle": "Willkommen auf der Yedicihan Plattform",
     "welcomeSubtitle": "Melde dich an, um fortzufahren und Gutes zu teilen.",
     "checkoutTitle": "Nur ein kurzer Schritt",
     "checkoutSubtitle": "Melde dich jetzt an. Danach kehrst du direkt zur Zahlung zurück.",

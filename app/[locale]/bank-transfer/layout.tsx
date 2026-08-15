@@ -3,36 +3,36 @@ import { buildPageMetadata, LOCALE_SEO, type Locale } from "@/lib/seo";
 
 const BANK_TRANSFER_SEO: Record<Locale, { title: string; description: string }> = {
   ar: {
-    title: "التبرع عبر التحويل البنكي | جمعية قرة العيون للإغاثة والتكافل",
-    description: "اطّلع على حسابات جمعية قرة العيون البنكية وتبرع بأمان عبر التحويل البنكي لدعم المشاريع الإنسانية والطبية والتعليمية.",
+    title: "التبرع عبر التحويل البنكي | جمعية يدي جيهان",
+    description: "اطّلع على حسابات جمعية يدي جيهان البنكية وتبرع بأمان عبر التحويل البنكي لدعم المشاريع الإنسانية والطبية والتعليمية.",
   },
   en: {
-    title: "Donate by Bank Transfer | Gözbebekleri",
-    description: "View Gözbebekleri bank accounts and complete your donation safely by bank transfer to support humanitarian, medical, and educational projects.",
+    title: "Donate by Bank Transfer | Yedicihan",
+    description: "View Yedicihan bank accounts and complete your donation safely by bank transfer to support humanitarian, medical, and educational projects.",
   },
   fr: {
-    title: "Faire un don par virement bancaire | Gözbebekleri",
-    description: "Consultez les comptes bancaires de Gözbebekleri et effectuez votre don en toute sécurité par virement bancaire pour soutenir nos projets humanitaires.",
+    title: "Faire un don par virement bancaire | Yedicihan",
+    description: "Consultez les comptes bancaires de Yedicihan et effectuez votre don en toute sécurité par virement bancaire pour soutenir nos projets humanitaires.",
   },
   tr: {
-    title: "Banka Havalesi ile Bağış | Gözbebekleri Derneği",
-    description: "Gözbebekleri Derneği banka hesaplarını görüntüleyin ve insani, tıbbi ve eğitim projelerine güvenle havale yoluyla bağış yapın.",
+    title: "Banka Havalesi ile Bağış | Yedicihan Derneği",
+    description: "Yedicihan Derneği banka hesaplarını görüntüleyin ve insani, tıbbi ve eğitim projelerine güvenle havale yoluyla bağış yapın.",
   },
   id: {
-    title: "Donasi melalui Transfer Bank | Gözbebekleri",
-    description: "Lihat rekening bank Gözbebekleri dan selesaikan donasi Anda dengan aman melalui transfer bank untuk mendukung program kemanusiaan.",
+    title: "Donasi melalui Transfer Bank | Yedicihan",
+    description: "Lihat rekening bank Yedicihan dan selesaikan donasi Anda dengan aman melalui transfer bank untuk mendukung program kemanusiaan.",
   },
   pt: {
-    title: "Doar por transferência bancária | Gözbebekleri",
-    description: "Veja as contas bancárias da Gözbebekleri e conclua a sua doação com segurança por transferência bancária para apoiar projetos humanitários.",
+    title: "Doar por transferência bancária | Yedicihan",
+    description: "Veja as contas bancárias da Yedicihan e conclua a sua doação com segurança por transferência bancária para apoiar projetos humanitários.",
   },
   es: {
-    title: "Donar por transferencia bancaria | Gözbebekleri",
-    description: "Consulta las cuentas bancarias de Gözbebekleri y completa tu donación de forma segura mediante transferencia bancaria para apoyar proyectos humanitarios.",
+    title: "Donar por transferencia bancaria | Yedicihan",
+    description: "Consulta las cuentas bancarias de Yedicihan y completa tu donación de forma segura mediante transferencia bancaria para apoyar proyectos humanitarios.",
   },
   de: {
-    title: "Per Banküberweisung spenden | Gözbebekleri",
-    description: "Sieh dir die Bankkonten von Gözbebekleri an und schließe deine Spende sicher per Banküberweisung ab, um humanitäre Projekte zu unterstützen.",
+    title: "Per Banküberweisung spenden | Yedicihan",
+    description: "Sieh dir die Bankkonten von Yedicihan an und schließe deine Spende sicher per Banküberweisung ab, um humanitäre Projekte zu unterstützen.",
   },
 };
 

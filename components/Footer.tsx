@@ -12,7 +12,7 @@ import { appendCurrencyQuery, getCurrencyCodeForLinks } from '@/lib/currency-lin
 import { getSocialLinks } from '@/lib/social-links';
 import { track } from '@vercel/analytics';
 
-const LOGO_URL = '/logo-white.png';
+const LOGO_URL = '/yedicijan_logo.png';
 
 const Footer = () => {
   const t = useTranslations('Footer');

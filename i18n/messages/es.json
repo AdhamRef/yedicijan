@@ -170,14 +170,14 @@
     "communityImpact": "Impacto social",
     "faq1Question": "¿Cómo puedo unirme como voluntario?",
     "faq1Answer": "Puede registrarse en nuestro sitio completando el formulario disponible. Después recibirá un mensaje con los próximos pasos y las orientaciones iniciales.",
-    "faq2Question": "¿El voluntariado en el equipo Gözbebekleri es remunerado?",
+    "faq2Question": "¿El voluntariado en el equipo Yedicihan es remunerado?",
     "faq2Answer": "No, el voluntariado generalmente no es remunerado. Sin embargo, en algunos programas, los voluntarios activos pueden recibir apoyo para transporte o formas de reconocimiento.",
     "faq3Question": "¿Cómo se seleccionan los voluntarios para los proyectos?",
     "faq3Answer": "La selección depende de factores como la especialidad, la ubicación y la disponibilidad. Procuramos asignar a cada voluntario la misión más adecuada.",
     "faq4Question": "¿Puedo ser voluntario a distancia?",
     "faq4Answer": "Sí. Tenemos oportunidades de voluntariado digital, como gestión de contenidos, diseño gráfico, marketing digital y comunicación con colaboradores.",
     "faq5Question": "¿Cómo puedo proponer mi propia iniciativa?",
-    "faq5Answer": "Si tiene una idea de proyecto humanitario, el equipo de Gözbebekleri puede ayudarle a ponerla en marcha ofreciendo recursos y apoyo logístico.",
+    "faq5Answer": "Si tiene una idea de proyecto humanitario, el equipo de Yedicihan puede ayudarle a ponerla en marcha ofreciendo recursos y apoyo logístico.",
     "featuredProjects": "Proyectos destacados",
     "currentProjects": "Proyectos actuales",
     "viewAll": "Ver todo",
@@ -199,7 +199,7 @@
   "HeroSlider": {
     "quickDonate": "Donación rápida",
     "badge": "Asociación de utilidad pública registrada oficialmente",
-    "title": "Lleva el bien con confianza junto a Qurrat Al-Ayun",
+    "title": "Lleva el bien con confianza junto a Yedi Cihan",
     "subtitle": "Haz llegar a quienes lo necesitan tu ayuda de emergencia, zakat, alimentos, refugio, salud, huérfanos y qurban.",
     "donateNow": "Donar ahora",
     "exploreProjects": "Explorar proyectos",
@@ -227,7 +227,7 @@
     "loadError": "No se pudieron cargar los proyectos. Inténtelo de nuevo."
   },
   "QuickDonate": {
-    "associationName": "Asociación de Socorro y Solidaridad Qurrat Al-Ayun",
+    "associationName": "Asociación de Socorro y Solidaridad Yedicihan",
     "hadithQuote": "El Mensajero de Allah ﷺ dijo",
     "hadithText": "La mejor caridad es la que continúa, aunque sea pequeña.",
     "description": "Haga que su donación sea continua y ayude a transformar la vida de quienes lo necesitan. Su compromiso mensual aumenta el impacto de cada donación y fortalece la sostenibilidad de nuestro trabajo humanitario.",
@@ -259,7 +259,7 @@
   },
   "Footer": {
     "aboutUsDesc1": "Somos una asociación turca de socorro y solidaridad que trabaja en el cuidado y apoyo a niños en distintas regiones del mundo. Trabajamos para ofrecer a los niños una vida mejor y un futuro más seguro.",
-    "description": "Qurrat Al-Ayun es una plataforma benéfica que apoya a niños y familias vulnerables mediante programas humanitarios, médicos y educativos en distintas regiones del mundo.",
+    "description": "Yedicihan es una plataforma benéfica que apoya a niños y familias vulnerables mediante programas humanitarios, médicos y educativos en distintas regiones del mundo.",
     "messageTitle": "Envíenos un mensaje",
     "messageDesc": "¿Tiene una pregunta o sugerencia? Contáctenos y le responderemos pronto.",
     "messagePlaceholder": "Escriba su mensaje aquí...",
@@ -278,12 +278,12 @@
     "quickLinks": "Enlaces rápidos",
     "categories": "Campañas",
     "contactUs": "Contacto",
-    "copyright": "© {year} Qurrat Al-Ayun. Todos los derechos reservados.",
+    "copyright": "© {year} Yedicihan. Todos los derechos reservados.",
     "developedBy": "Desarrollado en 2026"
   },
   "AboutUs": {
     "pageTitle": "Sobre nosotros",
-    "associationName": "Asociación de Socorro y Solidaridad Qurrat Al-Ayun",
+    "associationName": "Asociación de Socorro y Solidaridad Yedicihan",
     "aboutUsTitle": "¿Quiénes somos?",
     "aboutUsDesc1": "Somos una asociación turca de ayuda humanitaria y solidaridad que trabaja en la protección, el cuidado y el apoyo a niños en todo el mundo. Nos esforzamos por ofrecerles una vida mejor y un futuro más seguro, aliviar su sufrimiento y apoyar su acceso a derechos fundamentales.",
     "aboutUsDesc2": "También trabajamos para integrar a los niños necesitados en la sociedad, concienciarlos sobre sus derechos y mejorar las condiciones sociales, económicas y psicológicas de sus familias mediante programas de calidad.",
@@ -316,7 +316,7 @@
     "presidentMessageParagraphs": [
       "En el mundo actual, especialmente en las regiones afectadas por crisis, los niños se encuentran entre los grupos más vulnerables ante los conflictos, las dificultades económicas, las guerras y los desastres naturales.",
       "Ante esta dolorosa realidad, nos negamos a permanecer como simples espectadores. Decidimos actuar para contribuir a construir un futuro más seguro, digno y esperanzador para cada niño al que podamos llegar, especialmente los huérfanos.",
-      "Desde 2011, la Asociación Gözbebekleri lleva a cabo diversos proyectos para apoyar a niños necesitados y huérfanos, especialmente en los ámbitos de la salud, la educación, la nutrición y el apoyo social.",
+      "Desde 2011, la Asociación Yedicihan lleva a cabo diversos proyectos para apoyar a niños necesitados y huérfanos, especialmente en los ámbitos de la salud, la educación, la nutrición y el apoyo social.",
       "Cuando se trata de niños, nuestro guía y ejemplo es el Profeta Muhammad ﷺ, enviado como misericordia para todos los mundos. Procuramos seguir su ejemplo de compasión hacia los niños, aliviando su sufrimiento y atendiendo sus necesidades.",
       "A través de nuestros equipos especializados y voluntarios en distintas regiones, trabajamos para que los niños sientan que no están solos, para mejorar sus condiciones y abrir nuevas puertas de esperanza ante ellos.",
       "Nuestra asociación continúa su labor sin ánimo de lucro, guiada por el principio: \"Servir a las personas es servir a Allah.\" Con sinceridad, responsabilidad y gracias a su apoyo, seguimos llevando el bien a quienes más lo necesitan."
@@ -355,7 +355,7 @@
     "whatsapp": "WhatsApp"
   },
   "Blog": {
-    "metaTitleSuffix": " - Qurrat Al-Ayun",
+    "metaTitleSuffix": " - Yedicihan",
     "sharePost": "Compartir artículo",
     "similarPosts": "Artículos similares",
     "relatedCampaign": "Proyecto relacionado",
@@ -499,7 +499,7 @@
     "viewAllInCategory": "Ver todo"
   },
   "SignInDialog": {
-    "welcomeTitle": "Bienvenido a la plataforma Qurrat Al-Ayun",
+    "welcomeTitle": "Bienvenido a la plataforma Yedicihan",
     "welcomeSubtitle": "Inicie sesión para continuar y compartir el bien.",
     "checkoutTitle": "Solo un paso rápido más",
     "checkoutSubtitle": "Inicie sesión ahora y volverá directamente al pago.",

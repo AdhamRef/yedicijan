@@ -53,8 +53,8 @@ interface CartItem {
   };
 }
 
-const LOGO_URL = "/logo.png";
-const LOGO_MOBILE_URL = "/logo.png";
+const LOGO_URL = "/yedicijan_logo.png";
+const LOGO_MOBILE_URL = "/yedicijan_logo.png";
 
 const Navbar = () => {
   const t = useTranslations("Navbar");

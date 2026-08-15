@@ -170,14 +170,14 @@
     "communityImpact": "Toplumsal Etki",
     "faq1Question": "Gönüllü olarak nasıl katılabilirim?",
     "faq1Answer": "Web sitemizdeki formu doldurarak başvuru yapabilirsiniz. Sonrasında ilk yönlendirme ve gerekli adımlar hakkında size bilgi verilecektir.",
-    "faq2Question": "Gözbebekleri ekibinde gönüllülük ücretli mi?",
+    "faq2Question": "Yedicihan ekibinde gönüllülük ücretli mi?",
     "faq2Answer": "Hayır, gönüllülük tamamen ücretsizdir. Bazı programlarda aktif gönüllüler için ulaşım desteği veya teşekkür hediyeleri sağlanabilir.",
     "faq3Question": "Projelere gönüllüler nasıl seçilir?",
     "faq3Answer": "Seçim; uzmanlık alanı, coğrafi konum ve uygunluk gibi kriterlere göre yapılır. Her gönüllüyü en uygun görevle buluşturmaya çalışıyoruz.",
     "faq4Question": "Uzaktan gönüllü olabilir miyim?",
     "faq4Answer": "Evet. İçerik yönetimi, grafik tasarım, dijital pazarlama ve destekçilerle iletişim gibi alanlarda uzaktan gönüllülük imkanlarımız bulunmaktadır.",
     "faq5Question": "Kendi girişimimi nasıl önerebilirim?",
-    "faq5Answer": "İnsani bir proje fikriniz varsa, Gözbebekleri ekibi kaynak ve lojistik destek sağlayarak fikrinizi hayata geçirmenize yardımcı olabilir.",
+    "faq5Answer": "İnsani bir proje fikriniz varsa, Yedicihan ekibi kaynak ve lojistik destek sağlayarak fikrinizi hayata geçirmenize yardımcı olabilir.",
     "featuredProjects": "Öne Çıkan Projeler",
     "currentProjects": "Güncel Projeler",
     "viewAll": "Tümünü Gör",
@@ -199,7 +199,7 @@
   "HeroSlider": {
     "quickDonate": "Hızlı Bağış",
     "badge": "Resmi kayıtlı kamu yararına dernek",
-    "title": "Gözbebekleri ile iyiliği güvenle ulaştırın",
+    "title": "Yedi Cihan ile iyiliği güvenle ulaştırın",
     "subtitle": "Acil yardım, zekat, gıda, barınma, sağlık, yetim ve kurban desteklerinizi ihtiyaç sahiplerine ulaştırın.",
     "donateNow": "Hemen Bağış Yap",
     "exploreProjects": "Projeleri İncele",
@@ -227,7 +227,7 @@
     "loadError": "Projeler yüklenemedi. Lütfen tekrar deneyin."
   },
   "QuickDonate": {
-    "associationName": "Gözbebekleri Yardımlaşma ve Dayanışma Derneği",
+    "associationName": "Yedicihan Yardımlaşma ve Dayanışma Derneği",
     "hadithQuote": "Allah Resulü ﷺ buyurdu",
     "hadithText": "Sadakanın en hayırlısı, az da olsa sürekli olanıdır.",
     "description": "Bağışınızı sürekli hale getirerek ihtiyaç sahiplerinin hayatında kalıcı bir fark oluşturun. Aylık desteğiniz her bağışın etkisini büyütür ve yardım çalışmalarımızın sürdürülebilirliğini güçlendirir.",
@@ -259,7 +259,7 @@
   },
   "Footer": {
     "aboutUsDesc1": "Dünya genelinde çocuklara yönelik bakım, yardım ve dayanışma alanlarında faaliyet gösteren bir Türk sivil toplum kuruluşuyuz. Çocuklara daha iyi bir yaşam ve güvenli bir gelecek sunmak için çalışıyoruz.",
-    "description": "Gözbebekleri; çocukları ve ihtiyaç sahibi aileleri insani, tıbbi ve eğitim odaklı programlarla destekleyen bir yardım platformudur.",
+    "description": "Yedicihan; çocukları ve ihtiyaç sahibi aileleri insani, tıbbi ve eğitim odaklı programlarla destekleyen bir yardım platformudur.",
     "messageTitle": "Bize mesaj gönderin",
     "messageDesc": "Bir sorunuz veya öneriniz mi var? Bize ulaşın, en kısa sürede size dönelim.",
     "messagePlaceholder": "Mesajınızı buraya yazın...",
@@ -278,12 +278,12 @@
     "quickLinks": "Hızlı Bağlantılar",
     "categories": "Kampanyalar",
     "contactUs": "İletişim",
-    "copyright": "© {year} Gözbebekleri. Tüm hakları saklıdır.",
+    "copyright": "© {year} Yedicihan. Tüm hakları saklıdır.",
     "developedBy": "2026'da geliştirildi"
   },
   "AboutUs": {
     "pageTitle": "Hakkımızda",
-    "associationName": "Gözbebekleri Yardım ve Dayanışma Derneği",
+    "associationName": "Yedicihan Yardım ve Dayanışma Derneği",
     "aboutUsTitle": "Biz Kimiz?",
     "aboutUsDesc1": "Dünya genelinde çocuklara yönelik bakım, yardım ve dayanışma alanlarında faaliyet gösteren bir Türk sivil toplum kuruluşuyuz. Çocuklara daha iyi bir yaşam ve daha güvenli bir gelecek sunmak; yaşadıkları zorlukları hafifletmek, temel haklarına erişimlerini desteklemek, zihinsel ve fiziksel gelişimlerine katkı sağlamak için çalışıyoruz.",
     "aboutUsDesc2": "İhtiyaç sahibi çocukların topluma kazandırılması, hakları konusunda bilinçlendirilmesi ve nitelikli programlar ile projeler aracılığıyla ailelerinin sosyal, ekonomik ve psikolojik durumlarının iyileştirilmesi için çaba gösteriyoruz.",
@@ -316,7 +316,7 @@
     "presidentMessageParagraphs": [
       "Günümüz dünyasında, özellikle İslam coğrafyasında yaşanan siyasi krizler, ekonomik sıkıntılar, savaşlar ve doğal afetlerden en çok etkilenen kesimlerin başında şüphesiz çocuklar gelmektedir.",
       "Bizler, bu acı gerçek karşısında yalnızca seyirci kalmamak adına; ulaşabildiğimiz tüm çocuklar, özellikle de yetimler için daha güvenli, daha umut dolu ve daha yaşanabilir bir gelecek inşa etmek amacıyla harekete geçtik.",
-      "Gözbebekleri Derneği olarak 2011 yılından bu yana; sağlık, eğitim, beslenme ve sosyal destek başta olmak üzere, çocukları ve ailelerini kapsayan çeşitli projelerle ihtiyaç sahibi çocuklara ve yetimlere destek olmak için çalışmalar yürütüyoruz.",
+      "Yedicihan Derneği olarak 2011 yılından bu yana; sağlık, eğitim, beslenme ve sosyal destek başta olmak üzere, çocukları ve ailelerini kapsayan çeşitli projelerle ihtiyaç sahibi çocuklara ve yetimlere destek olmak için çalışmalar yürütüyoruz.",
       "Söz konusu çocuklar olduğunda rehberimiz, âlemlere rahmet olarak gönderilen Peygamber Efendimiz Hz. Muhammed'dir ﷺ. Onun çocuklara gösterdiği merhameti ve hassasiyeti örnek alarak, nerede olurlarsa olsunlar çocukların acılarını hafifletmeye, ihtiyaçlarını gidermeye ve yüzlerinde bir tebessüm olmaya gayret ediyoruz.",
       "Dünyanın farklı bölgelerinde görev yapan uzman ekiplerimiz ve gönüllülerimizle birlikte, çocuklara yalnız olmadıklarını hissettirmek; onların hayatlarına dokunmak ve daha iyi şartlara ulaşmalarına katkı sağlamak için çalışıyoruz.",
       "Derneğimiz, \"Halka hizmet, Hakk'a hizmettir\" anlayışıyla, hiçbir kâr amacı gütmeden, samimiyet ve sorumluluk bilinciyle siz değerli bağışçılarımızın desteğiyle çalışmalarına devam edecektir."
@@ -355,7 +355,7 @@
     "whatsapp": "WhatsApp"
   },
   "Blog": {
-    "metaTitleSuffix": " - Gözbebekleri",
+    "metaTitleSuffix": " - Yedicihan",
     "sharePost": "Yazıyı Paylaş",
     "similarPosts": "Benzer Yazılar",
     "relatedCampaign": "İlgili Projeler",
@@ -499,7 +499,7 @@
     "viewAllInCategory": "Tümünü gör"
   },
   "SignInDialog": {
-    "welcomeTitle": "Gözbebekleri Platformuna Hoş Geldiniz",
+    "welcomeTitle": "Yedicihan Platformuna Hoş Geldiniz",
     "welcomeSubtitle": "Devam etmek ve iyiliği paylaşmak için giriş yapın.",
     "checkoutTitle": "Sadece kısa bir adım",
     "checkoutSubtitle": "Şimdi giriş yapın; ardından ödeme adımına geri döneceksiniz.",
