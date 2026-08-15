@@ -1,6 +1,7 @@
 import axios from "axios";
 import { Metadata } from "next";
 import MainPage from "./_components/MainPage";
+import { getServerBaseUrl } from "@/lib/server-base-url";
 
 
 interface CategoryProps {
@@ -14,7 +15,7 @@ interface CategoryProps {
 export async function generateMetadata({ params }: CategoryProps): Promise<Metadata> {
   const fetchCategoryData = async (): Promise<Category> => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "";
+      const baseUrl = await getServerBaseUrl();
       const locale = params.locale || 'ar';
       const response = await axios.get(
         `${baseUrl}/api/post-categories/${params.categoryId}`,

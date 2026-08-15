@@ -4,6 +4,7 @@ import axios from "axios";
 import Image from "next/image";
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { getServerBaseUrl } from "@/lib/server-base-url";
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import { isObjectId, pickLocaleSlug, whereByIdOrAnyLocaleSlug } from "@/lib/slug";
@@ -145,7 +146,7 @@ export async function generateMetadata(args: BlogPostProps): Promise<Metadata> {
 
 export default async function BlogPost({ params: paramsPromise }: BlogPostProps) {
   const params = await paramsPromise;
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://gozbebekleri.org";
+  const baseUrl = await getServerBaseUrl();
   const locale = params.locale || "ar";
   const msgs = await import(`../../../../i18n/messages/${locale}.json`);
   const t = (k: string) => msgs?.default?.Blog?.[k] ?? k;
