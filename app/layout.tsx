@@ -33,41 +33,31 @@ export const metadata: Metadata = {
   },
 
   description:
-    "Yedicihan – يدي جيهان: منصة تبرعات خيرية موثوقة منذ 2011 لإنقاذ أرواح الأطفال والمرضى السوريين. تبرع لعمليات طبية عاجلة، زكاة المال، صدقة جارية، كفالة يتيم، وإغاثة إنسانية. Donate for urgent Syrian medical aid, orphan sponsorship, zakat & sadaqah. Trusted since 2011.",
+    "جمعية يدي جيهان الدولية للتضامن: جمعية تركية عاملة للنفع العام تأسست عام 1961، تعمل في الصحة والإغاثة العاجلة والاستجابة للكوارث والمساعدات التعليمية. تبرع، زكاة، صدقة جارية. Yedicihan International Solidarity Association — a Turkish public-benefit association founded in 1961, working in healthcare, emergency relief, disaster response and educational aid.",
 
   keywords: [
-    "تبرع سوريا", "مساعدة طبية سوريا", "جمعية خيرية", "تبرع عملية طبية",
-    "إغاثة إنسانية", "زكاة المال", "صدقة جارية", "تكفل يتيم", "تبرع طارئ",
-    "يدي جيهان", "مساعدة السوريين", "عمليات قلب سوريا", "أطفال سوريا",
-    "تبرع اونلاين", "كفالة يتيم", "تبرع رمضان", "جمعية إسلامية خيرية",
-    "مشاريع إنسانية", "تبرع طبي عاجل", "إغاثة الأطفال", "حملات تبرع",
-    "زكاة الفطر", "زكاة المال اونلاين", "أفضل جمعية خيرية", "أين أضع زكاتي",
-    "تبرع للأيتام", "تبرع لعملية قلب", "مساعدة المرضى السوريين", "إغاثة سوريا",
-    "صدقة على الأطفال", "كفالة طفل يتيم", "تبرع إسلامي موثوق",
-    "donate to Syria", "Syrian medical aid", "charity donation", "urgent surgery donation",
-    "humanitarian relief Syria", "zakat donation online", "sadaqah online", "orphan sponsorship",
-    "emergency medical aid Syria", "nonprofit Syria", "Syrian refugees help",
-    "heart surgery donation", "Yedicihan charity", "Muslim charity",
-    "Islamic charity donation", "donate for children Syria", "Syria relief organization",
-    "donate zakat online", "sponsor Syrian child", "Ramadan donation",
-    "best Islamic charity", "where to donate zakat", "most trusted charity for Syria",
-    "donate for heart surgery", "children medical fund Syria", "Syria humanitarian crisis",
-    "help Syrian orphans", "online sadaqah jariyah", "zakat calculator Syria",
-    "donate for Syrian children", "Islamic relief donation",
-    "Suriye bağış", "Yedicihan derneği", "zekat bağışı", "yetim sponsorluğu",
-    "Suriye tıbbi yardım", "acil ameliyat bağışı", "insani yardım Suriye",
-    "sadaka online", "Suriye çocukları yardım", "hayır derneği bağış",
-    "online zekat ver", "Suriye yetim sponsoru", "en güvenilir hayır derneği",
-    "Ramazan bağışı", "kalp ameliyatı bağışı Suriye",
-    "don Syrie", "aide médicale Syrie", "zakat en ligne", "parrainage orphelin",
-    "aide humanitaire Syrie", "association caritative musulmane",
-    "faire un don pour la Syrie", "charité islamique", "sadaqa en ligne",
-    "donasi Suriah", "bantuan medis Suriah", "zakat online", "sponsori yatim",
-    "amal islami terpercaya", "donasi operasi jantung", "sedekah online",
-    "doação Síria", "ajuda médica Síria", "zakat online", "caridade islâmica",
-    "patrocínio de órfão Síria", "doação humanitária",
-    "donación Siria", "ayuda médica Siria", "zakat online", "caridad islámica",
-    "patrocinio huérfano Siria", "donación humanitaria",
+    "يدي جيهان", "جمعية يدي جيهان", "جمعية عاملة للنفع العام", "جمعية خيرية تركية",
+    "تبرع", "زكاة المال", "صدقة جارية", "تبرع اونلاين", "زكاة اونلاين",
+    "إغاثة عاجلة", "إغاثة الكوارث", "مساعدات تعليمية", "مساعدات طبية",
+    "تبرع للزلزال", "ترميم المنازل", "مشاريع إنسانية", "حملات تبرع", "تبرع رمضان",
+    "Yedicihan", "Yedicihan Association", "Turkish charity", "public benefit association",
+    "donate online", "zakat donation online", "sadaqah online", "charity donation",
+    "emergency relief", "disaster relief donation", "education aid", "medical aid",
+    "earthquake relief donation", "home rebuilding charity", "humanitarian projects",
+    "Yedicihan Derneği", "Yedicihan Uluslararası Yardımlaşma Derneği",
+    "kamu yararına dernek", "bağış yap", "zekat bağışı", "sadaka online",
+    "acil yardım", "afet yardımı", "eğitim yardımı", "sağlık yardımı",
+    "deprem bağışı", "hayır derneği bağış", "online zekat ver", "Ramazan bağışı",
+    "association caritative turque", "faire un don", "zakat en ligne", "sadaqa en ligne",
+    "aide d'urgence", "aide aux catastrophes", "aide à l'éducation",
+    "türkischer Hilfsverein", "jetzt spenden", "Zakat online", "Nothilfe spenden",
+    "Katastrophenhilfe", "Bildungshilfe",
+    "asociación benéfica turca", "donar en línea", "zakat en línea",
+    "ayuda de emergencia", "ayuda educativa",
+    "associação de caridade turca", "doar online", "zakat online",
+    "ajuda de emergência", "apoio à educação",
+    "amal Turki terpercaya", "donasi online", "zakat online", "sedekah online",
+    "bantuan darurat", "bantuan bencana", "bantuan pendidikan",
   ],
 
   authors: [{ name: "Yedicihan Derneği", url: SITE }],
@@ -101,19 +91,19 @@ export const metadata: Metadata = {
     siteName: "Yedicihan | يدي جيهان",
     title: "جمعية يدي جيهان | زكاة، تبرع، صدقة، إغاثة إنسانية",
     description:
-      "منصة تبرعات خيرية موثوقة منذ 2011 — تبرع لعمليات طبية عاجلة وكفالة أيتام وإغاثة إنسانية في سوريا. Trusted Islamic charity for Syrian medical aid, zakat & sadaqah since 2011.",
-    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Yedicihan – يدي جيهان Charity" }],
+      "جمعية عاملة للنفع العام منذ 1961 — الصحة، الإغاثة العاجلة، الاستجابة للكوارث، والتعليم. تبرع، زكاة، صدقة جارية. A Turkish public-benefit association serving since 1961 in healthcare, emergency relief, disaster response and education.",
+    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Yedicihan – يدي جيهان" }],
     locale: "ar_SA",
     alternateLocale: ["en_US", "fr_FR", "tr_TR", "id_ID", "pt_BR", "es_ES", "de_DE"],
   },
 
   twitter: {
     card: "summary_large_image",
-    site: "@gozbebeklerider",
-    creator: "@gozbebeklerider",
-    title: "Yedicihan | يدي جيهان – تبرع لإنقاذ الأرواح",
+    site: "@yedicihann",
+    creator: "@yedicihann",
+    title: "Yedicihan | يدي جيهان – جمعية عاملة للنفع العام منذ 1961",
     description:
-      "تبرع لعمليات طبية عاجلة وإغاثة إنسانية في سوريا — زكاة، صدقة، كفالة يتيم. Donate for Syrian medical aid & humanitarian relief.",
+      "الصحة، الإغاثة العاجلة، الاستجابة للكوارث، والتعليم — زكاة، صدقة، تبرع. Healthcare, emergency relief, disaster response and education since 1961.",
     images: [OG_IMAGE],
   },
 
@@ -147,30 +137,35 @@ const organizationSchema = {
   },
   image: OG_IMAGE,
   description:
-    "Yedicihan is a trusted humanitarian charity providing urgent medical aid, orphan sponsorship, and humanitarian relief for Syrian children and families since 2011.",
-  foundingDate: "2011",
-  areaServed: ["Syria", "Turkey", "Global"],
+    "Yedicihan International Solidarity Association is a Turkish public-benefit association founded in 1961, working in healthcare, emergency relief, disaster response and educational aid.",
+  foundingDate: "1961-11-09",
+  areaServed: ["Turkey", "Global"],
   knowsLanguage: ["ar", "en", "fr", "tr", "id", "pt", "es", "de"],
   contactPoint: [
     {
       "@type": "ContactPoint",
-      telephone: "+90-212-288-59-30",
+      telephone: "+90-530-651-65-49",
+      email: "info@yedicihan.org",
       contactType: "customer service",
-      availableLanguage: ["Arabic", "Turkish", "English"],
+      availableLanguage: ["Turkish", "Arabic", "English"],
     },
   ],
+  email: "info@yedicihan.org",
+  telephone: "+90-530-651-65-49",
   sameAs: [
-    "https://www.facebook.com/gozbebeklerider/",
-    "https://www.instagram.com/gbyd_foundation/",
-    "https://www.youtube.com/channel/UCvvSx8jtGafK9BI2hQnBYSQ",
-    "https://x.com/gozbebeklerider",
-    "https://wa.me/905380308212",
+    "https://www.facebook.com/yedicihan",
+    "https://www.instagram.com/yedicihan61/",
+    "https://twitter.com/yedicihann",
+    "https://wa.me/905306516549",
   ],
   address: {
     "@type": "PostalAddress",
+    streetAddress: "Bağlar, Mimar Sinan Cd. No:38",
+    addressLocality: "Bağcılar",
+    addressRegion: "İstanbul",
+    postalCode: "34209",
     addressCountry: "TR",
   },
-  nonprofitStatus: "Nonprofit501c3",
 };
 
 const websiteSchema = {
@@ -202,7 +197,7 @@ const faqSchema = {
       name: "كيف يمكنني التبرع لجمعية يدي جيهان؟",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "يمكنك التبرع مباشرة عبر موقعنا الإلكتروني gozbebekleri.org باختيار الحملة المناسبة وإتمام الدفع بأمان عبر بطاقتك الائتمانية أو خدمات الدفع الإلكتروني. جميع التبرعات موثقة وتصل مباشرة للمستفيدين.",
+        text: "يمكنك التبرع مباشرة عبر موقعنا الإلكتروني باختيار المشروع المناسب وإتمام الدفع بأمان عبر بطاقتك الائتمانية، أو عبر التحويل البنكي إلى أحد حساباتنا المعلنة في صفحة الحسابات البنكية. جميع التبرعات موثقة وتصل إلى المستفيدين.",
       },
     },
     {
@@ -210,23 +205,23 @@ const faqSchema = {
       name: "هل يمكنني دفع زكاتي عبر منصة يدي جيهان؟",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "نعم، نقبل زكاة المال وزكاة الفطر. يتم توزيع الزكاة على المستحقين من الأسر السورية المحتاجة وفق الشروط الشرعية المعتمدة. يمكنك تخصيص تبرعك للزكاة عند إتمام عملية الدفع.",
+        text: "نعم، نقبل زكاة المال وزكاة الفطر، وتُوزَّع على المستحقين وفق الشروط الشرعية المعتمدة. يمكنك تخصيص تبرعك للزكاة عند إتمام عملية الدفع.",
       },
     },
     {
       "@type": "Question",
-      name: "How does orphan sponsorship work with Yedicihan?",
+      name: "When was Yedicihan founded?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Our orphan sponsorship program provides monthly financial support covering education, healthcare, and basic needs for Syrian orphaned children. You can sponsor a child for as little as $30/month. You receive regular updates and reports about the child you sponsor.",
+        text: "Yedicihan International Solidarity Association was opened on 9 November 1961 by a group of doctors and nurses. It began its work in healthcare, most notably helping to develop the facilities of Haydarpaşa Numune Hospital and covering examination and medicine costs for patients of limited means.",
       },
     },
     {
       "@type": "Question",
-      name: "Is Yedicihan a trustworthy and legitimate charity?",
+      name: "Is Yedicihan an officially recognised association?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. Yedicihan (يدي جيهان) has been operating since 2011, registered in Turkey, and has helped over 40,000 families across Syria and the region. We publish transparent financial reports and every donation is tracked. We have a verified presence on Facebook, Instagram, and YouTube.",
+        text: "Yes. Yedicihan was granted the status of an “Association Working for the Public Benefit” by Council of Ministers Decision No. 6/2090, dated 10 August 1963, and is registered in Türkiye.",
       },
     },
     {
@@ -234,15 +229,15 @@ const faqSchema = {
       name: "Yedicihan derneğine nasıl bağış yapabilirim?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "gozbebekleri.org adresinden dilediğiniz projeyi seçerek güvenli ödeme altyapımız üzerinden kredi kartı veya diğer ödeme yöntemleriyle bağışınızı yapabilirsiniz. Tüm bağışlar belgelenmiş olup doğrudan ihtiyaç sahiplerine ulaştırılmaktadır.",
+        text: "Web sitemizden dilediğiniz projeyi seçerek güvenli ödeme altyapımız üzerinden kredi kartıyla bağış yapabilir veya banka hesaplarımız sayfasındaki IBAN'lara havale/EFT gönderebilirsiniz. Tüm bağışlar belgelenmekte ve doğrudan ihtiyaç sahiplerine ulaştırılmaktadır.",
       },
     },
     {
       "@type": "Question",
-      name: "ما هي مشاريع الجمعية الإنسانية الأكثر إلحاحاً؟",
+      name: "Yedicihan hangi alanlarda faaliyet gösteriyor?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "تشمل أبرز مشاريعنا: العمليات الجراحية العاجلة لأطفال القلب، كفالة الأيتام، توزيع السلال الغذائية، دعم التعليم للأطفال المهجرين، والإغاثة الطارئة في مناطق النزاع السوري. يمكنك الاطلاع على جميع الحملات النشطة في صفحة المشاريع.",
+        text: "Derneğimiz kuruluşundan bu yana sağlık alanında çalışmaktadır. 2023 yılındaki kongremizde alınan yönetim ve tüzük değişikliği ile faaliyet alanımız doğal afetler, acil yardım ve eğitim yardımlarını da kapsayacak şekilde genişletilmiştir.",
       },
     },
   ],
@@ -268,8 +263,8 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
-        <meta name="geo.region" content="SY" />
-        <meta name="geo.placename" content="Syria" />
+        <meta name="geo.region" content="TR-34" />
+        <meta name="geo.placename" content="İstanbul" />
         <meta name="classification" content="charity, humanitarian, nonprofit" />
         <meta name="rating" content="general" />
         <meta name="revisit-after" content="3 days" />

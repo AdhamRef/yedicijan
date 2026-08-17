@@ -22,14 +22,12 @@ import {
 import { getSocialLinks } from "@/lib/social-links";
 import { track } from "@vercel/analytics";
 
-const PHONE_RAW = "+902122885930";
-const PHONE_DISPLAY = "+90 212 288 59 30";
-const EMAIL = "info@gozbebekleri.org.tr";
+const PHONE_RAW = "+905306516549";
+const PHONE_DISPLAY = "+90 530 651 65 49";
+const EMAIL = "info@yedicihan.org";
 const ADDRESS_LINES = [
-  "ŞİRİNEVLER MAH. KAZIM KARABEKİR",
-  "3. SOKAK DISKAPINO:14",
-  "ZAKKUM AP İÇKAPINO:2",
-  "BAHÇELİEVLER / İSTANBUL",
+  "Bağlar, Mimar Sinan Cd. No:38",
+  "34209 Bağcılar / İstanbul",
 ];
 
 const ContactPage = () => {
@@ -327,7 +325,7 @@ const ContactPage = () => {
                 { Icon: Instagram, href: social.instagram, label: "Instagram" },
                 { Icon: Twitter, href: social.twitter, label: "Twitter" },
                 { Icon: Youtube, href: social.youtube, label: "YouTube" },
-              ];
+              ].filter(({ href }) => Boolean(href));
             })().map(({ Icon, href, label }) => (
               <a
                 key={label}

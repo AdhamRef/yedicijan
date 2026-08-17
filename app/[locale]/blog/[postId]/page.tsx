@@ -233,7 +233,7 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
                 </CardContent>
 
                 <CardFooter>
-                  <ShareButton label={t('sharePost')} copiedMessage={t('linkCopied')} url={`https://gozbebekleri.org/${locale}/blog/${post?.slug || params.postId}`} />
+                  <ShareButton label={t('sharePost')} copiedMessage={t('linkCopied')} url={`${SITE_URL}/${locale}/blog/${post?.slug || params.postId}`} />
                 </CardFooter>
               </Card>
             </div>

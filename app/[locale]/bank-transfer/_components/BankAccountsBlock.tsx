@@ -7,52 +7,41 @@ import { useTranslations } from "next-intl";
 
 interface Account {
   type: string;
-  number: string;
-  ext: string;
   iban: string;
+  /** The association publishes IBANs only; these are shown when known. */
+  number?: string;
+  ext?: string;
 }
 
 interface Bank {
   name: string;
-  branch: string;
   swift: string;
   accountName: string;
-  logo: string;
   accounts: Account[];
+  branch?: string;
+  logo?: string;
 }
+
+const ACCOUNT_HOLDER = "Yedicihan Uluslararası Yardımlaşma Derneği";
 
 const BANKS: Bank[] = [
   {
-    name: "Kuveyt Türk Katılım Bankası",
-    branch: "Şirinevler",
-    swift: "KTEFTRIS",
-    accountName: "GÖZBEBEKLERİ YARDIMLAŞMA VE DAYANIŞMA DERNEĞİ",
-    logo: "/kuveyt-turk.png",
-    accounts: [
-      { type: "TL", number: "8023858", ext: "5", iban: "TR790020500000802385800005" },
-    ],
-  },
-  {
-    name: "T.C. Ziraat Bankası",
-    branch: "Şirinevler",
-    swift: "TCZBTR2AXXX",
-    accountName: "GÖZBEBEKLERİ YARDIMLAŞMA VE DAYANIŞMA DERNEĞİ",
-    logo: "/ziraat-bankasi.png",
-    accounts: [
-      { type: "TL", number: "826-82467702", ext: "5004", iban: "TR700001000826824677025004" },
-      { type: "USD", number: "826-82467702", ext: "5005", iban: "TR430001000826824677025005" },
-    ],
-  },
-  {
     name: "Ziraat Katılım Bankası",
-    branch: "Şirinevler Şubesi",
     swift: "ZKBATRIS",
-    accountName: "Göz Bebekleri Yardımlaşma Ve Dayanışma Derneği",
+    accountName: ACCOUNT_HOLDER,
     logo: "/ziraat-katilim.jpg",
     accounts: [
-      { type: "TL", number: "166-1643884", ext: "4", iban: "TR800020900001643884000004" },
-      { type: "EURO", number: "166-1643884", ext: "6", iban: "TR260020900001643884000006" },
-      { type: "USD", number: "166-1643884", ext: "5", iban: "TR530020900001643884000005" },
+      { type: "TL", iban: "TR750020900001843729000001" },
+      { type: "EUR", iban: "TR210020900001843729000003" },
+      { type: "USD", iban: "TR480020900001843729000002" },
+    ],
+  },
+  {
+    name: "AlbarakaTürk Katılım Bankası",
+    swift: "BTFHTRIS",
+    accountName: ACCOUNT_HOLDER,
+    accounts: [
+      { type: "TL", iban: "TR710020300009942518000001" },
     ],
   },
 ];
@@ -60,7 +49,7 @@ const BANKS: Bank[] = [
 const CURRENCY_STYLE: Record<string, string> = {
   TL: "bg-red-50 text-red-600 border border-red-200",
   USD: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  EURO: "bg-blue-50 text-blue-700 border border-blue-200",
+  EUR: "bg-blue-50 text-blue-700 border border-blue-200",
 };
 
 function formatIBAN(iban: string) {
@@ -102,12 +91,16 @@ function BankCard({ bank, t }: { bank: Bank; t: ReturnType<typeof useTranslation
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
       {/* Header */}
       <div className="flex items-center gap-4 px-6 py-5 border-b border-gray-100">
-        <div className="relative w-36 h-10 flex-shrink-0">
-          <Image src={bank.logo} alt={bank.name} fill className="object-contain object-left" />
-        </div>
+        {bank.logo && (
+          <div className="relative w-36 h-10 flex-shrink-0">
+            <Image src={bank.logo} alt={bank.name} fill className="object-contain object-left" />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="text-base font-bold text-gray-900 leading-tight">{bank.name}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{t("branch")} {bank.branch}</p>
+          {bank.branch && (
+            <p className="text-xs text-gray-400 mt-0.5">{t("branch")} {bank.branch}</p>
+          )}
         </div>
         <div className="hidden sm:block text-right flex-shrink-0">
           <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Swift / BIC</p>
@@ -150,12 +143,16 @@ function BankCard({ bank, t }: { bank: Bank; t: ReturnType<typeof useTranslation
                   >
                     {acc.type}
                   </span>
-                  <span className="text-xs text-gray-400">
-                    {t("accountNo")} <span className="text-gray-700 font-semibold">{acc.number}</span>
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    {t("extNo")} <span className="text-gray-700 font-semibold">{acc.ext}</span>
-                  </span>
+                  {acc.number && (
+                    <span className="text-xs text-gray-400">
+                      {t("accountNo")} <span className="text-gray-700 font-semibold">{acc.number}</span>
+                    </span>
+                  )}
+                  {acc.ext && (
+                    <span className="text-xs text-gray-400">
+                      {t("extNo")} <span className="text-gray-700 font-semibold">{acc.ext}</span>
+                    </span>
+                  )}
                 </div>
                 <p className="text-base font-black text-gray-900 tracking-widest font-mono">
                   {formatIBAN(acc.iban)}
@@ -183,8 +180,8 @@ export default function BankAccountsBlock() {
       ))}
       <p className="text-center text-sm text-gray-400 pt-2">
         {t("footer")}{" "}
-        <a href="mailto:iletisim@gozbebekleri.org" className="text-[#A5243D] font-semibold hover:underline">
-          iletisim@gozbebekleri.org
+        <a href="mailto:info@yedicihan.org" className="text-[#A5243D] font-semibold hover:underline">
+          info@yedicihan.org
         </a>
       </p>
     </div>

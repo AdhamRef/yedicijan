@@ -135,12 +135,13 @@ const Footer = () => {
   ];
 
   const social = getSocialLinks(locale);
+  // `href` is empty for networks the association has no account on yet.
   const socialLinks = [
     { Icon: Facebook, href: social.facebook, label: 'Facebook' },
     { Icon: Twitter, href: social.twitter, label: 'Twitter' },
     { Icon: Instagram, href: social.instagram, label: 'Instagram' },
     { Icon: Youtube, href: social.youtube, label: 'Youtube' },
-  ] as const;
+  ].filter((s) => Boolean(s.href));
 
   return (
     <footer className="relative overflow-hidden bg-gradient-to-b from-deep to-[#01101c] text-white">
@@ -236,28 +237,28 @@ const Footer = () => {
                 <span className="w-8 h-8 rounded-lg bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                   <MapPin className="w-4 h-4 text-gold" />
                 </span>
-                <span className="mt-1.5">{isTr ? 'İstanbul, Türkiye' : isAr ? 'إسطنبول، تركيا' : 'Istanbul, Turkey'}</span>
+                <span className="mt-1.5" dir="ltr">Bağlar, Mimar Sinan Cd. No:38, 34209 Bağcılar / İstanbul</span>
               </li>
               <li>
                 <a
-                  href="tel:+902122885930"
+                  href="tel:+905306516549"
                   className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors"
                 >
                   <span className="w-8 h-8 rounded-lg bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                     <Phone className="w-4 h-4 text-gold" />
                   </span>
-                  <span dir="ltr">+90 212 288 59 30</span>
+                  <span dir="ltr">+90 530 651 65 49</span>
                 </a>
               </li>
               <li>
                 <a
-                  href="mailto:info@gozbebekleri.org.tr"
+                  href="mailto:info@yedicihan.org"
                   className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors"
                 >
                   <span className="w-8 h-8 rounded-lg bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                     <Mail className="w-4 h-4 text-gold" />
                   </span>
-                  info@gozbebekleri.org.tr
+                  info@yedicihan.org
                 </a>
               </li>
             </ul>

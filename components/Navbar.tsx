@@ -218,7 +218,7 @@ const Navbar = () => {
                 { Icon: Youtube, href: social.youtube, label: "Youtube" },
                 { Icon: Facebook, href: social.facebook, label: "Facebook" },
                 { Icon: Twitter, href: social.twitter, label: "Twitter" },
-              ].map(({ Icon, href, label }) => (
+              ].filter(({ href }) => Boolean(href)).map(({ Icon, href, label }) => (
                 <a
                   key={label}
                   href={href}
@@ -231,11 +231,11 @@ const Navbar = () => {
                 </a>
               ))}
               <a
-                href="https://wa.me/905380308212"
+                href="https://wa.me/905306516549"
                 className="ms-2 ps-3 border-s border-gray-200 flex items-center gap-1.5 hover:text-burgundy transition-colors"
               >
                 <Phone className="w-3.5 h-3.5" />
-                <span dir="ltr">+90 212 288 59 30</span>
+                <span dir="ltr">+90 530 651 65 49</span>
               </a>
             </div>
             {/* Right: language + currency */}
@@ -486,8 +486,8 @@ const Navbar = () => {
                     { Icon: Youtube, href: social.youtube, label: "Youtube" },
                     { Icon: Facebook, href: social.facebook, label: "Facebook" },
                     { Icon: Twitter, href: social.twitter, label: "Twitter" },
-                    { Icon: MessageCircle, href: "https://wa.me/905380308212", label: "WhatsApp" },
-                  ].map(({ Icon, href, label }) => (
+                    { Icon: MessageCircle, href: "https://wa.me/905306516549", label: "WhatsApp" },
+                  ].filter(({ href }) => Boolean(href)).map(({ Icon, href, label }) => (
                     <a
                       key={label}
                       href={href}

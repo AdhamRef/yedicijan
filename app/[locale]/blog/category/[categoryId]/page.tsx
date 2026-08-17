@@ -2,6 +2,7 @@ import axios from "axios";
 import { Metadata } from "next";
 import MainPage from "./_components/MainPage";
 import { getServerBaseUrl } from "@/lib/server-base-url";
+import { SITE_URL } from "@/lib/seo";
 
 
 interface CategoryProps {
@@ -44,7 +45,7 @@ export async function generateMetadata({ params }: CategoryProps): Promise<Metad
           alt: category.title,
         },
       ],
-      url: `https://gozbebekleri.org/${params.locale || "ar"}/blog/category/${(category as any)?.slug || params.categoryId}`,
+      url: `${SITE_URL}/${params.locale || "ar"}/blog/category/${(category as any)?.slug || params.categoryId}`,
       type: "website",
     },
     twitter: {
@@ -54,7 +55,7 @@ export async function generateMetadata({ params }: CategoryProps): Promise<Metad
       images: [category.image || "/default-category-bg.jpg"],
     },
     alternates: {
-      canonical: `https://gozbebekleri.org/${params.locale || "ar"}/blog/category/${(category as any)?.slug || params.categoryId}`,
+      canonical: `${SITE_URL}/${params.locale || "ar"}/blog/category/${(category as any)?.slug || params.categoryId}`,
     },
   };
 }
