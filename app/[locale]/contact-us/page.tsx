@@ -7,7 +7,6 @@ import {
   MapPin,
   Facebook,
   Instagram,
-  Youtube,
   Twitter,
   Send,
   CheckCircle2,
@@ -324,8 +323,7 @@ const ContactPage = () => {
                 { Icon: Facebook, href: social.facebook, label: "Facebook" },
                 { Icon: Instagram, href: social.instagram, label: "Instagram" },
                 { Icon: Twitter, href: social.twitter, label: "Twitter" },
-                { Icon: Youtube, href: social.youtube, label: "YouTube" },
-              ].filter(({ href }) => Boolean(href));
+              ];
             })().map(({ Icon, href, label }) => (
               <a
                 key={label}

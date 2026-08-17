@@ -11,7 +11,6 @@ import {
   Heart,
   Facebook,
   Instagram,
-  Youtube,
   Twitter,
   MessageCircle,
   Phone,
@@ -215,10 +214,9 @@ const Navbar = () => {
             <div className="flex items-center gap-0.5">
               {[
                 { Icon: Instagram, href: social.instagram, label: "Instagram" },
-                { Icon: Youtube, href: social.youtube, label: "Youtube" },
                 { Icon: Facebook, href: social.facebook, label: "Facebook" },
                 { Icon: Twitter, href: social.twitter, label: "Twitter" },
-              ].filter(({ href }) => Boolean(href)).map(({ Icon, href, label }) => (
+              ].map(({ Icon, href, label }) => (
                 <a
                   key={label}
                   href={href}
@@ -483,11 +481,10 @@ const Navbar = () => {
                 <div className="px-5 py-3 flex items-center justify-center gap-3">
                   {[
                     { Icon: Instagram, href: social.instagram, label: "Instagram" },
-                    { Icon: Youtube, href: social.youtube, label: "Youtube" },
                     { Icon: Facebook, href: social.facebook, label: "Facebook" },
                     { Icon: Twitter, href: social.twitter, label: "Twitter" },
                     { Icon: MessageCircle, href: "https://wa.me/905306516549", label: "WhatsApp" },
-                  ].filter(({ href }) => Boolean(href)).map(({ Icon, href, label }) => (
+                  ].map(({ Icon, href, label }) => (
                     <a
                       key={label}
                       href={href}

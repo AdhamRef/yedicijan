@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Mail, Phone, MapPin, Facebook, Instagram, Youtube, Twitter, Send, Heart, ChevronRight } from 'lucide-react';
+import { Mail, Phone, MapPin, Facebook, Instagram, Twitter, Send, Heart, ChevronRight } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useSession } from 'next-auth/react';
 import { usePathname, useRouter } from '@/i18n/routing';
@@ -135,13 +135,11 @@ const Footer = () => {
   ];
 
   const social = getSocialLinks(locale);
-  // `href` is empty for networks the association has no account on yet.
   const socialLinks = [
     { Icon: Facebook, href: social.facebook, label: 'Facebook' },
     { Icon: Twitter, href: social.twitter, label: 'Twitter' },
     { Icon: Instagram, href: social.instagram, label: 'Instagram' },
-    { Icon: Youtube, href: social.youtube, label: 'Youtube' },
-  ].filter((s) => Boolean(s.href));
+  ] as const;
 
   return (
     <footer className="relative overflow-hidden bg-gradient-to-b from-deep to-[#01101c] text-white">
