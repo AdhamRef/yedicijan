@@ -21,7 +21,7 @@ const tajawal = Tajawal({
   display: "swap",
 });
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.gozbebekleri.org";
+const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.yedicihan.org";
 const OG_IMAGE = `/yedicijan_logo.png`;
 
 export const metadata: Metadata = {

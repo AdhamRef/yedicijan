@@ -135,9 +135,9 @@ function elasticEmailErrorText(res: { body: unknown; text?: string }): string {
  * `GET /v4/domains` does not always answer with a bare hostname. When a domain is verified for one
  * specific sender rather than wholesale, Elastic Email returns the sender scope inline:
  *
- *     "Domain": "gozbebekleri.org (info@gozbebekleri.org)"
+ *     "Domain": "yedicihan.org (info@yedicihan.org)"
  *
- * Comparing that string to "gozbebekleri.org" never matched, so a correctly verified sender was
+ * Comparing that string to "yedicihan.org" never matched, so a correctly verified sender was
  * reported as ELASTIC_EMAIL_SENDER_DOMAIN_NOT_VERIFIED on the فحص الاتصال page.
  */
 export function elasticEmailDomainName(raw: string): string {

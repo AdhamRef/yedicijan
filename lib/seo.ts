@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/locales";
 
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.gozbebekleri.org").replace(/\/$/, "");
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.yedicihan.org").replace(/\/$/, "");
 export const SITE_NAME = "Yedicihan";
 export const OG_IMAGE = `${SITE_URL}/og-image.jpg`;
 

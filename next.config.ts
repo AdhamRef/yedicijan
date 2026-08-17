@@ -86,7 +86,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "via.placeholder.com" },
-      { protocol: "https", hostname: "gozbebekleri.org" },
+      { protocol: "https", hostname: "yedicihan.org" },
       { protocol: "https", hostname: "muslimglobalrelief.org" },
       { protocol: "https", hostname: "example.com" },
       { protocol: "https", hostname: "img.youtube.com" },
