@@ -92,6 +92,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "example.com" },
       { protocol: "https", hostname: "img.youtube.com" },
       { protocol: "https", hostname: "newarab.com" },
+      { protocol: "https", hostname: "i0.wp.com" },
+      { protocol: "https", hostname: "middleeastmonitor.com" },
       { protocol: "https", hostname: "division.iium.edu.my" },
     ],
   },

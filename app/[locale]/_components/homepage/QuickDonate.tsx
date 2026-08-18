@@ -185,7 +185,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         {/* ── Left: emotional photo panel ── */}
         <div className="relative min-h-[340px] lg:min-h-[600px]">
           <Image
-            src="https://www.newarab.com/sites/default/files/media/images/C3143D3C-B372-42F4-9659-D65BC50F57C4.jpg"
+            src="https://i0.wp.com/www.middleeastmonitor.com/wp-content/uploads/2022/08/AA-20220820-28691570-28691558-DAILY_LIFE_IN_GAZA.jpg?fit=920%2C613&ssl=1"
             alt=""
             aria-hidden
             fill
