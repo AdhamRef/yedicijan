@@ -35,6 +35,13 @@ function ChevronDown() {
 }
 
 const LOGO_URL = "/yedicijan_logo.png";
+// Same field photo the QuickDonate panel uses — here it sits far behind the brand
+// wash as a texture, so the auth screen shares the homepage's visual language.
+const TEXTURE_URL = "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg";
+
+// The page lives inside <main className="pt-12 lg:pt-[88px]">, so a full 100dvh
+// would push past the fold. Subtracting the navbar keeps the card on one screen.
+const SHELL_HEIGHT = "h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] lg:h-[calc(100dvh-88px)] lg:max-h-[calc(100dvh-88px)]";
 
 export default function CompleteProfilePage() {
   const { data: session, status } = useSession();
@@ -123,7 +130,7 @@ export default function CompleteProfilePage() {
 
   if (pageLoading || status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#A5243D]">
+      <div className={`${SHELL_HEIGHT} flex items-center justify-center bg-[#A5243D]`}>
         <Loader2 className="w-6 h-6 animate-spin text-white/60" />
       </div>
     );
@@ -144,27 +151,40 @@ export default function CompleteProfilePage() {
        : "text-gray-400 border-gray-200 hover:border-gray-300"}`;
 
   return (
-    <div className="min-h-screen bg-[#A5243D] flex flex-col items-center justify-center p-4" dir={isRTL ? "rtl" : "ltr"}>
+    <div
+      className={`${SHELL_HEIGHT} relative overflow-hidden bg-[#A5243D] flex flex-col items-center justify-center px-4 py-5`}
+      dir={isRTL ? "rtl" : "ltr"}
+    >
 
-      {/* Subtle radial glow behind card */}
-      <div className="pointer-events-none fixed inset-0">
-        <div className="absolute inset-0 bg-gradient-to-b from-burgundy to-deep" />
+      {/* Layered backdrop: photo texture → brand wash → dot grid → radial glow */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <Image
+          src={TEXTURE_URL}
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover object-center opacity-25"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-burgundy/90 via-burgundy/95 to-deep" />
+        <div className="absolute inset-0 opacity-[0.07] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:18px_18px]" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-white/5 blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-sm">
+      {/* Scrolls internally on very short screens so the shell itself never grows */}
+      <div className="relative w-full max-w-sm max-h-full overflow-y-auto scrollbar-hide">
 
         {/* Logo + greeting above card */}
-        <div className="text-center mb-5">
+        <div className="text-center mb-4">
           <Image
             src={LOGO_URL}
             alt="Logo"
             width={48}
             height={48}
-            className="h-10 w-auto object-contain brightness-0 invert mx-auto mb-4"
+            className="h-9 w-auto object-contain brightness-0 invert mx-auto mb-3"
           />
           {/* Avatar */}
-          <div className="relative inline-flex mb-3">
+          <div className="relative inline-flex mb-2.5">
             {userImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -186,9 +206,12 @@ export default function CompleteProfilePage() {
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl shadow-black/20 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-2xl shadow-black/25 ring-1 ring-black/5 overflow-hidden">
 
-          <div className="px-6 py-5 space-y-4">
+          {/* Gold hairline — the same accent the homepage cards carry */}
+          <div className="h-1 w-full bg-gradient-to-r from-gold via-gold/70 to-transparent rtl:bg-gradient-to-l" />
+
+          <div className="px-6 py-5 space-y-3.5">
 
             {/* Error */}
             {error && (
