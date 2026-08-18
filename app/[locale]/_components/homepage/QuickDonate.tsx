@@ -185,7 +185,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         {/* ── Left: emotional photo panel ── */}
         <div className="relative min-h-[340px] lg:min-h-[600px]">
           <Image
-            src="https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg"
+            src="https://yedicihan.org/images/onlinebagis-banner2.jpg"
             alt=""
             aria-hidden
             fill
@@ -331,8 +331,8 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
             disabled={!selectedCategoryId || displayAmount <= 0 || categoriesLoading || belowMin}
             className="shape-button mt-5 flex w-full items-center justify-center gap-2 bg-burgundy py-3.5 text-base font-bold text-white shadow-soft transition-all duration-300 hover:bg-burgundyDark hover:shadow-lift disabled:pointer-events-none disabled:opacity-50"
           >
-            {t("donateNow")}
             <Heart className="h-4 w-4" fill="currentColor" />
+            {t("donateNow")}
           </button>
 
           {/* Secure */}
