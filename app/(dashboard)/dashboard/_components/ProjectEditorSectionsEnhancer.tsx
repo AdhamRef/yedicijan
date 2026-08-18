@@ -246,29 +246,59 @@ function placeSeoAsSecondSection() {
   return false;
 }
 
+/** Drops toggles left over from when every section was foldable, and re-shows
+ *  whatever they had hidden — so a client that is already on the page (or a Fast
+ *  Refresh in dev) doesn't end up with a half-collapsed form. */
+function removeLegacyToggles(form: HTMLFormElement) {
+  let changed = false;
+
+  for (const toggle of Array.from(form.querySelectorAll<HTMLElement>(`.${HEADER_CLASS}`))) {
+    const target = toggle.nextElementSibling;
+    if (target instanceof HTMLElement && target.id === SEO_PORTAL_ID) continue;
+    toggle.remove();
+    changed = true;
+  }
+
+  for (const section of Array.from(form.children)) {
+    if (!(section instanceof HTMLElement)) continue;
+    if (section.id === SEO_PORTAL_ID) continue;
+    // Only ever touch sections this enhancer itself hid — never a display:none
+    // that the form set for its own reasons.
+    if (section.dataset.projectCollapsibleSection !== "true") continue;
+    delete section.dataset.projectCollapsibleSection;
+    section.classList.remove("mt-3");
+    if (section.style.display === "none") section.style.display = "";
+    changed = true;
+  }
+
+  return changed;
+}
+
+/** Every section of the project editor stays open. Only the SEO workbench keeps
+ *  a fold, since it is long, optional and rarely touched on a given edit. */
 function collapseProjectSections(projectId: string) {
   const form = getProjectForm();
   if (!form) return false;
   let changed = ensureLocaleLinksSection(projectId);
   if (placeSeoAsSecondSection()) changed = true;
+  if (removeLegacyToggles(form)) changed = true;
 
   const beforeY = window.scrollY;
-  const sections = Array.from(form.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
-  let index = 0;
-  for (const section of sections) {
-    if (!isSectionCandidate(section)) continue;
-    if (section.dataset.projectCollapsibleSection === "true") {
-      index += 1;
-      continue;
-    }
-    section.dataset.projectCollapsibleSection = "true";
-    section.classList.add("mt-3");
-    const toggle = makeToggle(getSectionTitle(section, index), section);
-    section.insertAdjacentElement("beforebegin", toggle);
-    section.style.display = "none";
+  const seo = document.getElementById(SEO_PORTAL_ID);
+  if (
+    seo instanceof HTMLElement &&
+    seo.parentElement === form &&
+    isSectionCandidate(seo) &&
+    seo.dataset.projectCollapsibleSection !== "true"
+  ) {
+    seo.dataset.projectCollapsibleSection = "true";
+    seo.classList.add("mt-3");
+    const toggle = makeToggle(getSectionTitle(seo, 0), seo);
+    seo.insertAdjacentElement("beforebegin", toggle);
+    seo.style.display = "none";
     changed = true;
-    index += 1;
   }
+
   if (placeSeoAsSecondSection()) changed = true;
   if (changed) window.requestAnimationFrame(() => window.scrollTo({ top: beforeY, behavior: "instant" as ScrollBehavior }));
   return changed;
