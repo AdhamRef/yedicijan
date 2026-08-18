@@ -185,7 +185,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         {/* ── Left: emotional photo panel ── */}
         <div className="relative min-h-[340px] lg:min-h-[600px]">
           <Image
-            src="https://yedicihan.org/images/onlinebagis-banner2.jpg"
+            src="https://www.newarab.com/sites/default/files/media/images/C3143D3C-B372-42F4-9659-D65BC50F57C4.jpg"
             alt=""
             aria-hidden
             fill
