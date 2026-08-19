@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/form';
 import { ArrowLeft, Loader2, Upload, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import CategoryIcon, { CATEGORY_ICON_NAMES } from '@/components/CategoryIcon';
+import { CategoryIconPicker } from '../_components/CategoryIconPicker';
 
 const formSchema = z.object({
   name: z.string().min(1, 'اسم الحملة مطلوب').max(50, 'اسم الحملة طويل جداً'),
@@ -362,36 +362,9 @@ export default function NewCategoryPage() {
                   <FormItem>
                     <FormLabel>أيقونة الحملة</FormLabel>
                     <FormControl>
-                      <div className="space-y-3">
-                        {field.value && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <div className="w-9 h-9 rounded-lg bg-brand/10 flex items-center justify-center">
-                              <CategoryIcon name={field.value} className="w-5 h-5 text-brand" />
-                            </div>
-                            <span className="font-medium">{field.value}</span>
-                          </div>
-                        )}
-                        <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
-                          {CATEGORY_ICON_NAMES.map((name) => (
-                            <button
-                              key={name}
-                              type="button"
-                              title={name}
-                              onClick={() => field.onChange(name)}
-                              className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${
-                                field.value === name
-                                  ? 'border-brand bg-brand/10 text-brand'
-                                  : 'border-gray-200 text-gray-500 hover:border-brand/50 hover:text-brand'
-                              }`}
-                            >
-                              <CategoryIcon name={name} className="w-5 h-5" />
-                              <span className="text-[9px] leading-tight text-center truncate w-full">{name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      <CategoryIconPicker value={field.value} onChange={field.onChange} />
                     </FormControl>
-                    <FormDescription>اختر أيقونة للحملة</FormDescription>
+                    <FormDescription>اختر أيقونة جاهزة أو علم أي دولة.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
