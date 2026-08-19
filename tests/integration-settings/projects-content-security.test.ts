@@ -253,20 +253,46 @@ test("direct bulk Arabic mutation is disabled without OpenAI or database access"
   assert.doesNotMatch(source, /api\.openai\.com|OPENAI_API_KEY|prisma\.|saveArabicItem|proofreadArabic/);
 });
 
-test("localization preview cannot apply or save database changes", () => {
+test("localization apply is authorized, section-scoped and field-scoped", () => {
   const api = readFileSync("app/api/admin/content-localization/preview/route.ts", "utf8");
-  const dialog = readFileSync(
-    "app/(dashboard)/dashboard/_components/ContentLocalizationPreviewDialog.tsx",
-    "utf8",
-  );
   const card = readFileSync(
     "app/(dashboard)/dashboard/_components/ContentLocalizationAuditCard.tsx",
     "utf8",
   );
-  assert.match(api, /body\?\.action !== "generate"/);
-  assert.match(api, /status: 409/);
-  assert.doesNotMatch(api, /\.update\(|\.upsert\(|\.create\(|\.delete\(/);
-  assert.doesNotMatch(dialog, /saveRows|حفظ بعد التدقيق|rows:\s*changedRows/);
+
+  const handler = api.slice(api.indexOf("export async function POST"));
+  const authIndex = handler.indexOf("authorize(section)");
+  const applyIndex = handler.indexOf('body?.action === "apply"');
+  assert.ok(authIndex >= 0, "apply handler must authorize the parsed section");
+  assert.ok(
+    applyIndex > authIndex,
+    "apply must not run before the section permission check",
+  );
+
+  // The payload's item types are validated against the section, so a caller
+  // holding only `campaigns` cannot reach category or blog rows.
+  assert.match(api, /const SECTION_TYPES: Record<\s*\n?\s*ContentLocalizationSection/);
+  assert.match(api, /parseApplyItems\(body\?\.items, section\)/);
+
+  // Writes stay inside the localization whitelist: translatable text on the four
+  // content models and nothing else. The rich-text article body is excluded.
+  assert.match(api, /const APPLY_FIELDS: Record<ItemType/);
+  assert.doesNotMatch(api, /^\s*post: \["title", "description", "content"\],$/m);
+  const allowedWrites = new Set([
+    "prisma.campaign.update(",
+    "prisma.category.update(",
+    "prisma.post.update(",
+    "prisma.postCategory.update(",
+    "prisma.campaignTranslation.upsert(",
+    "prisma.categoryTranslation.upsert(",
+    "prisma.postTranslation.upsert(",
+    "prisma.postCategoryTranslation.upsert(",
+  ]);
+  for (const write of api.match(/prisma\.[A-Za-z]+\.[A-Za-z]+\(/g) || []) {
+    if (write.endsWith(".findMany(") || write.endsWith(".findUnique(")) continue;
+    assert.ok(allowedWrites.has(write), `unexpected write target: ${write}`);
+  }
+
   assert.doesNotMatch(card, /arabic-bulk-proofread|تدقيق العربي بالكامل/);
 });
 

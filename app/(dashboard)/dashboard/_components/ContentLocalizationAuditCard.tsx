@@ -365,6 +365,7 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
         open={previewOpen}
         onOpenChange={setPreviewOpen}
         defaultLocale="de"
+        onSaved={loadAudit}
       />
     </>
   );

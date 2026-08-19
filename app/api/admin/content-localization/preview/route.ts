@@ -308,6 +308,125 @@ async function generateProfessionalTranslation(
   };
 }
 
+/** The only fields an apply may ever touch. Anything else in the payload is
+ *  dropped — slugs, images, ids and every unrelated model stay out of reach. */
+const APPLY_FIELDS: Record<ItemType, readonly string[]> = {
+  campaign: ["title", "description"],
+  category: ["name", "description"],
+  // `content` is the rich-text article body; the dialog can only show it as
+  // flattened text, so saving it back would strip the document structure.
+  post: ["title", "description"],
+  postCategory: ["name", "title", "description"],
+};
+
+const SECTION_TYPES: Record<ContentLocalizationSection, readonly ItemType[]> = {
+  campaigns: ["campaign"],
+  categories: ["category"],
+  blog: ["post", "postCategory"],
+};
+
+type ApplyItem = { id: string; type: ItemType; fields: Record<string, string> };
+
+/** Validates the client payload against the section it claims to belong to and
+ *  strips every field that is not whitelisted for that item type. */
+function parseApplyItems(
+  value: unknown,
+  section: ContentLocalizationSection,
+): ApplyItem[] {
+  if (!Array.isArray(value)) return [];
+  const allowedTypes = SECTION_TYPES[section];
+  const items: ApplyItem[] = [];
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const raw = entry as { id?: unknown; type?: unknown; fields?: unknown };
+    const id = typeof raw.id === "string" ? raw.id.trim() : "";
+    const type = allowedTypes.find((candidate) => candidate === raw.type);
+    if (!id || !type) continue;
+    if (!raw.fields || typeof raw.fields !== "object") continue;
+
+    const source = raw.fields as Record<string, unknown>;
+    const fields: Record<string, string> = {};
+    for (const field of APPLY_FIELDS[type]) {
+      const text = normalizeText(source[field]);
+      if (text) fields[field] = text;
+    }
+    if (Object.keys(fields).length > 0) items.push({ id, type, fields });
+  }
+
+  return items;
+}
+
+/** Arabic is the source of truth, so it lives on the base record; every other
+ *  locale lives in the matching *Translation row. */
+async function applyItem(item: ApplyItem, locale: Locale): Promise<void> {
+  const data = item.fields;
+
+  if (locale === "ar") {
+    if (item.type === "campaign") {
+      await prisma.campaign.update({ where: { id: item.id }, data });
+    } else if (item.type === "category") {
+      await prisma.category.update({ where: { id: item.id }, data });
+    } else if (item.type === "post") {
+      await prisma.post.update({ where: { id: item.id }, data });
+    } else {
+      await prisma.postCategory.update({ where: { id: item.id }, data });
+    }
+    return;
+  }
+
+  if (item.type === "campaign") {
+    // title + description are NOT NULL on the translation row, so a create that
+    // only carries one of them still has to supply the other.
+    await prisma.campaignTranslation.upsert({
+      where: { campaignId_locale: { campaignId: item.id, locale } },
+      update: data,
+      create: {
+        campaign: { connect: { id: item.id } },
+        locale,
+        title: data.title ?? "",
+        description: data.description ?? "",
+      },
+    });
+    return;
+  }
+
+  if (item.type === "category") {
+    await prisma.categoryTranslation.upsert({
+      where: { categoryId_locale: { categoryId: item.id, locale } },
+      update: data,
+      create: {
+        category: { connect: { id: item.id } },
+        locale,
+        name: data.name ?? "",
+        description: data.description,
+      },
+    });
+    return;
+  }
+
+  if (item.type === "post") {
+    await prisma.postTranslation.upsert({
+      where: { postId_locale: { postId: item.id, locale } },
+      update: data,
+      create: { post: { connect: { id: item.id } }, locale, ...data },
+    });
+    return;
+  }
+
+  await prisma.postCategoryTranslation.upsert({
+    where: { categoryId_locale: { categoryId: item.id, locale } },
+    update: data,
+    create: {
+      category: { connect: { id: item.id } },
+      locale,
+      name: data.name ?? "",
+      title: data.title,
+      description: data.description,
+    },
+  });
+}
+
 async function authorize(section: ContentLocalizationSection) {
   const session = await getServerSession(authOptions);
   return requireAdminOrDashboardPermission(
@@ -333,7 +452,7 @@ export async function GET(request: NextRequest) {
       25,
     );
     const rows = await loadPreviewRows(section, locale, limit);
-    return NextResponse.json({ ok: true, readOnly: true, section, locale, rows });
+    return NextResponse.json({ ok: true, section, locale, rows });
   } catch (error) {
     console.error("Content localization preview failed:", error);
     return NextResponse.json(
@@ -354,15 +473,35 @@ export async function POST(request: NextRequest) {
     const denied = await authorize(section);
     if (denied) return denied;
 
+    if (body?.action === "apply") {
+      const items = parseApplyItems(body?.items, section);
+      if (items.length === 0) {
+        return NextResponse.json(
+          { error: "No editable fields were submitted" },
+          { status: 400 },
+        );
+      }
+
+      for (const item of items) {
+        await applyItem(item, locale);
+      }
+
+      // Hand back a fresh preview so the dialog reflects what is now stored.
+      const rows = await loadPreviewRows(section, locale, 10);
+      return NextResponse.json({
+        ok: true,
+        action: "apply",
+        applied: items.length,
+        section,
+        locale,
+        rows,
+      });
+    }
+
     if (body?.action !== "generate") {
       return NextResponse.json(
-        {
-          ok: false,
-          readOnly: true,
-          error:
-            "Localization apply is temporarily disabled pending Preview -> Review -> Approve -> Apply -> Rollback workflow.",
-        },
-        { status: 409 },
+        { error: "Unsupported action" },
+        { status: 400 },
       );
     }
 
@@ -374,7 +513,6 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({
       ok: true,
-      readOnly: true,
       action: "generate",
       section,
       locale,
