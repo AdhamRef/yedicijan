@@ -241,7 +241,7 @@ const DonationSuccessPage = () => {
             className="group flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-800 font-semibold py-4 px-8 rounded-2xl transition-all shadow-xl hover:shadow-2xl border-3 border-purple-300 hover:scale-105"
           >
             <span className="text-base">{t('backToHome')}</span>
-            <ArrowLeft className="w-5 h-5 group-hover:translate-x-[-4px] transition-transform" />
+            <ArrowLeft className="w-5 h-5 rtl:rotate-180 group-hover:translate-x-[-4px] rtl:group-hover:translate-x-[4px] transition-transform" />
           </button>
         </div>
       </div>

@@ -37,7 +37,7 @@ const BlogCard: React.FC<BlogCardProps> = ({ title, image, link = "#", descripti
           <p className="text-gray-500 text-xs line-clamp-2 mb-3">{description}</p>
         )}
         <span className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-burgundy group-hover:text-burgundyDark transition-colors">
-          {t("readMore")} <ArrowRight className="w-3.5 h-3.5" />
+          {t("readMore")} <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
         </span>
       </div>
     </Link>

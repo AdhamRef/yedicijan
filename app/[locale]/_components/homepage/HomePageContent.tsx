@@ -136,7 +136,7 @@ const HomePage: React.FC<HomePageContentProps> = ({
               <p className="mt-3 text-gray-500">{t("featuredProjects") || "ÖNE ÇIKAN PROJELER"}</p>
             </div>
             <Link href="/campaigns" className="shape-button inline-flex items-center gap-2 bg-deep hover:bg-navy px-5 py-3 text-sm font-semibold text-white transition-colors w-fit">
-              {t("viewAll") || "Tümünü Gör"} <ArrowRight className="w-4 h-4" />
+              {t("viewAll") || "Tümünü Gör"} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
             </Link>
           </div>
           {/* Suspense boundary required because CampaignCard descendants call useSearchParams. */}
@@ -241,7 +241,7 @@ const HomePage: React.FC<HomePageContentProps> = ({
 
             <div className="sm:hidden text-center mt-6">
               <Link href="/campaigns" className="inline-flex items-center gap-1.5 text-sm font-semibold text-burgundy">
-                {t("viewAll") || "View all"} <ArrowRight className="w-4 h-4" />
+                {t("viewAll") || "View all"} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
               </Link>
             </div>
           </div>
@@ -264,7 +264,7 @@ const HomePage: React.FC<HomePageContentProps> = ({
                   <div className="gold-mark mt-5" />
                 </div>
                 <Link href="/blog" className="hidden shrink-0 sm:inline-flex items-center gap-2 shape-button bg-deep hover:bg-navy px-5 py-3 text-sm font-semibold text-white transition-colors">
-                  {t("viewAll")} <ArrowRight className="w-4 h-4" />
+                  {t("viewAll")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
                 </Link>
               </div>
 
@@ -296,7 +296,7 @@ const HomePage: React.FC<HomePageContentProps> = ({
                     <div className="flex flex-col p-6">
                       <p className="line-clamp-2 text-sm leading-relaxed text-gray-500">{featured.description}</p>
                       <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-burgundy transition-colors group-hover:text-burgundyDark">
-                        {tBlog("readMore")} <ArrowRight className="h-4 w-4" />
+                        {tBlog("readMore")} <ArrowRight className="h-4 w-4 rtl:rotate-180" />
                       </span>
                     </div>
                   )}
@@ -323,7 +323,7 @@ const HomePage: React.FC<HomePageContentProps> = ({
                           <span className="text-[10px] font-bold uppercase tracking-widest text-burgundy">{t("news")}</span>
                           <h4 className="mt-1 line-clamp-2 font-bold leading-snug text-deep transition-colors group-hover:text-burgundy">{post.title}</h4>
                           <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-gray-400 transition-colors group-hover:text-burgundy">
-                            {tBlog("readMore")} <ArrowRight className="h-3.5 w-3.5" />
+                            {tBlog("readMore")} <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" />
                           </span>
                         </div>
                       </Link>

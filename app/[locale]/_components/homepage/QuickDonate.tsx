@@ -355,7 +355,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
           {/* Discover link */}
           <Link href="/about-us" className="mt-4 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-navy transition-colors hover:text-burgundy">
             {t("discoverMore")}
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" />
           </Link>
         </div>
       </div>

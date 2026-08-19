@@ -182,7 +182,7 @@ const BlogPage = ({
                       {formatDate(post.createdAt)}
                     </span>
                     <span className="flex items-center gap-1 text-burgundy font-semibold group-hover:text-burgundyDark transition-colors">
-                      {t("readMore") || "Devamını Oku"} <ArrowRight className="w-3.5 h-3.5" />
+                      {t("readMore") || "Devamını Oku"} <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
                     </span>
                   </div>
                 </div>
@@ -199,7 +199,7 @@ const BlogPage = ({
               disabled={isLoadingMore}
               className="shape-button inline-flex items-center gap-2 bg-burgundy hover:bg-burgundyDark text-white font-semibold px-8 py-3 transition-colors disabled:opacity-60"
             >
-              {isLoadingMore ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("loading") || "Yükleniyor..."}</> : <>{t("loadMore") || "Daha Fazla"} <ArrowRight className="w-4 h-4" /></>}
+              {isLoadingMore ? <><Loader2 className="w-4 h-4 animate-spin" /> {t("loading") || "Yükleniyor..."}</> : <>{t("loadMore") || "Daha Fazla"} <ArrowRight className="w-4 h-4 rtl:rotate-180" /></>}
             </button>
           </div>
         )}

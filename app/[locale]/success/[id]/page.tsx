@@ -665,7 +665,7 @@ const DonationSuccessPage = () => {
             className="gap-2 border-slate-300 text-slate-700 hover:bg-slate-50 font-medium py-6 px-6 rounded-xl"
           >
             {t('backToHome')}
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-5 h-5 rtl:rotate-180" />
           </Button>
         </motion.div>
       </div>
