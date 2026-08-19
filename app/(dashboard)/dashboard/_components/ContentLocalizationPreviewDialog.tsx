@@ -134,8 +134,8 @@ export function ContentLocalizationPreviewDialog({
         params: { section, locale, limit: 10 },
       });
       adoptRows(response.data?.rows || []);
-    } catch (error: any) {
-      toast.error(error?.response?.data?.error || "تعذر تجهيز المعاينة");
+    } catch (error) {
+      toast.error(errorMessage(error, "تعذر تجهيز المعاينة"));
     } finally {
       setLoading(false);
     }
@@ -152,8 +152,8 @@ export function ContentLocalizationPreviewDialog({
       });
       adoptRows(response.data?.rows || []);
       toast.success("تم تجهيز الاقتراحات — راجعها ثم اضغط حفظ");
-    } catch (error: any) {
-      toast.error(error?.response?.data?.error || "تعذر توليد المعاينة");
+    } catch (error) {
+      toast.error(errorMessage(error, "تعذر توليد المعاينة"));
     } finally {
       setGenerating(false);
     }
@@ -193,8 +193,8 @@ export function ContentLocalizationPreviewDialog({
       adoptRows(response.data?.rows || []);
       toast.success(`تم حفظ ${response.data?.applied ?? items.length} عنصر في ${LOCALE_LABELS[locale]}`);
       onSaved?.();
-    } catch (error: any) {
-      toast.error(error?.response?.data?.error || "تعذر حفظ التعديلات");
+    } catch (error) {
+      toast.error(errorMessage(error, "تعذر حفظ التعديلات"));
     } finally {
       setSavingKey(null);
     }
