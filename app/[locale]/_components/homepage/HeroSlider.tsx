@@ -180,16 +180,16 @@ const HeroSlider: React.FC<HeroSliderProps> = ({ initialSlides = [], initialFirs
 
           <div className="mt-6 flex flex-wrap justify-center gap-3 lg:justify-start">
             <Link
-              href="/#quick_donate"
+              href="/campaigns"
               className="shape-button bg-burgundy px-5 py-3 text-sm font-semibold text-white shadow-soft transition-all duration-300 hover:scale-105 hover:bg-burgundyDark"
             >
               {t("donateNow")}
             </Link>
             <Link
-              href="/campaigns"
+              href="/contact-us"
               className="shape-button bg-white px-5 py-3 text-sm font-semibold text-deep transition-all duration-300 hover:scale-105 hover:bg-ice"
             >
-              {t("exploreProjects")}
+              {t("contactUs")}
             </Link>
           </div>
 

@@ -283,10 +283,12 @@ test("localization apply is authorized, section-scoped and field-scoped", () => 
     "prisma.category.update(",
     "prisma.post.update(",
     "prisma.postCategory.update(",
+    "prisma.slide.update(",
     "prisma.campaignTranslation.upsert(",
     "prisma.categoryTranslation.upsert(",
     "prisma.postTranslation.upsert(",
     "prisma.postCategoryTranslation.upsert(",
+    "prisma.slideTranslation.upsert(",
   ]);
   for (const write of api.match(/prisma\.[A-Za-z]+\.[A-Za-z]+\(/g) || []) {
     if (write.endsWith(".findMany(") || write.endsWith(".findUnique(")) continue;

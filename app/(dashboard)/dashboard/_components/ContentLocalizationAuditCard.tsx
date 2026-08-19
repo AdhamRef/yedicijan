@@ -43,12 +43,14 @@ const FIELD_LABELS: Record<string, string> = {
   name: "الاسم",
   description: "الوصف",
   content: "المحتوى",
+  buttonText: "نص الزر",
 };
 
 const SECTION_LABELS = {
   campaigns: "المشاريع",
   categories: "الحملات",
   blog: "المقالات",
+  slides: "الشرائح",
 } as const;
 
 type Section = keyof typeof SECTION_LABELS;

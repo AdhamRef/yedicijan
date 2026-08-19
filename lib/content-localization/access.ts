@@ -4,6 +4,7 @@ export const CONTENT_LOCALIZATION_SECTIONS = [
   "campaigns",
   "categories",
   "blog",
+  "slides",
 ] as const;
 
 export type ContentLocalizationSection =
@@ -16,6 +17,7 @@ const SECTION_PERMISSION: Record<
   campaigns: "campaigns",
   categories: "categories",
   blog: "blog",
+  slides: "slides",
 };
 
 export function parseContentLocalizationSection(

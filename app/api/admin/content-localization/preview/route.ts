@@ -13,7 +13,7 @@ const TRANSLATION_LOCALES = ["en", "fr", "tr", "id", "pt", "es", "de"] as const;
 const SUPPORTED_LOCALES = ["ar", ...TRANSLATION_LOCALES] as const;
 type Locale = (typeof SUPPORTED_LOCALES)[number];
 type TranslationLocale = (typeof TRANSLATION_LOCALES)[number];
-type ItemType = "campaign" | "category" | "post" | "postCategory";
+type ItemType = "campaign" | "category" | "post" | "postCategory" | "slide";
 
 type PreviewRow = {
   id: string;
@@ -134,6 +134,33 @@ async function loadPreviewRows(
         locale,
         fields: ["title", "description"],
         sourceArabic: { title: item.title, description: item.description },
+        translation: locale === "ar"
+          ? null
+          : item.translations.find((row) => row.locale === locale),
+      }))
+      .filter((row): row is PreviewRow => Boolean(row))
+      .slice(0, limit);
+  }
+
+  if (section === "slides") {
+    const rows = await prisma.slide.findMany({
+      orderBy: { order: "asc" },
+      include: { translations: true },
+      take: 200,
+    });
+    return rows
+      .map((item) => makeRow({
+        id: item.id,
+        type: "slide",
+        label: item.title || "بدون عنوان",
+        typeLabel: "شريحة",
+        locale,
+        fields: ["title", "description", "buttonText"],
+        sourceArabic: {
+          title: item.title,
+          description: item.description,
+          buttonText: item.buttonText,
+        },
         translation: locale === "ar"
           ? null
           : item.translations.find((row) => row.locale === locale),
@@ -317,12 +344,14 @@ const APPLY_FIELDS: Record<ItemType, readonly string[]> = {
   // flattened text, so saving it back would strip the document structure.
   post: ["title", "description"],
   postCategory: ["name", "title", "description"],
+  slide: ["title", "description", "buttonText"],
 };
 
 const SECTION_TYPES: Record<ContentLocalizationSection, readonly ItemType[]> = {
   campaigns: ["campaign"],
   categories: ["category"],
   blog: ["post", "postCategory"],
+  slides: ["slide"],
 };
 
 type ApplyItem = { id: string; type: ItemType; fields: Record<string, string> };
@@ -369,6 +398,8 @@ async function applyItem(item: ApplyItem, locale: Locale): Promise<void> {
       await prisma.category.update({ where: { id: item.id }, data });
     } else if (item.type === "post") {
       await prisma.post.update({ where: { id: item.id }, data });
+    } else if (item.type === "slide") {
+      await prisma.slide.update({ where: { id: item.id }, data });
     } else {
       await prisma.postCategory.update({ where: { id: item.id }, data });
     }
@@ -400,6 +431,22 @@ async function applyItem(item: ApplyItem, locale: Locale): Promise<void> {
         locale,
         name: data.name ?? "",
         description: data.description,
+      },
+    });
+    return;
+  }
+
+  if (item.type === "slide") {
+    // title is NOT NULL on the translation row.
+    await prisma.slideTranslation.upsert({
+      where: { slideId_locale: { slideId: item.id, locale } },
+      update: data,
+      create: {
+        slide: { connect: { id: item.id } },
+        locale,
+        title: data.title ?? "",
+        description: data.description,
+        buttonText: data.buttonText,
       },
     });
     return;

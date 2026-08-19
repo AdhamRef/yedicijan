@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'react-hot-toast';
 import { errorMessage } from '@/lib/dashboard/client-error-message';
+import { ContentLocalizationAuditCard } from '../_components/ContentLocalizationAuditCard';
 
 interface Slide {
   id: string;
@@ -191,6 +192,8 @@ export default function SlidesPage() {
           </Button>
         </div>
       </div>
+
+      <ContentLocalizationAuditCard section="slides" />
 
       <Card>
         <DndProvider backend={HTML5Backend}>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "react-hot-toast";
+import { errorMessage } from "@/lib/dashboard/client-error-message";
 
 const LOCALE_LABELS: Record<string, string> = {
   ar: "العربية",
@@ -24,11 +25,12 @@ const FIELD_LABELS: Record<string, string> = {
   name: "الاسم",
   description: "الوصف",
   content: "المحتوى",
+  buttonText: "نص الزر",
 };
 
-type Section = "campaigns" | "categories" | "blog";
+type Section = "campaigns" | "categories" | "blog" | "slides";
 
-type RowType = "campaign" | "category" | "post" | "postCategory";
+type RowType = "campaign" | "category" | "post" | "postCategory" | "slide";
 
 type PreviewRow = {
   id: string;
@@ -53,6 +55,7 @@ const EDITABLE_FIELDS: Record<RowType, readonly string[]> = {
   category: ["name", "description"],
   post: ["title", "description"],
   postCategory: ["name", "title", "description"],
+  slide: ["title", "description", "buttonText"],
 };
 
 function plainText(value: string | null | undefined): string {
@@ -77,11 +80,6 @@ function plainText(value: string | null | undefined): string {
     }
   }
   return raw.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  const response = (error as { response?: { data?: { error?: unknown } } })?.response;
-  return typeof response?.data?.error === "string" ? response.data.error : fallback;
 }
 
 function rowKey(row: PreviewRow): string {

@@ -160,6 +160,18 @@ async function loadItems(section: ContentLocalizationSection): Promise<AuditItem
       fields: ["title", "description"],
     }));
   }
+  if (section === "slides") {
+    const rows = await prisma.slide.findMany({ orderBy: { order: "asc" }, include: { translations: true } });
+    return rows.map((item) => evaluateItem({
+      id: item.id,
+      label: item.title || "بدون عنوان",
+      section,
+      typeLabel: "شريحة",
+      arabicFields: { title: item.title, description: item.description, buttonText: item.buttonText },
+      translations: item.translations,
+      fields: ["title", "description", "buttonText"],
+    }));
+  }
   if (section === "categories") {
     const rows = await prisma.category.findMany({ orderBy: [{ order: "asc" }, { name: "asc" }], include: { translations: true } });
     return rows.map((item) => evaluateItem({
