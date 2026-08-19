@@ -79,6 +79,11 @@ function plainText(value: string | null | undefined): string {
   return raw.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  const response = (error as { response?: { data?: { error?: unknown } } })?.response;
+  return typeof response?.data?.error === "string" ? response.data.error : fallback;
+}
+
 function rowKey(row: PreviewRow): string {
   return `${row.type}-${row.id}`;
 }
