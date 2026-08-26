@@ -1,8 +1,13 @@
 "use client";
 
 /**
- * PayForCardForm — raw card inputs for the PayFor (Ziraat Katılım) 3D Secure flow.
- * Card data is collected here and POSTed directly to the bank via HTML form submit.
+ * PayForCardForm — raw card inputs for the bank 3D Secure flows.
+ * Shared by PayFor (Ziraat Katılım) and Albaraka Türk; the difference is where the
+ * card goes from here. PayFor doesn't hash the card fields, so the browser appends
+ * them to the form it POSTs straight to the bank. Albaraka signs them into its
+ * request MAC, so they're posted to our /api/albaraka/3d/initiate route to be signed
+ * — unless ALBARAKA_USE_OOS=1, in which case this form isn't rendered at all and the
+ * bank's own hosted page collects the card.
  * This component has NO connection to Stripe whatsoever.
  */
 

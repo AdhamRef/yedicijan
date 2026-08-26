@@ -80,9 +80,9 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
 
   const [currency, setCurrency] = useState("USD");
   // `provider` is the gateway/rail label stored on Donation.provider
-  // ("BANK" / "PAYFOR" / "STRIPE"). All three are card-style rails, so
+  // ("BANK" / "PAYFOR" / "ALBARAKA" / "STRIPE"). All are card-style rails, so
   // Donation.paymentMethod is always CARD here.
-  const [provider, setProvider] = useState<"BANK" | "PAYFOR" | "STRIPE">("BANK");
+  const [provider, setProvider] = useState<"BANK" | "PAYFOR" | "ALBARAKA" | "STRIPE">("BANK");
   const [teamSupport, setTeamSupport] = useState("0");
   const [notes, setNotes] = useState("");
   const [editableItems, setEditableItems] = useState<EditableItem[]>([
@@ -458,7 +458,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
               <label className="text-xs font-medium text-slate-700">طريقة الدفع</label>
               <Select
                 value={provider}
-                onValueChange={(v) => setProvider(v as "BANK" | "PAYFOR" | "STRIPE")}
+                onValueChange={(v) => setProvider(v as "BANK" | "PAYFOR" | "ALBARAKA" | "STRIPE")}
               >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
@@ -466,6 +466,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                 <SelectContent>
                   <SelectItem value="BANK" className="text-xs">حساب بنكي</SelectItem>
                   <SelectItem value="PAYFOR" className="text-xs">Ziraat Payfor</SelectItem>
+                  <SelectItem value="ALBARAKA" className="text-xs">Albaraka Türk</SelectItem>
                   <SelectItem value="STRIPE" className="text-xs">Stripe</SelectItem>
                 </SelectContent>
               </Select>

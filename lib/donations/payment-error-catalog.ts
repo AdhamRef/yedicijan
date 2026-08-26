@@ -52,7 +52,9 @@ export interface ResolvedPaymentError {
 /**
  * ISO 8583 / Turkish bank response code → our internal key.
  * Sources: standard ISO 8583 codes + common Türkiye İş Bankası / PayFor
- * mappings observed in production callbacks.
+ * mappings observed in production callbacks. Albaraka returns the same
+ * ISO-8583 codes in ServiceResponseData.ResponseCode, which we store in the
+ * same providerProcReturnCode column, so this map covers both gateways.
  */
 const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
   "00": "generic", // success — shouldn't land here, but keep mapping safe
@@ -158,7 +160,7 @@ export interface DonationErrorInputs {
 }
 
 export function resolvePaymentError(input: DonationErrorInputs): ResolvedPaymentError {
-  // 1. Try the PayFor numeric code first — it's the most reliable signal.
+  // 1. Try the bank's numeric code first (PayFor / Albaraka) — most reliable signal.
   const rawCode = (input.providerProcReturnCode ?? "").toString().trim();
   if (rawCode && PAYFOR_CODE_MAP[rawCode]) {
     const key = PAYFOR_CODE_MAP[rawCode];

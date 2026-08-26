@@ -41,6 +41,7 @@ import { useReferralCode } from "@/hooks/useReferralCode";
 import { useRouter } from "@/i18n/routing";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
 import { shouldSkipPopup } from "@/lib/in-app-browser";
+import { resolveGateway } from "@/lib/payment-gateway";
 import { useTranslations, useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
 import { PhoneInput } from "react-international-phone";
@@ -121,6 +122,10 @@ const CartPaymentDialog = ({
   const globalTeamSupport: SuggestedTeamSupportConfig | null =
     globalSettings?.suggestedTeamSupport ?? null;
   const payforEnabled = globalSettings ? globalSettings.payforEnabled : true;
+  const mainGateway = globalSettings ? globalSettings.mainGateway : "STRIPE";
+  // With the bank's hosted card page on, Albaraka collects the card itself and we
+  // must not render our own form (the card fields are signed into its request MAC).
+  const albarakaUseOOS = globalSettings ? globalSettings.albarakaUseOOS : false;
 
   const teamSupportOptions = useMemo(() => {
     const amounts = resolveFinalTeamSupportAmounts(getCurrency(), null, globalTeamSupport);
@@ -138,7 +143,7 @@ const CartPaymentDialog = ({
   const [teamSupport, setTeamSupport]     = useState<number | null>(null);
   const [coverFees,   setCoverFees]       = useState(false);
   const paymentMethod = "CARD";
-  // PayFor manual card inputs (use3D === true)
+  // Manual card inputs for the bank 3D rails (PayFor / Albaraka)
   const [cardDetails, setCardDetails]     = useState<PayForCardState>({ cardNumber: "", expiryDate: "", cvv: "", cardholderName: "" });
   const [cardFocus, setCardFocus]         = useState("");
   // Stripe Elements — ready state tracked here, confirmation done via ref
@@ -147,10 +152,25 @@ const CartPaymentDialog = ({
   const onStripeReadyChange = useCallback((ready: boolean) => setStripeReady(ready), []);
   // Set when PayFor fails and we get a fallback clientSecret from the server
   const [fallbackClientSecret, setFallbackClientSecret] = useState<string | null>(null);
-  // Auto-select PayFor when TL currency (cart is always ONE_TIME). Fallback secret forces Stripe.
-  // Admin kill-switch (GlobalSettings.payforEnabled) forces Stripe for every
-  // currency, including TRY, when off.
-  const use3D = payforEnabled && getCurrency() === "TRY" && !fallbackClientSecret;
+  // Which rail this cart checkout runs on. The cart is always ONE_TIME, so PayFor takes
+  // TRY while the admin leaves it on, and everything else goes to the selected main
+  // gateway. A fallback secret means a 3D attempt already failed and the donor holds a
+  // Stripe intent, so Stripe wins from then on.
+  const gateway = resolveGateway({
+    mainGateway,
+    payforEnabled,
+    currency: getCurrency(),
+    donationType: "ONE_TIME",
+    forceStripe: Boolean(fallbackClientSecret),
+  });
+  const use3D = gateway === "PAYFOR";
+  const useAlbaraka = gateway === "ALBARAKA";
+  /** Both 3D rails post an HTML form to the bank instead of confirming via stripe.js. */
+  const useBank3D = use3D || useAlbaraka;
+  /** Card inputs we render ourselves — Albaraka's hosted page replaces them. */
+  const useOwnCardForm = use3D || (useAlbaraka && !albarakaUseOOS);
+  /** Stripe Elements are mounted only when Stripe is actually charging. */
+  const useStripeElements = gateway === "STRIPE";
   const [fallbackDonationId, setFallbackDonationId] = useState<string | null>(null);
   // Guard against duplicate fallback execution
   const hasFallenBackRef = useRef(false);
@@ -503,7 +523,7 @@ const CartPaymentDialog = ({
       // stripeFormRef.current.confirmPayment() calls stripe.confirmCardPayment()
       // with CardNumberElement inside the Elements context — card data goes
       // browser → Stripe directly, never touches our server.
-      if (paymentMethod === "CARD" && !use3D) {
+      if (paymentMethod === "CARD" && useStripeElements) {
         if (selectedCardId) {
           toast.error(t("useNewCard"));
           setLoading(false);
@@ -560,19 +580,47 @@ const CartPaymentDialog = ({
         return;
       }
 
-      // ── PayFor 3D ──────────────────────────────────────────────────────
-      if (paymentMethod === "CARD" && use3D) {
+      // ── Bank 3D Secure (PayFor or Albaraka) ────────────────────────────
+      // Both rails work the same way: ask the server for a signed hidden-input set,
+      // POST it to the bank as an HTML form, then poll the donation until the bank's
+      // callback settles it. Only the endpoint and how the card reaches the bank differ.
+      if (paymentMethod === "CARD" && useBank3D) {
         const res = await axios.post("/api/cart/payment", basePayload);
         if (!res.data?.success) { onClose(); return; }
         const donationId = res.data.donation.id as string;
+        const newPan = cardDetails.cardNumber.replace(/\s/g, "");
 
-        // Saved card: server decrypts PAN + uses stored Expiry/CardHolderName.
-        // New card: server returns base fields; browser appends Pan/Expiry/CardHolderName/Cvv2.
-        const init = await axios.post("/api/payfor/3dpay/initiate", {
-          donationId,
-          locale,
-          savedCardId: selectedCardId ?? undefined,
-        });
+        // Save new card fire-and-forget
+        if (useOwnCardForm && !selectedCardId && session?.user?.id && newPan.length >= 13) {
+          axios.post("/api/credit-cards", {
+            cardNumber:     newPan,
+            expiryDate:     cardDetails.expiryDate,
+            cvc:            cardDetails.cvv,
+            cardholderName: cardDetails.cardholderName || undefined,
+          }).catch(() => {});
+        }
+
+        // Albaraka signs the card fields into the request MAC, so the card has to go
+        // to our server to be signed. PayFor leaves them out of its hash, so the
+        // browser appends them below and the PAN never reaches us.
+        const init = await axios.post(
+          useAlbaraka ? "/api/albaraka/3d/initiate" : "/api/payfor/3dpay/initiate",
+          {
+            donationId,
+            locale,
+            savedCardId: selectedCardId ?? undefined,
+            ...(useAlbaraka && useOwnCardForm
+              ? {
+                  card: {
+                    number: selectedCardId ? undefined : newPan,
+                    expiry: selectedCardId ? undefined : cardDetails.expiryDate,
+                    cvv:    cardDetails.cvv,
+                    holder: selectedCardId ? undefined : cardDetails.cardholderName,
+                  },
+                }
+              : {}),
+          }
+        );
         const { actionUrl, fields } = init.data as { actionUrl: string; fields: Record<string, string> };
 
         const form = document.createElement("form");
@@ -584,26 +632,21 @@ const CartPaymentDialog = ({
           form.appendChild(input);
         });
 
+        // Card fields the browser still has to add — PayFor only. Albaraka's fields
+        // are already signed into `fields` server-side (or collected on the bank's
+        // own page), so appending anything here would break its MAC.
         const browserCardFields: Record<string, string> = {};
-        if (selectedCardId) {
-          // Pan/Expiry/CardHolderName already in `fields`; add CVC only.
-          browserCardFields.Cvv2 = cardDetails.cvv;
-        } else {
-          const newPan = cardDetails.cardNumber.replace(/\s/g, "");
-          // Save new card fire-and-forget
-          if (session?.user?.id && newPan.length >= 13) {
-            axios.post("/api/credit-cards", {
-              cardNumber:     newPan,
-              expiryDate:     cardDetails.expiryDate,
-              cvc:            cardDetails.cvv,
-              cardholderName: cardDetails.cardholderName || undefined,
-            }).catch(() => {});
+        if (use3D) {
+          if (selectedCardId) {
+            // Pan/Expiry/CardHolderName already in `fields`; add CVC only.
+            browserCardFields.Cvv2 = cardDetails.cvv;
+          } else {
+            const [mm, yy] = cardDetails.expiryDate.split("/");
+            browserCardFields.Pan = newPan;
+            browserCardFields.Expiry = `${mm ?? ""}${yy ?? ""}`; // MMYY
+            browserCardFields.Cvv2 = cardDetails.cvv;
+            browserCardFields.CardHolderName = cardDetails.cardholderName;
           }
-          const [mm, yy] = cardDetails.expiryDate.split("/");
-          browserCardFields.Pan = newPan;
-          browserCardFields.Expiry = `${mm ?? ""}${yy ?? ""}`; // MMYY
-          browserCardFields.Cvv2 = cardDetails.cvv;
-          browserCardFields.CardHolderName = cardDetails.cardholderName;
         }
         Object.entries(browserCardFields).forEach(([name, value]) => {
           const input = document.createElement("input");
@@ -616,16 +659,17 @@ const CartPaymentDialog = ({
         // Window object — the form would silently submit to a hidden frame and the
         // user would see nothing happen. Going straight to a full-page redirect
         // (target=_self) lets the bank's 3DS page own the screen and redirect back
-        // to /api/payfor/3dpay/ok → /success on completion.
+        // to the gateway's callback → /success on completion.
         const skipPopup = shouldSkipPopup();
+        const popupName = useAlbaraka ? "albaraka3d" : "payfor3d";
         const pw = 600, ph = 700;
         const popup = skipPopup
           ? null
           : window.open(
-              "about:blank", "payfor3d",
+              "about:blank", popupName,
               `width=${pw},height=${ph},left=${Math.round((screen.width  - pw) / 2)},top=${Math.round((screen.height - ph) / 2)},scrollbars=yes,resizable=yes`
             );
-        form.target = popup ? "payfor3d" : "_self";
+        form.target = popup ? popupName : "_self";
         document.body.appendChild(form);
         form.submit();
         document.body.removeChild(form);
@@ -911,8 +955,10 @@ const CartPaymentDialog = ({
           </div>
         )} */}
 
-        {/* ── Saved cards picker — shown when user has any saved card ── */}
-        {savedCards.length > 0 && (
+        {/* ── Saved cards picker — shown when user has any saved card ──
+            Hidden when Albaraka's hosted page owns the card step: the donor
+            enters the card at the bank, so a stored PAN has nowhere to go. */}
+        {savedCards.length > 0 && !(useAlbaraka && albarakaUseOOS) && (
           <div className="space-y-3">
             <p className="text-sm font-semibold text-gray-700">{t("savedCards")}</p>
             <div className="space-y-2">
@@ -977,15 +1023,15 @@ const CartPaymentDialog = ({
           </div>
         )}
 
-        {/* Stripe Elements — only when no saved card + not use3D */}
-        {paymentMethod === "CARD" && !use3D && !selectedCardId && (
+        {/* Stripe Elements — only when no saved card + Stripe is charging */}
+        {paymentMethod === "CARD" && useStripeElements && !selectedCardId && (
           <Elements stripe={getStripePromise()}>
             <StripePaymentStep ref={stripeFormRef} onReadyChange={onStripeReadyChange} />
           </Elements>
         )}
 
-        {/* PayFor — full form when no saved card + use3D */}
-        {paymentMethod === "CARD" && use3D && !selectedCardId && (
+        {/* Manual card form — shared by the PayFor and Albaraka 3D rails */}
+        {paymentMethod === "CARD" && useOwnCardForm && !selectedCardId && (
           <PayForCardForm
             cardDetails={cardDetails}
             setCardDetails={setCardDetails}
@@ -996,7 +1042,7 @@ const CartPaymentDialog = ({
 
         {/* Minimum Stripe amount warning */}
         <AnimatePresence>
-          {!use3D && totalAmount < stripeMinAmount && (
+          {useStripeElements && totalAmount < stripeMinAmount && (
             <motion.p
               key="stripe-min"
               className="text-[13px] text-amber-600 font-medium"
@@ -1061,9 +1107,9 @@ const CartPaymentDialog = ({
                 !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())
               )) ||
               (paymentMethod === "CARD" && selectedCardId && cardDetails.cvv.length < 3) ||
-              (paymentMethod === "CARD" && !selectedCardId && !use3D && !stripeReady) ||
-              (paymentMethod === "CARD" && !selectedCardId && !use3D && totalAmount < stripeMinAmount) ||
-              (paymentMethod === "CARD" && !selectedCardId && use3D && !isCardValid())
+              (paymentMethod === "CARD" && !selectedCardId && useStripeElements && !stripeReady) ||
+              (paymentMethod === "CARD" && !selectedCardId && useStripeElements && totalAmount < stripeMinAmount) ||
+              (paymentMethod === "CARD" && !selectedCardId && useOwnCardForm && !isCardValid())
             }
             className="flex-1 shape-button bg-burgundy hover:bg-burgundyDark text-white shadow-soft inline-flex items-center justify-center gap-2">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : confirmDonationLabel}

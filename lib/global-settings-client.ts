@@ -11,11 +11,23 @@ import {
   parseSuggestedTeamSupport,
   type SuggestedTeamSupportConfig,
 } from "./campaign/suggested-team-support";
+import { parseMainGateway, type MainGateway } from "./payment-gateway";
 
 export type GlobalSettings = {
   suggestedTeamSupport: SuggestedTeamSupportConfig;
   /** Master switch for the PayFor gateway. Default true. */
   payforEnabled: boolean;
+  /** Gateway handling every case PayFor doesn't take. Default "STRIPE". */
+  mainGateway: MainGateway;
+  /**
+   * True when Albaraka is set up to collect the card on its own hosted page.
+   * The checkout dialogs must then skip our card form entirely — Albaraka signs
+   * the card fields into the request MAC, so a card we collect locally would
+   * have to be posted to our server to be signed.
+   */
+  albarakaUseOOS: boolean;
+  /** False when ALBARAKA_ENC_KEY is missing, i.e. the gateway can't sign anything. */
+  albarakaConfigured: boolean;
 };
 
 let cached: GlobalSettings | null = null;
@@ -44,7 +56,13 @@ export async function fetchGlobalSettings(
       });
       if (!res.ok) return null;
       const data = (await res.json().catch(() => null)) as
-        | { suggestedTeamSupport?: unknown; payforEnabled?: unknown }
+        | {
+            suggestedTeamSupport?: unknown;
+            payforEnabled?: unknown;
+            mainGateway?: unknown;
+            albarakaUseOOS?: unknown;
+            albarakaConfigured?: unknown;
+          }
         | null;
       const parsed: GlobalSettings = {
         suggestedTeamSupport: parseSuggestedTeamSupport(data?.suggestedTeamSupport),
@@ -52,6 +70,10 @@ export async function fetchGlobalSettings(
         // the donation flow working before the first record is persisted and
         // when the API response shape is incomplete for any reason.
         payforEnabled: data?.payforEnabled !== false,
+        // Anything unrecognised falls back to Stripe — the rail that always works.
+        mainGateway: parseMainGateway(data?.mainGateway),
+        albarakaUseOOS: data?.albarakaUseOOS === true,
+        albarakaConfigured: data?.albarakaConfigured === true,
       };
       cached = parsed;
       return parsed;

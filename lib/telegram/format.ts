@@ -83,7 +83,13 @@ function statusBadge(d: { status: string; paidAt: Date | string | null }): { emo
 
 function providerLabel(d: { provider: string | null; paymentMethod: string | null }): string {
   const p =
-    d.provider === "STRIPE" ? "Stripe" : d.provider === "PAYFOR" ? "PayFor (Ziraat)" : d.provider ?? "—";
+    d.provider === "STRIPE"
+      ? "Stripe"
+      : d.provider === "PAYFOR"
+        ? "PayFor (Ziraat)"
+        : d.provider === "ALBARAKA"
+          ? "Albaraka Türk"
+          : d.provider ?? "—";
   const m = d.paymentMethod === "CARD" ? "Card" : d.paymentMethod === "PAYPAL" ? "PayPal" : d.paymentMethod ?? "";
   return m ? `${p} · ${m}` : p;
 }

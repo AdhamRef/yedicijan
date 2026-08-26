@@ -177,12 +177,11 @@ export default function DonationFailedPage() {
       if (!newId) throw new Error("retry returned no id");
 
       // Pick the next-step URL by provider. STRIPE → checkout session URL.
-      // PAYFOR (TRY) → /api/payfor/3dpay/initiate which renders a 3DS form;
-      // it expects a card — easier to send them back to the campaign dialog.
-      // Default to Stripe for everything that's not PayFor.
+      // The 3D Secure rails (PAYFOR, ALBARAKA) start from a signed form that needs
+      // card details, so there's nothing to redirect to — bounce those donors back
+      // to the campaign dialog. Default to Stripe for everything else.
       const provider = (donation.provider ?? "STRIPE").toUpperCase();
-      if (provider === "PAYFOR") {
-        // PayFor needs card details — bounce to /campaigns so the dialog opens.
+      if (provider === "PAYFOR" || provider === "ALBARAKA") {
         toast.success(t("retry.payforHint"));
         router.push("/campaigns");
         return;

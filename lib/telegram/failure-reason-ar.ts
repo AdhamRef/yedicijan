@@ -72,7 +72,7 @@ const STRIPE_CODES: Record<string, Reason> = {
 };
 
 /**
- * PayFor / Ziraat ISO-8583 response codes. Only the universally standardised
+ * PayFor / Ziraat / Albaraka ISO-8583 response codes. Only the universally standardised
  * ones are mapped — the bank's proprietary `V…` / `MR…` codes are intentionally absent.
  */
 const PAYFOR_CODES: Record<string, Reason> = {

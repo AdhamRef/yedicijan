@@ -130,7 +130,7 @@ export interface CanonicalDonation {
 
 export interface CanonicalPayment {
   method?: string;
-  gateway?: "stripe" | "payfor" | "paypal";
+  gateway?: "stripe" | "albaraka" | "payfor" | "paypal";
   is_3ds?: boolean;
   payment_status?: "pending" | "success" | "failed";
   transaction_id?: string;
