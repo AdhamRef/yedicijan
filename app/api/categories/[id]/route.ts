@@ -27,7 +27,10 @@ export async function GET(
     const allTranslations = paramsUrl.get('allTranslations') === 'true';
 
     const category = await prisma.category.findFirst({
-      where: whereByIdOrLocaleSlug(id, locale),
+      // Any locale, not just this one: a locale without its own slug canonically
+      // uses the English one, so those URLs must resolve here too. Locale still
+      // selects which translation is returned, not which slugs are addressable.
+      where: whereByIdOrAnyLocaleSlug(id),
       select: {
         id: true,
         slug: true,
