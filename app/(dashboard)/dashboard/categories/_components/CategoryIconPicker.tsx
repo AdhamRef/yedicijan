@@ -3,10 +3,17 @@
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import CategoryIcon, {
-  CATEGORY_ICON_NAMES,
   flagIconValue,
   parseCategoryIcon,
 } from "@/components/CategoryIcon";
+import {
+  ICON_CATALOG_WITH_FALLBACK,
+  ICON_SECTOR_LABELS,
+  ICON_SECTOR_ORDER,
+  iconLabel,
+  type IconCatalogEntry,
+  type IconSector,
+} from "./category-icon-catalog";
 
 /**
  * ISO 3166-1 alpha-2 codes, so every country the flag CDN publishes can be
@@ -52,9 +59,11 @@ function countryNames(locale: string): Record<string, string> {
 }
 
 /**
- * Picks what goes into `category.icon`: one of the built-in Lucide icons or any
- * country flag. Flags are stored as `flag:XX`; CategoryIcon also reads looser
- * forms, so a value typed by hand elsewhere still renders.
+ * Picks what goes into `category.icon`: one of the built-in icons — Lucide's or
+ * one of the glyphs drawn for this organisation's own project types — or any
+ * country flag. Flags are stored as `flag:XX` and custom glyphs as
+ * `custom:Name`; CategoryIcon also reads looser forms, so a value typed by hand
+ * elsewhere still renders.
  */
 export function CategoryIconPicker({
   value,
@@ -69,6 +78,29 @@ export function CategoryIconPicker({
     hasValue && parsed.kind === "flag" ? "flag" : "icon",
   );
   const [query, setQuery] = useState("");
+  const [iconQuery, setIconQuery] = useState("");
+
+  // Grouped by the sectors the organisation splits its projects across, so an
+  // admin adding a shelter project scans ~16 icons instead of the whole set.
+  const iconGroups = useMemo(() => {
+    const search = iconQuery.trim().toLowerCase();
+    const matches = (entry: IconCatalogEntry) =>
+      !search ||
+      [entry.label, entry.name, ...(entry.keywords ?? [])]
+        .join(" ")
+        .toLowerCase()
+        .includes(search);
+
+    return ICON_SECTOR_ORDER.map((sector: IconSector) => ({
+      sector,
+      label: ICON_SECTOR_LABELS[sector],
+      entries: ICON_CATALOG_WITH_FALLBACK.filter(
+        (entry) => entry.sector === sector && matches(entry),
+      ),
+    })).filter((group) => group.entries.length > 0);
+  }, [iconQuery]);
+
+  const iconResultCount = iconGroups.reduce((sum, group) => sum + group.entries.length, 0);
 
   const names = useMemo(() => countryNames("ar"), []);
   const englishNames = useMemo(() => countryNames("en"), []);
@@ -100,7 +132,7 @@ export function CategoryIconPicker({
           <span className="font-medium">
             {parsed.kind === "flag"
               ? `${names[parsed.countryCode] || parsed.countryCode} (${parsed.countryCode})`
-              : parsed.name}
+              : iconLabel(parsed.name)}
           </span>
           <button
             type="button"
@@ -132,23 +164,59 @@ export function CategoryIconPicker({
       </div>
 
       {mode === "icon" ? (
-        <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
-          {CATEGORY_ICON_NAMES.map((name) => (
-            <button
-              key={name}
-              type="button"
-              title={name}
-              onClick={() => onChange(name)}
-              className={`flex flex-col items-center gap-1 p-2 rounded-lg border transition-all ${
-                parsed.kind === "lucide" && hasValue && parsed.name === name
-                  ? "border-brand bg-brand/10 text-brand"
-                  : "border-gray-200 text-gray-500 hover:border-brand/50 hover:text-brand"
-              }`}
-            >
-              <CategoryIcon name={name} className="w-5 h-5" />
-              <span className="text-[9px] leading-tight text-center truncate w-full">{name}</span>
-            </button>
-          ))}
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 -translate-y-1/2 start-3 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={iconQuery}
+              onChange={(event) => setIconQuery(event.target.value)}
+              placeholder="ابحث عن أيقونة (مسجد، بئر، أضحية، خيمة، يتيم...)"
+              className="w-full rounded-lg border border-gray-200 py-2 ps-9 pe-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
+            />
+          </div>
+
+          <div className="max-h-80 space-y-4 overflow-y-auto pe-1">
+            {iconGroups.map((group) => (
+              <div key={group.sector}>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                  {group.label}
+                </p>
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {group.entries.map((entry) => {
+                    const selected =
+                      hasValue &&
+                      (parsed.kind === "lucide" || parsed.kind === "custom") &&
+                      parsed.name === entry.name;
+                    return (
+                      <button
+                        key={entry.value}
+                        type="button"
+                        title={`${entry.label} (${entry.name})`}
+                        onClick={() => onChange(entry.value)}
+                        className={`flex flex-col items-center gap-1 rounded-lg border p-2 transition-all ${
+                          selected
+                            ? "border-brand bg-brand/10 text-brand"
+                            : "border-gray-200 text-gray-500 hover:border-brand/50 hover:text-brand"
+                        }`}
+                      >
+                        <CategoryIcon name={entry.value} className="w-5 h-5" />
+                        <span className="w-full truncate text-center text-[9px] leading-tight">
+                          {entry.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {iconResultCount === 0 && (
+              <p className="py-4 text-center text-xs text-gray-400">
+                لا توجد أيقونة مطابقة.
+              </p>
+            )}
+          </div>
         </div>
       ) : (
         <div className="space-y-2">

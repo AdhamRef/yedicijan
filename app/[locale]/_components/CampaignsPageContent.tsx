@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { Search, HandHeart, ArrowRight, X, ChevronRight, Check } from "lucide-react";
+import { Search, HandHeart, ArrowRight, X, ChevronDown, ChevronRight, Check } from "lucide-react";
 import CampaignCard from "@/app/[locale]/_components/CampaignCard";
 import { useDebounce } from "use-debounce";
 import { useLocale, useTranslations } from "next-intl";
@@ -301,8 +301,9 @@ const CampaignsPage = ({
             </p>
           </div>
 
-          {/* Info aside card */}
-          <aside className="shape-card border border-white/15 bg-white/10 p-8 backdrop-blur">
+          {/* Info aside card — desktop only. On phones it pushed the categories bar
+              a full screen down without adding anything the hero doesn't already say. */}
+          <aside className="hidden md:block shape-card border border-white/15 bg-white/10 p-8 backdrop-blur">
             <div className="gold-mark" />
             <div className="mt-8 flex items-center justify-between gap-6">
               <div>
@@ -320,11 +321,26 @@ const CampaignsPage = ({
 
       {/* ── Categories bar ── */}
       <section className="max-w-7xl mx-auto px-4 lg:px-8 -mt-8 relative z-30">
-        <div className="shape-card flex flex-col gap-5 bg-white p-5 shadow-lift md:flex-row md:items-center">
-          <div className="shape-chip w-fit bg-deep px-7 py-3.5 text-sm font-extrabold text-white flex-shrink-0">
+        <div className="shape-card flex items-center gap-3 bg-white p-3 shadow-lift md:gap-5 md:p-5">
+          <div className="shape-chip w-fit bg-deep px-4 py-2.5 text-xs font-extrabold text-white flex-shrink-0 md:px-7 md:py-3.5 md:text-sm">
             {t("categoriesLabel")}
           </div>
-          <div className="flex items-center gap-2.5 overflow-x-auto scrollbar-hide pb-1 md:flex-wrap md:overflow-visible md:pb-0">
+
+          {/* Phones get a dropdown instead of the chip row. The row scrolled
+              horizontally with no affordance, so most categories were simply never
+              discovered — a closed control that names the current filter is honest
+              about there being more behind it. */}
+          <div className="min-w-0 flex-1 md:hidden">
+            <CategorySelect
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onSelect={handleCategoryChange}
+              allLabel={t("allCampaigns") || "All"}
+              isRTL={isRTL}
+            />
+          </div>
+
+          <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2.5">
             <button
               onClick={() => handleCategoryChange("all")}
               className={`shape-chip flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 border ${
@@ -554,6 +570,187 @@ const CampaignsPage = ({
         </div>
       </section>
     </main>
+  );
+};
+
+/* ── Category picker (phones) ──
+   A select-only combobox rather than a native <select>, so each option can carry
+   its icon and campaign count the way the desktop chips do. Keyboard and ARIA
+   follow the listbox pattern: focus stays on the button and aria-activedescendant
+   points at the highlighted option. */
+interface CategorySelectProps {
+  categories: Category[];
+  selectedCategory: string;
+  onSelect: (id: string) => void;
+  allLabel: string;
+  isRTL: boolean;
+}
+
+const CategorySelect = ({
+  categories,
+  selectedCategory,
+  onSelect,
+  allLabel,
+  isRTL,
+}: CategorySelectProps) => {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const listId = useId();
+
+  const options = useMemo(
+    () => [{ id: "all", name: allLabel, icon: null as string | null, campaignCount: undefined as number | undefined }, ...categories],
+    [categories, allLabel]
+  );
+  const selectedIndex = Math.max(0, options.findIndex((o) => o.id === selectedCategory));
+  const selected = options[selectedIndex] ?? options[0];
+
+  // Open on the current selection so the first arrow press moves from where the
+  // user actually is rather than from the top of the list.
+  useEffect(() => {
+    if (open) setActiveIndex(selectedIndex);
+  }, [open, selectedIndex]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  // Keep the highlighted option in view while arrowing through a long list.
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    listRef.current.querySelector<HTMLElement>('[data-active="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [open, activeIndex]);
+
+  const commit = (index: number) => {
+    const option = options[index];
+    if (option) onSelect(option.id);
+    setOpen(false);
+    buttonRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      if (!open) return;
+      setOpen(false);
+      buttonRef.current?.focus();
+      return;
+    }
+    if (e.key === "Tab") {
+      setOpen(false);
+      return;
+    }
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, options.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setActiveIndex(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setActiveIndex(options.length - 1);
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      commit(activeIndex);
+    }
+  };
+
+  return (
+    <div ref={rootRef} className="relative" onKeyDown={handleKeyDown}>
+      <button
+        ref={buttonRef}
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-activedescendant={open ? `${listId}-${activeIndex}` : undefined}
+        onClick={() => setOpen((v) => !v)}
+        className="shape-chip flex w-full items-center gap-2 border border-gray-200 bg-white px-3 py-2.5 text-xs font-semibold text-ink transition-colors hover:border-burgundy/50"
+      >
+        {selected.id === "all" ? (
+          <HandHeart className="h-4 w-4 flex-shrink-0 text-burgundy" />
+        ) : (
+          <CategoryIcon name={selected.icon} className="h-4 w-4 flex-shrink-0 text-burgundy" />
+        )}
+        <span className="min-w-0 flex-1 truncate text-start">{selected.name}</span>
+        {selected.campaignCount != null && (
+          <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-500">
+            {selected.campaignCount}
+          </span>
+        )}
+        <ChevronDown
+          className={`h-4 w-4 flex-shrink-0 text-gray-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <ul
+          ref={listRef}
+          id={listId}
+          role="listbox"
+          aria-label={allLabel}
+          dir={isRTL ? "rtl" : "ltr"}
+          className="absolute inset-x-0 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-1.5 shadow-lift"
+        >
+          {options.map((option, index) => {
+            const isSelected = option.id === selectedCategory;
+            const isActive = index === activeIndex;
+            return (
+              <li
+                key={option.id}
+                id={`${listId}-${index}`}
+                role="option"
+                aria-selected={isSelected}
+                data-active={isActive}
+                onPointerEnter={() => setActiveIndex(index)}
+                onClick={() => commit(index)}
+                className={`flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold transition-colors ${
+                  isSelected
+                    ? "bg-burgundy text-white"
+                    : isActive
+                      ? "bg-burgundy/8 text-burgundy"
+                      : "text-ink"
+                }`}
+              >
+                {option.id === "all" ? (
+                  <HandHeart className="h-4 w-4 flex-shrink-0" />
+                ) : (
+                  <CategoryIcon name={option.icon} className="h-4 w-4 flex-shrink-0" />
+                )}
+                <span className="min-w-0 flex-1 truncate">{option.name}</span>
+                {option.campaignCount != null && (
+                  <span
+                    className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      isSelected ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {option.campaignCount}
+                  </span>
+                )}
+                {isSelected && <Check className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={3} />}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 };
 

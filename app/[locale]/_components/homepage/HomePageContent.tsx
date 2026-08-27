@@ -249,9 +249,10 @@ const HomePage: React.FC<HomePageContentProps> = ({
                 {shown.map((cat, i) => {
                   const featured = isMosaic && i === 0;
                   // A flag is a filled rectangle, so blown up as a faint watermark it
-                  // reads as a stray colour block rather than as decoration. Glyphs only.
+                  // reads as a stray colour block rather than as decoration. Stroke
+                  // glyphs — Lucide's and our own — are fine.
                   const watermark =
-                    !cat.image && parseCategoryIcon(cat.icon).kind === "lucide";
+                    !cat.image && parseCategoryIcon(cat.icon).kind !== "flag";
                   return (
                     <Link
                       key={cat.id}
