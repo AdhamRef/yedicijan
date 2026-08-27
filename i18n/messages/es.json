@@ -235,7 +235,7 @@
     "discoverMore": "Conozca mejor nuestra historia",
     "monthlyCommitment": "Compromiso de donación mensual",
     "monthlyCommitmentDesc": "Haga que su ayuda sea permanente y continua, como se menciona en el noble hadiz:",
-    "selectProject": "Seleccionar proyecto",
+    "selectProject": "Selecciona un proyecto",
     "selectAmount": "Seleccionar cantidad",
     "customAmount": "O introduzca una cantidad personalizada",
     "enterAmount": "Introducir cantidad",
@@ -256,7 +256,9 @@
     "impact3": "Medicinas que no pueden esperar",
     "giveTitle": "Dona en menos de un minuto",
     "encourage": "Tu donación de {amount} podría ser la ayuda que una familia está esperando.",
-    "reassurance": "El 100% llega a quienes lo necesitan"
+    "reassurance": "El 100% llega a quienes lo necesitan",
+    "selectCategory": "Selecciona un área",
+    "noCampaigns": "No hay proyectos en esta área por ahora"
   },
   "Footer": {
     "aboutUsDesc1": "Una asociación de solidaridad de utilidad pública al servicio desde 1961.",

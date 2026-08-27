@@ -235,7 +235,7 @@
     "discoverMore": "Découvrir notre histoire",
     "monthlyCommitment": "S'engager à un don mensuel",
     "monthlyCommitmentDesc": "Rendez votre aide durable, comme le rappelle le noble hadith :",
-    "selectProject": "Sélectionner un projet",
+    "selectProject": "Choisir un projet",
     "selectAmount": "Sélectionner un montant",
     "customAmount": "Ou saisir un montant personnalisé",
     "enterAmount": "Saisir le montant",
@@ -256,7 +256,9 @@
     "impact3": "Des soins qui ne peuvent attendre",
     "giveTitle": "Faites un don en moins d'une minute",
     "encourage": "Votre don de {amount} pourrait être l'aide qu'une famille attend.",
-    "reassurance": "100 % parvient à ceux qui en ont besoin"
+    "reassurance": "100 % parvient à ceux qui en ont besoin",
+    "selectCategory": "Choisir un domaine",
+    "noCampaigns": "Aucun projet dans ce domaine pour le moment"
   },
   "Footer": {
     "aboutUsDesc1": "Une association de solidarité d'utilité publique au service depuis 1961.",

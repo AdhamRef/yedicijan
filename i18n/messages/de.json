@@ -235,7 +235,7 @@
     "discoverMore": "Mehr über unsere Geschichte erfahren",
     "monthlyCommitment": "Monatlich spenden",
     "monthlyCommitmentDesc": "Mache deine Hilfe dauerhaft, wie es im edlen Hadith erwähnt wird:",
-    "selectProject": "Projekt auswählen",
+    "selectProject": "Projekt wählen",
     "selectAmount": "Betrag auswählen",
     "customAmount": "Oder einen eigenen Betrag eingeben",
     "enterAmount": "Betrag eingeben",
@@ -256,7 +256,9 @@
     "impact3": "Medizin, die nicht warten kann",
     "giveTitle": "In unter einer Minute spenden",
     "encourage": "Deine {amount} könnten die Hilfe sein, auf die eine Familie wartet.",
-    "reassurance": "100 % erreichen die Menschen, die sie brauchen"
+    "reassurance": "100 % erreichen die Menschen, die sie brauchen",
+    "selectCategory": "Bereich wählen",
+    "noCampaigns": "Derzeit keine Projekte in diesem Bereich"
   },
   "Footer": {
     "aboutUsDesc1": "Ein gemeinnützig tätiger Solidaritätsverein, im Dienst seit 1961.",

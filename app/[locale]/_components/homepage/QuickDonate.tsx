@@ -10,6 +10,8 @@ import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Link } from "@/i18n/routing";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
+import type { SuggestedDonationsConfig } from "@/lib/campaign/suggested-donations";
+import type { ShareLabelsConfig } from "@/lib/campaign/share-labels";
 
 // DonationDialog pulls in @stripe/stripe-js (~230KiB) plus the Stripe utility script.
 // Loading it lazily keeps Stripe out of the homepage critical path entirely.
@@ -19,6 +21,28 @@ interface CategoryOption {
   id: string;
   name: string;
   image?: string | null;
+}
+
+/**
+ * The subset of a campaign the donation dialog needs. Quick Donate now gives to a
+ * specific campaign rather than to its category, so the amount presets, shares
+ * config and goal type all have to travel with the selection.
+ */
+interface CampaignOption {
+  id: string;
+  title: string;
+  images?: string[];
+  targetAmount?: number;
+  currentAmount?: number;
+  goalType?: string;
+  fundraisingMode?: string;
+  sharePriceUSD?: number | null;
+  suggestedShareCounts?: {
+    counts: number[];
+    priceByCurrency?: Record<string, number>;
+  } | null;
+  suggestedDonations?: SuggestedDonationsConfig | null;
+  shareLabels?: ShareLabelsConfig | null;
 }
 
 interface QuickDonateProps {
@@ -48,12 +72,19 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
   const [categoriesLoading, setCategoriesLoading] = useState(initialCategories.length === 0);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>("");
+  const [campaignsLoading, setCampaignsLoading] = useState(false);
+  const [campaignDropdownOpen, setCampaignDropdownOpen] = useState(false);
+  const campaignDropdownRef = useRef<HTMLDivElement>(null);
+  /** Set when the visitor picks a category themselves, so the project list only
+   *  springs open on a deliberate change and never on first paint. */
+  const autoOpenCampaignsRef = useRef(false);
   const [currencyLabel, setCurrencyLabel] = useState<string>("USD");
   const [stripeMinAmount, setStripeMinAmount] = useState(1);
-  const [resumeAmount, setResumeAmount] = useState<number | undefined>(undefined);
-  const [resumeCategoryId, setResumeCategoryId] = useState<string>("");
-  const [resumeCategoryName, setResumeCategoryName] = useState<string>("");
-  const [resumeCategoryImage, setResumeCategoryImage] = useState<string | undefined>(undefined);
+  /** Campaign the visitor had picked before being sent to sign-in. */
+  const pendingResumeCampaignRef = useRef<string>("");
+  const [resumeRequested, setResumeRequested] = useState(false);
 
   useEffect(() => {
     const cur = getCurrency();
@@ -70,34 +101,38 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
     }
   }, []);
 
-  // After sign-in redirect: restore selection, open donation dialog, clean URL
+  // After sign-in redirect: restore the selection and re-open the dialog. The
+  // dialog can't open here any more — it now needs a campaign, and campaigns are
+  // fetched per category, so opening waits until that selection is back in place.
   useEffect(() => {
     if (searchParams.get("openDonation") !== "1") return;
     try {
       const stored = typeof window !== "undefined" ? sessionStorage.getItem(QUICK_DONATE_RESUME_KEY) : null;
       if (stored) {
-        const data = JSON.parse(stored) as { categoryId?: string; categoryName?: string; categoryImage?: string; amount?: number };
-        if (data.categoryId) setResumeCategoryId(data.categoryId);
-        if (data.categoryName) setResumeCategoryName(data.categoryName);
-        if (data.categoryImage) setResumeCategoryImage(data.categoryImage);
-        if (typeof data.amount === "number" && data.amount > 0) setResumeAmount(data.amount);
+        const data = JSON.parse(stored) as { categoryId?: string; campaignId?: string; amount?: number };
+        if (data.categoryId) setSelectedCategoryId(data.categoryId);
+        if (data.campaignId) pendingResumeCampaignRef.current = data.campaignId;
+        if (typeof data.amount === "number" && data.amount > 0) setSelectedAmount(data.amount);
         sessionStorage.removeItem(QUICK_DONATE_RESUME_KEY);
       }
     } catch {
       /* ignore */
     }
-    setDonationDialogMounted(true);
-    setDonationDialogOpen(true);
+    setResumeRequested(true);
     router.replace(
       appendCurrencyQuery(`${pathname}#quick_donate`, getCurrencyCodeForLinks())
     );
   }, [searchParams, pathname, router]);
 
-  // Close category dropdown on outside click
+  // Close either dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(target)) {
         setCategoryDropdownOpen(false);
+      }
+      if (campaignDropdownRef.current && !campaignDropdownRef.current.contains(target)) {
+        setCampaignDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -137,27 +172,88 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale]);
 
+  // Projects inside the chosen area. Refetched whenever the area changes, since
+  // the gift now goes to one specific project rather than to the area as a whole.
+  useEffect(() => {
+    if (!selectedCategoryId) {
+      setCampaigns([]);
+      setSelectedCampaignId("");
+      return;
+    }
+    let cancelled = false;
+    setCampaignsLoading(true);
+    setCampaigns([]);
+    setSelectedCampaignId("");
+    fetch(`/api/categories/${selectedCategoryId}/campaigns?locale=${locale}&limit=50`)
+      .then((res) => (res.ok ? res.json() : { items: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        const items = (Array.isArray(data?.items) ? data.items : []) as CampaignOption[];
+        setCampaigns(items);
+
+        // Prefer the project the visitor had chosen before signing in; otherwise
+        // preselect the first so the button is usable straight away.
+        const wanted = pendingResumeCampaignRef.current;
+        pendingResumeCampaignRef.current = "";
+        const restored = wanted ? items.find((c) => c.id === wanted) : undefined;
+        setSelectedCampaignId(restored?.id ?? items[0]?.id ?? "");
+        // The saved project is gone (unpublished, or the area changed) — don't
+        // silently reopen checkout on a different one, let them pick again.
+        if (wanted && !restored) setResumeRequested(false);
+
+        if (autoOpenCampaignsRef.current && items.length > 1) setCampaignDropdownOpen(true);
+        autoOpenCampaignsRef.current = false;
+      })
+      .catch(() => {
+        if (!cancelled) autoOpenCampaignsRef.current = false;
+      })
+      .finally(() => {
+        if (!cancelled) setCampaignsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategoryId, locale]);
+
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
+  const selectedCampaign = campaigns.find((c) => c.id === selectedCampaignId);
   const displayAmount = selectedAmount ?? (customAmount ? parseFloat(customAmount) || 0 : 0);
   const belowMin = stripeMinAmount > 1 && displayAmount > 0 && displayAmount < stripeMinAmount;
+  const canDonate =
+    Boolean(selectedCampaignId) && displayAmount > 0 && !belowMin && !campaignsLoading;
+
+  // Reopen checkout once the restored project is actually in hand.
+  useEffect(() => {
+    if (!resumeRequested || !selectedCampaignId) return;
+    setResumeRequested(false);
+    setDonationDialogMounted(true);
+    setDonationDialogOpen(true);
+  }, [resumeRequested, selectedCampaignId]);
 
   const storeQuickDonateResume = () => {
-    if (!selectedCategoryId || !selectedCategory || displayAmount <= 0) return;
+    if (!selectedCategoryId || !selectedCampaignId || displayAmount <= 0) return;
     if (typeof window === "undefined") return;
     sessionStorage.setItem(
       QUICK_DONATE_RESUME_KEY,
       JSON.stringify({
         categoryId: selectedCategoryId,
-        categoryName: selectedCategory.name,
-        categoryImage: selectedCategory.image ?? undefined,
+        campaignId: selectedCampaignId,
         amount: displayAmount,
       })
     );
   };
 
+  const handleCategorySelect = (categoryId: string) => {
+    setCategoryDropdownOpen(false);
+    if (categoryId === selectedCategoryId) return;
+    // Deliberate change — reveal the projects inside it rather than making the
+    // visitor guess that a second choice is waiting.
+    autoOpenCampaignsRef.current = true;
+    setSelectedCategoryId(categoryId);
+  };
+
   const handleDonateClick = () => {
-    if (!selectedCategoryId || !selectedCategory) return;
-    if (displayAmount <= 0) return;
+    if (!canDonate) return;
     setDonationDialogMounted(true);
     setDonationDialogOpen(true);
   };
@@ -208,10 +304,10 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
               <span className="h-px w-7 bg-gold" />
               {t("eyebrow")}
             </span>
-            <h2 className="text-2xl font-semibold drop-shadow-sm sm:text-3xl lg:text-[2.6rem]">
+            <h2 className="text-2xl font-semibold leading-[1.35] drop-shadow-sm sm:text-3xl sm:leading-[1.3] lg:text-[2.6rem] lg:leading-[1.25]">
               {t("heading")}
             </h2>
-            <p className="max-w-md text-sm leading-relaxed text-ice/90 sm:text-base">
+            <p className="max-w-md text-sm leading-[1.9] text-ice/90 sm:text-base">
               {t("description")}
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
@@ -228,13 +324,13 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         {/* ── Right: donation widget ── */}
         <div className="flex flex-col p-6 sm:p-8 lg:p-10">
           <div className="mb-5">
-            <h3 className="text-xl font-extrabold text-deep sm:text-2xl">{t("giveTitle")}</h3>
+            <h3 className="text-xl font-extrabold leading-snug text-deep sm:text-2xl">{t("giveTitle")}</h3>
             <div className="gold-mark-sm mt-3" />
           </div>
 
           {/* Category */}
           <div ref={categoryDropdownRef} className="relative mb-4">
-            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-gray-400">{t("selectProject")}</label>
+            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-gray-400">{t("selectCategory")}</label>
             <button
               type="button"
               onClick={() => !categoriesLoading && setCategoryDropdownOpen((o) => !o)}
@@ -263,12 +359,63 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
                         key={cat.id}
                         type="button"
                         dir={locale === "ar" ? "rtl" : "ltr"}
-                        onClick={() => { setSelectedCategoryId(cat.id); setCategoryDropdownOpen(false); }}
+                        onClick={() => handleCategorySelect(cat.id)}
                         className={`flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-start text-sm transition-colors ${
                           isSelected ? "bg-burgundy/[0.07] font-semibold text-burgundy" : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
                         <span className="truncate">{cat.name}</span>
+                        {isSelected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-burgundy" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Project inside the chosen area — the donation is credited here, not
+              to the area, so it has to be an explicit choice. */}
+          <div ref={campaignDropdownRef} className="relative mb-4">
+            <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-gray-400">{t("selectProject")}</label>
+            <button
+              type="button"
+              onClick={() =>
+                !campaignsLoading && campaigns.length > 0 && setCampaignDropdownOpen((o) => !o)
+              }
+              dir={locale === "ar" ? "rtl" : "ltr"}
+              className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-sm transition-all ${
+                campaignDropdownOpen
+                  ? "border-burgundy bg-white ring-2 ring-burgundy/15"
+                  : "border-gray-200 bg-gray-50/80 hover:border-burgundy/50"
+              } ${campaignsLoading || campaigns.length === 0 ? "pointer-events-none opacity-60" : ""}`}
+            >
+              {campaignsLoading ? (
+                <span className="animate-pulse text-xs text-gray-400">...</span>
+              ) : campaigns.length === 0 ? (
+                <span className="truncate text-start text-xs font-medium text-gray-400">{t("noCampaigns")}</span>
+              ) : (
+                <span className="truncate text-start font-medium text-gray-900">{selectedCampaign?.title ?? ""}</span>
+              )}
+              <ChevronDown className={`h-4 w-4 flex-shrink-0 text-burgundy transition-transform duration-200 ${campaignDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {campaignDropdownOpen && !campaignsLoading && campaigns.length > 0 && (
+              <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl">
+                <div className="max-h-52 divide-y divide-gray-50 overflow-y-auto">
+                  {campaigns.map((camp) => {
+                    const isSelected = camp.id === selectedCampaignId;
+                    return (
+                      <button
+                        key={camp.id}
+                        type="button"
+                        dir={locale === "ar" ? "rtl" : "ltr"}
+                        onClick={() => { setSelectedCampaignId(camp.id); setCampaignDropdownOpen(false); }}
+                        className={`flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-start text-sm transition-colors ${
+                          isSelected ? "bg-burgundy/[0.07] font-semibold text-burgundy" : "text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span className="truncate">{camp.title}</span>
                         {isSelected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-burgundy" />}
                       </button>
                     );
@@ -319,7 +466,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
               {tDonation("stripeMinDonation", { amount: stripeMinAmount, currency: currencyLabel })}
             </p>
           ) : displayAmount > 0 ? (
-            <p className="mt-3 flex items-center gap-2 rounded-xl bg-burgundy/[0.06] px-3.5 py-2.5 text-xs font-medium text-burgundy animate-fade-in">
+            <p className="mt-3 flex items-center gap-2 rounded-xl bg-burgundy/[0.06] px-3.5 py-2.5 text-xs font-medium leading-relaxed text-burgundy animate-fade-in">
               <Heart className="h-3.5 w-3.5 shrink-0" fill="currentColor" />
               {t("encourage", { amount: `${displayAmount} ${currencyLabel}` })}
             </p>
@@ -328,7 +475,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
           {/* CTA */}
           <button
             onClick={handleDonateClick}
-            disabled={!selectedCategoryId || displayAmount <= 0 || categoriesLoading || belowMin}
+            disabled={!canDonate || categoriesLoading}
             className="shape-button mt-5 flex w-full items-center justify-center gap-2 bg-burgundy py-3.5 text-base font-bold text-white shadow-soft transition-all duration-300 hover:bg-burgundyDark hover:shadow-lift disabled:pointer-events-none disabled:opacity-50"
           >
             <Heart className="h-4 w-4" fill="currentColor" />
@@ -347,7 +494,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
               <div key={labelKey} className="text-center">
                 <Icon className="mx-auto mb-1.5 h-4 w-4 text-burgundy" />
                 <div className="text-base font-extrabold text-deep sm:text-lg">{value}</div>
-                <div className="mt-0.5 text-[10px] leading-tight text-gray-400">{t(labelKey)}</div>
+                <div className="mt-0.5 text-[10px] leading-snug text-gray-400">{t(labelKey)}</div>
               </div>
             ))}
           </div>
@@ -363,18 +510,22 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
       {donationDialogMounted && (
         <DonationDialog
           isOpen={donationDialogOpen}
-          onClose={() => {
-            setDonationDialogOpen(false);
-            setResumeAmount(undefined);
-            setResumeCategoryId("");
-            setResumeCategoryName("");
-            setResumeCategoryImage(undefined);
-          }}
-          monthlyOnly
-          categoryId={resumeCategoryId || selectedCategoryId}
-          categoryName={resumeCategoryName || (selectedCategory?.name ?? "")}
-          categoryImage={resumeCategoryImage ?? selectedCategory?.image ?? undefined}
-          initialDonationAmount={resumeAmount ?? (displayAmount > 0 ? displayAmount : undefined)}
+          onClose={() => setDonationDialogOpen(false)}
+          // No monthlyOnly: the dialog opens on its own first step so the visitor
+          // chooses one-time or monthly instead of being committed to a
+          // subscription they never asked for.
+          campaignId={selectedCampaign?.id ?? ""}
+          campaignTitle={selectedCampaign?.title ?? ""}
+          campaignImage={selectedCampaign?.images?.[0] || undefined}
+          targetAmount={selectedCampaign?.targetAmount ?? 0}
+          amountRaised={selectedCampaign?.currentAmount ?? 0}
+          goalType={selectedCampaign?.goalType}
+          fundraisingMode={selectedCampaign?.fundraisingMode}
+          sharePriceUSD={selectedCampaign?.sharePriceUSD ?? null}
+          suggestedShareCounts={selectedCampaign?.suggestedShareCounts ?? null}
+          suggestedDonations={selectedCampaign?.suggestedDonations ?? null}
+          shareLabels={selectedCampaign?.shareLabels ?? null}
+          initialDonationAmount={displayAmount > 0 ? displayAmount : undefined}
           authCallbackUrl={
             typeof window !== "undefined"
               ? appendCurrencyQuery(

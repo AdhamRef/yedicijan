@@ -235,7 +235,7 @@
     "discoverMore": "Conheça melhor a nossa história",
     "monthlyCommitment": "Compromisso de doação mensal",
     "monthlyCommitmentDesc": "Torne sua ajuda permanente e contínua, como mencionado no nobre hadith:",
-    "selectProject": "Selecionar projeto",
+    "selectProject": "Selecione um projeto",
     "selectAmount": "Selecionar valor",
     "customAmount": "Ou insira um valor personalizado",
     "enterAmount": "Inserir valor",
@@ -256,7 +256,9 @@
     "impact3": "Remédios que não podem esperar",
     "giveTitle": "Doe em menos de um minuto",
     "encourage": "A sua doação de {amount} pode ser a ajuda que uma família espera.",
-    "reassurance": "100% chega a quem precisa"
+    "reassurance": "100% chega a quem precisa",
+    "selectCategory": "Selecione uma área",
+    "noCampaigns": "Nenhum projeto nesta área no momento"
   },
   "Footer": {
     "aboutUsDesc1": "Uma associação de solidariedade de utilidade pública ao serviço desde 1961.",

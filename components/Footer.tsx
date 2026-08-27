@@ -296,14 +296,11 @@ const Footer = () => {
             <Heart className="w-3 h-3 text-gold fill-gold/30" />
             {t('copyright', { year: new Date().getFullYear() })}
           </p>
-          <a
-            href="https://www.jubyte.net"
-            target="_blank"
-            rel="noopener noreferrer"
+          <p
             className="hover:text-gold transition-colors"
           >
             {t('developedBy')}
-          </a>
+          </p>
         </div>
       </div>
 

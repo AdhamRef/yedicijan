@@ -235,7 +235,7 @@
     "discoverMore": "Hikayemiz hakkında daha fazlasını keşfedin",
     "monthlyCommitment": "Aylık Bağış Taahhüdü",
     "monthlyCommitmentDesc": "Bağışınızı, hadis-i şerifte belirtildiği gibi kalıcı ve sürekli kılın:",
-    "selectProject": "Proje Seç",
+    "selectProject": "Proje Seçin",
     "selectAmount": "Tutar Seç",
     "customAmount": "Veya özel tutar girin",
     "enterAmount": "Tutar girin",
@@ -256,7 +256,9 @@
     "impact3": "Ertelenemez ilaç ve tedavi",
     "giveTitle": "Bir dakikadan kısa sürede bağış yap",
     "encourage": "{amount} bağışın, bir ailenin beklediği yardım olabilir.",
-    "reassurance": "%100'ü ihtiyaç sahiplerine ulaşır"
+    "reassurance": "%100'ü ihtiyaç sahiplerine ulaşır",
+    "selectCategory": "Alan Seçin",
+    "noCampaigns": "Bu alanda şu anda proje yok"
   },
   "Footer": {
     "aboutUsDesc1": "1961’den bu yana hizmet veren, kamu yararına çalışan bir yardımlaşma derneği.",

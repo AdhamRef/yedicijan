@@ -256,7 +256,9 @@
     "impact3": "Obat yang tak bisa menunggu",
     "giveTitle": "Berdonasi dalam waktu kurang dari satu menit",
     "encourage": "Donasimu sebesar {amount} bisa menjadi bantuan yang ditunggu sebuah keluarga.",
-    "reassurance": "100% sampai kepada yang membutuhkan"
+    "reassurance": "100% sampai kepada yang membutuhkan",
+    "selectCategory": "Pilih Bidang",
+    "noCampaigns": "Belum ada proyek di bidang ini"
   },
   "Footer": {
     "aboutUsDesc1": "Asosiasi solidaritas untuk kepentingan umum, melayani sejak 1961.",

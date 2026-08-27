@@ -256,7 +256,9 @@
     "impact3": "Medicine that can't wait",
     "giveTitle": "Give in under a minute",
     "encourage": "Your {amount} could be the help a family has been waiting for.",
-    "reassurance": "100% reaches the people who need it"
+    "reassurance": "100% reaches the people who need it",
+    "selectCategory": "Select Area",
+    "noCampaigns": "No projects in this area right now"
   },
   "Footer": {
     "aboutUsDesc1": "A public-benefit solidarity association serving since 1961.",

@@ -34,6 +34,7 @@ import {
   generateUniqueSlug,
   generateUniqueLocaleSlug,
   normalizeUserSlug,
+  whereByIdOrAnyLocaleSlug,
   whereByIdOrLocaleSlug,
 } from "@/lib/slug";
 import { EMPTY_TIPTAP_DOC_JSON } from "@/lib/tiptap-empty-doc";
@@ -62,13 +63,18 @@ export async function GET(
       "ar";
 
     // ✅ STEP 1: Fetch campaign with ONLY current locale translations
-    // Accept either an ObjectId, the base slug, or a per-locale translation slug.
+    // Accept an ObjectId, the base slug, or a translation slug from ANY locale —
+    // deliberately not just `locale`'s own. A locale with no slug of its own falls
+    // back to the English one (see pickLocaleSlug), so /tr/campaign/<english-slug>
+    // is a canonical URL the page renders without redirecting; matching only the
+    // requested locale here 404'd exactly those pages. Locale still decides which
+    // translation is returned below, it just doesn't gate which slugs resolve.
     // Soft-deleted campaigns 404 here so public detail pages and the edit form
     // can't surface them — historical donation joins go through other queries.
     const campaign = await prisma.campaign.findFirst({
       where: {
         AND: [
-          whereByIdOrLocaleSlug(id, locale),
+          whereByIdOrAnyLocaleSlug(id),
           NOT_SOFT_DELETED,
         ],
       },
