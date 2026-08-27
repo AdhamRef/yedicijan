@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import axios from "axios";
 import { Globe, MoreHorizontal, Baby, Home, Map, ArrowRight, ShieldCheck, Eye, BadgeCheck, Camera } from "lucide-react";
-import CategoryIcon from "@/components/CategoryIcon";
+import CategoryIcon, { parseCategoryIcon } from "@/components/CategoryIcon";
 
 import HeroSlider, { type SlideItem } from "./HeroSlider";
 import CampaignsSlider from "./CampaignsSlider";
@@ -56,6 +56,15 @@ const STATS = [
   { icon: Map, valueKey: "stat4Value", labelKey: "stat4Label", value: "4" },
 ];
 
+/**
+ * Legibility wash for the category tiles. Weighted to the bottom on purpose: the
+ * name needs a solid base, but the photo is the point of the card, so the top ~40%
+ * is left almost untouched. A plain `to-t` Tailwind gradient puts its midpoint at
+ * 50% and drowns the whole image, which is why this is spelled out in stops.
+ */
+const CATEGORY_TILE_WASH =
+  "linear-gradient(to top, rgba(2,29,50,0.95) 0%, rgba(2,29,50,0.78) 26%, rgba(2,29,50,0.28) 55%, rgba(2,29,50,0) 100%)";
+
 const TRUST_FEATURES = [
   { icon: ShieldCheck, titleKey: "trust1Title", titleFallback: "Güvenli ödeme", descKey: "trust1Desc", descFallback: "Kart ve banka destekli bağış altyapısı." },
   { icon: Eye, titleKey: "trust2Title", titleFallback: "Şeffaf süreç", descKey: "trust2Desc", descFallback: "Bağış süreci ve bilgilendirme akışı." },
@@ -74,6 +83,9 @@ const HomePage: React.FC<HomePageContentProps> = ({
 }) => {
   const t = useTranslations("HomePage");
   const tBlog = useTranslations("BlogCard");
+  // Category tiles reuse the existing "Donate Now" label rather than adding a
+  // near-duplicate key to all eight locale files.
+  const tCampaign = useTranslations("Campaign");
   const locale = useLocale();
 
   // Mirror SSR-provided data into local state. If SSR's internal fetches failed
@@ -199,54 +211,143 @@ const HomePage: React.FC<HomePageContentProps> = ({
         </div>
       </section>
 
-      {/* ── Donation Categories ── */}
-      {categories.length > 0 && (
-        <section
-          className="bg-gray-50 py-7 border-y border-gray-100"
-          style={{
-            backgroundImage: "url('/bg.webp')",
-            backgroundRepeat: "repeat",
-            backgroundSize: "200px",
-            backgroundBlendMode: "multiply",
-          }}
-        >
-          <div className="max-w-7xl mx-auto px-4">
-            <div className="flex items-end justify-between mb-6">
-              <div>
-                <div className="gold-mark-sm mb-3" />
-                <h2 className="text-xl sm:text-2xl font-extrabold text-deep mt-0.5">{t("donationCategories") || "Donation Categories"}</h2>
-                <p className="text-sm text-gray-500 mt-1">{t("weHelp") || "WE HELP"}</p>
-              </div>
-              <Link href="/campaigns" className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-burgundy hover:text-burgundyDark transition-colors">
-                {t("viewAll") || "View all"} <MoreHorizontal className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-              {categories.slice(0, 6).map((cat) => (
+      {/* ── Donation Categories — full-bleed image mosaic ── */}
+      {categories.length > 0 && (() => {
+        const shown = categories.slice(0, 6);
+        // The lg mosaic is a 3×3 grid where the first tile takes a 2×2 block and the
+        // other five fill the remaining cells exactly — so it only tiles cleanly with a
+        // full set of six. It also needs a picture worth blowing up: categories without
+        // an image fall back to a pattern, which shouldn't be the biggest thing on the
+        // section. Either condition failing drops back to an even grid.
+        const isMosaic = shown.length === 6 && Boolean(shown[0].image);
+        return (
+          <section
+            className="bg-offwhite py-16 sm:py-24 border-y border-black/5"
+            style={{
+              backgroundImage: "url('/bg.webp')",
+              backgroundRepeat: "repeat",
+              backgroundSize: "200px",
+              backgroundBlendMode: "multiply",
+            }}
+          >
+            <div className="max-w-7xl mx-auto px-4">
+              <div className="mb-10 flex flex-col gap-5 sm:mb-12 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-[0.25em] text-burgundy">{t("weHelp")}</span>
+                  <h2 className="mt-3 text-3xl font-extrabold text-deep sm:text-4xl">{t("donationCategories")}</h2>
+                  <div className="gold-mark mt-5" />
+                </div>
                 <Link
-                  key={cat.id}
-                  href={`/category/${cat.slug || cat.id}`}
-                  className="group flex flex-col items-center gap-2 p-3 sm:p-4 shape-chip border border-gray-100 bg-white hover:bg-deep hover:border-deep transition-all duration-300 hover:-translate-y-0.5 hover:shadow-soft"
+                  href="/campaigns"
+                  className="hidden shrink-0 sm:inline-flex items-center gap-2 shape-button bg-deep hover:bg-navy px-5 py-3 text-sm font-semibold text-white transition-colors"
                 >
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 shape-chip bg-burgundy/8 flex items-center justify-center group-hover:bg-white/15 transition-colors">
-                    <CategoryIcon name={cat.icon} className="w-5 h-5 sm:w-7 sm:h-7 text-burgundy group-hover:text-gold transition-colors" />
-                  </div>
-                  <span className="text-[13px] sm:text-sm font-medium text-ink group-hover:text-white text-center line-clamp-2 leading-snug transition-colors">
-                    {cat.name}
-                  </span>
+                  {t("viewAll")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
                 </Link>
-              ))}
-            </div>
+              </div>
 
-            <div className="sm:hidden text-center mt-6">
-              <Link href="/campaigns" className="inline-flex items-center gap-1.5 text-sm font-semibold text-burgundy">
-                {t("viewAll") || "View all"} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
-              </Link>
+              <div className="grid grid-cols-2 auto-rows-[190px] gap-3 sm:auto-rows-[240px] sm:grid-cols-3 sm:gap-5 lg:auto-rows-[250px]">
+                {shown.map((cat, i) => {
+                  const featured = isMosaic && i === 0;
+                  // A flag is a filled rectangle, so blown up as a faint watermark it
+                  // reads as a stray colour block rather than as decoration. Glyphs only.
+                  const watermark =
+                    !cat.image && parseCategoryIcon(cat.icon).kind === "lucide";
+                  return (
+                    <Link
+                      key={cat.id}
+                      href={`/category/${cat.slug || cat.id}`}
+                      className={`group relative isolate flex flex-col overflow-hidden shape-card bg-gradient-to-br from-navy via-deep to-soft shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lift ${
+                        featured ? "lg:col-span-2 lg:row-span-2" : ""
+                      }`}
+                    >
+                      {cat.image ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={cat.image}
+                          alt=""
+                          loading="lazy"
+                          className="absolute inset-0 -z-10 h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                        />
+                      ) : (
+                        /* Several categories genuinely have no image. Rather than a flat
+                           block of colour, those get the brand texture over the gradient. */
+                        <div
+                          className="absolute inset-0 -z-10 opacity-[0.35]"
+                          style={{
+                            backgroundImage: "url('/bg.webp')",
+                            backgroundRepeat: "repeat",
+                            backgroundSize: "180px",
+                          }}
+                        />
+                      )}
+
+                      {/* Legibility wash — photos vary wildly in exposure, so the name sits
+                          on a guaranteed dark base rather than on the image itself. */}
+                      <div className="absolute inset-0" style={{ backgroundImage: CATEGORY_TILE_WASH }} />
+
+                      {/* …and an oversized watermark of the category's own icon, so an
+                          image-less tile still reads as designed instead of as a gap. */}
+                      {watermark && (
+                        <div
+                          className="pointer-events-none absolute -bottom-5 -end-4 text-white/[0.09] transition-transform duration-700 ease-out group-hover:scale-110"
+                          aria-hidden
+                        >
+                          <CategoryIcon name={cat.icon} className="h-32 w-32" />
+                        </div>
+                      )}
+
+                      <div className="pointer-events-none absolute inset-0 shape-card ring-1 ring-inset ring-white/10 transition-colors duration-300 group-hover:ring-gold/50" />
+
+                      {/* Badge only for a category that actually chose an icon. Most have
+                          none, and CategoryIcon falls back to a heart — six identical
+                          hearts across the grid is noise, not identity. */}
+                      {cat.icon?.trim() && (
+                        <div
+                          className={`absolute top-4 start-4 flex items-center justify-center shape-chip bg-white/10 text-gold ring-1 ring-white/20 backdrop-blur-sm transition-all duration-300 group-hover:bg-gold group-hover:text-deep group-hover:ring-gold ${
+                            featured ? "h-10 w-10 sm:top-5 sm:start-5 lg:h-14 lg:w-14" : "h-10 w-10"
+                          }`}
+                        >
+                          <CategoryIcon
+                            name={cat.icon}
+                            className={featured ? "h-5 w-5 lg:h-7 lg:w-7" : "h-5 w-5"}
+                          />
+                        </div>
+                      )}
+
+                      <div className="relative mt-auto w-full p-4 sm:p-5 lg:p-6">
+                        {/* Built from utilities rather than the .gold-mark-sm class so the
+                            hover width actually wins the cascade against its fixed width. */}
+                        <div
+                          className={`mb-3 rounded-full bg-gold transition-all duration-500 group-hover:w-16 ${
+                            featured ? "h-[5px] w-12" : "h-1 w-10"
+                          }`}
+                        />
+                        <h3
+                          className={`font-extrabold leading-snug text-white drop-shadow-sm line-clamp-2 ${
+                            featured ? "text-xl sm:text-2xl lg:text-3xl" : "text-lg sm:text-xl"
+                          }`}
+                        >
+                          {cat.name}
+                        </h3>
+                        <span className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-white/85 transition-colors duration-300 group-hover:text-gold sm:text-sm">
+                          {tCampaign("donateNow")}
+                          <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1" />
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="sm:hidden text-center mt-8">
+                <Link href="/campaigns" className="inline-flex items-center gap-1.5 text-sm font-semibold text-burgundy">
+                  {t("viewAll")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+                </Link>
+              </div>
             </div>
-          </div>
-        </section>
-      )}
+          </section>
+        );
+      })()}
 
       {/* ── News / Blog — editorial featured + list ── */}
       {posts.length > 0 && (() => {

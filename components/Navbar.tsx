@@ -292,6 +292,7 @@ const Navbar = () => {
               href="/campaigns"
               className="hidden lg:flex items-center gap-1.5 shape-button bg-burgundy hover:bg-burgundyDark text-white font-bold text-[13px] px-4 py-1.5 transition-colors flex-shrink-0"
             >
+            
               <Heart className="w-4 h-4 fill-white/30" />
               {t("donate") || "BAĞIŞ YAP"}
             </Link>

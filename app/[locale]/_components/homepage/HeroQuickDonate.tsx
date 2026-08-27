@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
-import { Heart, CheckCircle, ChevronDown, Check } from "lucide-react";
+import { Heart, CheckCircle, ChevronDown, Check, CarTaxiFront } from "lucide-react";
 import { getCurrency } from "@/hooks/useCampaignValue";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
+import { CardStackPlusIcon } from "@radix-ui/react-icons";
 
 // DonationDialog pulls in @stripe/stripe-js (~230KiB) plus the Stripe utility script.
 // Loading it lazily keeps Stripe out of the homepage critical path entirely.
