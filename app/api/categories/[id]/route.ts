@@ -9,8 +9,8 @@ import {
   generateUniqueSlug,
   generateUniqueLocaleSlug,
   normalizeUserSlug,
+  whereByIdOrAnyLocaleSlug,
   whereByIdOrSlug,
-  whereByIdOrLocaleSlug,
 } from "@/lib/slug";
 import { NOT_SOFT_DELETED } from "@/lib/campaign/soft-delete-filter";
 

@@ -11,7 +11,7 @@ import {
 import { parseSuggestedDonations } from "@/lib/campaign/suggested-donations";
 import { parseShareLabels } from "@/lib/campaign/share-labels";
 import { pickTranslation, translationLocaleWhere } from "@/lib/i18n/translation-fallback";
-import { whereByIdOrLocaleSlug } from "@/lib/slug";
+import { whereByIdOrAnyLocaleSlug } from "@/lib/slug";
 import { parseCategoryPriorities, getCategoryPriority } from "@/lib/campaign/categories";
 import { NOT_SOFT_DELETED } from "@/lib/campaign/soft-delete-filter";
 
@@ -47,7 +47,10 @@ export async function GET(
     // Check that category exists and fetch localized name if available. Resolves the
     // param against the category's base slug or any per-locale translation slug.
     const category = await prisma.category.findFirst({
-      where: whereByIdOrLocaleSlug(idOrSlug, locale),
+      // Any locale, not just this one: a locale without its own slug canonically
+      // uses the English one, so those URLs must resolve here too. Locale still
+      // selects which translation is returned, not which slugs are addressable.
+      where: whereByIdOrAnyLocaleSlug(idOrSlug),
       select: {
         id: true,
         slug: true,
