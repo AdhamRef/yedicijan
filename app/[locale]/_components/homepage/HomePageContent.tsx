@@ -222,7 +222,7 @@ const HomePage: React.FC<HomePageContentProps> = ({
         const isMosaic = shown.length === 6 && Boolean(shown[0].image);
         return (
           <section
-            className="bg-offwhite py-16 sm:py-24 border-y border-black/5"
+            className="bg-offwhite py-10 sm:py-14 border-y border-black/5"
             style={{
               backgroundImage: "url('/bg.webp')",
               backgroundRepeat: "repeat",
@@ -231,21 +231,21 @@ const HomePage: React.FC<HomePageContentProps> = ({
             }}
           >
             <div className="max-w-7xl mx-auto px-4">
-              <div className="mb-10 flex flex-col gap-5 sm:mb-12 sm:flex-row sm:items-end sm:justify-between">
+              <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <span className="text-xs font-bold uppercase tracking-[0.25em] text-burgundy">{t("weHelp")}</span>
-                  <h2 className="mt-3 text-3xl font-extrabold text-deep sm:text-4xl">{t("donationCategories")}</h2>
-                  <div className="gold-mark mt-5" />
+                  <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-burgundy">{t("weHelp")}</span>
+                  <h2 className="mt-1.5 text-2xl font-extrabold text-deep sm:text-3xl">{t("donationCategories")}</h2>
+                  <div className="gold-mark-sm mt-3" />
                 </div>
                 <Link
                   href="/campaigns"
-                  className="hidden shrink-0 sm:inline-flex items-center gap-2 shape-button bg-deep hover:bg-navy px-5 py-3 text-sm font-semibold text-white transition-colors"
+                  className="hidden shrink-0 sm:inline-flex items-center gap-1.5 shape-button bg-deep hover:bg-navy px-4 py-2 text-[13px] font-semibold text-white transition-colors"
                 >
-                  {t("viewAll")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+                  {t("viewAll")} <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
                 </Link>
               </div>
 
-              <div className="grid grid-cols-2 auto-rows-[190px] gap-3 sm:auto-rows-[240px] sm:grid-cols-3 sm:gap-5 lg:auto-rows-[250px]">
+              <div className="grid grid-cols-2 auto-rows-[142px] gap-2.5 sm:auto-rows-[168px] sm:grid-cols-3 sm:gap-3 lg:auto-rows-[180px]">
                 {shown.map((cat, i) => {
                   const featured = isMosaic && i === 0;
                   // A flag is a filled rectangle, so blown up as a faint watermark it
@@ -256,7 +256,7 @@ const HomePage: React.FC<HomePageContentProps> = ({
                     <Link
                       key={cat.id}
                       href={`/category/${cat.slug || cat.id}`}
-                      className={`group relative isolate flex flex-col overflow-hidden shape-card bg-gradient-to-br from-navy via-deep to-soft shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lift ${
+                      className={`group relative isolate flex flex-col overflow-hidden shape-card bg-gradient-to-br from-navy via-deep to-soft shadow-soft transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lift ${
                         featured ? "lg:col-span-2 lg:row-span-2" : ""
                       }`}
                     >
@@ -289,10 +289,10 @@ const HomePage: React.FC<HomePageContentProps> = ({
                           image-less tile still reads as designed instead of as a gap. */}
                       {watermark && (
                         <div
-                          className="pointer-events-none absolute -bottom-5 -end-4 text-white/[0.09] transition-transform duration-700 ease-out group-hover:scale-110"
+                          className="pointer-events-none absolute -bottom-4 -end-3 text-white/[0.09] transition-transform duration-700 ease-out group-hover:scale-110"
                           aria-hidden
                         >
-                          <CategoryIcon name={cat.icon} className="h-32 w-32" />
+                          <CategoryIcon name={cat.icon} className="h-24 w-24" />
                         </div>
                       )}
 
@@ -303,35 +303,35 @@ const HomePage: React.FC<HomePageContentProps> = ({
                           hearts across the grid is noise, not identity. */}
                       {cat.icon?.trim() && (
                         <div
-                          className={`absolute top-4 start-4 flex items-center justify-center shape-chip bg-white/10 text-gold ring-1 ring-white/20 backdrop-blur-sm transition-all duration-300 group-hover:bg-gold group-hover:text-deep group-hover:ring-gold ${
-                            featured ? "h-10 w-10 sm:top-5 sm:start-5 lg:h-14 lg:w-14" : "h-10 w-10"
+                          className={`absolute top-3 start-3 flex items-center justify-center shape-chip bg-white/10 text-gold ring-1 ring-white/20 backdrop-blur-sm transition-all duration-300 group-hover:bg-gold group-hover:text-deep group-hover:ring-gold ${
+                            featured ? "h-8 w-8 lg:h-11 lg:w-11" : "h-8 w-8"
                           }`}
                         >
                           <CategoryIcon
                             name={cat.icon}
-                            className={featured ? "h-5 w-5 lg:h-7 lg:w-7" : "h-5 w-5"}
+                            className={featured ? "h-4 w-4 lg:h-[22px] lg:w-[22px]" : "h-4 w-4"}
                           />
                         </div>
                       )}
 
-                      <div className="relative mt-auto w-full p-4 sm:p-5 lg:p-6">
+                      <div className="relative mt-auto w-full p-3 sm:p-3.5 lg:p-4">
                         {/* Built from utilities rather than the .gold-mark-sm class so the
                             hover width actually wins the cascade against its fixed width. */}
                         <div
-                          className={`mb-3 rounded-full bg-gold transition-all duration-500 group-hover:w-16 ${
-                            featured ? "h-[5px] w-12" : "h-1 w-10"
+                          className={`mb-2 h-1 rounded-full bg-gold transition-all duration-500 group-hover:w-12 ${
+                            featured ? "w-10" : "w-8"
                           }`}
                         />
                         <h3
                           className={`font-extrabold leading-snug text-white drop-shadow-sm line-clamp-2 ${
-                            featured ? "text-xl sm:text-2xl lg:text-3xl" : "text-lg sm:text-xl"
+                            featured ? "text-base sm:text-lg lg:text-2xl" : "text-[15px] sm:text-base"
                           }`}
                         >
                           {cat.name}
                         </h3>
-                        <span className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-white/85 transition-colors duration-300 group-hover:text-gold sm:text-sm">
+                        <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-white/85 transition-colors duration-300 group-hover:text-gold sm:text-xs">
                           {tCampaign("donateNow")}
-                          <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1" />
+                          <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1" />
                         </span>
                       </div>
                     </Link>
@@ -339,9 +339,9 @@ const HomePage: React.FC<HomePageContentProps> = ({
                 })}
               </div>
 
-              <div className="sm:hidden text-center mt-8">
-                <Link href="/campaigns" className="inline-flex items-center gap-1.5 text-sm font-semibold text-burgundy">
-                  {t("viewAll")} <ArrowRight className="w-4 h-4 rtl:rotate-180" />
+              <div className="sm:hidden text-center mt-5">
+                <Link href="/campaigns" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-burgundy">
+                  {t("viewAll")} <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
                 </Link>
               </div>
             </div>
