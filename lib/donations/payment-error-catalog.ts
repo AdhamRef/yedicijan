@@ -83,7 +83,7 @@ const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
   "54": "expiredCard", // expired card
   "55": "authenticationFailed", // incorrect PIN
   "57": "doNotHonor", // transaction not permitted to cardholder
-  "58": "doNotHonor", // transaction not permitted to terminal
+  "58": "processingError", // transaction not permitted to terminal — merchant setup, not the card
   "59": "fraudSuspected", // suspected fraud
   "61": "limitExceeded", // exceeds withdrawal amount limit
   "62": "doNotHonor", // restricted card
@@ -103,6 +103,7 @@ const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
   "93": "doNotHonor", // transaction cannot be completed - violation of law
   "94": "processingError", // duplicate transaction
   "96": "processingError", // system malfunction
+  V001: "processingError", // PayFor: merchant not found (Üye işyeri bulma hatası) — bank-side setup
   "B1": "authenticationFailed", // surcharge amount not permitted
   "N7": "invalidCvc",
   "R0": "authenticationFailed",

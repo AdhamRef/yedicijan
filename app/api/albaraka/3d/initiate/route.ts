@@ -13,11 +13,13 @@ import {
   albarakaLang,
   albarakaMinorUnits,
   albarakaOrderId,
+  albarakaTargetCurrency,
   isAlbarakaConfigured,
   type AlbarakaFormFields,
 } from "@/lib/albaraka";
 import { resolveGateway } from "@/lib/payment-gateway";
 import {
+  convertAmountBetweenCurrencies,
   convertAmountInCurrencyToTry,
   getUsdBaseRatesForServer,
 } from "@/lib/exchange/rates-service";
@@ -55,10 +57,14 @@ type InitiateBody = {
   };
 };
 
-/** Convert any amount to TRY using USD-base rates from the database (same as donations). */
-async function toTRY(amount: number, fromCurrency: string): Promise<number> {
+/** Convert an amount into the charge currency using USD-base rates from the database (same as donations). */
+async function toCurrency(amount: number, fromCurrency: string, toCurrency: string): Promise<number> {
+  const from = fromCurrency === "TL" ? "TRY" : fromCurrency;
+  if (from === toCurrency) return amount;
   const rates = await getUsdBaseRatesForServer();
-  return convertAmountInCurrencyToTry(amount, fromCurrency, rates);
+  return toCurrency === "TRY"
+    ? convertAmountInCurrencyToTry(amount, from, rates)
+    : convertAmountBetweenCurrencies(amount, from, toCurrency, rates);
 }
 
 /**
@@ -136,19 +142,13 @@ export async function POST(req: NextRequest) {
     const origin = publicOrigin(req);
     const locale = (body.locale ?? donation.locale ?? "en").toString().toLowerCase();
 
-    // The merchant account is Turkish, so by default every donation is converted to
-    // TRY and charged in TL. Set ALBARAKA_MULTI_CURRENCY=1 only once the bank has
-    // enabled USD/EUR terminals for this merchant.
-    const multiCurrency = process.env.ALBARAKA_MULTI_CURRENCY === "1";
+    // ALBARAKA_CHARGE_CURRENCY picks what the bank is asked to charge (TRY by default —
+    // the merchant account is Turkish). The donation is converted into that currency
+    // with the same DB rates the donations use.
     const donationCurrency = String(donation.currency || "TRY").toUpperCase();
-    const chargeInDonationCurrency =
-      multiCurrency && ["TRY", "TL", "USD", "US", "EUR", "EU"].includes(donationCurrency);
-    const chargeAmount = chargeInDonationCurrency
-      ? donation.totalAmount
-      : await toTRY(donation.totalAmount, donation.currency);
-    const currencyCode = chargeInDonationCurrency
-      ? albarakaCurrencyCode(donationCurrency)
-      : "TL";
+    const targetCurrency = albarakaTargetCurrency(donationCurrency, cfg.chargeCurrency);
+    const chargeAmount = await toCurrency(donation.totalAmount, donationCurrency, targetCurrency);
+    const currencyCode = albarakaCurrencyCode(targetCurrency);
     const amount = albarakaMinorUnits(chargeAmount);
     if (amount <= 0) {
       return NextResponse.json({ error: "Invalid donation amount" }, { status: 400 });

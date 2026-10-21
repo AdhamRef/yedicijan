@@ -134,3 +134,21 @@ export function convertAmountInCurrencyToTry(
   const tryAmount = usd * rTry;
   return Math.round(tryAmount * 100) / 100;
 }
+
+/** Same USD-base conversion as `convertAmountInCurrencyToTry`, to any target currency. */
+export function convertAmountBetweenCurrencies(
+  amount: number,
+  fromCurrency: string,
+  toCurrency: string,
+  rates: Record<string, number>
+): number {
+  const from = String(fromCurrency || "USD").trim().toUpperCase();
+  const to = String(toCurrency || "USD").trim().toUpperCase();
+  if (from === to) return amount;
+  const rFrom = from === "USD" ? 1 : rates[from];
+  const rTo = to === "USD" ? 1 : rates[to];
+  if (!rFrom || !rTo || rFrom <= 0 || rTo <= 0) {
+    throw new Error(`Missing USD-base rate for ${from} or ${to}`);
+  }
+  return Math.round((amount / rFrom) * rTo * 100) / 100;
+}

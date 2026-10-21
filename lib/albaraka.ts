@@ -39,7 +39,47 @@ export type AlbarakaConfig = {
   useOOS: boolean;
   /** Opens the bank's Joker Vadaa campaign picker before 3D verification. */
   useJokerVadaa: boolean;
+  /** Which currency the bank is asked to charge — see `albarakaChargeCurrency`. */
+  chargeCurrency: AlbarakaChargeCurrency;
 };
+
+/**
+ * ALBARAKA_CHARGE_CURRENCY:
+ *  - TRY (default) — every donation is converted to lira and charged in TL.
+ *  - USD / EUR     — every donation is converted to that currency.
+ *  - DONATION      — charged in the donation's own currency when it is TRY/USD/EUR,
+ *                    otherwise converted to TRY.
+ * USD/EUR/DONATION need the bank to have opened USD/EUR terminals for this merchant.
+ * The older ALBARAKA_MULTI_CURRENCY=1 is still honoured as DONATION when the new
+ * variable is not set.
+ */
+export type AlbarakaChargeCurrency = "TRY" | "USD" | "EUR" | "DONATION";
+
+function albarakaChargeCurrency(): AlbarakaChargeCurrency {
+  const raw = process.env.ALBARAKA_CHARGE_CURRENCY?.trim().toUpperCase();
+  if (raw === "TL") return "TRY";
+  if (raw === "TRY" || raw === "USD" || raw === "EUR" || raw === "DONATION") return raw;
+  if (raw) {
+    console.warn(`[Albaraka] Unknown ALBARAKA_CHARGE_CURRENCY "${raw}", charging in TRY`);
+    return "TRY";
+  }
+  return process.env.ALBARAKA_MULTI_CURRENCY === "1" ? "DONATION" : "TRY";
+}
+
+/**
+ * Resolves the ISO currency a donation is actually charged in. Albaraka only takes
+ * TRY, USD and EUR, so anything else falls back to TRY.
+ */
+export function albarakaTargetCurrency(
+  donationCurrency: string,
+  mode: AlbarakaChargeCurrency
+): "TRY" | "USD" | "EUR" {
+  if (mode !== "DONATION") return mode;
+  const c = String(donationCurrency || "").toUpperCase();
+  if (c === "USD" || c === "US") return "USD";
+  if (c === "EUR" || c === "EU") return "EUR";
+  return "TRY";
+}
 
 /**
  * Merchant identifiers default to the values issued for this merchant; they are not
@@ -64,6 +104,7 @@ export function albarakaConfig(): AlbarakaConfig {
     ).replace(/\/$/, ""),
     useOOS: process.env.ALBARAKA_USE_OOS === "1",
     useJokerVadaa: process.env.ALBARAKA_USE_JOKER_VADAA === "1",
+    chargeCurrency: albarakaChargeCurrency(),
   };
 }
 

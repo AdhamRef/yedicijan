@@ -92,7 +92,11 @@ export async function POST(req: NextRequest) {
   const mdErrorMessage = String(raw.MdErrorMessage ?? "");
 
   /** Marks the donation failed (unless already paid) and sends the donor to the failure page. */
-  async function fail(reason: string, extra: Record<string, unknown> = {}) {
+  async function fail(
+    reason: string,
+    extra: Record<string, unknown> = {},
+    procReturnCode: string | null = null
+  ) {
     console.error("[Albaraka CALLBACK] failed:", reason, extra);
     try {
       const donation = await prisma.donation.findUnique({ where: { id: donationId } });
@@ -104,6 +108,7 @@ export async function POST(req: NextRequest) {
             provider: "ALBARAKA",
             providerOrderId: donation.providerOrderId ?? orderId ?? null,
             providerTxnResult: "Failed",
+            providerProcReturnCode: procReturnCode,
             providerErrorMessage: reason,
             providerRaw: asJson({
               ...(typeof donation.providerRaw === "object" && donation.providerRaw
@@ -237,9 +242,11 @@ export async function POST(req: NextRequest) {
     const responseDescription = sale.ServiceResponseData?.ResponseDescription ?? "";
 
     if (!isAlbarakaApproved(sale)) {
-      return await fail(responseDescription || `Sale declined (${responseCode})`, {
-        albarakaSale: sale as unknown as Record<string, unknown>,
-      });
+      return await fail(
+        responseDescription || `Sale declined (${responseCode})`,
+        { albarakaSale: sale as unknown as Record<string, unknown> },
+        responseCode || null
+      );
     }
 
     // ── 5. Settle ────────────────────────────────────────────────────────────
