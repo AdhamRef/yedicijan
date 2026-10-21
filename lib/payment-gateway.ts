@@ -12,6 +12,9 @@
  * rails authenticate a single transaction and hand back no reusable credential, so
  * a recurring charge is simply not expressible through them.
  *
+ * ALBARAKA_RECURRING_ENABLED does not change this: Albaraka has no documented
+ * recurring API for this merchant, so monthly stays on Stripe either way.
+ *
  * `payforEnabled` is the one remaining switch. Turning PayFor off doesn't fall back
  * to Stripe — lira donations move to Albaraka, which charges in TL anyway.
  */

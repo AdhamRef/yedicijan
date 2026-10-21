@@ -41,7 +41,28 @@ export type AlbarakaConfig = {
   useJokerVadaa: boolean;
   /** Which currency the bank is asked to charge — see `albarakaChargeCurrency`. */
   chargeCurrency: AlbarakaChargeCurrency;
+  /**
+   * ALBARAKA_RECURRING_ENABLED. Reserved: Albaraka has no documented recurring /
+   * stored-card API for this merchant, and a later monthly cycle could not be 3D
+   * authenticated anyway. Monthly donations therefore stay on Stripe regardless —
+   * see `resolveGateway`. Setting it to 1 only logs a warning until the bank
+   * provides a recurring integration.
+   */
+  recurringEnabled: boolean;
 };
+
+let warnedRecurring = false;
+
+function albarakaRecurringEnabled(): boolean {
+  const enabled = process.env.ALBARAKA_RECURRING_ENABLED === "1";
+  if (enabled && !warnedRecurring) {
+    warnedRecurring = true;
+    console.warn(
+      "[Albaraka] ALBARAKA_RECURRING_ENABLED=1 is set, but Albaraka recurring billing is not supported; monthly donations stay on Stripe."
+    );
+  }
+  return enabled;
+}
 
 /**
  * ALBARAKA_CHARGE_CURRENCY:
@@ -105,6 +126,7 @@ export function albarakaConfig(): AlbarakaConfig {
     useOOS: process.env.ALBARAKA_USE_OOS === "1",
     useJokerVadaa: process.env.ALBARAKA_USE_JOKER_VADAA === "1",
     chargeCurrency: albarakaChargeCurrency(),
+    recurringEnabled: albarakaRecurringEnabled(),
   };
 }
 
