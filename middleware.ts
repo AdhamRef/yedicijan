@@ -29,6 +29,14 @@ function countryFromHeaders(req: NextRequest): string | null {
   return null;
 }
 
+function safeDecode(pathname: string): string {
+  try {
+    return decodeURI(pathname).normalize('NFC');
+  } catch {
+    return pathname;
+  }
+}
+
 // Runs before SSR so the page renders with `currency` already in cookies —
 // otherwise scripts/pixels would fire with the default (USD) before the
 // client-side `?currency=` sync catches up.
@@ -81,10 +89,16 @@ export default function middleware(req: NextRequest) {
   // `https://localhost:3000` — which speaks plain HTTP, so it fails with EPROTO.
   // A rewrite that doesn't change the path does nothing, so pass the request
   // through instead. The locale request headers next-intl set are kept.
+  // Paths are compared decoded: next-intl decodes the pathname and re-encodes it
+  // when building the rewrite, so a non-ASCII slug (every Arabic campaign URL) can
+  // come back with different percent-encoding than the request carried.
   const rewrite = response.headers.get('x-middleware-rewrite');
   if (rewrite) {
     const target = new URL(rewrite);
-    if (target.pathname === req.nextUrl.pathname && target.search === req.nextUrl.search) {
+    if (
+      safeDecode(target.pathname) === safeDecode(req.nextUrl.pathname) &&
+      target.search === req.nextUrl.search
+    ) {
       response.headers.delete('x-middleware-rewrite');
       response.headers.set('x-middleware-next', '1');
     }

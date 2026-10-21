@@ -1,5 +1,3 @@
-"use server";
-
 import axios from "axios";
 import Image from "next/image";
 import { Metadata } from "next";

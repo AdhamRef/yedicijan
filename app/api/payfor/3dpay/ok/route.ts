@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
   const errorMessage = String(raw.ErrMsg || raw.ErrorMessage || raw.errorMessage || "");
   const authCode = String(raw.AuthCode || raw.authCode || "");
   const hostRefNum = String(raw.HostRefNum || raw.hostRefNum || "");
+  const threeDStatus = String(raw["3DStatus"] ?? "");
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -68,7 +69,19 @@ export async function POST(req: NextRequest) {
         return { ok: false as const, reason: "order_mismatch" as const };
       }
 
-      const isSuccess = procReturnCode === "00" || txnResult.toLowerCase() === "success";
+      // 3D Secure is the only mode this merchant runs. A payment settles only when
+      // the bank both authenticated the cardholder in full (3DStatus 1 — 2/3/4 are
+      // "half 3D" attempts) and approved the charge (ProcReturnCode 00). A bare
+      // TxnResult "Success" is no longer enough on its own.
+      const snapshot = (donation.providerRaw as { payforRequest?: { purchAmount?: string } } | null)
+        ?.payforRequest;
+      const amountMatches =
+        !snapshot?.purchAmount ||
+        Number(raw.PurchAmount) === Number(snapshot.purchAmount);
+      const isSuccess =
+        procReturnCode === "00" &&
+        threeDStatus === "1" &&
+        amountMatches;
       if (!isSuccess) {
         await tx.donation.update({
           where: { id: donation.id },
@@ -79,7 +92,13 @@ export async function POST(req: NextRequest) {
             providerTxnResult: txnResult || null,
             providerAuthCode: authCode || null,
             providerHostRefNum: hostRefNum || null,
-            providerErrorMessage: errorMessage || "Payment failed",
+            providerErrorMessage:
+              errorMessage ||
+              (!amountMatches
+                ? `Amount mismatch (expected ${snapshot?.purchAmount}, got ${raw.PurchAmount})`
+                : threeDStatus !== "1"
+                  ? `3D Secure not completed (3DStatus ${threeDStatus || "empty"})`
+                  : "Payment failed"),
             providerRaw: raw as any,
           },
         });

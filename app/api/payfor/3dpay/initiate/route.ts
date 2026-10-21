@@ -146,6 +146,9 @@ export async function POST(req: NextRequest) {
         provider: "PAYFOR",
         providerOrderId: orderId,
         providerTxnType: txnType,
+        // What we asked the bank to charge. The ok callback compares the bank's
+        // PurchAmount against it, so a swapped amount can't settle the donation.
+        providerRaw: { payforRequest: { orderId, purchAmount, currency } },
       },
     });
 
