@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
+import { publicOrigin } from "@/lib/public-origin";
 import {
   ALBARAKA_FORM_FIELDS,
   albarakaConfig,
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
 
     // APP_URL keeps OkUrl/ReturnURL on the domain registered with the bank; a bare
     // localhost origin gets the 3D form rejected.
-    const origin = process.env.APP_URL?.replace(/\/$/, "") ?? new URL(req.url).origin;
+    const origin = publicOrigin(req);
     const locale = (body.locale ?? donation.locale ?? "en").toString().toLowerCase();
 
     // The merchant account is Turkish, so by default every donation is converted to

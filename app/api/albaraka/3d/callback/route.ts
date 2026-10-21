@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { publicOrigin } from "@/lib/public-origin";
 import {
   ALBARAKA_PAYMENT_MAC_PARAMS,
   albarakaConfig,
@@ -59,7 +60,7 @@ function macEquals(a: string, b: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const origin = process.env.APP_URL?.replace(/\/$/, "") ?? new URL(req.url).origin;
+  const origin = publicOrigin(req);
   const { searchParams } = new URL(req.url);
   const donationId = searchParams.get("donationId") || "";
   const locale = (searchParams.get("locale") || "en").toLowerCase();

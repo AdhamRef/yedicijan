@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicOrigin } from "@/lib/public-origin";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminSession } from "@/lib/dashboard/api-auth";
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     // empty body is fine
   }
 
-  const origin = new URL(req.url).origin;
+  const origin = publicOrigin(req);
   const webhookUrl = bodyUrl || `${origin}/api/telegram/webhook`;
 
   const result = await tgSetWebhook(webhookUrl);

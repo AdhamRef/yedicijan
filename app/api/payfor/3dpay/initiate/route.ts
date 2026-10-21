@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
+import { publicOrigin } from "@/lib/public-origin";
 import crypto from "crypto";
 import {
   formatPayForPurchAmount,
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     // Use APP_URL env var so OkUrl/FailUrl match the bank's registered MerchantHomeUrl.
     // Without this, localhost:3000 is sent and the bank's 3D auth server rejects it.
-    const origin = process.env.APP_URL?.replace(/\/$/, "") ?? new URL(req.url).origin;
+    const origin = publicOrigin(req);
     const locale = (body.locale ?? donation.locale ?? "en").toString().toLowerCase();
 
     const orderId = donation.id; // within 50 chars (ObjectId)

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicOrigin } from "@/lib/public-origin";
 import { prisma } from "@/lib/prisma";
 // Donate (success) CAPI now fires server-side from `dispatchDonationPaid`
 // the moment the donation flips to PAID — that's the only path that
@@ -13,7 +14,7 @@ import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversio
 import { dispatchDonationPaid, dispatchEvent } from "@/lib/events/dispatch";
 
 export async function POST(req: NextRequest) {
-  const origin = new URL(req.url).origin;
+  const origin = publicOrigin(req);
   const { searchParams } = new URL(req.url);
   const donationId = searchParams.get("donationId") || "";
   const locale = (searchParams.get("locale") || "en").toLowerCase();

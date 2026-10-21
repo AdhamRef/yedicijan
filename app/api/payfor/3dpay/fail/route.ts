@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicOrigin } from "@/lib/public-origin";
 import { prisma } from "@/lib/prisma";
 import { dispatchEvent } from "@/lib/events/dispatch";
 import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversion-server";
 
 export async function POST(req: NextRequest) {
-  const origin = new URL(req.url).origin;
+  const origin = publicOrigin(req);
   const { searchParams } = new URL(req.url);
   const donationId = searchParams.get("donationId") || "";
   const locale = (searchParams.get("locale") || "en").toLowerCase();

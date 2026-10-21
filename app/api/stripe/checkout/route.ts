@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicOrigin } from "@/lib/public-origin";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const origin = new URL(req.url).origin;
+    const origin = publicOrigin(req);
     const locale = (body.locale ?? donation.locale ?? "en").toLowerCase();
 
     // Build a descriptive product name
