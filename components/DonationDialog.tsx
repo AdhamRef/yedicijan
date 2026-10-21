@@ -224,7 +224,6 @@ const DonationDialog = ({
   const globalTeamSupport: SuggestedTeamSupportConfig | null =
     globalSettings?.suggestedTeamSupport ?? null;
   const payforEnabled = globalSettings ? globalSettings.payforEnabled : true;
-  const mainGateway = globalSettings ? globalSettings.mainGateway : "STRIPE";
   // With the bank's hosted card page on, Albaraka collects the card itself and we
   // must not render our own form (the card fields are signed into its request MAC).
   const albarakaUseOOS = globalSettings ? globalSettings.albarakaUseOOS : false;
@@ -286,20 +285,13 @@ const DonationDialog = ({
     (ready: boolean) => setStripeReady(ready),
     [],
   );
-  // Auto-select PayFor when ONE_TIME + TL, Stripe otherwise. Fallback secret forces Stripe.
-  const [fallbackClientSecret, setFallbackClientSecret] = useState<
-    string | null
-  >(null);
-  // Which rail this donation runs on. PayFor keeps its original case (one-time TRY,
-  // admin switch on); everything else goes to whichever main gateway the admin picked,
-  // except monthly which is Stripe-only. A fallback secret means a 3D attempt already
-  // failed and the donor was handed a Stripe intent, so Stripe wins from then on.
+  // Which rail this donation runs on. One-time: lira to PayFor while the admin leaves
+  // it on, everything else to Albaraka. Monthly is the only Stripe case left — it needs
+  // a reusable credential that neither 3D Secure rail hands back.
   const gateway = resolveGateway({
-    mainGateway,
     payforEnabled,
     currency: getCurrency(),
     donationType,
-    forceStripe: Boolean(fallbackClientSecret),
   });
   const use3D = gateway === "PAYFOR";
   const useAlbaraka = gateway === "ALBARAKA";
@@ -307,13 +299,10 @@ const DonationDialog = ({
   const useBank3D = use3D || useAlbaraka;
   /** Card inputs we render ourselves — Albaraka's hosted page replaces them. */
   const useOwnCardForm = use3D || (useAlbaraka && !albarakaUseOOS);
-  /** Stripe Elements are mounted only when Stripe is actually charging. */
+  /** Stripe Elements are mounted for monthly subscriptions and nothing else. */
   const useStripeElements = gateway === "STRIPE";
-  const [fallbackDonationId, setFallbackDonationId] = useState<string | null>(
-    null,
-  );
-  // Guard against duplicate fallback execution
-  const hasFallenBackRef = useRef(false);
+  // Guard so the failure redirect fires once even if the poll ticks again.
+  const hasFailedRef = useRef(false);
   // Guards to prevent funnel events firing more than once per dialog session
   const checkoutTrackedRef = useRef(false);
   const paymentInfoTrackedRef = useRef(false);
@@ -461,9 +450,7 @@ const DonationDialog = ({
   // Reset state when dialog opens + fire view_donation_page
   useEffect(() => {
     if (isOpen) {
-      setFallbackClientSecret(null);
-      setFallbackDonationId(null);
-      hasFallenBackRef.current = false;
+      hasFailedRef.current = false;
       checkoutTrackedRef.current = false;
       paymentInfoTrackedRef.current = false;
       // Auto-skip the (now-removed) sign-in step: guests proceed straight to
@@ -2133,36 +2120,25 @@ const DonationDialog = ({
         }
         if (!stripeFormRef.current) throw new Error("Stripe form not ready");
 
-        let targetDonationId: string;
-        let clientSecret: string;
-
-        // Re-use fallback intent if PayFor previously failed
-        if (fallbackClientSecret && fallbackDonationId) {
-          targetDonationId = fallbackDonationId;
-          clientSecret = fallbackClientSecret;
-        } else {
-          const response = await axios.post("/api/donations", donationData);
-          if (!response.data.success) {
-            onClose();
-            return;
-          }
-          targetDonationId = response.data.donation.id as string;
-
-          const endpoint =
-            donationType === "MONTHLY"
-              ? "/api/stripe/subscribe"
-              : "/api/stripe/charge";
-          const intentRes = await axios.post(endpoint, {
-            donationId: targetDonationId,
-            locale,
-          });
-          if (intentRes.data.error) {
-            toast.error(intentRes.data.error ?? t("donationFailed"));
-            setLoading(false);
-            return;
-          }
-          clientSecret = intentRes.data.clientSecret as string;
+        const response = await axios.post("/api/donations", donationData);
+        if (!response.data.success) {
+          onClose();
+          return;
         }
+        const targetDonationId = response.data.donation.id as string;
+
+        // Subscriptions are the only thing left on Stripe, so this is always
+        // /api/stripe/subscribe — the one-time charge endpoints are gone.
+        const intentRes = await axios.post("/api/stripe/subscribe", {
+          donationId: targetDonationId,
+          locale,
+        });
+        if (intentRes.data.error) {
+          toast.error(intentRes.data.error ?? t("donationFailed"));
+          setLoading(false);
+          return;
+        }
+        const clientSecret = intentRes.data.clientSecret as string;
 
         isRedirecting = true;
         setRedirecting(true);

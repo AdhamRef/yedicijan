@@ -1,9 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { Elements } from "@stripe/react-stripe-js";
-import { getStripePromise } from "@/lib/stripe-client";
-import { StripePaymentStep, type StripePaymentHandle } from "@/components/StripePaymentStep";
 import { PayForCardForm, type PayForCardState } from "@/components/PayForCardForm";
 import { SignInPanel } from "@/components/SignInDialog";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -21,7 +18,6 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import axios from "axios";
-import { toast } from "react-hot-toast";
 import { useConfettiStore } from "@/hooks/use-confetti-store";
 import { getCurrency } from "@/hooks/useCampaignValue";
 import { useCart } from "@/hooks/useCart";
@@ -122,7 +118,6 @@ const CartPaymentDialog = ({
   const globalTeamSupport: SuggestedTeamSupportConfig | null =
     globalSettings?.suggestedTeamSupport ?? null;
   const payforEnabled = globalSettings ? globalSettings.payforEnabled : true;
-  const mainGateway = globalSettings ? globalSettings.mainGateway : "STRIPE";
   // With the bank's hosted card page on, Albaraka collects the card itself and we
   // must not render our own form (the card fields are signed into its request MAC).
   const albarakaUseOOS = globalSettings ? globalSettings.albarakaUseOOS : false;
@@ -146,34 +141,22 @@ const CartPaymentDialog = ({
   // Manual card inputs for the bank 3D rails (PayFor / Albaraka)
   const [cardDetails, setCardDetails]     = useState<PayForCardState>({ cardNumber: "", expiryDate: "", cvv: "", cardholderName: "" });
   const [cardFocus, setCardFocus]         = useState("");
-  // Stripe Elements — ready state tracked here, confirmation done via ref
-  const [stripeReady, setStripeReady]     = useState(false);
-  const stripeFormRef = useRef<StripePaymentHandle | null>(null);
-  const onStripeReadyChange = useCallback((ready: boolean) => setStripeReady(ready), []);
-  // Set when PayFor fails and we get a fallback clientSecret from the server
-  const [fallbackClientSecret, setFallbackClientSecret] = useState<string | null>(null);
-  // Which rail this cart checkout runs on. The cart is always ONE_TIME, so PayFor takes
-  // TRY while the admin leaves it on, and everything else goes to the selected main
-  // gateway. A fallback secret means a 3D attempt already failed and the donor holds a
-  // Stripe intent, so Stripe wins from then on.
+  // The cart is always a one-time donation, so it never touches Stripe: lira goes
+  // to PayFor while the admin leaves it on, everything else to Albaraka. Both are
+  // 3D Secure rails that take over the page, so there are no Stripe Elements here.
   const gateway = resolveGateway({
-    mainGateway,
     payforEnabled,
     currency: getCurrency(),
     donationType: "ONE_TIME",
-    forceStripe: Boolean(fallbackClientSecret),
   });
   const use3D = gateway === "PAYFOR";
   const useAlbaraka = gateway === "ALBARAKA";
-  /** Both 3D rails post an HTML form to the bank instead of confirming via stripe.js. */
+  /** Both rails post an HTML form to the bank. Always true for the cart. */
   const useBank3D = use3D || useAlbaraka;
   /** Card inputs we render ourselves — Albaraka's hosted page replaces them. */
   const useOwnCardForm = use3D || (useAlbaraka && !albarakaUseOOS);
-  /** Stripe Elements are mounted only when Stripe is actually charging. */
-  const useStripeElements = gateway === "STRIPE";
-  const [fallbackDonationId, setFallbackDonationId] = useState<string | null>(null);
-  // Guard against duplicate fallback execution
-  const hasFallenBackRef = useRef(false);
+  // Guard so the failure redirect fires once even if the poll ticks again.
+  const hasFailedRef = useRef(false);
   const [loading, setLoading]             = useState(false);
   const [redirecting, setRedirecting]     = useState(false);
   const [payforSwitching, setPayforSwitching] = useState(false);
@@ -210,20 +193,6 @@ const CartPaymentDialog = ({
   const fees        = (amount + (teamSupport ?? 0)) * 0.03;
   const totalAmount = amount + (teamSupport ?? 0) + (coverFees ? fees : 0);
 
-  // Minimum Stripe charge = 1 USD converted to the selected currency, rounded up.
-  const stripeMinAmount = (() => {
-    const cur = payCurrencyCode();
-    if (cur === "USD") return 1;
-    try {
-      const cached = typeof window !== "undefined" ? localStorage.getItem("cachedExchangeRates") : null;
-      if (!cached) return 1;
-      const { rates } = JSON.parse(cached) as { rates: Record<string, number> };
-      const rate = rates?.[cur];
-      return rate ? Math.ceil(rate+1) : 1;
-    } catch {
-      return 1;
-    }
-  })();
   const isPhoneValid = () => session?.user?.id ? true : phoneValue.trim().replace(/\s/g, "").length >= 10;
   const isCardValid  = () =>
     selectedCardId
@@ -247,10 +216,7 @@ const CartPaymentDialog = ({
     if (!isOpen) {
       checkoutTrackedRef.current = false;
     } else {
-      // Reset fallback guard and state when dialog re-opens
-      hasFallenBackRef.current = false;
-      setFallbackClientSecret(null);
-      setFallbackDonationId(null);
+      hasFailedRef.current = false;
     }
   }, [isOpen]);
 
@@ -519,67 +485,6 @@ const CartPaymentDialog = ({
       const refCode = getReferralCode();
       if (refCode) basePayload.referralCode = refCode;
 
-      // ── Stripe Elements direct charge (no 3D) ─────────────────────────
-      // stripeFormRef.current.confirmPayment() calls stripe.confirmCardPayment()
-      // with CardNumberElement inside the Elements context — card data goes
-      // browser → Stripe directly, never touches our server.
-      if (paymentMethod === "CARD" && useStripeElements) {
-        if (selectedCardId) {
-          toast.error(t("useNewCard"));
-          setLoading(false);
-          return;
-        }
-        if (!stripeFormRef.current) throw new Error("Stripe form not ready");
-
-        let targetDonationId: string;
-        let clientSecret: string;
-
-        // Re-use fallback intent if PayFor previously failed
-        if (fallbackClientSecret && fallbackDonationId) {
-          targetDonationId = fallbackDonationId;
-          clientSecret = fallbackClientSecret;
-        } else {
-          const res = await axios.post("/api/cart/payment", basePayload);
-          if (!res.data?.success) { onClose(); return; }
-          targetDonationId = res.data.donation.id as string;
-
-          const intentRes = await axios.post("/api/stripe/charge", { donationId: targetDonationId, locale });
-          if (intentRes.data.error) {
-            toast.error(intentRes.data.error ?? t("donationFailed"));
-            setLoading(false);
-            return;
-          }
-          clientSecret = intentRes.data.clientSecret as string;
-        }
-
-        isRedirecting = true;
-        setRedirecting(true);
-
-        const { error: confirmError } = await stripeFormRef.current.confirmPayment(clientSecret);
-        if (confirmError) {
-          // Mark donation FAILED for audit trail, then send the user to the explanatory
-          // failure page (which carries the bank-transfer fallback so we don't lose the donation).
-          axios
-            .patch(`/api/donations/${targetDonationId}/fail`, {
-              reason: confirmError.message ?? "stripe_confirm_failed",
-            })
-            .catch(() => {});
-          router.push(
-            appendCurrencyQuery(
-              `/donation-failed?donationId=${encodeURIComponent(targetDonationId)}`,
-              getCurrencyCodeForLinks()
-            )
-          );
-          return;
-        }
-
-        clearItems(); confetti.onOpen();
-        router.push(
-          appendCurrencyQuery(`/success/${targetDonationId}`, getCurrencyCodeForLinks())
-        );
-        return;
-      }
-
       // ── Bank 3D Secure (PayFor or Albaraka) ────────────────────────────
       // Both rails work the same way: ask the server for a signed hidden-input set,
       // POST it to the bank as an HTML form, then poll the donation until the bank's
@@ -682,8 +587,8 @@ const CartPaymentDialog = ({
 
         const handlePayforFailure = () => {
           // Guard: only run once even if poll fires multiple times
-          if (hasFallenBackRef.current) return;
-          hasFallenBackRef.current = true;
+          if (hasFailedRef.current) return;
+          hasFailedRef.current = true;
 
           if (payforPollRef.current) { clearInterval(payforPollRef.current); payforPollRef.current = null; }
           if (payforPopupRef.current && !payforPopupRef.current.closed) payforPopupRef.current.close();
@@ -1023,13 +928,6 @@ const CartPaymentDialog = ({
           </div>
         )}
 
-        {/* Stripe Elements — only when no saved card + Stripe is charging */}
-        {paymentMethod === "CARD" && useStripeElements && !selectedCardId && (
-          <Elements stripe={getStripePromise()}>
-            <StripePaymentStep ref={stripeFormRef} onReadyChange={onStripeReadyChange} />
-          </Elements>
-        )}
-
         {/* Manual card form — shared by the PayFor and Albaraka 3D rails */}
         {paymentMethod === "CARD" && useOwnCardForm && !selectedCardId && (
           <PayForCardForm
@@ -1039,22 +937,6 @@ const CartPaymentDialog = ({
             setCardFocus={setCardFocus}
           />
         )}
-
-        {/* Minimum Stripe amount warning */}
-        <AnimatePresence>
-          {useStripeElements && totalAmount < stripeMinAmount && (
-            <motion.p
-              key="stripe-min"
-              className="text-[13px] text-amber-600 font-medium"
-              initial={{ opacity: 0, y: -6, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: "auto" }}
-              exit={{ opacity: 0, y: -6, height: 0 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              {t("stripeMinDonation", { amount: stripeMinAmount, currency: getCurrency() })}
-            </motion.p>
-          )}
-        </AnimatePresence>
 
         {/* Guest fields */}
         {useGuestCheckout && (
@@ -1107,8 +989,6 @@ const CartPaymentDialog = ({
                 !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())
               )) ||
               (paymentMethod === "CARD" && selectedCardId && cardDetails.cvv.length < 3) ||
-              (paymentMethod === "CARD" && !selectedCardId && useStripeElements && !stripeReady) ||
-              (paymentMethod === "CARD" && !selectedCardId && useStripeElements && totalAmount < stripeMinAmount) ||
               (paymentMethod === "CARD" && !selectedCardId && useOwnCardForm && !isCardValid())
             }
             className="flex-1 shape-button bg-burgundy hover:bg-burgundyDark text-white shadow-soft inline-flex items-center justify-center gap-2">

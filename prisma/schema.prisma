@@ -1077,12 +1077,10 @@ model GlobalSettings {
   id                   String   @id @default(auto()) @map("_id") @db.ObjectId
   /// { "amounts": number[], "byCurrency"?: Record<string, number[]> } — global default team-support amounts; per-campaign override on Campaign.suggestedTeamSupport wins
   suggestedTeamSupport Json?
-  /// Master switch for the PayFor (Ziraat Katılım) 3D Secure gateway. When false,
-  /// every donation is forced through the main gateway regardless of currency.
+  /// Master switch for the PayFor (Ziraat Katılım) 3D Secure gateway, which takes
+  /// one-time donations in Turkish lira. When false those move to Albaraka, which
+  /// charges in TL anyway. Routing is otherwise fixed — see lib/payment-gateway.ts.
   payforEnabled        Boolean  @default(true)
-  /// Main card gateway: "STRIPE" or "ALBARAKA". Handles every case PayFor doesn't
-  /// take, except monthly subscriptions which always run on Stripe.
-  mainGateway          String   @default("STRIPE")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

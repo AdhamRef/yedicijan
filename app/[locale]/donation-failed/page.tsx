@@ -176,25 +176,15 @@ export default function DonationFailedPage() {
       const newId = res.data?.id as string | undefined;
       if (!newId) throw new Error("retry returned no id");
 
-      // Pick the next-step URL by provider. STRIPE → checkout session URL.
-      // The 3D Secure rails (PAYFOR, ALBARAKA) start from a signed form that needs
-      // card details, so there's nothing to redirect to — bounce those donors back
-      // to the campaign dialog. Default to Stripe for everything else.
-      const provider = (donation.provider ?? "STRIPE").toUpperCase();
-      if (provider === "PAYFOR" || provider === "ALBARAKA") {
-        toast.success(t("retry.payforHint"));
-        router.push("/campaigns");
-        return;
-      }
-
-      // Stripe path — create a new Checkout Session and redirect.
-      const checkout = await axios.post("/api/stripe/checkout", {
-        donationId: newId,
-        locale,
-      });
-      const url = checkout.data?.url as string | undefined;
-      if (!url) throw new Error("stripe returned no url");
-      window.location.href = url;
+      // Every one-time donation now runs on a 3D Secure rail (PayFor for lira,
+      // Albaraka otherwise), and both start from a signed form that needs the card
+      // re-entered — there is no hosted URL to hand the donor. So the retry always
+      // bounces back to the campaign dialog, which reopens the right flow.
+      // (`newId` is the fresh clone the dialog will settle.)
+      void newId;
+      toast.success(t("retry.payforHint"));
+      router.push("/campaigns");
+      return;
     } catch (err) {
       console.error("retry failed:", err);
       toast.error(t("retry.failed"));

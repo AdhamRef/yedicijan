@@ -1,71 +1,42 @@
 /**
- * Which gateway a given donation should be charged through.
+ * Which gateway a given donation is charged through.
  *
- * Three rails exist:
- *   - PAYFOR   — Ziraat Katılım 3D Secure. Unchanged, opt-out only: it keeps
- *                exactly the case it always had (one-time TRY donations) as long
- *                as the admin leaves its switch on.
- *   - STRIPE   — the original main gateway.
- *   - ALBARAKA — Albaraka Türk EPOS 3D Secure, an alternative main gateway.
+ * Routing is fixed, not configurable — there is no "main gateway" choice any more:
  *
- * STRIPE and ALBARAKA are interchangeable: whichever the admin picks as the main
- * gateway handles every case the other would have handled, with one exception —
- * monthly subscriptions, which need stored-credential recurring billing that the
- * Albaraka EPOS integration doesn't offer. Those stay on Stripe regardless.
+ *   - **PAYFOR**   (Ziraat Katılım 3D Secure) — one-time donations in Turkish lira.
+ *   - **ALBARAKA** (Albaraka Türk 3D Secure)  — every other one-time donation.
+ *   - **STRIPE**   — monthly subscriptions only, and nothing else.
+ *
+ * Stripe was removed from one-time donations entirely. It survives for monthly
+ * because it is the only gateway here that can bill a second cycle: both 3D Secure
+ * rails authenticate a single transaction and hand back no reusable credential, so
+ * a recurring charge is simply not expressible through them.
+ *
+ * `payforEnabled` is the one remaining switch. Turning PayFor off doesn't fall back
+ * to Stripe — lira donations move to Albaraka, which charges in TL anyway.
  */
 
-/** Gateway an admin can nominate as the main one in the dashboard. */
-export type MainGateway = "STRIPE" | "ALBARAKA";
-
 /** Gateway actually used to charge a specific donation. */
-export type ResolvedGateway = "STRIPE" | "ALBARAKA" | "PAYFOR";
-
-export const MAIN_GATEWAYS: readonly MainGateway[] = ["STRIPE", "ALBARAKA"] as const;
-
-export function isMainGateway(value: unknown): value is MainGateway {
-  return value === "STRIPE" || value === "ALBARAKA";
-}
-
-/** Normalises anything stored/received into a valid main gateway, defaulting to Stripe. */
-export function parseMainGateway(value: unknown): MainGateway {
-  return isMainGateway(value) ? value : "STRIPE";
-}
+export type ResolvedGateway = "ALBARAKA" | "PAYFOR" | "STRIPE";
 
 export type GatewayResolutionInput = {
-  mainGateway: MainGateway;
+  /** Admin switch for the PayFor rail. When off, lira donations go to Albaraka. */
   payforEnabled: boolean;
   /** ISO currency the donor is giving in, e.g. "TRY". */
   currency: string;
   /** Monthly donations create a subscription and can only run on Stripe. */
   donationType?: "ONE_TIME" | "MONTHLY" | null;
-  /**
-   * Set once a gateway has already failed and the donor was handed a Stripe
-   * PaymentIntent to retry with — that forces Stripe for the rest of the attempt.
-   */
-  forceStripe?: boolean;
 };
 
 export function resolveGateway({
-  mainGateway,
   payforEnabled,
   currency,
   donationType = "ONE_TIME",
-  forceStripe = false,
 }: GatewayResolutionInput): ResolvedGateway {
-  if (forceStripe) return "STRIPE";
-  // Subscriptions are Stripe-only: neither PayFor nor Albaraka gives us a
-  // reusable credential to bill on the next cycle.
+  // The only remaining Stripe case. Neither 3D rail can bill the next cycle.
   if (donationType === "MONTHLY") return "STRIPE";
-  // PayFor's case is unchanged from before Albaraka existed: an explicitly
-  // one-time TRY donation, with the admin switch on.
-  if (
-    payforEnabled &&
-    donationType === "ONE_TIME" &&
-    String(currency || "").toUpperCase() === "TRY"
-  ) {
-    return "PAYFOR";
-  }
-  return mainGateway;
+  if (payforEnabled && String(currency || "").toUpperCase() === "TRY") return "PAYFOR";
+  return "ALBARAKA";
 }
 
 /** Lower-case name used by the analytics/pixel layer. */

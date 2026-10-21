@@ -16,7 +16,7 @@ import {
   isAlbarakaConfigured,
   type AlbarakaFormFields,
 } from "@/lib/albaraka";
-import { parseMainGateway } from "@/lib/payment-gateway";
+import { resolveGateway } from "@/lib/payment-gateway";
 import {
   convertAmountInCurrencyToTry,
   getUsdBaseRatesForServer,
@@ -85,18 +85,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Server-side belt matching the PayFor kill-switch: the dialogs already gate the
-    // UI on the selected main gateway, but a client could still call this directly.
+    // Server-side belt: the dialogs already route by currency, but a client could
+    // call this directly. Albaraka takes everything except lira, and lira only when
+    // PayFor is switched off.
     const settings = await prisma.globalSettings.findFirst({
       orderBy: { createdAt: "asc" },
-      select: { mainGateway: true },
+      select: { payforEnabled: true },
     });
-    if (parseMainGateway(settings?.mainGateway) !== "ALBARAKA") {
-      return NextResponse.json(
-        { error: "Albaraka is not the selected main gateway." },
-        { status: 403 }
-      );
-    }
+    const payforEnabled = settings?.payforEnabled ?? true;
 
     const body = (await req.json()) as Partial<InitiateBody>;
     const donationId = String(body.donationId || "").trim();
@@ -120,6 +116,19 @@ export async function POST(req: NextRequest) {
     }
     if (donation.paidAt) {
       return NextResponse.json({ error: "Donation already paid" }, { status: 400 });
+    }
+    // Enforce the same routing the dialogs use, so a hand-crafted request can't
+    // push a donation down the wrong rail.
+    const resolved = resolveGateway({
+      payforEnabled,
+      currency: donation.currency,
+      donationType: donation.subscriptionId ? "MONTHLY" : "ONE_TIME",
+    });
+    if (resolved !== "ALBARAKA") {
+      return NextResponse.json(
+        { error: `This donation routes to ${resolved}, not Albaraka.` },
+        { status: 403 }
+      );
     }
 
     // APP_URL keeps OkUrl/ReturnURL on the domain registered with the bank; a bare

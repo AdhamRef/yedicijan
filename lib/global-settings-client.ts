@@ -11,14 +11,11 @@ import {
   parseSuggestedTeamSupport,
   type SuggestedTeamSupportConfig,
 } from "./campaign/suggested-team-support";
-import { parseMainGateway, type MainGateway } from "./payment-gateway";
 
 export type GlobalSettings = {
   suggestedTeamSupport: SuggestedTeamSupportConfig;
   /** Master switch for the PayFor gateway. Default true. */
   payforEnabled: boolean;
-  /** Gateway handling every case PayFor doesn't take. Default "STRIPE". */
-  mainGateway: MainGateway;
   /**
    * True when Albaraka is set up to collect the card on its own hosted page.
    * The checkout dialogs must then skip our card form entirely — Albaraka signs
@@ -59,7 +56,6 @@ export async function fetchGlobalSettings(
         | {
             suggestedTeamSupport?: unknown;
             payforEnabled?: unknown;
-            mainGateway?: unknown;
             albarakaUseOOS?: unknown;
             albarakaConfigured?: unknown;
           }
@@ -70,8 +66,6 @@ export async function fetchGlobalSettings(
         // the donation flow working before the first record is persisted and
         // when the API response shape is incomplete for any reason.
         payforEnabled: data?.payforEnabled !== false,
-        // Anything unrecognised falls back to Stripe — the rail that always works.
-        mainGateway: parseMainGateway(data?.mainGateway),
         albarakaUseOOS: data?.albarakaUseOOS === true,
         albarakaConfigured: data?.albarakaConfigured === true,
       };
