@@ -140,8 +140,20 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 1. MAC verification ──────────────────────────────────────────────────
-    const expectedMac = albarakaResponseMac(raw, cfg.encKey);
-    const receivedMac = String(raw.MacNew ?? "");
+    // Signs the authentication result only (ECI/CAVV/MdStatus/MdErrorMessage/MD/
+    // SecureTransactionId) — amount and order are checked separately in step 2.
+    const expectedMac = albarakaResponseMac(
+      {
+        eci,
+        cavv,
+        mdStatus,
+        mdErrorMessage,
+        md,
+        secureTransactionId,
+      },
+      cfg.encKey
+    );
+    const receivedMac = String(raw.Mac ?? raw.MacNew ?? "");
     if (!receivedMac || !macEquals(expectedMac, receivedMac)) {
       return await fail("3D response MAC mismatch — response could not be verified");
     }

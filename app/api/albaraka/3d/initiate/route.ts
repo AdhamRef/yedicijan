@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { publicOrigin } from "@/lib/public-origin";
 import {
   ALBARAKA_FORM_FIELDS,
+  ALBARAKA_FORM_MAC_PARAMS,
   albarakaConfig,
   albarakaCurrencyCode,
   albarakaFormMac,
@@ -235,7 +236,20 @@ export async function POST(req: NextRequest) {
       packetCode: "",
     };
 
-    const macNew = albarakaFormMac(fields, cfg.encKey);
+    // Only these six values are signed; the rest of the form rides along unsigned.
+    // Cvc2/CardNo/ExpireDate are the empty strings set above when the bank's hosted
+    // page is collecting the card.
+    const mac = albarakaFormMac(
+      {
+        merchantNo: cfg.merchantNo,
+        terminalNo: cfg.terminalNo,
+        cardNo,
+        cvc2: cvv,
+        expireDate: expiredDate,
+        amount: String(amount),
+      },
+      cfg.encKey
+    );
 
     await prisma.donation.update({
       where: { id: donation.id },
@@ -260,10 +274,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // MacNew is appended after the signed fields; it is not part of its own input.
+    // Mac and MacParams ride alongside the form; neither is part of the MAC input.
     const formFields: Record<string, string> = {};
     for (const name of ALBARAKA_FORM_FIELDS) formFields[name] = fields[name];
-    formFields.MacNew = macNew;
+    formFields.Mac = mac;
+    formFields.MacParams = ALBARAKA_FORM_MAC_PARAMS;
 
     console.log("[Albaraka INITIATE]", {
       donationId: donation.id,

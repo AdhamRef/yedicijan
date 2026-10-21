@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const orderId = String(raw.OrderId || raw.orderId || "");
   const procReturnCode = String(raw.ProcReturnCode || raw.ProcReturnCode?.toString?.() || raw.procReturnCode || "");
   const txnResult = String(raw.TxnResult || raw.txnResult || "");
-  const errorMessage = String(raw.ErrorMessage || raw.errorMessage || "");
+  const errorMessage = String(raw.ErrMsg || raw.ErrorMessage || raw.errorMessage || "");
   const authCode = String(raw.AuthCode || raw.authCode || "");
   const hostRefNum = String(raw.HostRefNum || raw.hostRefNum || "");
 

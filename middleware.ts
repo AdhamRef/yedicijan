@@ -74,6 +74,22 @@ export default function middleware(req: NextRequest) {
 
   const response = intl(req) ?? NextResponse.next();
 
+  // next-intl answers an already-prefixed path with a rewrite to that same path,
+  // built on `req.url`. Behind the nginx proxy that absolute URL can come out on a
+  // different origin than the one Next compares it against (e.g. https vs http),
+  // and Next then treats it as an external rewrite and proxies the request to
+  // `https://localhost:3000` — which speaks plain HTTP, so it fails with EPROTO.
+  // A rewrite that doesn't change the path does nothing, so pass the request
+  // through instead. The locale request headers next-intl set are kept.
+  const rewrite = response.headers.get('x-middleware-rewrite');
+  if (rewrite) {
+    const target = new URL(rewrite);
+    if (target.pathname === req.nextUrl.pathname && target.search === req.nextUrl.search) {
+      response.headers.delete('x-middleware-rewrite');
+      response.headers.set('x-middleware-next', '1');
+    }
+  }
+
   if (normalized) {
     response.cookies.set('currency', normalized, {
       maxAge: CURRENCY_COOKIE_MAX_AGE,

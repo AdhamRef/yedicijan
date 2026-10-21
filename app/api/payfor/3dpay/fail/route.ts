@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const orderId = String(raw.OrderId || raw.orderId || "");
   const procReturnCode = String(raw.ProcReturnCode || raw.procReturnCode || "");
   const txnResult = String(raw.TxnResult || raw.txnResult || "");
-  const errorMessage = String(raw.ErrorMessage || raw.errorMessage || "Payment failed");
+  const errorMessage = String(raw.ErrMsg || raw.ErrorMessage || raw.errorMessage || "Payment failed");
 
   try {
     const donation = await prisma.donation.findUnique({

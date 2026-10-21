@@ -5,17 +5,22 @@ import crypto from "crypto";
  *
  * Reference: "Sanal Pos 3D Secure Entegrasyon Dokümanı" (Albaraka Türk / Posnet EPOS API).
  *
- * Three distinct MAC algorithms are involved; all three are implemented here and were
- * verified byte-for-byte against the worked examples in the bank's document:
+ * Three MACs are involved. All three are plain **SHA256** (not HMAC) over the relevant
+ * values concatenated with **no separator**, with the encryption key appended last, and
+ * the digest base64-encoded. Each is verified byte-for-byte against the worked examples
+ * in the bank's document — see `tmp/albaraka-vectors.ts`.
  *
- *  1. `albarakaFormMac`     — HMAC-SHA256, signs the 3DS redirect form we POST to the bank.
- *  2. `albarakaResponseMac` — HMAC-SHA256, verifies the form the bank POSTs back to us.
- *  3. `albarakaPaymentMac`  — plain SHA256, signs the /Sale call that finalises the 3D auth.
+ *  1. `albarakaFormMac`     — signs the 3DS redirect form we POST to the bank (§4.3.1).
+ *  2. `albarakaResponseMac` — verifies the form the bank POSTs back to us (§4.4.2).
+ *  3. `albarakaPaymentMac`  — signs the /Sale call that finalises the 3D auth (§4.5).
  *
- * For 1 and 2 the message is the ordered parameter values joined with ";", with the
- * encryption key appended after a final ";" — and that same key is also the HMAC key.
- * For 3 the message is the values concatenated with no separator, key appended, hashed
- * with a bare SHA256 (not HMAC).
+ * Each MAC travels with a `MacParams` string naming the fields that went into it, in
+ * order, colon-separated and excluding the key.
+ *
+ * NOTE: an earlier revision of this integration followed a different Albaraka document
+ * that specified HMAC-SHA256 over every form field joined with ";" and a `MacNew` field.
+ * That spec does not match this merchant's EPOS profile; the bank rejects its MACs. The
+ * algorithm below is the one from the PDF that ships with these credentials.
  */
 
 /** Albaraka accepts only these three currency codes. */
@@ -94,21 +99,13 @@ export function albarakaOrderId(): string {
   return crypto.randomBytes(10).toString("hex").toUpperCase();
 }
 
-function hmacSha256Base64(message: string, key: string): string {
-  return crypto
-    .createHmac("sha256", Buffer.from(key, "utf8"))
-    .update(Buffer.from(message, "utf8"))
-    .digest("base64");
-}
-
 function sha256Base64(message: string): string {
   return crypto.createHash("sha256").update(Buffer.from(message, "utf8")).digest("base64");
 }
 
 /**
- * Field order of the 3D verification form. The MAC is computed over the values in
- * exactly this order, so this array is the single source of truth for both the MAC
- * input and the hidden inputs the browser posts.
+ * Hidden inputs of the 3D verification form, in the order the bank's sample emits them.
+ * Only a subset of these is signed — see `ALBARAKA_FORM_MAC_PARAMS`.
  */
 export const ALBARAKA_FORM_FIELDS = [
   "PosnetID",
@@ -137,51 +134,79 @@ export const ALBARAKA_FORM_FIELDS = [
 
 export type AlbarakaFormFields = Record<(typeof ALBARAKA_FORM_FIELDS)[number], string>;
 
-/**
- * MacNew for the outgoing 3D form.
- * Verified against the bank's worked example:
- *   1010054515195582;6700972671;67908222;ALB_TST_25111101ss22;Sale;…;INITIAL;;;;<encKey>
- *   → t+TjQCIihRDsAHzO5pVb1ibHZmZw5VMsC885KiSe14E=
- * Fields we don't send still take part as empty strings — dropping them shifts every
- * later value one separator to the left and the bank rejects the form.
- */
-export function albarakaFormMac(fields: AlbarakaFormFields, encKey: string): string {
-  const message =
-    ALBARAKA_FORM_FIELDS.map((name) => fields[name] ?? "").join(";") + ";" + encKey;
-  return hmacSha256Base64(message, encKey);
-}
-
-/** Parameter order of the MacNew the bank sends back after 3D verification. */
-export const ALBARAKA_RESPONSE_MAC_FIELDS = [
-  "CCPrefix",
-  "TranType",
-  "Amount",
-  "OrderId",
-  "MerchantId",
-  "CAVV",
-  "CAVVAlgorithm",
-  "ECI",
-  "MD",
-  "MdErrorMessage",
-  "MdStatus",
-  "SecureTransactionId",
-  "Currency",
-] as const;
+/** `MacParams` value sent with the 3D form, naming the signed fields in order (§4.3.1). */
+export const ALBARAKA_FORM_MAC_PARAMS =
+  "MerchantNo:TerminalNo:CardNo:Cvc2:ExpireDate:Amount";
 
 /**
- * Recomputes the MacNew the bank attached to its callback so we can prove the
- * amount / order / 3D verdict weren't tampered with during the browser round-trip.
- * Verified against the bank's worked example:
- *   450634;Sale;2500;…;Successful;1;1010078005220492;TL;<encKey>
- *   → 4XYPXgwGWcmrC+8Y+/cmkZOsxBVBpGynIbLCbjFZBk0=
+ * `Mac` for the outgoing 3D form (§4.3.1).
+ * SHA256 over MerchantNo + TerminalNo + CardNo + Cvc2 + ExpireDate + Amount + encKey,
+ * concatenated with no separator. Amount is in kuruş with no punctuation.
+ *
+ * When the bank's hosted page collects the card, the three card values are sent as
+ * empty strings and simply contribute nothing to the concatenation — that is what the
+ * document means by "string.Empty", and it is what UseOOS=1 relies on.
+ *
+ * Verified: 6700950031|67540050|5400619360964581|056|2001|175|10,10,10,10,10,10,10,10
+ *           → xuhPbpcPJ6kVs7JeIXS8f06Cv0mb9cNPMfjp1HiB7Ew=
  */
-export function albarakaResponseMac(
-  values: Record<string, string | undefined>,
+export function albarakaFormMac(
+  params: {
+    merchantNo: string;
+    terminalNo: string;
+    cardNo: string;
+    cvc2: string;
+    expireDate: string;
+    amount: string;
+  },
   encKey: string
 ): string {
-  const message =
-    ALBARAKA_RESPONSE_MAC_FIELDS.map((name) => values[name] ?? "").join(";") + ";" + encKey;
-  return hmacSha256Base64(message, encKey);
+  return sha256Base64(
+    params.merchantNo +
+      params.terminalNo +
+      params.cardNo +
+      params.cvc2 +
+      params.expireDate +
+      params.amount +
+      encKey
+  );
+}
+
+/** `MacParams` the bank returns with its callback MAC (§4.4.2). */
+export const ALBARAKA_RESPONSE_MAC_PARAMS =
+  "ECI:CAVV:MdStatus:MdErrorMessage:MD:SecureTransactionId";
+
+/**
+ * Recomputes the `Mac` the bank attaches to its callback, proving the 3D verdict wasn't
+ * rewritten during the browser round-trip (§4.4.2).
+ * SHA256 over ECI + CAVV + MdStatus + MdErrorMessage + MD + SecureTransactionId + encKey.
+ *
+ * Note this covers the authentication result only — not Amount or OrderId. Those are
+ * cross-checked separately in the callback against the snapshot taken at initiate.
+ *
+ * Verified: 02|jKOBaLBL3hQ+CREBPu1HBQQAAAA=|1|Authenticated|0161…644,0161…644|1010028947569644|key
+ *           → r21kMm4nMqvJakjq47Jl+3fk2xrFPrDoTJFQGxkgkfk=
+ */
+export function albarakaResponseMac(
+  values: {
+    eci: string;
+    cavv: string;
+    mdStatus: string;
+    mdErrorMessage: string;
+    md: string;
+    secureTransactionId: string;
+  },
+  encKey: string
+): string {
+  return sha256Base64(
+    values.eci +
+      values.cavv +
+      values.mdStatus +
+      values.mdErrorMessage +
+      values.md +
+      values.secureTransactionId +
+      encKey
+  );
 }
 
 /**
