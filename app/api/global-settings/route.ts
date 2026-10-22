@@ -30,7 +30,7 @@ export async function GET() {
     return NextResponse.json({
       suggestedTeamSupport: parseSuggestedTeamSupport(settings?.suggestedTeamSupport),
       // Default true — first read before any record exists must still let
-      // PayFor remain available for TRY donors.
+      // PayFor remain available for non-TRY donors.
       payforEnabled: settings?.payforEnabled ?? true,
       // Neither flag is a secret; the checkout dialogs need them to decide whether
       // to render our own card form (Albaraka signs the card fields into the MAC,
@@ -101,13 +101,13 @@ export async function PUT(request: NextRequest) {
       updateData.payforEnabled = body.payforEnabled;
     }
 
-    // Turning PayFor off sends lira donations to Albaraka, so refuse it when
-    // Albaraka can't sign anything — that would leave TRY with no working rail.
+    // Turning PayFor off sends every one-time donation to Albaraka, so refuse it
+    // when Albaraka can't sign anything — that would leave no working rail at all.
     if (body.payforEnabled === false && !isAlbarakaConfigured()) {
       return NextResponse.json(
         {
           error:
-            "Cannot disable PayFor: Albaraka is not configured on the server (ALBARAKA_ENC_KEY is missing), so Turkish lira donations would have no gateway.",
+            "Cannot disable PayFor: Albaraka is not configured on the server (ALBARAKA_ENC_KEY is missing), so one-time donations would have no gateway.",
         },
         { status: 400 }
       );

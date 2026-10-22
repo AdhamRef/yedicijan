@@ -92,8 +92,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Server-side belt: the dialogs already route by currency, but a client could
-    // call this directly. Albaraka takes everything except lira, and lira only when
-    // PayFor is switched off.
+    // call this directly. Albaraka takes lira donations, and every other currency
+    // only when PayFor is switched off.
     const settings = await prisma.globalSettings.findFirst({
       orderBy: { createdAt: "asc" },
       select: { payforEnabled: true },

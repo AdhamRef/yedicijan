@@ -142,7 +142,7 @@ const CartPaymentDialog = ({
   const [cardDetails, setCardDetails]     = useState<PayForCardState>({ cardNumber: "", expiryDate: "", cvv: "", cardholderName: "" });
   const [cardFocus, setCardFocus]         = useState("");
   // The cart is always a one-time donation, so it never touches Stripe: lira goes
-  // to PayFor while the admin leaves it on, everything else to Albaraka. Both are
+  // to Albaraka, everything else to PayFor while the admin leaves it on. Both are
   // 3D Secure rails that take over the page, so there are no Stripe Elements here.
   const gateway = resolveGateway({
     payforEnabled,

@@ -3,8 +3,9 @@
  *
  * Routing is fixed, not configurable — there is no "main gateway" choice any more:
  *
- *   - **PAYFOR**   (Ziraat Katılım 3D Secure) — one-time donations in Turkish lira.
- *   - **ALBARAKA** (Albaraka Türk 3D Secure)  — every other one-time donation.
+ *   - **ALBARAKA** (Albaraka Türk 3D Secure)  — one-time donations in Turkish lira.
+ *   - **PAYFOR**   (Ziraat Katılım 3D Secure) — every other one-time donation
+ *                  (converted to TRY and charged in lira).
  *   - **STRIPE**   — monthly subscriptions only, and nothing else.
  *
  * Stripe was removed from one-time donations entirely. It survives for monthly
@@ -16,14 +17,14 @@
  * recurring API for this merchant, so monthly stays on Stripe either way.
  *
  * `payforEnabled` is the one remaining switch. Turning PayFor off doesn't fall back
- * to Stripe — lira donations move to Albaraka, which charges in TL anyway.
+ * to Stripe — every one-time donation moves to Albaraka, which charges in TL anyway.
  */
 
 /** Gateway actually used to charge a specific donation. */
 export type ResolvedGateway = "ALBARAKA" | "PAYFOR" | "STRIPE";
 
 export type GatewayResolutionInput = {
-  /** Admin switch for the PayFor rail. When off, lira donations go to Albaraka. */
+  /** Admin switch for the PayFor rail. When off, every one-time donation goes to Albaraka. */
   payforEnabled: boolean;
   /** ISO currency the donor is giving in, e.g. "TRY". */
   currency: string;
@@ -38,8 +39,9 @@ export function resolveGateway({
 }: GatewayResolutionInput): ResolvedGateway {
   // The only remaining Stripe case. Neither 3D rail can bill the next cycle.
   if (donationType === "MONTHLY") return "STRIPE";
-  if (payforEnabled && String(currency || "").toUpperCase() === "TRY") return "PAYFOR";
-  return "ALBARAKA";
+  const c = String(currency || "").toUpperCase();
+  if (c === "TRY" || c === "TL") return "ALBARAKA";
+  return payforEnabled ? "PAYFOR" : "ALBARAKA";
 }
 
 /** Lower-case name used by the analytics/pixel layer. */

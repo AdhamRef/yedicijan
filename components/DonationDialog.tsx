@@ -285,8 +285,8 @@ const DonationDialog = ({
     (ready: boolean) => setStripeReady(ready),
     [],
   );
-  // Which rail this donation runs on. One-time: lira to PayFor while the admin leaves
-  // it on, everything else to Albaraka. Monthly is the only Stripe case left — it needs
+  // Which rail this donation runs on. One-time: lira to Albaraka, everything else to
+  // PayFor while the admin leaves it on. Monthly is the only Stripe case left — it needs
   // a reusable credential that neither 3D Secure rail hands back.
   const gateway = resolveGateway({
     payforEnabled,

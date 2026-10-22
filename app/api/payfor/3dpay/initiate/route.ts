@@ -14,6 +14,7 @@ import {
   getUsdBaseRatesForServer,
 } from "@/lib/exchange/rates-service";
 import { decryptCard } from "@/lib/card-crypto";
+import { resolveGateway } from "@/lib/payment-gateway";
 
 /** Convert any amount to TRY using USD-base rates from the database (same as donations). */
 async function toTRY(amount: number, fromCurrency: string): Promise<number> {
@@ -34,8 +35,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    // Master kill-switch: if the admin disabled PayFor in GlobalSettings,
-    // every TRY donation must go through Stripe. Refuse to initiate a 3D
+    // Master kill-switch: if the admin disabled PayFor in GlobalSettings, every
+    // one-time donation goes through Albaraka instead. Refuse to initiate a 3D
     // Secure session regardless of what the client requested. The dialogs
     // already gate the UI on the same flag — this is the server-side belt.
     const settings = await prisma.globalSettings.findFirst({
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     });
     if (settings && settings.payforEnabled === false) {
       return NextResponse.json(
-        { error: "PayFor gateway is disabled. Use the Stripe checkout instead." },
+        { error: "PayFor gateway is disabled. This donation routes to Albaraka." },
         { status: 403 }
       );
     }
@@ -70,6 +71,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: `Donation has already failed (status=${donation.status})` },
         { status: 400 }
+      );
+    }
+    // Enforce the same routing the dialogs use: PayFor takes every currency except
+    // lira, which belongs to Albaraka.
+    const resolved = resolveGateway({
+      payforEnabled: settings?.payforEnabled ?? true,
+      currency: donation.currency,
+      donationType: donation.subscriptionId ? "MONTHLY" : "ONE_TIME",
+    });
+    if (resolved !== "PAYFOR") {
+      return NextResponse.json(
+        { error: `This donation routes to ${resolved}, not PayFor.` },
+        { status: 403 }
       );
     }
     const gatewayUrl = process.env.PAYFOR_3DPAY_URL;

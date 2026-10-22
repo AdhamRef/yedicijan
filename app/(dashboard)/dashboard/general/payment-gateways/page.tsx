@@ -58,8 +58,8 @@ export default function PaymentGatewaysPage() {
       await axios.put("/api/global-settings", { payforEnabled: next });
       toast.success(
         next
-          ? "تم تفعيل PayFor — تبرعات الليرة التركية تمر عبره"
-          : "تم إيقاف PayFor — تبرعات الليرة التركية ستمر عبر Albaraka"
+          ? "تم تفعيل PayFor — التبرعات بالعملات غير الليرة التركية تمر عبره"
+          : "تم إيقاف PayFor — كل التبرعات الفردية ستمر عبر Albaraka"
       );
     } catch (e) {
       setPayforEnabled(prev);
@@ -77,13 +77,15 @@ export default function PaymentGatewaysPage() {
   const routes = [
     {
       when: "تبرع لمرة واحدة بالليرة التركية (TRY)",
-      gateway: payforEnabled ? "PayFor — زراعت كاتيليم" : "Albaraka Türk",
-      note: payforEnabled ? "3D Secure" : "3D Secure — لأن PayFor موقوف",
+      gateway: "Albaraka Türk",
+      note: "3D Secure",
     },
     {
       when: "تبرع لمرة واحدة بأي عملة أخرى",
-      gateway: "Albaraka Türk",
-      note: "3D Secure — يُحوَّل المبلغ إلى الليرة التركية",
+      gateway: payforEnabled ? "PayFor — زراعت كاتيليم" : "Albaraka Türk",
+      note: payforEnabled
+        ? "3D Secure — يُحوَّل المبلغ إلى الليرة التركية"
+        : "3D Secure — لأن PayFor موقوف",
     },
     { when: "تبرع شهري (اشتراك)", gateway: "Stripe", note: "التحصيل المتكرر" },
   ];
@@ -141,9 +143,9 @@ export default function PaymentGatewaysPage() {
                       PayFor — زراعت كاتيليم
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      يتولّى التبرعات الفردية بالليرة التركية عبر 3D Secure. عند
-                      الإيقاف تنتقل هذه التبرعات إلى Albaraka، التي تحصّل
-                      بالليرة أيضًا.
+                      يتولّى التبرعات الفردية بكل العملات غير الليرة التركية عبر
+                      3D Secure، ويحصّلها بالليرة بعد التحويل. عند الإيقاف تنتقل
+                      هذه التبرعات إلى Albaraka.
                     </p>
                   </div>
                 </div>
@@ -170,7 +172,8 @@ export default function PaymentGatewaysPage() {
                     Albaraka Türk
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    البوابة الأساسية لكل التبرعات الفردية غير الليرة التركية.
+                    البوابة الأساسية للتبرعات الفردية بالليرة التركية، وتتولّى
+                    كل العملات عند إيقاف PayFor.
                     مُهيّأة عبر متغيرات البيئة ولا تحتاج إعدادًا هنا.
                     {albarakaUseOOS &&
                       " يجمع البنك بيانات البطاقة على صفحته الخاصة."}
