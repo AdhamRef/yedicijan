@@ -11,7 +11,7 @@ export type ArchiveProjectOptions = {
 };
 
 export const ARCHIVE_PROJECT_OPTIONS_EVENT = "archive-project-options-updated";
-export const ARCHIVE_PROJECT_OPTIONS_STORAGE_KEY = "gozbebekleri.archive.project-options";
+export const ARCHIVE_PROJECT_OPTIONS_STORAGE_KEY = "yedicihan.archive.project-options";
 export const ARCHIVE_PROJECT_OPTIONS_API = "/api/admin/archive/project-options";
 
 export const DEFAULT_ARCHIVE_PROJECT_OPTIONS: ArchiveProjectOptions = {

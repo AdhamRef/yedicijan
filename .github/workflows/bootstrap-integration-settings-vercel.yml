@@ -36,9 +36,9 @@ jobs:
     timeout-minutes: 45
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_PROJECT_NAME: gozbebekleri
+      VERCEL_PROJECT_NAME: yedicihan
       VERCEL_PROJECT_ID: prj_hkMyu8iABc7AAqF7T1DvYRpKYRqV
-      VERCEL_TEAM_SCOPE: gozbebekleri-dernek
+      VERCEL_TEAM_SCOPE: yedicihan-dernek
       VERCEL_TEAM_ID: team_zLLO1Hql8hFDCswcnpMMDCBj
       TARGET_BRANCH: agent/secure-integration-settings-backend
       SAFE_REPORT: ${{ runner.temp }}/bootstrap-integration-settings-summary.md
@@ -83,4 +83,4 @@ jobs:
           | Blocker | WORKFLOW_FAILED_BEFORE_SANITIZED_REPORT |
           REPORT
           fi
-          gh pr comment 127 --repo AdhamRef/gozbebekleri --body-file "$SAFE_REPORT"
+          gh pr comment 127 --repo AdhamRef/yedicihan --body-file "$SAFE_REPORT"

@@ -9,9 +9,9 @@ import type {
 
 export const brandProfiles: BrandProfile[] = [
   {
-    id: "brand_gozbebekleri",
-    key: "gozbebekleri",
-    name: "Gözbebekleri Derneği",
+    id: "brand_yedicihan",
+    key: "yedicihan",
+    name: "Yedicihan Derneği",
     description: "هوية الجمعية الخيرية التشغيلية الأساسية للوحة التحكم الحالية.",
     mission: "إيصال حملات إغاثة موثوقة مع دليل واضح للمتبرع وتحديثات ميدانية عملية.",
     vision: "رحلة تبرع يكون فيها كل تبرع سهل الإعطاء، سهل الثقة، ومرتبطًا بوضوح بالأثر.",
@@ -61,7 +61,7 @@ export const brandProfiles: BrandProfile[] = [
 export const brandAssets: BrandAsset[] = [
   {
     id: "asset_goz_primary_logo",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     title: "الشعار الأساسي",
     type: "LOGO",
     format: "SVG",
@@ -76,7 +76,7 @@ export const brandAssets: BrandAsset[] = [
   },
   {
     id: "asset_goz_receipt_template",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     title: "قالب إيصال التبرع",
     type: "CERTIFICATE",
     format: "PDF",
@@ -137,9 +137,9 @@ export const brandAssets: BrandAsset[] = [
 ];
 
 export const brandColors: BrandColor[] = [
-  { id: "color_goz_blue", profileId: "brand_gozbebekleri", name: "أزرق الثقة", hex: "#025EB8", rgb: "2, 94, 184", usage: "PRIMARY", description: "لون الهوية الأساسي ولون التمييز في اللوحة.", order: 1 },
-  { id: "color_goz_navy", profileId: "brand_gozbebekleri", name: "كحلي داكن", hex: "#10212B", rgb: "16, 33, 43", usage: "TEXT", description: "العناوين ولوحات الثقة والأسطح الجادة في اللوحة.", order: 2 },
-  { id: "color_goz_ivory", profileId: "brand_gozbebekleri", name: "خلفية دافئة", hex: "#FFFDF8", rgb: "255, 253, 248", usage: "BACKGROUND", description: "خلفية ناعمة لصفحات الهوية الموجهة للمتبرعين.", order: 3 },
+  { id: "color_goz_blue", profileId: "brand_yedicihan", name: "أزرق الثقة", hex: "#025EB8", rgb: "2, 94, 184", usage: "PRIMARY", description: "لون الهوية الأساسي ولون التمييز في اللوحة.", order: 1 },
+  { id: "color_goz_navy", profileId: "brand_yedicihan", name: "كحلي داكن", hex: "#10212B", rgb: "16, 33, 43", usage: "TEXT", description: "العناوين ولوحات الثقة والأسطح الجادة في اللوحة.", order: 2 },
+  { id: "color_goz_ivory", profileId: "brand_yedicihan", name: "خلفية دافئة", hex: "#FFFDF8", rgb: "255, 253, 248", usage: "BACKGROUND", description: "خلفية ناعمة لصفحات الهوية الموجهة للمتبرعين.", order: 3 },
   { id: "color_minber_trust_navy", profileId: "brand_minber_aksa", name: "كحلي الثقة", hex: "#10212B", rgb: "16, 33, 43", usage: "PRIMARY", description: "لون الثقة الأساسي لمنبر الأقصى.", order: 1 },
   { id: "color_minber_deep_navy", profileId: "brand_minber_aksa", name: "كحلي داكن", hex: "#132C38", rgb: "19, 44, 56", usage: "TEXT", description: "العناوين ولوحات الثقة العالية.", order: 2 },
   { id: "color_minber_gold", profileId: "brand_minber_aksa", name: "ذهبي الأقصى", hex: "#D39A27", rgb: "211, 154, 39", usage: "ACCENT", description: "لمسات الوقف والشهادات والأقصى.", order: 3 },
@@ -153,7 +153,7 @@ export const brandColors: BrandColor[] = [
 ];
 
 export const brandFonts: BrandFont[] = [
-  { id: "font_goz_ui", profileId: "brand_gozbebekleri", name: "System UI", usage: "واجهة اللوحة", fallback: "Inter, Arial, sans-serif", source: "system", notes: "مستقر لشاشات اللوحة الداخلية." },
+  { id: "font_goz_ui", profileId: "brand_yedicihan", name: "System UI", usage: "واجهة اللوحة", fallback: "Inter, Arial, sans-serif", source: "system", notes: "مستقر لشاشات اللوحة الداخلية." },
   { id: "font_minber_ar", profileId: "brand_minber_aksa", name: "Noto Kufi Arabic", usage: "العناوين العربية", fallback: "Tajawal, Arial, sans-serif", source: "Google Fonts", notes: "بحاجة إلى تأكيد مقابل خطوط الموقع العام النهائية." },
   { id: "font_minber_latin", profileId: "brand_minber_aksa", name: "Poppins", usage: "العناوين اللاتينية وأزرار التبرع", fallback: "Inter, Arial, sans-serif", source: "Google Fonts", notes: "يصلح للإنجليزية والتركية والفرنسية والبرتغالية والإسبانية والألمانية والإندونيسية." },
   { id: "font_burak_ui", profileId: "brand_burak", name: "Inter", usage: "واجهة الحملات التركية", fallback: "Arial, sans-serif", source: "system/google", notes: "بحاجة إلى تأكيد مع نظام تصميم بوراك النهائي." },
@@ -162,7 +162,7 @@ export const brandFonts: BrandFont[] = [
 export const brandGuidelines: BrandGuideline[] = [
   {
     id: "guide_goz_proof",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     section: "proof",
     title: "الدليل قبل الضغط",
     body: "يجب أن يعرض نص الحملة تحديثات ميدانية أو إيصالات أو دليلًا تشغيليًا قبل طلب مبلغ أعلى.",
@@ -171,7 +171,7 @@ export const brandGuidelines: BrandGuideline[] = [
   },
   {
     id: "guide_goz_dignity",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     section: "donor-dignity",
     title: "احترام كرامة المستفيد",
     body: "تجنّب اللغة التي تُهين متلقّي المساعدة. أظهر الحاجة باحترام مع خطوة تالية واضحة.",
@@ -207,7 +207,7 @@ export const brandGuidelines: BrandGuideline[] = [
   },
   {
     id: "guide_global_ai",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     section: "cta",
     title: "مخرجات الذكاء الاصطناعي مسودات فقط",
     body: "قد يقترح الذكاء الاصطناعي نصوصًا وترجمات وفحوص ضوابط، لكنه لا يستطيع النشر أو إرسال الرسائل أو تغيير الميزانيات أو اعتماد الأصول.",
@@ -219,7 +219,7 @@ export const brandGuidelines: BrandGuideline[] = [
 export const brandMessageFrameworks: BrandMessageFramework[] = [
   {
     id: "framework_goz_friday",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     name: "رسائل الجمعة",
     type: "FRIDAY",
     locale: "tr",
@@ -230,7 +230,7 @@ export const brandMessageFrameworks: BrandMessageFramework[] = [
   },
   {
     id: "framework_goz_thank_you",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     name: "الشكر",
     type: "THANK_YOU",
     locale: "tr",
@@ -274,7 +274,7 @@ export const brandMessageFrameworks: BrandMessageFramework[] = [
   },
   {
     id: "framework_goz_reactivation",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     name: "إعادة تفعيل المتبرع",
     type: "DONOR_REACTIVATION",
     locale: "tr",
@@ -296,7 +296,7 @@ export const brandMessageFrameworks: BrandMessageFramework[] = [
   },
   {
     id: "framework_goz_general",
-    profileId: "brand_gozbebekleri",
+    profileId: "brand_yedicihan",
     name: "حملة عامة",
     type: "GENERAL",
     locale: "tr",

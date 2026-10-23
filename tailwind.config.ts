@@ -14,7 +14,7 @@ export default {
   			poppins: ["var(--font-poppins)"],
   		},
   		colors: {
-  			// ── Yedi Cihan brand palette (design_inspiration) ──
+  			// ── Yedicihan brand palette (design_inspiration) ──
   			// The public site (app/[locale] + the shared shell) is built on these.
   			deep: '#021D32',
   			navy: '#073452',

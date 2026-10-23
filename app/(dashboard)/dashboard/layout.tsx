@@ -6,7 +6,7 @@ import DashboardLayoutClient from "./DashboardLayoutClient";
 import ar from "../../../i18n/messages/ar.json";
 
 export const metadata: Metadata = {
-  title: "لوحة التحكم | قرة العيون",
+  title: "لوحة التحكم | يدي جيهان",
   description: "إدارة المشاريع والتبرعات والمستخدمين",
   icons: { icon: "/logometayedi.avif" },
   robots: { index: false, follow: false },

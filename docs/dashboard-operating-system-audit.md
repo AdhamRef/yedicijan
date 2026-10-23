@@ -14,9 +14,9 @@
 Status: **audit only, no runtime behaviour changed by this document.**
 Date: 2026-07-04
 Scope: repository root `d:/Work/alafiya - Copy/` (the active project). The
-`gozbebekleri/` subfolder is a **stale May-2026 snapshot** and is out of scope —
+`yedicihan/` subfolder is a **stale May-2026 snapshot** and is out of scope —
 never edit it. Confirmed via `git log` (root `app/` last changed 2026-07-03,
-`gozbebekleri/` last changed 2026-05-24).
+`yedicihan/` last changed 2026-05-24).
 
 This audit verifies the actual codebase against the target architecture. It does
 **not** assume the code matches any prior plan.

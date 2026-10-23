@@ -51,7 +51,7 @@ test("Elastic Email field validation rejects bad values", () => {
 test("transactional payload matches the Elastic Email v4 contract", () => {
   const payload = buildElasticEmailPayload(
     { to: "donor@example.org", subject: "شكرًا لتبرعك", html: "<p>شكرًا</p>", text: "شكرًا" },
-    { email: "noreply@yedicihan.org.tr", name: "Gözbebekleri" }
+    { email: "noreply@yedicihan.org.tr", name: "Yedicihan" }
   ) as {
     Recipients: { To: string[] };
     Content: { From: string; Subject: string; Body: { ContentType: string; Content: string; Charset: string }[] };
@@ -59,7 +59,7 @@ test("transactional payload matches the Elastic Email v4 contract", () => {
   };
 
   assert.deepEqual(payload.Recipients.To, ["donor@example.org"]);
-  assert.equal(payload.Content.From, "Gözbebekleri <noreply@yedicihan.org.tr>");
+  assert.equal(payload.Content.From, "Yedicihan <noreply@yedicihan.org.tr>");
   assert.equal(payload.Content.Subject, "شكرًا لتبرعك");
   assert.deepEqual(payload.Content.Body.map((part) => part.ContentType), ["HTML", "PlainText"]);
   assert.equal(payload.Content.Body[0].Charset, "utf-8");
@@ -76,7 +76,7 @@ test("payload omits the plain-text part when none is rendered", () => {
 
 test("sender identity quotes display names that would break the From header", () => {
   assert.equal(formatSenderIdentity("a@b.org", null), "a@b.org");
-  assert.equal(formatSenderIdentity("a@b.org", "Gözbebekleri"), "Gözbebekleri <a@b.org>");
+  assert.equal(formatSenderIdentity("a@b.org", "Yedicihan"), "Yedicihan <a@b.org>");
   assert.equal(formatSenderIdentity("a@b.org", "Charity, Inc <spoof@evil.org>"), '"Charity, Inc <spoof@evil.org>" <a@b.org>');
   assert.equal(formatSenderIdentity("a@b.org", "Line\nBreak"), "Line Break <a@b.org>");
 });

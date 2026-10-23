@@ -95,7 +95,7 @@ To let the MCP (and Cursor) access your file and apply the design:
 
 ### Option A: Invite the MCP account to the file (recommended)
 
-1. Open the file in Figma (e.g. **Gözbebekleri**).
+1. Open the file in Figma (e.g. **Yedicihan**).
 2. Click **Share** in the top-right.
 3. In “Invite people”, add the **same Figma account your MCP uses**:
    - **Email to invite:** `developedbyadham7@gmail.com`  
@@ -121,11 +121,11 @@ Use this only if you’re okay with anyone who has the link viewing the file.
 
 ---
 
-## 6. File-specific note (Gözbebekleri)
+## 6. File-specific note (Yedicihan)
 
 The Figma file below was **not accessible** via the MCP because of password protection (API cannot use password-protected links):
 
-- File: `Gözbebekleri`  
+- File: `Yedicihan`  
 - URL: `https://www.figma.com/design/hMC7LWWFYO77YdoRoa2Q68/...?node-id=106-2`
 
 After you fix access (see §5), we can:
