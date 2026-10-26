@@ -80,7 +80,8 @@ const CampaignsPage = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch] = useDebounce(searchQuery, 300);
   const [selectedCategory, setSelectedCategory] = useState("all");
-  const [filters, setFilters] = useState<FilterState>({ sortBy: "newest", minAmount: 0, maxAmount: 100000000 });
+  // No filter UI any more; the defaults still feed the API query and the client-side ordering.
+  const [filters] = useState<FilterState>({ sortBy: "newest", minAmount: 0, maxAmount: 100000000 });
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshingList, setIsRefreshingList] = useState(false);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -245,18 +246,11 @@ const CampaignsPage = ({
     }
   }), [filteredCampaigns, filters.sortBy, isRefreshingList, selectedCategory]);
 
-  const handleFilterChange = (key: keyof FilterState, value: number | string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  };
-
   const handleCategoryChange = (categoryId: string) => {
     if (categoryId === selectedCategory) return;
     setSelectedCategory(categoryId);
   };
 
-  const resultCountLabel = totalCount > sortedCampaigns.length
-    ? `${sortedCampaigns.length} / ${totalCount}`
-    : String(sortedCampaigns.length);
   const showEmptyState = sortedCampaigns.length === 0 && !isLoadingMore && !isRefreshingList;
 
   if (loading) return <LoadingSkeleton />;
@@ -395,25 +389,8 @@ const CampaignsPage = ({
       {/* ── Grid ── */}
       <section className="max-w-7xl mx-auto px-4 lg:px-8 py-10 md:py-12">
         <div>
-          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-deep">{t("allCampaigns") || "All projects"}</h2>
-              <p className="mt-2 text-sm font-medium text-gray-500">
-                <span className="font-semibold text-gray-800">{isRefreshingList ? "..." : resultCountLabel}</span>{" "}
-                {t("resultsFound") || "projects found"}
-              </p>
-            </div>
-
-            <select
-              value={filters.sortBy}
-              onChange={(e) => handleFilterChange("sortBy", e.target.value)}
-              className="shape-chip h-11 w-full border border-gray-200 bg-white px-4 text-sm font-semibold text-deep outline-none sm:w-[200px]"
-            >
-              <option value="newest">{t("newest") || "Newest"}</option>
-              <option value="amount-high">{t("amountHigh") || "Highest"}</option>
-              <option value="amount-low">{t("amountLow") || "Lowest"}</option>
-              <option value="progress">{t("progress") || "Progress"}</option>
-            </select>
+          <div className="mb-8">
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-deep">{t("allCampaigns") || "All projects"}</h2>
           </div>
 
           {error && sortedCampaigns.length > 0 && (
