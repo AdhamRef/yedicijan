@@ -71,9 +71,11 @@ interface CampaignCardProps {
   isFeatured?: boolean;
   compact?: boolean;
   listView?: boolean;
+  /** Taller image area — used on the /campaigns listing, where cards have room to breathe. */
+  tall?: boolean;
 }
 
-export function CampaignCard({ campaign, className, onClick, isFeatured = false, listView = false }: CampaignCardProps) {
+export function CampaignCard({ campaign, className, onClick, isFeatured = false, listView = false, tall = false }: CampaignCardProps) {
   const t = useTranslations("CampaignsPage");
   const locale = useLocale();
   const { convertToCurrency } = useCurrency();
@@ -206,7 +208,7 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
       >
         {/* Image with title + gold-mark overlaid */}
         <Link href={detailHref} prefetch={true} onClick={onClick} className="relative flex-1 block">
-          <div className="relative w-full overflow-hidden h-full min-h-[12rem] sm:min-h-[14rem]">
+          <div className={`relative w-full overflow-hidden h-full ${tall ? "min-h-[16rem] sm:min-h-[19rem]" : "min-h-[12rem] sm:min-h-[14rem]"}`}>
             <Image
               src={isFeatured ? buildImgSrc(rawImgSrc, 960, 720) : imgSrc}
               alt={campaign.title}

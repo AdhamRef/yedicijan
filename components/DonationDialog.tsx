@@ -864,20 +864,32 @@ const DonationDialog = ({
 
   const renderStepIndicator = () => {
     const steps = getSteps();
+    if (!steps.length) return null;
+    const stepIndex = Math.min(currentStep, steps.length - 1);
     return (
-      <div className="flex items-center gap-1.5 mb-3 px-5 pt-4 sm:mb-4 sm:px-6">
-        {steps.map((step, index) => (
-          <div
-            key={index}
-            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-              index < currentStep
-                ? "bg-burgundy"
-                : index === currentStep
-                  ? "bg-gold"
-                  : "bg-gray-200"
-            }`}
-          />
-        ))}
+      <div className="shrink-0 border-b border-gray-100 bg-white px-5 pt-4 pb-3.5 sm:px-7">
+        <div className="mb-2.5 flex items-center justify-between gap-3">
+          <span className="truncate text-xs font-bold text-deep sm:text-[13px]">
+            {steps[stepIndex]?.title}
+          </span>
+          <span dir="ltr" className="shrink-0 text-xs font-semibold tabular-nums text-gray-400">
+            {stepIndex + 1} / {steps.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {steps.map((step, index) => (
+            <div
+              key={index}
+              className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                index < currentStep
+                  ? "bg-burgundy"
+                  : index === currentStep
+                    ? "bg-gold"
+                    : "bg-gray-200"
+              }`}
+            />
+          ))}
+        </div>
       </div>
     );
   };
@@ -2425,15 +2437,18 @@ const DonationDialog = ({
       >
         <DialogContent
           dir={isRTL ? "rtl" : "ltr"}
-          className="w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] max-h-screen overflow-y-auto overflow-x-hidden p-0 rounded-none sm:rounded-[28px_8px_28px_8px] rtl:sm:rounded-[8px_28px_8px_28px] sm:shadow-lift sm:ring-1 sm:ring-deep/5 top-0 sm:top-[50%] translate-y-0 sm:translate-y-[-50%]"
-          closeClassName="text-white hover:text-white/80"
+          // Flex column, not the base grid: as a grid, the full-height phone layout
+          // stretched every row and the base gap-4 left white strips between the
+          // header, the step bar and the form, so the content never started at the top.
+          className="flex flex-col gap-0 border-0 bg-white w-full h-[100dvh] max-h-[100dvh] sm:h-auto sm:max-w-xl sm:max-h-[90vh] overflow-y-auto overflow-x-hidden p-0 rounded-none sm:rounded-[28px_8px_28px_8px] rtl:sm:rounded-[8px_28px_8px_28px] sm:shadow-lift sm:ring-1 sm:ring-deep/5 top-0 sm:top-[50%] translate-y-0 sm:translate-y-[-50%]"
+          closeClassName="z-20 rounded-full bg-black/25 p-1.5 text-white opacity-100 backdrop-blur-sm hover:bg-black/40 hover:text-white rtl:right-auto rtl:left-4"
           aria-describedby={undefined}
         >
           <DialogTitle className="sr-only">{t("donationAmount")}</DialogTitle>
           {mounted && (
             <>
               {/* Branded header */}
-              <div className="relative h-24 sm:h-32 overflow-hidden">
+              <div className="relative h-40 shrink-0 overflow-hidden sm:h-48">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={
@@ -2447,24 +2462,24 @@ const DonationDialog = ({
                   className="w-full h-full object-cover object-center"
                 />
                 {/* Deep brand wash + subtle dotted texture (matches the site hero). */}
-                <div className="absolute inset-0 bg-gradient-to-t from-deep via-deep/85 to-deep/55" />
+                <div className="absolute inset-0 bg-gradient-to-t from-deep via-deep/70 to-deep/25" />
                 <div className="absolute inset-0 opacity-[0.08] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center sm:px-6">
-                  <span className="shape-chip mb-2 inline-flex items-center gap-1.5 bg-burgundy px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-soft">
+                <div className="absolute inset-x-0 bottom-0 flex flex-col items-start gap-2.5 px-5 pb-5 text-start sm:px-7 sm:pb-6">
+                  <span className="shape-chip inline-flex items-center gap-1.5 bg-burgundy px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-soft">
                     <Heart className="h-3 w-3" fill="currentColor" />
                     {donationType === "MONTHLY"
                       ? t("monthlyDonation")
                       : t("oneTimeDonation")}
                   </span>
-                  <h2 className="text-white font-extrabold text-sm sm:text-base line-clamp-2 leading-snug drop-shadow-sm">
+                  <h2 className="line-clamp-2 text-lg font-extrabold leading-snug text-white drop-shadow-sm sm:text-xl">
                     {isCategoryMode ? categoryName : campaignTitle}
                   </h2>
-                  <div className="gold-mark-sm mt-2" />
+                  <div className="gold-mark-sm" />
                 </div>
               </div>
               {/* Step progress bar */}
               {donationType && renderStepIndicator()}
-              <div className="relative z-10 px-4 pb-5 sm:px-6 sm:pb-6 bg-white overflow-visible">
+              <div className="relative z-10 flex-1 bg-white px-5 pt-5 pb-6 overflow-visible sm:px-7 sm:pt-6 sm:pb-7">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={redirecting ? "redirecting" : currentStep}
