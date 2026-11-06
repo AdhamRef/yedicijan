@@ -1,3 +1,4 @@
+import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isValidLocale } from "@/lib/locales";
@@ -407,6 +408,10 @@ export async function POST(request: NextRequest) {
       donationLocale && isValidLocale(String(donationLocale).toLowerCase())
         ? String(donationLocale).toLowerCase()
         : null;
+
+    if (type === "MONTHLY" && !MONTHLY_DONATIONS_ENABLED) {
+      return NextResponse.json({ error: "Monthly donations are not available." }, { status: 403 });
+    }
 
     if (type === "MONTHLY") {
       // Monthly: create Subscription + first Donation (transaction) linked to it.

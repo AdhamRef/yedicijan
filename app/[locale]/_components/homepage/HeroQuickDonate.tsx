@@ -6,6 +6,7 @@ import { Heart, CheckCircle, ChevronDown, Check, CarTaxiFront } from "lucide-rea
 import { getCurrency } from "@/hooks/useCampaignValue";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { useTranslations, useLocale } from "next-intl";
+import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { useSearchParams } from "next/navigation";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
 import { CardStackPlusIcon } from "@radix-ui/react-icons";
@@ -140,7 +141,9 @@ const HeroQuickDonate: React.FC<HeroQuickDonateProps> = ({ initialCategories = [
 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const displayAmount = selectedAmount ?? (customAmount ? parseFloat(customAmount) || 0 : 0);
-  const belowMin = stripeMinAmount > 1 && displayAmount > 0 && displayAmount < stripeMinAmount;
+  // Stripe's minimum charge; it doesn't apply to the bank rails.
+  const belowMin =
+    MONTHLY_DONATIONS_ENABLED && stripeMinAmount > 1 && displayAmount > 0 && displayAmount < stripeMinAmount;
 
   const storeResume = () => {
     if (!selectedCategoryId || !selectedCategory || displayAmount <= 0) return;

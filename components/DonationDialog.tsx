@@ -1,9 +1,5 @@
-import { Elements } from "@stripe/react-stripe-js";
-import { getStripePromise } from "@/lib/stripe-client";
-import {
-  StripePaymentStep,
-  type StripePaymentHandle,
-} from "@/components/StripePaymentStep";
+import dynamic from "next/dynamic";
+import type { StripePaymentHandle } from "@/components/StripePaymentStep";
 import {
   PayForCardForm,
   type PayForCardState,
@@ -71,7 +67,11 @@ import {
 } from "@/lib/currency-link";
 import { getDonationAttributionPayload } from "@/lib/attribution/client-payload";
 import { shouldSkipPopup } from "@/lib/in-app-browser";
-import { gatewayAnalyticsName, resolveGateway } from "@/lib/payment-gateway";
+import {
+  MONTHLY_DONATIONS_ENABLED,
+  gatewayAnalyticsName,
+  resolveGateway,
+} from "@/lib/payment-gateway";
 import { useTranslations, useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
 import { PhoneInput } from "react-international-phone";
@@ -79,6 +79,11 @@ import "react-international-phone/style.css";
 import { useIpCountry } from "@/hooks/useIpCountry";
 
 type DonationType = "ONE_TIME" | "MONTHLY";
+
+// Loaded only when monthly is on, so one-time checkouts never fetch Stripe's script.
+const StripeElementsStep = MONTHLY_DONATIONS_ENABLED
+  ? dynamic(() => import("@/components/StripeElementsStep"), { ssr: false })
+  : null;
 type PaymentMethod = "CARD" | "PAYPAL" | null;
 const DONATION_CHECKOUT_RESUME_KEY = "alafiya:donation-checkout-resume:v1";
 const CHECKOUT_RESUME_TTL_MS = 30 * 60 * 1000;
@@ -473,7 +478,7 @@ const DonationDialog = ({
 
   // When monthlyOnly (e.g. QuickDonate category), pre-select monthly and skip type step
   useEffect(() => {
-    if (isOpen && monthlyOnly && !donationType) {
+    if (isOpen && monthlyOnly && MONTHLY_DONATIONS_ENABLED && !donationType) {
       setDonationType("MONTHLY");
       setCurrentStep(0);
     }
@@ -492,9 +497,10 @@ const DonationDialog = ({
     };
   }, [isOpen]);
 
-  // When oneTimeOnly (e.g. Add to Cart flow), pre-select one-time and skip type step
+  // When oneTimeOnly (e.g. Add to Cart flow), or while monthly donations are switched
+  // off, pre-select one-time and skip type step
   useEffect(() => {
-    if (isOpen && oneTimeOnly && !donationType) {
+    if (isOpen && (oneTimeOnly || !MONTHLY_DONATIONS_ENABLED) && !donationType) {
       setDonationType("ONE_TIME");
       setCurrentStep(0);
     }
@@ -589,8 +595,10 @@ const DonationDialog = ({
       if ((resume.campaignId || "") !== (campaignId || "")) return;
       if ((resume.categoryId || "") !== (categoryId || "")) return;
 
+      // A resume saved before monthly was switched off must not bring it back.
       const restoredType =
-        resume.donationType === "ONE_TIME" || resume.donationType === "MONTHLY"
+        resume.donationType === "ONE_TIME" ||
+        (resume.donationType === "MONTHLY" && MONTHLY_DONATIONS_ENABLED)
           ? resume.donationType
           : donationType;
       if (restoredType) setDonationType(restoredType);
@@ -844,9 +852,12 @@ const DonationDialog = ({
     }
   };
 
+  const showTypeChooser =
+    MONTHLY_DONATIONS_ENABLED && !monthlyOnly && !oneTimeOnly && !shareMode;
+
   /** Donation Value step: return to type choice, previous step, or close dialog. */
   const handleBackFromDonationValueStep = () => {
-    if (!monthlyOnly && !oneTimeOnly && !shareMode && donationType) {
+    if (showTypeChooser && donationType) {
       setDonationType(null);
       setCurrentStep(0);
       return;
@@ -897,7 +908,7 @@ const DonationDialog = ({
   const getStepContent = () => {
     if (!mounted) return null;
 
-    if (!donationType && !monthlyOnly && !oneTimeOnly && !shareMode) {
+    if (!donationType && showTypeChooser) {
       return (
         <div className="space-y-6">
           <div className="text-center mb-8 flex flex-col items-center">
@@ -1725,13 +1736,11 @@ const DonationDialog = ({
             )}
 
             {/* Stripe Elements — only when no saved card + Stripe is charging */}
-            {paymentMethod === "CARD" && useStripeElements && !selectedCardId && (
-              <Elements stripe={getStripePromise()}>
-                <StripePaymentStep
-                  ref={stripeFormRef}
-                  onReadyChange={onStripeReadyChange}
-                />
-              </Elements>
+            {paymentMethod === "CARD" && useStripeElements && !selectedCardId && StripeElementsStep && (
+              <StripeElementsStep
+                handleRef={stripeFormRef}
+                onReadyChange={onStripeReadyChange}
+              />
             )}
 
             {/* Manual card form — shared by the PayFor and Albaraka 3D rails */}

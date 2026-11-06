@@ -3,9 +3,15 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
 import Stripe from "stripe";
+import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 
 export async function POST(req: NextRequest) {
   try {
+    // New subscriptions only. Renewals of existing ones arrive through the webhook.
+    if (!MONTHLY_DONATIONS_ENABLED) {
+      return NextResponse.json({ error: "Monthly donations are not available." }, { status: 403 });
+    }
+
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     if (!stripeKey) {
       console.error("[Stripe Subscribe] STRIPE_SECRET_KEY is not set");

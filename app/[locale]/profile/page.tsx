@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import {
   Dialog,
   DialogContent,
@@ -662,6 +663,8 @@ const ProfilePage = () => {
 
     const monthlyCount =
       u.donations?.filter((d) => d.type === "MONTHLY" && d.status === "ACTIVE").length || 0;
+    // Donors who already subscribed keep these controls so they can still manage or cancel.
+    const showMonthly = MONTHLY_DONATIONS_ENABLED || subscriptionRows.length > 0;
     const campaignCount = new Set(
       (u.donations ?? [])
         .filter(isSuccessfulCharge)
@@ -707,7 +710,7 @@ const ProfilePage = () => {
     return (
       <div className="space-y-6">
         {/* mini stat row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className={`grid grid-cols-1 gap-4 ${showMonthly ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <Card className="p-5 bg-gradient-to-br from-[#A5243D]/8 to-white border-[#A5243D]/20">
             <p className="text-xs font-semibold text-[#A5243D] uppercase tracking-wider">
               {t("donations.totalInPeriodTitle")}
@@ -720,13 +723,15 @@ const ProfilePage = () => {
               {t("donations.successfulPaymentsInPeriod", { count: successfulInPeriod.length })}
             </p>
           </Card>
-          <Card className="p-5 bg-gradient-to-br from-[#A5243D]/8 to-white border-[#D8AA55]/20">
-            <p className="text-xs font-semibold text-[#D8AA55] uppercase tracking-wider">
-              {t("donations.monthlyDonations")}
-            </p>
-            <p className="text-2xl font-bold text-gray-900 mt-2">{monthlyCount}</p>
-            <p className="text-xs text-gray-600 mt-1">{t("donations.activeSubscription")}</p>
-          </Card>
+          {showMonthly && (
+            <Card className="p-5 bg-gradient-to-br from-[#A5243D]/8 to-white border-[#D8AA55]/20">
+              <p className="text-xs font-semibold text-[#D8AA55] uppercase tracking-wider">
+                {t("donations.monthlyDonations")}
+              </p>
+              <p className="text-2xl font-bold text-gray-900 mt-2">{monthlyCount}</p>
+              <p className="text-xs text-gray-600 mt-1">{t("donations.activeSubscription")}</p>
+            </Card>
+          )}
           <Card className="p-5 bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
             <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">
               {t("donations.supportedCampaigns")}
@@ -925,6 +930,7 @@ const ProfilePage = () => {
         </section>
 
         {/* subscriptions */}
+        {showMonthly && (
         <section>
           <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <Repeat className="w-5 h-5 text-[#A5243D]" />
@@ -1018,6 +1024,7 @@ const ProfilePage = () => {
             )}
           </Card>
         </section>
+        )}
       </div>
     );
   };

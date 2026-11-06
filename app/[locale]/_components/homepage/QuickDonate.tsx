@@ -7,6 +7,7 @@ import { Heart, CheckCircle, ChevronDown, Check, ShieldCheck, Utensils, Home, St
 import { getCurrency } from "@/hooks/useCampaignValue";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { useTranslations, useLocale } from "next-intl";
+import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { useSearchParams } from "next/navigation";
 import { Link } from "@/i18n/routing";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
@@ -218,7 +219,9 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const selectedCampaign = campaigns.find((c) => c.id === selectedCampaignId);
   const displayAmount = selectedAmount ?? (customAmount ? parseFloat(customAmount) || 0 : 0);
-  const belowMin = stripeMinAmount > 1 && displayAmount > 0 && displayAmount < stripeMinAmount;
+  // Stripe's minimum charge; it doesn't apply to the bank rails.
+  const belowMin =
+    MONTHLY_DONATIONS_ENABLED && stripeMinAmount > 1 && displayAmount > 0 && displayAmount < stripeMinAmount;
   const canDonate =
     Boolean(selectedCampaignId) && displayAmount > 0 && !belowMin && !campaignsLoading;
 
@@ -308,7 +311,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
               {t("heading")}
             </h2>
             <p className="max-w-md text-sm leading-[1.9] text-ice/90 sm:text-base">
-              {t("description")}
+              {MONTHLY_DONATIONS_ENABLED ? t("description") : t("descriptionOneTime")}
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               {impacts.map(({ icon: Icon, key }) => (
@@ -511,8 +514,8 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         <DonationDialog
           isOpen={donationDialogOpen}
           onClose={() => setDonationDialogOpen(false)}
-          // No monthlyOnly: the dialog opens on its own first step so the visitor
-          // chooses one-time or monthly instead of being committed to a
+          // No monthlyOnly: when monthly is on, the dialog opens on its own first step
+          // so the visitor chooses one-time or monthly instead of being committed to a
           // subscription they never asked for.
           campaignId={selectedCampaign?.id ?? ""}
           campaignTitle={selectedCampaign?.title ?? ""}

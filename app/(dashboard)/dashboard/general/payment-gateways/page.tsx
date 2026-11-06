@@ -1,5 +1,6 @@
 "use client";
 
+import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "react-hot-toast";
@@ -87,7 +88,13 @@ export default function PaymentGatewaysPage() {
         ? "3D Secure — يُحوَّل المبلغ إلى الليرة التركية"
         : "3D Secure — لأن PayFor موقوف",
     },
-    { when: "تبرع شهري (اشتراك)", gateway: "Stripe", note: "التحصيل المتكرر" },
+    MONTHLY_DONATIONS_ENABLED
+      ? { when: "تبرع شهري (اشتراك)", gateway: "Stripe", note: "التحصيل المتكرر" }
+      : {
+          when: "تبرع شهري (اشتراك)",
+          gateway: "موقوف",
+          note: "الاشتراكات الحالية فقط تبقى على Stripe",
+        },
   ];
 
   return (
@@ -199,12 +206,14 @@ export default function PaymentGatewaysPage() {
                 </div>
                 <div>
                   <h3 className="text-base font-semibold text-gray-900">
-                    Stripe — التبرعات الشهرية فقط
+                    {MONTHLY_DONATIONS_ENABLED
+                      ? "Stripe — التبرعات الشهرية فقط"
+                      : "Stripe — الاشتراكات الحالية فقط"}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    لم يعد Stripe يستقبل أي تبرع لمرة واحدة. يبقى مسؤولًا عن
-                    الاشتراكات الشهرية وحدها، لأن بوابتَي 3D Secure لا توفّران
-                    وسيلة للتحصيل المتكرر في الدورة التالية.
+                    {MONTHLY_DONATIONS_ENABLED
+                      ? "لم يعد Stripe يستقبل أي تبرع لمرة واحدة. يبقى مسؤولًا عن الاشتراكات الشهرية وحدها، لأن بوابتَي 3D Secure لا توفّران وسيلة للتحصيل المتكرر في الدورة التالية."
+                      : "التبرع الشهري موقوف ولا تُقبل اشتراكات جديدة. يبقى Stripe لتحصيل الاشتراكات القائمة فقط حتى إلغائها."}
                   </p>
                 </div>
               </div>

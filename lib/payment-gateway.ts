@@ -1,6 +1,8 @@
 /**
  * Which gateway a given donation is charged through.
  *
+ * MONTHLY DONATIONS ARE CURRENTLY SWITCHED OFF — see MONTHLY_DONATIONS_ENABLED below.
+ *
  * Routing is fixed, not configurable — there is no "main gateway" choice any more:
  *
  *   - **ALBARAKA** (Albaraka Türk 3D Secure)  — one-time donations in Turkish lira.
@@ -19,6 +21,21 @@
  * `payforEnabled` is the one remaining switch. Turning PayFor off doesn't fall back
  * to Stripe — every one-time donation moves to Albaraka, which charges in TL anyway.
  */
+
+/**
+ * Master switch for monthly donations, and with them Stripe at checkout. Off unless
+ * NEXT_PUBLIC_MONTHLY_DONATIONS_ENABLED=1.
+ *
+ * To bring monthly back: set the variable to 1 and rebuild (NEXT_PUBLIC_ values are
+ * compiled in). Nothing else needs changing; every surface reads this constant.
+ *
+ * While off, the checkout is one-time only, Stripe's script isn't loaded, and the server
+ * refuses new subscriptions. Subscriptions that already exist keep billing on Stripe, so
+ * /api/stripe/webhook, the STRIPE_* keys and the profile's manage/cancel controls must
+ * stay in place for as long as any subscription is active.
+ */
+export const MONTHLY_DONATIONS_ENABLED =
+  process.env.NEXT_PUBLIC_MONTHLY_DONATIONS_ENABLED === "1";
 
 /** Gateway actually used to charge a specific donation. */
 export type ResolvedGateway = "ALBARAKA" | "PAYFOR" | "STRIPE";
