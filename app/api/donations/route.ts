@@ -20,6 +20,7 @@ import { sanitizeDonationAttribution } from "@/lib/attribution/sanitize";
 import { inferLocaleFromRequest } from "@/lib/preferred-lang";
 import { resolveGuestDonor } from "@/lib/users/resolve-guest-donor";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
+import { reportDonationPeriodWhere, reportDonationStatusWhere } from "@/lib/dashboard/report-donation-filter";
 
 // GET /api/donations - Get all donations (admin) or user's donations
 export async function GET(request: NextRequest) {
@@ -73,8 +74,7 @@ export async function GET(request: NextRequest) {
       ...(subscriptionOnly && { subscriptionId: { not: null } }),
       ...(donationTypeFilter === "MONTHLY" && { subscriptionId: { not: null } }),
       ...(!isAdmin && { donorId: session.user.id }),
-      ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
-      ...(statusFilter && ["PAID", "FAILED"].includes(statusFilter) && { status: statusFilter }),
+
     };
     if (categoryId && isAdmin) {
       baseWhere.OR = [
@@ -121,7 +121,9 @@ export async function GET(request: NextRequest) {
         ? { OR: [{ subscriptionId: null }, { subscriptionId: { isSet: false } }] }
         : null;
 
-    const extraFilters = [searchWhere, localeWhere, countryWhere, donationTypeWhere].filter((w) => w != null);
+    const periodWhere = reportDonationPeriodWhere(dateFilter);
+    const statusWhere = reportDonationStatusWhere(statusFilter);
+    const extraFilters = [searchWhere, localeWhere, countryWhere, donationTypeWhere, periodWhere, statusWhere].filter((w) => w != null);
     const where: Record<string, unknown> =
       extraFilters.length > 0 ? { AND: [baseWhere, ...extraFilters] } : baseWhere;
 
@@ -155,7 +157,7 @@ export async function GET(request: NextRequest) {
     const cycleById = new Map<string, number>();
     if (pageSubscriptionIds.length > 0) {
       const siblings = await prisma.donation.findMany({
-        where: { subscriptionId: { in: pageSubscriptionIds }, status: "PAID" },
+        where: { subscriptionId: { in: pageSubscriptionIds }, status: "PAID", paidAt: { not: null } },
         select: { id: true, subscriptionId: true, paidAt: true, createdAt: true },
       });
       const bySubscription = new Map<string, typeof siblings>();
