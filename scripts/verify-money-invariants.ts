@@ -49,21 +49,11 @@ async function main() {
 
   const byId = new Map(donations.map((d) => [d.id, d]));
 
-  // TWO different definitions of "counts", deliberately — they are not interchangeable and
-  // conflating them is itself a bug (it made the first draft of this script report 8 false
-  // failures):
-  //
-  //   contributesToCampaign — STRICT: PAID *and* paidAt set. This is what
-  //     lib/campaign/current-amount.ts uses for campaign.currentAmount. An unsettled
-  //     subscription row must not move a campaign total until the gateway confirms, or the
-  //     Stripe webhook's own increment double-counts it.
-  //
-  //   isRevenue — LENIENT: PAID and (paidAt set OR it is a subscription row). This is
-  //     PAID_DONATION_FILTER, what the dashboard cards / exports / public donor counts use.
-  //
+  // All financial totals use the same strict settlement rule: PAID plus paidAt.
+  // Subscription membership alone is never evidence of payment.
+
   const contributesToCampaign = (d: (typeof donations)[number]) => d.status === "PAID" && d.paidAt != null;
-  const isRevenue = (d: (typeof donations)[number]) =>
-    d.status === "PAID" && (d.paidAt != null || d.subscriptionId != null);
+  const isRevenue = contributesToCampaign;
 
   const campaignSettledIds = new Set(donations.filter(contributesToCampaign).map((d) => d.id));
   const settledIds = new Set(donations.filter(isRevenue).map((d) => d.id));
