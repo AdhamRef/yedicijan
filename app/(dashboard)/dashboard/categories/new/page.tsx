@@ -78,6 +78,7 @@ export default function NewCategoryPage() {
   });
 
   const onSubmit = async (values: FormValues) => {
+    if (saving) return;
     setSaving(true);
     try {
       await axios.post('/api/categories', {
@@ -95,11 +96,14 @@ export default function NewCategoryPage() {
           de: { name: values.name_de ?? '', description: values.description_de ?? '' },
         },
       });
-      toast.success('تم إنشاء الحملة بنجاح');
+      toast.success('تم إنشاء التصنيف بنجاح');
       router.push('/dashboard/categories');
     } catch (error) {
       console.error('Error creating category:', error);
-      toast.error('فشل في إنشاء الحملة');
+      const message = axios.isAxiosError(error) && typeof error.response?.data?.error === 'string'
+        ? error.response.data.error
+        : 'تعذّر إنشاء التصنيف. تحقق من قائمة التصنيفات قبل إعادة المحاولة.';
+      toast.error(message, { duration: 8000 });
     } finally {
       setSaving(false);
     }
@@ -119,7 +123,10 @@ export default function NewCategoryPage() {
       toast.success('تم رفع الصورة بنجاح');
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast.error('فشل في رفع الصورة');
+      const message = axios.isAxiosError(error) && typeof error.response?.data?.error === 'string'
+        ? error.response.data.error
+        : 'فشل رفع الصورة. تأكد من الصيغة والحجم ثم أعد المحاولة.';
+      toast.error(message, { duration: 8000 });
     } finally {
       setUploadingImage(false);
     }
@@ -129,17 +136,11 @@ export default function NewCategoryPage() {
     const imageUrl = form.getValues('image');
     if (!imageUrl) return;
 
-    try {
-      const publicId = imageUrl.split('/').slice(-1)[0].split('.')[0];
-      if (publicId) {
-        await axios.delete(`/api/upload?publicId=${publicId}`);
-      }
-      form.setValue('image', '');
-      toast.success('تم حذف الصورة بنجاح');
-    } catch (error) {
-      console.error('Error removing image:', error);
-      toast.error('فشل في حذف الصورة');
-    }
+    // The image has not been attached to a saved category yet. Remove only
+    // the form reference; deleting Cloudinary resources by URL can target
+    // a shared asset and the upload route requires a scoped public ID.
+    form.setValue('image', '');
+    toast.success('تمت إزالة الصورة من النموذج');
   };
 
   return (
