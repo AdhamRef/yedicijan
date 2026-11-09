@@ -40,3 +40,10 @@ test("maintenance database uses atomic revision updates and no automatic activat
   assert.match(content, /EMERGENCY_MAINTENANCE_FORCE/);
   assert.match(content, /INFRASTRUCTURE_EMERGENCY_LOCK/);
 });
+
+test("YediCihan emergency security page remains accessible from the permission-gated sidebar", () => {
+  const nav = file("lib/dashboard/nav-config.ts");
+  const icons = file("lib/dashboard/nav-icons.ts");
+  assert.match(nav, /href: "\/dashboard\/security", icon: "shieldAlert"/);
+  assert.match(icons, /shieldAlert: ShieldAlert/);
+});
