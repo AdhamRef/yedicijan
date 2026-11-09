@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isIP } from "node:net";
-function securityClientIp(headers: Pick<Headers,"get">): string | null {
+export function securityClientIp(headers: Pick<Headers,"get">): string | null {
   const raw = headers.get("x-real-ip")?.trim() ||
     (process.env.VERCEL ? headers.get("x-vercel-forwarded-for")?.split(",").at(-1)?.trim() : "");
   if (!raw) return null;
