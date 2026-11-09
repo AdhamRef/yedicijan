@@ -19,13 +19,18 @@ import { Pencil, Globe, Languages } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { Post } from "@prisma/client";
+import type { Post, PostTranslation } from "@prisma/client";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import React from "react";
 
 interface DescriptionFormProps {
-  initialData: Post;
+  initialData: Post & {
+    translations?: Array<Pick<PostTranslation, "locale" | "description">>;
+    descriptionAR?: string | null;
+    descriptionEN?: string | null;
+    descriptionFR?: string | null;
+  };
   postId: string;
 }
 
@@ -51,8 +56,8 @@ const DescriptionForm: React.FC<DescriptionFormProps> = ({
   });
 
   // Map initial data to new structure, prefer translations
-  const trEn = Array.isArray(initialData?.translations) ? initialData.translations.find((t:any) => t.locale === 'en') : null;
-  const trFr = Array.isArray(initialData?.translations) ? initialData.translations.find((t:any) => t.locale === 'fr') : null;
+  const trEn = Array.isArray(initialData?.translations) ? initialData.translations.find((t) => t.locale === 'en') : null;
+  const trFr = Array.isArray(initialData?.translations) ? initialData.translations.find((t) => t.locale === 'fr') : null;
 
   const mappedInitialData = {
     descriptionAR: initialData?.descriptionAR || initialData?.description || "",
@@ -88,8 +93,8 @@ const DescriptionForm: React.FC<DescriptionFormProps> = ({
   }
 
   const displayDescription = (language: string) => {
-    const trEn = Array.isArray(initialData?.translations) ? initialData.translations.find((t:any) => t.locale === 'en') : null;
-    const trFr = Array.isArray(initialData?.translations) ? initialData.translations.find((t:any) => t.locale === 'fr') : null;
+    const trEn = Array.isArray(initialData?.translations) ? initialData.translations.find((t) => t.locale === 'en') : null;
+    const trFr = Array.isArray(initialData?.translations) ? initialData.translations.find((t) => t.locale === 'fr') : null;
     if (language === "ar") {
       return initialData?.descriptionAR || initialData?.description || "لا يوجد وصف بالعربية";
     }

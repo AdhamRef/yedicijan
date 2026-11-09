@@ -39,7 +39,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { category_id: initialData?.category_id || "" },
+    defaultValues: { category_id: initialData?.categoryId || "" },
   });
 
   const { isSubmitting, isValid } = form.formState;
@@ -59,7 +59,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
     }
   }
 
-  const selectedOption = options.find((option) => option.value === initialData.category_id);
+  const selectedOption = options.find((option) => option.value === initialData.categoryId);
 
   return (
     <div className="mt-6 border bg-slate-100 rounded-md p-6">
@@ -77,7 +77,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({
         </Button>
       </div>
       {!isEditing && (
-        <p className={cn("text-sm mt-2", !initialData.category_id && "text-slate-500 italic")}>
+        <p className={cn("text-sm mt-2", !initialData.categoryId && "text-slate-500 italic")}>
           {selectedOption?.label || "لا يوجد تصنيف"}
         </p>
       )}

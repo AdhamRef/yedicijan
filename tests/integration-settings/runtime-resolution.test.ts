@@ -1,4 +1,5 @@
 import test from "node:test";
+import { syntheticProcessEnv } from "./synthetic-process-env";
 import assert from "node:assert/strict";
 import { IntegrationSettingsResolver } from "../../lib/integration-settings/resolver";
 import { encryptIntegrationSecret, integrationSecretContext } from "../../lib/integration-settings/crypto";
@@ -53,8 +54,8 @@ function repository(rows: IntegrationSettingRecord[], unavailable = false): Inte
 
 const audit = { write: async () => {} };
 
-function resolver(rows: IntegrationSettingRecord[], env: NodeJS.ProcessEnv, unavailable = false) {
-  return new IntegrationSettingsResolver(repository(rows, unavailable), audit, { env, encryptionKey: () => KEY, cacheTtlMs: 1 });
+function resolver(rows: IntegrationSettingRecord[], env: Record<string, string | undefined>, unavailable = false) {
+  return new IntegrationSettingsResolver(repository(rows, unavailable), audit, { env: syntheticProcessEnv(env), encryptionKey: () => KEY, cacheTtlMs: 1 });
 }
 
 test("active database values override environment fallback", async () => {

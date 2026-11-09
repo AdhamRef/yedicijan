@@ -238,7 +238,7 @@ test("localization audit and preview authorize by requested section", () => {
     assert.ok(parseIndex >= 0, `${path} must parse a known section`);
     assert.ok(authIndex > parseIndex, `${path} must authorize the parsed section`);
     assert.ok(loadIndex > authIndex, `${path} must authorize before loading section data`);
-    assert.doesNotMatch(source, /requireAdminOrDashboardPermission\([^)]*["']content["']/s);
+    assert.doesNotMatch(source, /requireAdminOrDashboardPermission\([^)]*["']content["']/);
     assert.match(source, /contentLocalizationPermissionForSection\(section\)/);
   }
 });
