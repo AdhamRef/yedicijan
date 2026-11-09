@@ -8,7 +8,7 @@ function securityClientIp(headers: Pick<Headers,"get">): string | null {
   const raw = headers.get("x-real-ip")?.trim() ||
     (process.env.VERCEL ? headers.get("x-vercel-forwarded-for")?.split(",").at(-1)?.trim() : "");
   if (!raw) return null;
-  const address = raw.replace(/^::ffff:(?=\\d+\\.)/i, "");
+  const address = raw.replace(/^::ffff:(?=\d+\.)/i, "");
   return isIP(address) ? address : null;
 }
 
