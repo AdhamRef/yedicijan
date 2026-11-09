@@ -1,10 +1,10 @@
 import { AboutPageType } from "@/types";
 import {
-  ComputerDesktopIcon,
-  LockClosedIcon,
-  SparklesIcon,
-  UsersIcon,
-} from "@heroicons/react/20/solid";
+  Monitor as ComputerDesktopIcon,
+  Lock as LockClosedIcon,
+  Sparkles as SparklesIcon,
+  Users as UsersIcon,
+} from "lucide-react";
 
 const mainPageAboutConfig: AboutPageType = {
   general: {
