@@ -268,6 +268,12 @@ export type ResolvedListMember = { userId: string | null; name: string | null; e
 /** Resolve a list's ACTIVE members into send-ready contacts (donor data read live). */
 export async function loadListMembers(listId: string): Promise<ResolvedListMember[]> {
   if (!process.env.DATABASE_URL) return [];
+  // Archived lists must never be used by the campaign executor. This matters
+  // when a CRM import fails after its list is created and is archived.
+  const list = await prisma.communicationAudienceList.findUnique({
+    where: { id: listId }, select: { status: true },
+  }).catch(() => null);
+  if (!list || list.status !== "ACTIVE") return [];
   const rows = await prisma.communicationAudienceMember.findMany({ where: { listId, status: "ACTIVE" }, take: 2000 }).catch(() => []);
   const donorIds = rows.filter((m) => m.contactType === "DONOR" && m.userId).map((m) => m.userId!) as string[];
   const donors = donorIds.length
