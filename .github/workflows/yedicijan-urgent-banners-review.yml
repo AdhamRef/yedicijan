@@ -13,6 +13,7 @@ on:
       - "lib/dashboard/permissions.ts"
       - "prisma/schema.prisma"
       - "tests/finance/yedicihan-urgent-banners.test.ts"
+      - "tests/finance/urgent-banner-permissions.test.ts"
       - ".github/workflows/yedicijan-urgent-banners-review.yml"
   workflow_dispatch:
 permissions:
@@ -51,7 +52,7 @@ jobs:
           npx prisma generate --schema prisma/schema.prisma
       - name: Synthetic banner and active-locale contracts
         run: |
-          node --import tsx --test tests/finance/yedicihan-urgent-banners.test.ts
+          node --import tsx --test tests/finance/yedicihan-urgent-banners.test.ts tests/finance/urgent-banner-permissions.test.ts
           npm run locale:audit:strict
       - name: Scoped TypeScript validation
         run: |
