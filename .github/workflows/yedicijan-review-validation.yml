@@ -93,6 +93,10 @@ jobs:
       # Never pass production credentials or connected providers into preview compilation.
       STRIPE_SECRET_KEY: ""
       STRIPE_WEBHOOK_SECRET: ""
+      GOOGLE_CLIENT_ID: "ci-build-disabled-google-client"
+      GOOGLE_CLIENT_SECRET: "ci-build-disabled-google-secret"
+      NEXTAUTH_SECRET: "ci-only-synthetic-secret-never-used-for-auth"
+      NEXTAUTH_URL: "http://127.0.0.1:3000"
     steps:
       - name: Fetch exact review SHA without submodule initialization
         env:
