@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { verifyPayForResponseHash } from "../../lib/payfor";
+import { verifyPayForResponseHash, redactPayForResponse } from "../../lib/payfor";
 
 test("PayFor callback signature authenticates linked reply and rejects tampering", () => {
   const password = "synthetic-fixture-not-a-real-secret";
@@ -46,4 +46,20 @@ test("PayFor approval callback cannot mark a donation paid without signed order"
   const writeAt = code.indexOf('status: "PAID"');
   assert.ok(signedAt >= 0 && isSuccessAt > signedAt && writeAt > signedAt);
   assert.match(code, /reason: "unverified"/);
+});
+
+test("PayFor diagnostics redact sensitive fields before logging", () => {
+  const redacted = redactPayForResponse({
+    OrderId: "test-order", ResponseHash: "secret-hash",
+    CardNumber: "4111111111111111", CVV: "123",
+  });
+  assert.equal(redacted.OrderId, "test-order");
+  assert.equal(redacted.ResponseHash, "[REDACTED]");
+  assert.equal(redacted.CardNumber, "[REDACTED]");
+  assert.equal(redacted.CVV, "[REDACTED]");
+  for (const flow of ["ok", "fail"]) {
+    const route = readFileSync("app/api/payfor/3dpay/" + flow + "/route.ts", "utf8");
+    assert.match(route, /redactPayForResponse\(raw\)/);
+    assert.doesNotMatch(route, /JSON\.stringify\(raw, null, 2\)/);
+  }
 });
