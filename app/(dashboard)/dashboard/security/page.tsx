@@ -1,3 +1,4 @@
+import DonationFraudReview from "./DonationFraudReview";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -14,6 +15,7 @@ export default async function SiteSecurityPage() {
     <main dir="rtl" className="space-y-5 p-4 sm:p-6">
       <h1 className="text-2xl font-bold">الأمان والحماية</h1>
       <EmergencyMaintenanceControl />
+      <DonationFraudReview />
       <p className="text-sm text-slate-600">الحظر الآلي لمحاولات الدفع يخضع لاختبارات إضافية قبل تفعيله. وضع الصيانة منفصل عنه.</p>
     </main>
   );
