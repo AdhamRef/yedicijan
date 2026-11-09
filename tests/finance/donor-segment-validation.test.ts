@@ -31,3 +31,8 @@ test("enforces display-name and description limits", () => {
   assert.equal(validateDonorSelection({ ...base, description: "X".repeat(501) }).ok, false);
   assert.equal(validateDonorSelection({ ...base, channel: "WHATSAPP" }).ok, true);
 });
+
+test("rejects unexpected donor selection metadata", () => {
+  assert.equal(validateDonorSelection({ ...base, sendNow: true }).ok, false);
+  assert.equal(validateDonorSelection({ ...base, donorIds: [id1], channel: "EMAIL", provider: "stripe" }).ok, false);
+});
