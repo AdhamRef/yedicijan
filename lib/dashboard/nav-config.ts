@@ -50,7 +50,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
     group: "الحملات والمحتوى",
     items: [
       { key: "campaigns", title: "المشاريع", href: "/dashboard/campaigns", icon: "heart", keywords: ["projects", "campaigns", "مشاريع"] },
-      { key: "campaigns", title: "البنرات العاجلة", href: "/dashboard/urgent-banners", icon: "alertTriangle", keywords: ["urgent banners", "emergency", "بانر"] },
+      { key: "campaigns", title: "البنرات العاجلة", href: "/dashboard/urgent-banners", icon: "images", keywords: ["urgent banners", "emergency", "بانر"] },
       { key: "categories", title: "الحملات والدول", href: "/dashboard/categories", icon: "globe", keywords: ["categories", "countries", "تصنيفات"] },
       { key: "blog", title: "المدونة", href: "/dashboard/blog", icon: "penLine", keywords: ["blog", "posts", "مقالات"] },
       // Built, API-backed, and previously unreachable. Slides and ticker both control what the
