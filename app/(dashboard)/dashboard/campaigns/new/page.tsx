@@ -926,8 +926,8 @@ const getTranslationStatus = () => {
                 </FormItem>
 
                 {/* Helper for partial translations */}
-                {Boolean(form.watch('title_fr') || form.watch('description_fr')) &&
-                 Boolean(!form.watch('title_fr') || !form.watch('description_fr')) && (
+                {Boolean(form.watch('title_fr') || !isDescEmpty(descriptionFr)) &&
+                 Boolean(!form.watch('title_fr') || isDescEmpty(descriptionFr)) && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription className='mt-[5px]'>
