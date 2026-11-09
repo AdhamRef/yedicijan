@@ -101,7 +101,6 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     const body = await request.json();
-    if (body.paymentMethod === "CARD") { const limited = await enforceDonationIntakeBudget(request); if (limited) return limited; }
     const {
       items,
       currency,
@@ -122,6 +121,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    if (body.paymentMethod === "CARD") { const limited = await enforceDonationIntakeBudget(request); if (limited) return limited; }
 
     // Resolve donor
     let donorId: string;
