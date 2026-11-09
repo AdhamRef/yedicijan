@@ -13,6 +13,16 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 30
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,6 +44,11 @@ jobs:
         run: npm run typecheck:integration-release
       - name: Run isolated security guard tests
         run: node --import tsx --test tests/integration-settings/donation-abuse-policy.test.ts tests/integration-settings/payment-initiation-budget.test.ts tests/integration-settings/emergency-maintenance-contract.test.ts tests/integration-settings/donation-fraud-persistence-contract.test.ts tests/integration-settings/verified-gateway-decline-wiring.test.ts tests/integration-settings/payfor-authentication.test.ts tests/integration-settings/trusted-donor-exemption.test.ts
+      - name: Verify real Mongo findAndModify, contention, and TTL in isolated QA database
+        env:
+          DATABASE_URL: mongodb://127.0.0.1:27017/security_qa_ci
+          DONATION_SECURITY_QA_ALLOW_WRITE: "YES"
+        run: node --import tsx scripts/security/verify-mongo-fraud-atomicity.ts
       - name: Verify production Next.js build with guard disabled
         env:
           DATABASE_URL: mongodb://127.0.0.1:27017/yedicihan_ci_build
