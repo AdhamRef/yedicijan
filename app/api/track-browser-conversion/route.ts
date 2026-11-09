@@ -38,7 +38,6 @@ export async function POST(request: NextRequest) {
     status: statusFrom(body?.status),
     value: typeof body?.value === "number" ? body.value : undefined,
     currency: body?.currency,
-    attempts: 1,
     error: body?.error || null,
     request: { source: "browser", userAgent: request.headers.get("user-agent") },
     response: body?.response ?? null,

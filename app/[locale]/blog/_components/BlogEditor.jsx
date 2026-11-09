@@ -103,7 +103,7 @@ const protectedPostConfig = {
   pleaseWait: "برجاء الانتظار ...",
 };
 
-const BlogEditor = ({ post, categories, campaignOptions = [], redirectAfterCreate, isCreate: isCreateProp }) => {
+const BlogEditor = ({ post, categories, campaignOptions = /** @type {{label: string, value: string}[]} */ ([]), redirectAfterCreate, isCreate: isCreateProp }) => {
   const router = useRouter();
   const isCreate = isCreateProp || !post?.id || post.id === "new";
   const createTranslationsCtx = useCreateTranslations();
