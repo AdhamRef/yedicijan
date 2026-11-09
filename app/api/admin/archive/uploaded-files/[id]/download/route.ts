@@ -1,3 +1,4 @@
+import { get as getPrivateBlob } from "@vercel/blob";
 import { metadataObject, numberField, stringField } from "@/lib/archive/uploaded-files";
 import { prisma } from "@/lib/prisma";
 import { requireArchiveApiAccess, requireArchiveUploadedFileListAccess } from "../../../_auth";
@@ -38,10 +39,36 @@ export async function GET(_request: Request, context: Params) {
 }
 
 async function streamBlobFile(url: string, fileName: string, fallbackMimeType: string) {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok || !response.body) return new Response("Not found", { status: 404 });
+  // Archive metadata must never become an arbitrary server-side fetch target.
+  // Private Blob requires an authenticated SDK request; the bare URL is not public.
+  let target: URL;
+  try { target = new URL(url); }
+  catch { return new Response("Not found", { status: 404 }); }
+  if (target.protocol !== "https:" || target.username || target.password) {
+    return new Response("Not found", { status: 404 });
+  }
+  if (target.hostname.endsWith(".private.blob.vercel-storage.com")) {
+    try {
+      const result = await getPrivateBlob(url, { access: "private" });
+      if (result?.statusCode !== 200 || !result.stream)
+        return new Response("Not found", { status: 404 });
+      return new Response(result.stream, {
+        headers: { ...downloadHeaders(fileName, result.blob.contentType || fallbackMimeType), "X-Content-Type-Options": "nosniff" },
+      });
+    } catch (error) {
+      console.error("Private archive download failed", error instanceof Error ? error.name : "unknown");
+      return new Response("Not found", { status: 404 });
+    }
+  }
+  // Backward compatibility for previously stored *public* Vercel Blob files
+  // only; do not expose or redirect to arbitrary hosts.
+  if (!target.hostname.endsWith(".public.blob.vercel-storage.com")) {
+    return new Response("Not found", { status: 404 });
+  }
+  const response = await fetch(url, { cache: "no-store", redirect: "error" }).catch(() => null);
+  if (!response?.ok || !response.body) return new Response("Not found", { status: 404 });
   return new Response(response.body, {
-    headers: downloadHeaders(fileName, response.headers.get("Content-Type") || fallbackMimeType),
+    headers: { ...downloadHeaders(fileName, response.headers.get("Content-Type") || fallbackMimeType), "X-Content-Type-Options": "nosniff" },
   });
 }
 
