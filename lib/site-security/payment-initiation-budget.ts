@@ -1,3 +1,4 @@
+import { inspectDonationAbuseRestriction } from "@/lib/site-security/donation-abuse-store";
 import "server-only";
 import { createHash } from "node:crypto";
 import type { NextRequest } from "next/server";
@@ -66,6 +67,8 @@ export async function enforcePaymentInitiationBudget(
     // Limit the request's donation identity even when no trustworthy IP is available.
     // The IP limit applies site-wide across all guarded Stripe initiation routes.
     if (ip) {
+      const fraud = await inspectDonationAbuseRestriction(ip, now);
+      if (fraud.blocked) return fraudReply(fraud.reason, fraud.retryAt, now);
       const decision = await count("ip", ip, ipLimit, now);
       if (!decision.accepted) return rateLimit(decision.retryAfterSeconds);
     }
@@ -98,7 +101,10 @@ export async function enforceDonationIntakeBudget(request: NextRequest): Promise
   const ip = securityClientIp(request.headers);
   if (!ip) return null; // Never infer identity from a spoofable request header.
   try {
-    const decision = await count("intake", ip, 12, Date.now());
+    const now = Date.now();
+    const fraud = await inspectDonationAbuseRestriction(ip, now);
+    if (fraud.blocked) return fraudReply(fraud.reason, fraud.retryAt, now);
+    const decision = await count("intake", ip, 12, now);
     return decision.accepted ? null : rateLimit(decision.retryAfterSeconds);
   } catch {
     return NextResponse.json(
@@ -106,4 +112,13 @@ export async function enforceDonationIntakeBudget(request: NextRequest): Promise
       { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "30" } },
     );
   }
+}
+
+function fraudReply(reason: "COOLDOWN" | "MANUAL_REVIEW" | null, retryAt: number | null, now: number) {
+  const seconds = retryAt === null ? null : Math.max(1, Math.ceil((retryAt - now) / 1000));
+  return NextResponse.json(
+    { error: reason === "MANUAL_REVIEW" ? "PAYMENT_REVIEW_BLOCKED" : "PAYMENT_COOLDOWN", retryAfterSeconds: seconds },
+    { status: reason === "MANUAL_REVIEW" ? 423 : 429,
+      headers: { "Cache-Control": "no-store", ...(seconds ? { "Retry-After": String(seconds) } : {}) } },
+  );
 }
