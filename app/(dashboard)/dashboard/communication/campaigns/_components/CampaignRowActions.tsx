@@ -165,7 +165,7 @@ export function CampaignRowActions({
       </DropdownMenu>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir="rtl" onClick={event => event.stopPropagation()}>
           <AlertDialogHeader>
             <AlertDialogTitle>إرسال «{campaign.name}»؟</AlertDialogTitle>
             <AlertDialogDescription>
