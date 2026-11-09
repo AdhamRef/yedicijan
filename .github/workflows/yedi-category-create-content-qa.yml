@@ -15,9 +15,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+      # The historical repo has a gitlink named gozbebekleri without a
+      # matching .gitmodules entry. actions/checkout invokes submodule
+      # cleanup even with submodules disabled, so fetch the exact event SHA
+      # as an archive instead; no submodule commands or branch mutation.
+      - name: Retrieve exact reviewed source without broken gitlink checkout
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output /tmp/yedi-source.tar.gz
+          tar -xzf /tmp/yedi-source.tar.gz --strip-components=1
+          test -f package-lock.json
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
