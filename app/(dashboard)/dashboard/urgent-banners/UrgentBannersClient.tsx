@@ -145,7 +145,7 @@ export function UrgentBannersClient() {
           <h3 className="font-semibold text-sm">ترجمات اللغات المفعّلة فقط</h3>
           <p className="text-xs text-muted-foreground">لا يظهر البانر في لغة أخرى ما لم يُكتب عنوانها. لا تُضاف أي لغات جديدة.</p>
           {SUPPORTED_LOCALES.filter((l) => l !== "ar").map((locale) => {
-            const t = form.translations[locale] || { title: "", description: "", ctaLabel: "ساهم الآن" };
+            const t = form.translations[locale] || { title: "", description: "", ctaLabel: "" };
             return <div key={locale} className="space-y-2 rounded-lg border p-3">
               <h4 className="text-sm font-medium">{LOCALE_LABELS[locale]}</h4>
               {(["title", "description", "ctaLabel"] as const).map((k) =>
