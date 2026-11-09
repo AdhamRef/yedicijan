@@ -266,7 +266,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({ editor }) => {
       <ToolButton
         title="Underline"
         active={editor.isActive("underline")}
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        onClick={() => editor.chain().focus().toggleMark("underline").run()}
       >
         <UnderlineIcon className="h-4 w-4" />
       </ToolButton>

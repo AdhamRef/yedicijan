@@ -59,7 +59,7 @@ const UrgencyBadge = () => (
 );
 
 // Enhanced Progress Bar with animation
-const AnimatedProgressBar = ({ percentage }) => {
+const AnimatedProgressBar = ({ percentage }: { percentage: number }) => {
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
@@ -94,7 +94,19 @@ const AnimatedProgressBar = ({ percentage }) => {
 };
 
 // Card with hover and animation effects
-const CampaignCard = ({ campaign, isMain = false, index = 0 }) => {
+type FeaturedCampaign = {
+  id: string;
+  slug?: string | null;
+  title: string;
+  description?: string | null;
+  images: string[];
+  currentAmount: number;
+  targetAmount: number;
+  donationCount: number;
+  daysLeft: number;
+};
+
+const CampaignCard = ({ campaign, isMain = false, index = 0 }: { campaign: FeaturedCampaign; isMain?: boolean; index?: number }) => {
   const { convertToCurrency } = useCurrency();
   const progressPercentage = Math.min(
     (campaign.currentAmount / campaign.targetAmount) * 100,
@@ -106,7 +118,7 @@ const CampaignCard = ({ campaign, isMain = false, index = 0 }) => {
       opacity: 0, 
       y: 20,
     },
-    visible: (i) => ({ 
+    visible: (i: number) => ({ 
       opacity: 1, 
       y: 0,
       transition: {
@@ -315,7 +327,7 @@ const CampaignCard = ({ campaign, isMain = false, index = 0 }) => {
 };
 
 // Main Component with enhanced styling
-const CampaignsDisplay = ({ campaigns }) => {
+const CampaignsDisplay = ({ campaigns }: { campaigns: FeaturedCampaign[] }) => {
   const mainCampaign = campaigns[0];
   const otherCampaigns = campaigns.slice(1, 5);
 

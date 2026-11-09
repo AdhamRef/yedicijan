@@ -39,7 +39,7 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
     {
       name: "underline",
       isActive: () => props.editor!.isActive("underline"),
-      command: () => props.editor!.chain().focus().toggleUnderline().run(),
+      command: () => props.editor!.chain().focus().toggleMark("underline").run(),
       icon: UnderlineIcon,
     },
     {

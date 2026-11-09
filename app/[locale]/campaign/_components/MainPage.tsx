@@ -52,6 +52,7 @@ interface Campaign {
     title: string;
     description: string;
     image: string | null;
+    videoUrl?: string | null;
     createdAt: string;
   }>;
 }
@@ -68,6 +69,7 @@ interface Comment {
   user: {
     name: string;
     image: string;
+    email?: string | null;
   };
 }
 
@@ -533,7 +535,7 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
                           )}
                         </p>
                         <div
-                          ref={(el) => (updateRefs.current[update.id] = el)}
+                          ref={(el) => { updateRefs.current[update.id] = el; }}
                           className={`relative ${
                             !isUpdateExpanded[update.id]
                               ? "max-h-[150px] overflow-hidden"

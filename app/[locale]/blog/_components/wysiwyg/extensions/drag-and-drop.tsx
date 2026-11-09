@@ -1,4 +1,5 @@
 import { Extension } from "@tiptap/core";
+import { DOMSerializer } from "@tiptap/pm/model";
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { EditorView } from "@tiptap/pm/view";
 
@@ -70,7 +71,7 @@ function DragHandle(options: DragHandleOptions) {
     
     // Replace the __serializeForClipboard usage with direct DOM manipulation
     const tempDiv = document.createElement('div');
-    const fragment = slice.content.toDOM();
+    const fragment = DOMSerializer.fromSchema(view.state.schema).serializeFragment(slice.content);
     tempDiv.appendChild(fragment);
     
     const text = slice.content.textBetween(0, slice.content.size, '\n');
