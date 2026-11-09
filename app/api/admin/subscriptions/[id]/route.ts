@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SubscriptionStatus } from "@prisma/client";
+import Stripe from "stripe";
+import { verifiedStripeSubscriptionState } from "@/lib/finance/stripe-subscription-authority";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -8,16 +10,6 @@ import {
   writeAuditLog,
   auditActorFromDashboardSession,
 } from "@/lib/audit-log";
-
-/** Returns the next billing date: one month from today, clamped to the target month's last day. */
-function nextBillingInOneMonth(): Date {
-  const d = new Date();
-  const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
-  const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
-  next.setUTCDate(Math.min(d.getUTCDate(), lastDay));
-  next.setUTCHours(0, 0, 0, 0);
-  return next;
-}
 
 /** PATCH /api/admin/subscriptions/[id] — set status (ACTIVE | PAUSED | CANCELLED); dashboard monthly permission */
 export async function PATCH(
@@ -46,28 +38,49 @@ export async function PATCH(
 
     const sub = await prisma.subscription.findUnique({
       where: { id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, payforToken: true },
     });
 
     if (!sub) {
       return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
     }
 
-    const nextStatus = status as SubscriptionStatus;
-    const data: {
-      status: SubscriptionStatus;
-      nextBillingDate?: Date;
-    } = { status: nextStatus };
-
-    if (nextStatus === "ACTIVE" && sub.status !== "ACTIVE") {
-      // Stripe owns the real cadence; seed nextBillingDate so list filters work.
-      data.nextBillingDate = nextBillingInOneMonth();
+    // The admin endpoint is a provider state reconciliation, NOT a Stripe
+    // cancellation/resumption operation. Reject unconfirmed local transitions.
+    const requestedStatus = status as SubscriptionStatus;
+    if (!sub.payforToken || !/^sub_[A-Za-z0-9]+$/.test(sub.payforToken)) {
+      return NextResponse.json({ error: "لا يمكن تحديث اشتراك دون معرّف Stripe مؤكد" }, { status: 409 });
     }
-
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) return NextResponse.json({ error: "Stripe غير مهيأ" }, { status: 503 });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2026-03-25.dahlia" });
+    const provider = await stripe.subscriptions.retrieve(sub.payforToken);
+    const paidFirst = await prisma.donation.findFirst({
+      where: { subscriptionId: sub.id, status: "PAID", paidAt: { not: null } },
+      select: { id: true },
+    });
+    let verified;
+    try {
+      verified = verifiedStripeSubscriptionState(provider, Boolean(paidFirst));
+    } catch (e) {
+      return NextResponse.json({
+        error: "الحالة لدى Stripe غير مؤهلة للتفعيل أو موعد التجديد غير مؤكد",
+        reason: e instanceof Error ? e.message : "UNKNOWN_PROVIDER_STATE",
+      }, { status: 409 });
+    }
+    if (verified.status !== requestedStatus) {
+      return NextResponse.json({
+        error: "يجب تنفيذ الإلغاء أو الإيقاف أو إعادة التفعيل لدى Stripe أولًا",
+        providerStatus: verified.status,
+      }, { status: 409 });
+    }
+    // Only mirror an already verified provider state; never create a local
+    // activation or fabricate its billing date.
     await prisma.subscription.update({
       where: { id },
-      data,
+      data: { status: verified.status, nextBillingDate: verified.nextBillingDate },
     });
+    const nextStatus = verified.status;
 
     const actor = auditActorFromDashboardSession(session!);
     await writeAuditLog({
@@ -125,7 +138,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: "Failed to update subscription",
-        details: error instanceof Error ? error.message : String(error),
+        details: "تعذر مزامنة الحالة من مزود الدفع",
       },
       { status: 500 }
     );
