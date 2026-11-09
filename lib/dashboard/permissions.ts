@@ -76,6 +76,7 @@ export function userCanExportReports(user: UserLike | undefined): boolean { retu
 
 const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
   { prefix: "/dashboard/platform-connections", key: "platformConnections" },
+  { prefix: "/dashboard/marketing/settled-attribution", key: "referrals" },
   { prefix: "/dashboard/marketing/attribution", key: "referrals" },
   { prefix: "/dashboard/marketing/tracking", key: "pixels" },
   { prefix: "/dashboard/marketing/connections", key: "platformConnections" },
