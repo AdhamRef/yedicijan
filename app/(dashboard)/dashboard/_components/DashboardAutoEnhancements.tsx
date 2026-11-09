@@ -75,7 +75,8 @@ function patchNetworkSaveEvents() {
     password?: string | null,
   ) {
     requestMetadata.set(this, { method, url: String(url) });
-    return originalOpen.call(this, method, url, async, username, password);
+    // XMLHttpRequest.open has overloaded call signatures; preserve the exact native arguments.
+    return Reflect.apply(originalOpen, this, [method, url, async, username, password]);
   } as typeof window.XMLHttpRequest.prototype.open;
 
   window.XMLHttpRequest.prototype.send = function patchedSend(
