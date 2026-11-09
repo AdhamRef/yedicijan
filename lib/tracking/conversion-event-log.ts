@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { prisma } from "@/lib/prisma";
 import { ensureConversionEventIndexes } from "@/lib/tracking/conversion-event-indexes";
 
@@ -51,7 +52,7 @@ export async function recordConversionEvent(input: RecordConversionEventInput): 
     addDefined(setDoc, "response", input.response);
     addDefined(setDoc, "sentAt", sentAt ?? undefined);
 
-    await prisma.$runCommandRaw({
+    await prisma.$runCommandRaw(mongoRawObject({
       update: "ConversionEvent",
       updates: [{
         q: { platform: input.platform, eventId: input.eventId, channel: input.channel },
@@ -62,7 +63,7 @@ export async function recordConversionEvent(input: RecordConversionEventInput): 
         },
         upsert: true,
       }],
-    });
+    }));
   } catch (error) {
     console.error("[conversion-event-log] failed", error);
   }

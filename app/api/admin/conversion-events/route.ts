@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -201,7 +202,7 @@ export async function GET(request: NextRequest) {
   }
   const filter: Query = clauses.length === 1 ? clauses[0] : { $and: clauses };
 
-  const result = await prisma.$runCommandRaw({
+  const result = await prisma.$runCommandRaw(mongoRawObject({
     find: "ConversionEvent",
     filter,
     sort: { updatedAt: -1, createdAt: -1 },
@@ -223,7 +224,7 @@ export async function GET(request: NextRequest) {
       updatedAt: 1,
       response: 1,
     },
-  });
+  }));
 
   let batch: ConversionEventLike[] = isRecord(result) && isRecord(result.cursor) && Array.isArray(result.cursor.firstBatch)
     ? result.cursor.firstBatch as ConversionEventLike[]

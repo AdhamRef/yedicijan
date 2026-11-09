@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -122,8 +123,8 @@ export async function GET(request: NextRequest) {
     const filter = buildFilter(url);
 
     const [result, countResult] = await Promise.all([
-      prisma.$runCommandRaw({ find: COLLECTION, filter, sort: { [sortBy]: sortDir, createdAt: -1 }, skip, limit }),
-      prisma.$runCommandRaw({ count: COLLECTION, query: filter }),
+      prisma.$runCommandRaw(mongoRawObject({ find: COLLECTION, filter, sort: { [sortBy]: sortDir, createdAt: -1 }, skip, limit })),
+      prisma.$runCommandRaw(mongoRawObject({ count: COLLECTION, query: filter })),
     ]);
 
     const rows = isRecord(result) && isRecord(result.cursor) && Array.isArray(result.cursor.firstBatch)

@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -65,7 +66,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // a "تحويل بنكي" hint. Deduped by donorName; idempotent per transaction hash; no messages sent.
     let donationId: string | null = null;
     if (status === "APPROVED") {
-      const found = await prisma.$runCommandRaw({ find: COLLECTION, filter: { _id: { $oid: id } }, limit: 1 }).catch(() => null);
+      const found = await prisma.$runCommandRaw(mongoRawObject({ find: COLLECTION, filter: { _id: { $oid: id } }, limit: 1 })).catch(() => null);
       const doc = isRecord(found) && isRecord(found.cursor) && Array.isArray(found.cursor.firstBatch)
         ? (found.cursor.firstBatch[0] as Record<string, unknown> | undefined) ?? null
         : null;
@@ -97,10 +98,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
     }
 
-    await prisma.$runCommandRaw({
+    await prisma.$runCommandRaw(mongoRawObject({
       update: COLLECTION,
       updates: [{ q: { _id: { $oid: id } }, u: { $set }, upsert: false }],
-    });
+    }));
 
     await writeAuditLog({
       ...actor,
@@ -131,14 +132,14 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const now = new Date();
     const actor = auditActorFromDashboardSession(session!);
 
-    await prisma.$runCommandRaw({
+    await prisma.$runCommandRaw(mongoRawObject({
       update: COLLECTION,
       updates: [{
         q: { _id: { $oid: id } },
         u: { $set: { status: "DELETED", deletedAt: now, deletedBy: actor.actorId, deletedByName: actor.actorName, updatedAt: now } },
         upsert: false,
       }],
-    });
+    }));
 
     await writeAuditLog({
       ...actor,
