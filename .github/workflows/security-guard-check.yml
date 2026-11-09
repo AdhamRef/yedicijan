@@ -40,4 +40,9 @@ jobs:
           DONATION_ABUSE_GUARD_ENABLED: "false"
           EMERGENCY_MAINTENANCE_FORCE: "false"
           NODE_ENV: production
+          # Synthetic build-only values; do not contact Google or authenticate.
+          GOOGLE_CLIENT_ID: ci-only-placeholder.apps.googleusercontent.com
+          GOOGLE_CLIENT_SECRET: ci-only-placeholder-not-a-credential
+          NEXTAUTH_SECRET: ci-only-placeholder-long-and-not-for-production-0000
+          NEXTAUTH_URL: http://localhost:3000
         run: npm run build
