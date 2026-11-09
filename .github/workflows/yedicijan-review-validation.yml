@@ -1,0 +1,84 @@
+name: YediCihan review checks (isolated, no production)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/audit-system-parity.mjs"
+      - "tests/finance/**"
+      - ".github/workflows/yedicijan-review-validation.yml"
+      - "prisma/**"
+      - "lib/locales.ts"
+      - "i18n/**"
+      - "middleware.ts"
+      - "app/**"
+      - "lib/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit-and-locale:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Fetch exact review SHA without legacy submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+      - name: Run standalone audit and locale guards
+        run: |
+          node --check scripts/audit-system-parity.mjs
+          node --test tests/finance/repository-surface-audit.test.mjs tests/finance/locale-independence.test.mjs
+  types-and-prisma:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedicijan_ci_never_connected?replicaSet=rs0
+      NEXT_TELEMETRY_DISABLED: "1"
+      CI: "1"
+    steps:
+      - name: Fetch exact review SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Validate Prisma schemas (offline)
+        run: |
+          npx prisma validate --schema prisma/schema.prisma
+          npx prisma validate --schema prisma/integration-settings.schema.prisma
+          npx prisma validate --schema prisma/dashboard-foundation.schema.prisma
+      - name: Generate Prisma clients without migration or DB access
+        run: |
+          npx prisma generate --schema prisma/schema.prisma
+          npx prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Scoped TypeScript checks
+        run: |
+          npm run typecheck:communication-runtime
+          npm run typecheck:integration-release
+      - name: Full project TypeScript check
+        run: npx tsc --noEmit --incremental false
