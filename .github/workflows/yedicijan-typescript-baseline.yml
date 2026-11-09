@@ -1,0 +1,70 @@
+name: YediCihan TypeScript baseline comparison (read only)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/yedicijan-typescript-baseline.yml"
+      - "app/sitemap.ts"
+      - "tsconfig.json"
+      - "app/**"
+      - "lib/**"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  typecheck:
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: ["db56006eb7d19b59c792dd8809b4c17df1bf18b6", "head"]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedicijan_ci_no_connection?replicaSet=rs0
+      CI: "1"
+    steps:
+      - name: Checkout pinned reference or exact PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REVISION: ${{ matrix.revision }}
+        run: |
+          set -euo pipefail
+          if [ "$REVISION" = "head" ]; then REVISION="$PR_SHA"; fi
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$REVISION"
+          git checkout --force --detach FETCH_HEAD
+          printf 'PINNED_REV=%s\n' "$(git rev-parse HEAD)"
+      - name: Node 24 and identical lockfile
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install locked dependencies, generate clients
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx prisma generate --schema prisma/schema.prisma
+          npx prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Capture full TypeScript diagnostics without suppressing errors
+        run: |
+          set +e
+          npx tsc --noEmit --incremental false --pretty false > /tmp/ts-errors.txt 2>&1
+          result=$?
+          set -e
+          echo "TSC_EXIT=$result"
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const input=fs.readFileSync("/tmp/ts-errors.txt","utf8");
+            const diagnostics=input.split("\n").map(s=>s.match(/^(.+?)\((\d+),(\d+)\): error (TS\d+): (.+)$/)).filter(Boolean);
+            const files=[...new Set(diagnostics.map(m=>m[1]))].sort();
+            const counts={};
+            for(const m of diagnostics) counts[m[4]]=(counts[m[4]]||0)+1;
+            console.log("DIAGNOSTIC_TOTAL="+diagnostics.length);
+            console.log("FILES_WITH_ERRORS="+files.length);
+            console.log("TYPES="+JSON.stringify(counts));
+            for(const m of diagnostics) console.log("DIAG "+JSON.stringify([m[1],m[2],m[3],m[4],m[5]]));
+          '
+          # Explicitly mark the job failed if any errors remain.
+          exit "$result"
