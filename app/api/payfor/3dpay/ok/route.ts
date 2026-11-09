@@ -1,3 +1,4 @@
+import { verifyPayForResponseHash } from "@/lib/payfor";
 import { NextRequest, NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/public-origin";
 import { prisma } from "@/lib/prisma";
@@ -50,6 +51,14 @@ export async function POST(req: NextRequest) {
 
       // Idempotency: if already confirmed by a prior callback, just redirect to success
       if (donation.paidAt !== null) return { ok: true as const };
+
+      // Bank-signed callback must match the server-generated order exactly.
+      // An unsigned or mismatched result is not proof of paid OR declined.
+      if (!donation.providerOrderId || !orderId ||
+          donation.providerOrderId !== orderId ||
+          !verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS)) {
+        return { ok: false as const, reason: "unverified" as const };
+      }
 
       // Basic linkage check
       if (donation.providerOrderId && orderId && donation.providerOrderId !== orderId) {
