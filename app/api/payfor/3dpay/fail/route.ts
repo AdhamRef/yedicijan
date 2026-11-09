@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData();
   const raw = Object.fromEntries(form.entries());
+  const safeRaw = redactPayForResponse(raw);
 
   console.error("[PayFor FAIL] Bank response:", JSON.stringify(redactPayForResponse(raw), null, 2));
 
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
           providerProcReturnCode: procReturnCode || null,
           providerTxnResult: txnResult || null,
           providerErrorMessage: errorMessage || null,
-          providerRaw: raw as Record<string, unknown>,
+          providerRaw: safeRaw,
         },
       });
       await recordSignedPayForDecline(raw, donation);
