@@ -71,3 +71,13 @@ export function verifyPayForResponseHash(response: Record<string, unknown>, merc
   const signed = Buffer.from(expected, "utf8");
   return actual.length === signed.length && crypto.timingSafeEqual(actual, signed);
 }
+
+/** Prevent PCI and authentication secrets entering centralized application logs. */
+const PAYFOR_SECRET_KEY = /pan|card *(no|number)|cvv|cvc|expiry|expdate|password|pass|secret|hash|mac/i;
+export function redactPayForResponse(raw: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    result[key] = PAYFOR_SECRET_KEY.test(key) ? "[REDACTED]" : value;
+  }
+  return result;
+}
