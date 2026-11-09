@@ -6,20 +6,19 @@ import { SITE_URL } from "@/lib/seo";
 
 
 interface CategoryProps {
-  params: {
-    locale: string;
-    categoryId: string;
-  };
+  params: Promise<{ locale: string; categoryId: string }>;
 }
+type CategoryMetadata = { title: string; description: string; image?: string | null; slug?: string | null };
 
 // Generate metadata for the category page
 export async function generateMetadata({ params }: CategoryProps): Promise<Metadata> {
-  const fetchCategoryData = async (): Promise<Category> => {
+  const { locale, categoryId } = await params;
+  const fetchCategoryData = async (): Promise<CategoryMetadata> => {
     try {
       const baseUrl = await getServerBaseUrl();
-      const locale = params.locale || 'ar';
+
       const response = await axios.get(
-        `${baseUrl}/api/post-categories/${params.categoryId}`,
+        `${baseUrl}/api/post-categories/${categoryId}`,
         { params: { locale } }
       );
       return response.data;
@@ -45,7 +44,7 @@ export async function generateMetadata({ params }: CategoryProps): Promise<Metad
           alt: category.title,
         },
       ],
-      url: `${SITE_URL}/${params.locale || "ar"}/blog/category/${(category as any)?.slug || params.categoryId}`,
+      url: `${SITE_URL}/${locale || "ar"}/blog/category/${category.slug || categoryId}`,
       type: "website",
     },
     twitter: {
@@ -60,6 +59,7 @@ export async function generateMetadata({ params }: CategoryProps): Promise<Metad
   };
 }
 
-export default function PostCategoryPage({ params }: CategoryProps) {
-  return <MainPage id={params.categoryId} />;
+export default async function PostCategoryPage({ params }: CategoryProps) {
+  const { categoryId } = await params;
+  return <MainPage id={categoryId} />;
 }

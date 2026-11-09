@@ -3,7 +3,7 @@ import Image from 'next/image';
 // Imported rather than referenced as "/WEBSITE.png" so Next reads the file's real
 // dimensions at build time, fingerprints the URL for immutable caching, and can
 // generate the blur placeholder used below.
-import websiteImage from '@/public/WEBSITE.png';
+const websiteImage = "/WEBSITE.png";
 import { Target, Users, Heart, MessageSquare, CheckCircle, Eye } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/routing';
@@ -66,7 +66,6 @@ const AboutUs = () => {
                   alt="متطوعو الجمعية يجهزون طرود المساعدات"
                   fill
                   sizes="(max-width: 1024px) 100vw, 50vw"
-                  placeholder="blur"
                   className="object-cover"
                 />
                 <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm px-3 py-2 rounded-lg shadow-md">

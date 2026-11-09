@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { PostCard } from "../../../_components/MainPostCard";
+import type { Post } from "@prisma/client";
 import { useLocale } from "next-intl"; // or use your i18n library
 
 // Improved type definitions
@@ -11,10 +12,10 @@ interface Category {
   title: string;
   description: string;
   image?: string;
-  posts: any[];
+  posts: Post[];
 }
 
-const MainPage: React.FC<CategoryProps> = ({ id }:{id:string}) => {
+const MainPage: React.FC<{ id: string }> = ({ id }) => {
   const locale = useLocale(); // Get the current locale (ar or en)
   const [category, setCategory] = useState<Category | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
