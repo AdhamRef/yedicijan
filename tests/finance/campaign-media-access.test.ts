@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canDeleteCampaignMedia, normalizeCampaignAssetId } from "../../lib/uploads/campaign-media-access";
+import { canDeleteCampaignMedia, normalizeCampaignAssetId, uploadFolderForSession } from "../../lib/uploads/campaign-media-access";
 
 function session(role: string, permissions: string[] = []) {
   return { user: { role, dashboardPermissions: permissions } } as Parameters<typeof canDeleteCampaignMedia>[0];
@@ -26,4 +26,13 @@ test("delete is scoped to a campaign image, never an arbitrary cloud folder", ()
   assert.equal(normalizeCampaignAssetId("../secrets"), null);
   assert.equal(normalizeCampaignAssetId("campaigns/../../user"), null);
   assert.equal(normalizeCampaignAssetId(""), null);
+});
+
+
+test("donor profile uploads remain allowed but isolated from campaign folder", () => {
+  assert.equal(uploadFolderForSession(null), null);
+  assert.equal(uploadFolderForSession(session("DONOR")), "avatars");
+  assert.equal(uploadFolderForSession(session("STAFF", ["donors"])), "avatars");
+  assert.equal(uploadFolderForSession(session("STAFF", ["campaigns"])), "campaigns");
+  assert.equal(uploadFolderForSession(session("ADMIN")), "campaigns");
 });
