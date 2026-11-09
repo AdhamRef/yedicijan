@@ -1,3 +1,4 @@
+import { redactPayForResponse } from "@/lib/payfor";
 import { verifyPayForResponseHash } from "@/lib/payfor";
 import { NextRequest, NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/public-origin";
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const raw = Object.fromEntries(form.entries());
 
   // Log full bank response for debugging
-  console.log("[PayFor OK] Bank response:", JSON.stringify(raw, null, 2));
+  console.log("[PayFor OK] Bank response:", JSON.stringify(redactPayForResponse(raw), null, 2));
 
   const orderId = String(raw.OrderId || raw.orderId || "");
   const procReturnCode = String(raw.ProcReturnCode || raw.ProcReturnCode?.toString?.() || raw.procReturnCode || "");
