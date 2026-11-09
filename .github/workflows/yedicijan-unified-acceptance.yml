@@ -54,7 +54,7 @@ jobs:
       - name: Locale invariants and source audit
         run: |
           npm run locale:audit:strict
-          node --test tests/finance/repository-surface-audit.test.mjs tests/finance/locale-independence.test.mjs
+          node --test tests/finance/repository-surface-audit.test.mjs tests/finance/locale-independence.test.mjs tests/finance/sitemap-runtime.test.mjs
       - name: Synthetic acceptance contracts for packages A–E
         run: |
           node --import tsx --test \
