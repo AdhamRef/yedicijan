@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from 'next-auth';
 import { authOptions } from "../auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
-import { writeAuditLog } from "@/lib/audit-log";
+import { queueAuditLog } from "@/lib/audit-log";
+import { writeErrorMessage } from "@/lib/dashboard/write-error-message";
+import { CategoryCreateInputError, parseCategoryCreatePayload } from "@/lib/campaign/category-create-payload";
 import { pickTranslation, translationLocaleWhere } from "@/lib/i18n/translation-fallback";
 import {
   generateUniqueSlug,
   generateUniqueLocaleSlug,
-  normalizeUserSlug,
 } from "@/lib/slug";
 import { CATEGORY_ACTIVE_OR_UNSET } from "@/lib/campaign/soft-delete-filter";
 
@@ -114,96 +115,66 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: admin-only; supports creating translations in a transaction
+// Category creation: prepare locale-specific URL slugs BEFORE the transaction.
+// Previously seven sequential findFirst + create calls inside Prisma's default
+// 5s interactive transaction could expire on a remote Atlas cluster (P2028).
+// One category write + one createMany still roll back together on any failure.
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  const denied = requireAdminOrDashboardPermission(session, "categories");
+  if (denied) return denied;
+
   try {
-    // Auth check: only admins can create categories
-    const session = await getServerSession(authOptions);
-    const denied = requireAdminOrDashboardPermission(session, 'categories');
-    if (denied) return denied;
+    const payload = parseCategoryCreatePayload(await request.json());
+    const english = payload.translations.find((row) => row.locale === "en");
+    if (!english) throw new CategoryCreateInputError("اسم التصنيف بالإنجليزية مطلوب.");
 
-    const data = await request.json();
-    const { name, description, image, icon, order, translations } = data;
-
-    if (!name) {
-      return NextResponse.json({ error: 'Category name is required' }, { status: 400 });
-    }
-
-    // English is required.
-    const enTrans = translations?.en;
-    const enName: string | undefined =
-      typeof enTrans?.name === "string" ? enTrans.name.trim() : undefined;
-    if (!enName) {
-      return NextResponse.json(
-        { error: "English category name is required" },
-        { status: 400 }
-      );
-    }
-
-    // Prepare translations payload (exclude default locale 'ar'). The actual slug per
-    // locale is computed inside the transaction for uniqueness.
-    const translationData: {
-      locale: string;
-      name: string;
-      description?: string;
-      requestedSlug: string | null;
-    }[] = [];
-    if (translations && typeof translations === 'object') {
-      for (const [locale, t] of Object.entries(translations)) {
-        if (locale !== 'ar' && t && typeof t === 'object') {
-          const tt: any = t;
-          if (tt.name) {
-            translationData.push({
-              locale,
-              name: tt.name,
-              description: tt.description || '',
-              requestedSlug: normalizeUserSlug(tt.slug),
-            });
-          }
-        }
-      }
-    }
-
-    // Auto-generate slug from English name (always); admin can override.
-    const requestedSlug = normalizeUserSlug(data.slug);
     const slug = await generateUniqueSlug(
       prisma.category as any,
-      requestedSlug ?? enName,
+      payload.requestedSlug ?? english.name,
       { fallbackPrefix: "category" }
+    );
+
+    // Parallel read-only uniqueness checks are intentionally outside the short
+    // transaction. Database-enforced unique keys remain authoritative.
+    const preparedTranslations = await Promise.all(
+      payload.translations.map(async (t) => ({
+        locale: t.locale,
+        name: t.name,
+        description: t.description,
+        slug: await generateUniqueLocaleSlug(
+          prisma.categoryTranslation as any,
+          t.requestedSlug ?? t.name,
+          { locale: t.locale, fallbackPrefix: "category" }
+        ),
+      }))
     );
 
     const category = await prisma.$transaction(async (tx) => {
       const created = await tx.category.create({
         data: {
-          name,
+          name: payload.name,
           slug,
-          description: description || '',
-          image: image || '',
-          icon: icon || '',
-          order: order ?? 0,
-        }
+          description: payload.description,
+          image: payload.image,
+          icon: payload.icon,
+          order: payload.order,
+        },
       });
 
-      // Sequential creates so the per-locale slug uniqueness check observes prior writes.
-      for (const t of translationData) {
-        const localeSlug = await generateUniqueLocaleSlug(
-          tx.categoryTranslation as any,
-          t.requestedSlug ?? t.name,
-          { locale: t.locale, fallbackPrefix: "category" }
-        );
-        await tx.categoryTranslation.create({
-          data: {
+      if (preparedTranslations.length > 0) {
+        await tx.categoryTranslation.createMany({
+          data: preparedTranslations.map(({ locale, name, description, slug }) => ({
             categoryId: created.id,
-            locale: t.locale,
-            name: t.name,
-            description: t.description || '',
-            slug: localeSlug,
-          },
+            locale,
+            name,
+            description,
+            slug,
+          })),
         });
       }
-
       return created;
-    });
+    }, { maxWait: 10_000, timeout: 20_000 });
 
     const full = await prisma.category.findUnique({
       where: { id: category.id },
@@ -215,32 +186,36 @@ export async function POST(request: NextRequest) {
         image: true,
         icon: true,
         order: true,
-        translations: { select: { locale: true, name: true, description: true, slug: true } }
-      }
+        translations: { select: { locale: true, name: true, description: true, slug: true } },
+      },
     });
 
-    const actor = session!.user;
-    await writeAuditLog({
-      actorId: actor.id,
-      actorName: actor.name,
-      actorRole: actor.role ?? "ADMIN",
+    queueAuditLog({
+      actorId: session!.user.id,
+      actorName: session!.user.name,
+      actorRole: session!.user.role ?? "ADMIN",
       action: "CATEGORY_CREATE",
-      messageAr: `${actor.name ?? "مسؤول"} أنشأ حملةًا جديدًا: ${full?.name ?? name}`,
+      messageAr: `${session!.user.name ?? "مسؤول"} أنشأ تصنيفاً جديداً: ${payload.name}`,
       entityType: "Category",
       entityId: category.id,
     });
 
     return NextResponse.json(full, { status: 201 });
-
   } catch (error) {
-    console.error('Error creating category:', error);
-
-    if (error instanceof Error) {
-      if (error.message.includes('Unique') || error.message.includes('unique')) {
-        return NextResponse.json({ error: 'Category with this name already exists' }, { status: 400 });
-      }
+    if (error instanceof CategoryCreateInputError) {
+      return NextResponse.json({ error: error.message, code: "INVALID_CATEGORY" }, { status: 400 });
     }
 
-    return NextResponse.json({ error: 'Failed to create category' }, { status: 500 });
+    // Do not expose raw MongoDB / Prisma exception details to the browser.
+    console.error("Error creating category:", error);
+    const code = error && typeof error === "object" && "code" in error
+      ? String((error as { code: unknown }).code) : "";
+    const status = code === "P2002" ? 409
+      : ["P2028", "P2034", "P1001", "P1002", "P1017"].includes(code) ? 503
+      : 500;
+    return NextResponse.json(
+      { error: writeErrorMessage(error, "تعذّر إنشاء التصنيف. تحقق من القائمة قبل إعادة المحاولة."), code: code || "CATEGORY_SAVE_FAILED" },
+      { status }
+    );
   }
 }
