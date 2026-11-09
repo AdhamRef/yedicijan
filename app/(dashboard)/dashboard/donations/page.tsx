@@ -163,10 +163,12 @@ export default function DonationsPage() {
       return matchesSearch;
     })
     .sort((a, b) => {
-      if (sortDirection === 'asc') {
-        return a[sortField] > b[sortField] ? 1 : -1;
-      }
-      return a[sortField] < b[sortField] ? 1 : -1;
+      const left = a[sortField];
+      const right = b[sortField];
+      const comparison = typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left ?? "").localeCompare(String(right ?? ""));
+      return sortDirection === "asc" ? comparison : -comparison;
     });
 
   const paginatedDonations = filteredDonations.slice(

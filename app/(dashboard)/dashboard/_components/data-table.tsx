@@ -53,7 +53,7 @@ const dateRangeFilter: FilterFn<any> = (row, columnId, filterValue: DateRange) =
   const cellValue = row.getValue(columnId);
   if (!cellValue) return false; // If the cell value is empty, exclude it
 
-  const cellDate = new Date(cellValue);
+  const cellDate = new Date(cellValue instanceof Date ? cellValue : String(cellValue));
   const fromDate = from ? new Date(from) : null;
   const toDate = to ? new Date(to) : null;
 
@@ -176,7 +176,8 @@ export function DataTable<TData, TValue>({
       headers.join(","),
       ...filteredData.map(row =>
         columns.map(column => {
-          const value = row[column.accessorKey as keyof typeof row];
+          const key = 'accessorKey' in column ? String(column.accessorKey) : 'id' in column ? String(column.id) : '';
+          const value = key ? table.getRowModel().rows.find((r) => r.id === row.id)?.getValue(key) : undefined;
           return typeof value === "string" || typeof value === "number" ? value : "";
         }).join(",")
       ),
