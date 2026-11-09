@@ -1,0 +1,33 @@
+name: YediCihan category-create isolated QA
+on:
+  push:
+    branches:
+      - fix/yedi-category-create-content-20261109
+  pull_request:
+    branches:
+      - main
+      - integration/yedicijan-unified-safe-20261109
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  category-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install repository dependencies
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Validate Prisma schema and generate clients
+        run: |
+          npx --no-install prisma validate --schema prisma/schema.prisma
+          npx --no-install prisma generate --schema prisma/schema.prisma
+          npx --no-install prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Run category creation input contracts (no DB, no production)
+        run: node --import tsx --test tests/finance/category-create-payload.test.ts
