@@ -1,3 +1,5 @@
+import { redactPayForResponse } from "@/lib/payfor";
+import { verifyPayForResponseHash } from "@/lib/payfor";
 import { NextRequest, NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/public-origin";
 import { prisma } from "@/lib/prisma";
@@ -25,9 +27,10 @@ export async function POST(req: NextRequest) {
 
   const form = await req.formData();
   const raw = Object.fromEntries(form.entries());
+  const safeRaw = redactPayForResponse(raw);
 
   // Log full bank response for debugging
-  console.log("[PayFor OK] Bank response:", JSON.stringify(raw, null, 2));
+  console.log("[PayFor OK] Bank response:", JSON.stringify(redactPayForResponse(raw), null, 2));
 
   const orderId = String(raw.OrderId || raw.orderId || "");
   const procReturnCode = String(raw.ProcReturnCode || raw.ProcReturnCode?.toString?.() || raw.procReturnCode || "");
@@ -51,22 +54,12 @@ export async function POST(req: NextRequest) {
       // Idempotency: if already confirmed by a prior callback, just redirect to success
       if (donation.paidAt !== null) return { ok: true as const };
 
-      // Basic linkage check
-      if (donation.providerOrderId && orderId && donation.providerOrderId !== orderId) {
-        await tx.donation.update({
-          where: { id: donation.id },
-          data: {
-            status: "FAILED",
-            provider: "PAYFOR",
-            providerProcReturnCode: procReturnCode || null,
-            providerTxnResult: txnResult || null,
-            providerAuthCode: authCode || null,
-            providerHostRefNum: hostRefNum || null,
-            providerErrorMessage: `OrderId mismatch`,
-            providerRaw: raw as any,
-          },
-        });
-        return { ok: false as const, reason: "order_mismatch" as const };
+      // Bank-signed callback must match the server-generated order exactly.
+      // An unsigned or mismatched result is not proof of paid OR declined.
+      if (!donation.providerOrderId || !orderId ||
+          donation.providerOrderId !== orderId ||
+          !verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS)) {
+        return { ok: false as const, reason: "unverified" as const };
       }
 
       // 3D Secure is the only mode this merchant runs. A payment settles only when
@@ -75,9 +68,17 @@ export async function POST(req: NextRequest) {
       // TxnResult "Success" is no longer enough on its own.
       const snapshot = (donation.providerRaw as { payforRequest?: { purchAmount?: string } } | null)
         ?.payforRequest;
+      // Require a stored initiation amount. An absent/invalid snapshot or
+      // missing amount is an unknown result, never proof of paid or declined.
       const amountMatches =
-        !snapshot?.purchAmount ||
+        typeof snapshot?.purchAmount === "string" &&
+        snapshot.purchAmount.length > 0 &&
+        String(raw.PurchAmount ?? "").length > 0 &&
+        Number.isFinite(Number(raw.PurchAmount)) &&
         Number(raw.PurchAmount) === Number(snapshot.purchAmount);
+      if (!amountMatches) {
+        return { ok: false as const, reason: "unverified" as const };
+      }
       const isSuccess =
         procReturnCode === "00" &&
         threeDStatus === "1" &&
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
                 : threeDStatus !== "1"
                   ? `3D Secure not completed (3DStatus ${threeDStatus || "empty"})`
                   : "Payment failed"),
-            providerRaw: raw as any,
+            providerRaw: safeRaw,
           },
         });
         return { ok: false as const, reason: "failed" as const };
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
           providerAuthCode: authCode || null,
           providerHostRefNum: hostRefNum || null,
           providerErrorMessage: null,
-          providerRaw: raw as any,
+          providerRaw: safeRaw,
         },
       });
 

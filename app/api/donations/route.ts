@@ -1,3 +1,5 @@
+import { securityClientIp } from "@/lib/site-security/payment-initiation-budget";
+import { enforceDonationIntakeBudget } from "@/lib/site-security/payment-initiation-budget";
 import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -214,11 +216,7 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     const body = await request.json();
-    const forwardedFor = request.headers.get("x-forwarded-for");
-    const clientIp =
-      forwardedFor?.split(",")[0]?.trim() ||
-      request.headers.get("x-real-ip") ||
-      undefined;
+    const clientIp = securityClientIp(request.headers) ?? undefined;
     const userAgent = request.headers.get("user-agent")?.slice(0, 500) || undefined;
     const attribution = sanitizeDonationAttribution({
       ...((body.attribution && typeof body.attribution === "object" && !Array.isArray(body.attribution)
@@ -253,6 +251,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    if (body.paymentMethod === "CARD") { const limited = await enforceDonationIntakeBudget(request); if (limited) return limited; }
 
     // Resolve donorId — authenticated user or guest upsert
     let donorId: string;

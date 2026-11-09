@@ -1,0 +1,65 @@
+name: Security guard verification
+on:
+  push:
+    branches:
+      - feature/donation-abuse-guard-20261109
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+jobs:
+  guard-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+      - name: Run full integration suite
+        env:
+          DATABASE_URL: mongodb://127.0.0.1:27017/yedicihan_ci_readonly
+        run: |
+          npx prisma generate
+          npx prisma generate --schema prisma/integration-settings.schema.prisma
+          npm run test:integration-settings
+      - name: Validate integration release TypeScript
+        run: npm run typecheck:integration-release
+      - name: Run isolated security guard tests
+        run: node --import tsx --test tests/integration-settings/donation-abuse-policy.test.ts tests/integration-settings/payment-initiation-budget.test.ts tests/integration-settings/emergency-maintenance-contract.test.ts tests/integration-settings/donation-fraud-persistence-contract.test.ts tests/integration-settings/verified-gateway-decline-wiring.test.ts tests/integration-settings/payfor-authentication.test.ts tests/integration-settings/trusted-donor-exemption.test.ts
+      - name: Verify real Mongo findAndModify, contention, and TTL in isolated QA database
+        env:
+          DATABASE_URL: mongodb://127.0.0.1:27017/security_qa_ci
+          DONATION_SECURITY_QA_ALLOW_WRITE: "YES"
+        run: node --import tsx scripts/security/verify-mongo-fraud-atomicity.ts
+      - name: Verify production Next.js build with guard disabled
+        env:
+          DATABASE_URL: mongodb://127.0.0.1:27017/yedicihan_ci_build
+          DONATION_ABUSE_GUARD_ENABLED: "false"
+          EMERGENCY_MAINTENANCE_FORCE: "false"
+          NODE_ENV: production
+          # Synthetic build-only values; do not contact Google or authenticate.
+          GOOGLE_CLIENT_ID: ci-only-placeholder.apps.googleusercontent.com
+          GOOGLE_CLIENT_SECRET: ci-only-placeholder-not-a-credential
+          NEXTAUTH_SECRET: ci-only-placeholder-long-and-not-for-production-0000
+          NEXTAUTH_URL: http://localhost:3000
+          STRIPE_SECRET_KEY: sk_test_ci_fixture_never_use_for_network
+          STRIPE_WEBHOOK_SECRET: whsec_ci_fixture_not_real
+        run: npm run build

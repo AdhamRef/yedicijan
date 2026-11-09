@@ -1,3 +1,6 @@
+import { securityClientIp } from "@/lib/site-security/payment-initiation-budget";
+import { sanitizeDonationAttribution } from "@/lib/attribution/sanitize";
+import { enforceDonationIntakeBudget } from "@/lib/site-security/payment-initiation-budget";
 import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -22,6 +25,7 @@ import { resolveGuestDonor } from "@/lib/users/resolve-guest-donor";
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const trustedClientIp = securityClientIp(request.headers);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -120,6 +124,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    if (body.paymentMethod === "CARD") { const limited = await enforceDonationIntakeBudget(request); if (limited) return limited; }
 
     // Resolve donor
     let donorId: string;
@@ -293,6 +299,7 @@ export async function POST(request: NextRequest) {
             referralId: referralId ?? undefined,
             subscriptionId: sub.id,
             paymentMethod,
+            attribution: trustedClientIp ? sanitizeDonationAttribution({ client_ip: trustedClientIp }) : undefined,
             cardDetails: null,
             items: {
               create: itemsResolved.map((item) => ({
@@ -364,6 +371,7 @@ export async function POST(request: NextRequest) {
           donorId: donorId,
           referralId: referralId ?? undefined,
           paymentMethod,
+          attribution: trustedClientIp ? sanitizeDonationAttribution({ client_ip: trustedClientIp }) : undefined,
           cardDetails: null,
           items: {
             create: itemsResolved.map((item) => ({

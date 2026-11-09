@@ -3,7 +3,7 @@ import {
   FileStack, Globe, Heart, HeartHandshake, HeartPulse, History, Images, Inbox,
   Landmark, LayoutDashboard, LayoutTemplate, Lightbulb, Link2, ListChecks, Mail,
   Megaphone, MessageCircle, MessageSquare, PenLine, Plug, Radar, Repeat, ScrollText, Send,
-  Server, Settings, Target, Ticket, TrendingUp, UserCog, Users, Webhook,
+  Server, Settings, ShieldAlert, Target, Ticket, TrendingUp, UserCog, Users, Webhook,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +45,7 @@ export const NAV_ICONS = {
   send: Send,
   server: Server,
   settings: Settings,
+  shieldAlert: ShieldAlert,
   target: Target,
   ticket: Ticket,
   trendingUp: TrendingUp,

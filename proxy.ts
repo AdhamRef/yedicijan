@@ -1,3 +1,4 @@
+import { readEmergencyMaintenance } from "@/lib/site-security/emergency-maintenance";
 import createIntlMiddleware from 'next-intl/middleware';
 import { NextResponse, type NextRequest } from 'next/server';
 import {
@@ -40,7 +41,26 @@ function safeDecode(pathname: string): string {
 // Runs before SSR so the page renders with `currency` already in cookies —
 // otherwise scripts/pixels would fire with the default (USD) before the
 // client-side `?currency=` sync catches up.
-export default function middleware(req: NextRequest) {
+export default async function proxy(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  const recoverable = /^\/(?:dashboard|auth)(?:\/|$)/.test(path)
+    || /^\/api\/(?:admin|auth|cron|webhooks)(?:\/|$)/.test(path)
+    || /^\/api\/(?:stripe\/webhook|paypal\/return|payfor\/3dpay\/(?:ok|fail)|albaraka\/3d\/callback|telegram\/webhook)(?:\/|$)/.test(path);
+  if (!recoverable) {
+    try {
+      if ((await readEmergencyMaintenance()).enabled) {
+        if (path.startsWith("/api/")) return NextResponse.json(
+          { error: "SITE_UNDER_MAINTENANCE" },
+          { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "300" } },
+        );
+        return new NextResponse(
+          '<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>صيانة أمنية</title><body style="font-family:system-ui;max-width:42rem;margin:16vh auto;padding:2rem;text-align:center"><h1>الموقع يخضع لصيانة أمنية مؤقتة</h1><p>نعتذر عن توقف خدمة التبرع مؤقتًا لحماية المعاملات.</p><p lang="en" dir="ltr">Temporary security maintenance. Please return later.</p></body></html>',
+          { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Retry-After": "300" } },
+        );
+      }
+    } catch { /* Readers fail open to preserve callback and administrative recovery. */ }
+  }
+  if (path.startsWith("/api/") || /^\/(?:dashboard|auth)(?:\/|$)/.test(path)) return NextResponse.next();
   const pathname = req.nextUrl.pathname;
 
   // Locale-less URL (e.g. a share link generated with auto-locale): pick a
@@ -120,5 +140,5 @@ export const config = {
   // and can be redirected. Excludes: API/Next internals/Vercel internals,
   // the standalone dashboard + auth routes (not localized), and any file with
   // an extension (favicon, images, sitemap.xml, etc.).
-  matcher: ['/((?!api|_next|_vercel|dashboard|auth|.*\\..*).*)'],
+  matcher: ['/((?!_next|_vercel|.*\\..*).*)'],
 };
