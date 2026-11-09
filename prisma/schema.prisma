@@ -1694,3 +1694,40 @@ model CommunicationCampaignTrackingLink {
 
   @@index([campaignId, status])
 }
+
+
+/// YediCihan-only homepage emergency banners. New records start disabled.
+/// No donor or payment data is stored here. No locale is added to lib/locales.ts.
+model UrgentBanner {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String
+  description String?
+  imageUrl    String?
+  ctaLabel    String   @default("ساهم الآن")
+  campaignId  String   @db.ObjectId
+  priority    Int      @default(0)
+  isActive    Boolean  @default(false)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  locales     String[] @default(["ar"])
+  translations UrgentBannerTranslation[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive, priority])
+  @@index([startsAt, endsAt])
+}
+
+/// Each translation is explicitly tied to an enabled YediCihan locale.
+/// Disabled registered languages never receive a row or a public banner.
+model UrgentBannerTranslation {
+  id          String       @id @default(auto()) @map("_id") @db.ObjectId
+  bannerId    String       @db.ObjectId
+  locale      String
+  title       String
+  description String?
+  ctaLabel    String?
+  banner      UrgentBanner @relation(fields: [bannerId], references: [id], onDelete: Cascade)
+
+  @@unique([bannerId, locale])
+}
