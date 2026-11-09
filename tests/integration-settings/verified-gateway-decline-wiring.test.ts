@@ -29,3 +29,10 @@ test("Albaraka adapter counts only explicit issuer card declines after verified 
   assert.match(adapter, /recordVerifiedDonationFailure\(/);
   assert.doesNotMatch(adapter, /"00"|"96"|"91"/);
 });
+
+test("Albaraka 3D callback logs only whitelisted diagnostics, not authentication secrets", () => {
+  const route = src("app/api/albaraka/3d/callback/route.ts");
+  assert.match(route, /safeBankFields/);
+  assert.doesNotMatch(route, /JSON\.stringify\(raw, null, 2\)/);
+  assert.doesNotMatch(route, /JSON\.stringify\(sale, null, 2\)/);
+});
