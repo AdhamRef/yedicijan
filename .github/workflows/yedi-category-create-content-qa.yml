@@ -3,8 +3,10 @@ on:
   push:
     branches:
       - fix/yedi-category-create-content-20261109
+      - fix/yedi-category-prisma-ci-env-20261109
   pull_request:
     branches:
+      - fix/yedi-category-create-content-20261109
       - main
       - integration/yedicijan-unified-safe-20261109
   workflow_dispatch:
@@ -38,6 +40,10 @@ jobs:
       - name: Install repository dependencies
         run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
       - name: Validate Prisma schema and generate clients
+        # Synthetic URI satisfies Prisma's schema-only env interpolation.
+        # These commands must NOT connect to MongoDB or production resources.
+        env:
+          DATABASE_URL: mongodb://127.0.0.1:27018/yedicijan_ci_schema_only?replicaSet=rs0
         run: |
           npx --no-install prisma validate --schema prisma/schema.prisma
           npx --no-install prisma generate --schema prisma/schema.prisma
