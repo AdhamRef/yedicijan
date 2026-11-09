@@ -1,6 +1,6 @@
 "use client";
 
-import ConfirmModal from "@/components/modals/confirm-modal";
+
 import { Button } from "@/components/ui/button";
 import { useConfettiStore } from "@/hooks/use-confetti-store";
 import axios from "axios";
@@ -72,11 +72,11 @@ const CourseActions: React.FC<CourseActionsProps> = ({
       >
         {isPublished ? "إخفاء" : "نشر"}
       </Button>
-      <ConfirmModal onConfirm={onDelete}>
+      <span onClick={() => { if (window.confirm("هل تريد حذف الدورة؟")) void onDelete(); }}>
         <Button size="sm" disabled={isLoading}>
           <Trash className="h-4 w-4" />
         </Button>
-      </ConfirmModal>
+      </span>
     </div>
   );
 };

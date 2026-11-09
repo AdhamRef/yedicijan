@@ -15,11 +15,11 @@ export async function storeArchiveBlobFile(args: {
   category: string;
   fileName: string;
   contentType: string;
-  body: BodyInit | Buffer;
+  body: Blob | ArrayBuffer | Uint8Array<ArrayBuffer> | string;
 }): Promise<ArchiveBlobStoredFile> {
   const safeName = args.fileName.replace(/[^\p{L}\p{N}._-]+/gu, "-").replace(/^-+|-+$/g, "") || "archive-file";
   const folder = args.category === "DOCUMENTS" ? "documents" : "marketing";
-  const blob = await put(`archive/${folder}/${Date.now()}-${safeName}`, args.body, {
+  const blob = await put(`archive/${folder}/${Date.now()}-${safeName}`, args.body instanceof Uint8Array ? new Uint8Array(args.body).buffer : args.body, {
     access: "private",
     addRandomSuffix: true,
     contentType: args.contentType || "application/octet-stream",

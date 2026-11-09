@@ -78,7 +78,7 @@ export async function PUT(request: NextRequest) {
     if (body.suggestedTeamSupport !== undefined) {
       try {
         if (body.suggestedTeamSupport === null) {
-          updateData.suggestedTeamSupport = Prisma.JsonNull;
+          updateData.suggestedTeamSupport = null;
         } else {
           const v = validateSuggestedTeamSupportBody(body.suggestedTeamSupport);
           if (v) {

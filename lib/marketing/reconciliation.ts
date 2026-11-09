@@ -305,7 +305,7 @@ export async function GET(request: NextRequest) {
   const rows: Row[] = [...buckets.values()].map((row) => ({
     ...row,
     label: cleanAdName(row.label, row.adId),
-    adsetId: row.adsetName ? null : row.adsetId,
+    adsetId: row.adsetName ? null : (row.adsetId ?? null),
     matchStatus: row.siteTouched && row.platformTouched ? "matched" : row.platformTouched ? "platform_only" : row.siteTouched ? "site_only" : "unknown",
     actualRoas: row.platformSpend > 0 ? row.siteRevenue / row.platformSpend : null,
     platformRoas: row.platformSpend > 0 ? row.platformReportedValue / row.platformSpend : null,

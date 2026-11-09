@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       missing.push("facebookAccessToken");
       guidance.push("أضف Access Token الخاص بـ Meta CAPI من Business Settings > System Users.");
     }
-    if (missing.length) {
+    if (missing.length || !pixelId || !accessToken) {
       await audit(p, "missing_config", eventName, eventId, { missingFields: missing });
       return missingConfig(p, missing, guidance);
     }

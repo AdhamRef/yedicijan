@@ -199,7 +199,7 @@ async function persistRawSettings(update: { $set: Record<string, unknown>; $unse
         },
       ],
     };
-    await prisma.$runCommandRaw(command);
+    await prisma.$runCommandRaw(mongoRawObject(command));
     return getRawTrackingSettings();
   }
 

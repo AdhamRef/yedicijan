@@ -140,7 +140,10 @@ export async function GET(request: NextRequest) {
     sort: { date: -1, updatedAt: -1 },
     limit,
   })) as JsonMap;
-  const rows = typeof result.cursor === "object" && result.cursor && Array.isArray((result.cursor as JsonMap).firstBatch) ? (result.cursor as JsonMap).firstBatch : [];
+  const batch = typeof result.cursor === "object" && result.cursor ? (result.cursor as JsonMap).firstBatch : null;
+  const rows: JsonMap[] = Array.isArray(batch)
+    ? batch.filter((row: unknown): row is JsonMap => typeof row === "object" && row !== null && !Array.isArray(row))
+    : [];
 
   const summary = rows.reduce((acc, row) => {
     if (typeof row === "object" && row) {
@@ -164,7 +167,7 @@ export async function POST(request: NextRequest) {
 
   await ensureIndexes();
   const body = await request.json().catch(() => ({}));
-  const rows = Array.isArray((body as JsonMap).rows) ? (body as JsonMap).rows : [body];
+  const rows: unknown[] = Array.isArray((body as JsonMap).rows) ? (body as { rows: unknown[] }).rows : [body];
   const normalized = rows.filter((row): row is JsonMap => typeof row === "object" && row !== null && !Array.isArray(row)).map(normalizeMetric);
   if (normalized.length === 0) return NextResponse.json({ ok: false, error: "missing rows" }, { status: 400 });
 
