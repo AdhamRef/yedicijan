@@ -1,0 +1,38 @@
+name: Isolated campaign row navigation regression
+on:
+  push:
+    branches:
+      - port/minber-campaign-row-click-20261109
+  pull_request:
+    branches:
+      - integration/yedicijan-unified-safe-20261109
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-campaign-row:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Fetch exact SHA as source archive so legacy broken nested gitlinks
+      # cannot cause actions/checkout cleanup to fail before test execution.
+      - name: Fetch exact reviewed repository snapshot
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output /tmp/source.tar.gz
+          tar -xzf /tmp/source.tar.gz --strip-components=1
+          test -f package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dev dependencies without executing scripts
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Assert only real campaign-row clicks navigate (no sends)
+        run: node --test tests/ported-systems/campaign-row-portal-navigation.test.mjs
