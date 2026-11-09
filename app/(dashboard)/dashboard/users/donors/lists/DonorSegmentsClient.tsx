@@ -20,6 +20,8 @@ export function DonorSegmentsClient() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [editList, setEditList] = useState<{ id: string; name: string } | null>(null);
+  const [activeList, setActiveList] = useState<{ id: string; members: Donor[] } | null>(null);
 
   async function refreshLists() {
     const response = await fetch("/api/admin/donor-segments", { cache: "no-store" });
@@ -82,6 +84,44 @@ export function DonorSegmentsClient() {
     }
   }
 
+
+  async function renameList() {
+    if (!editList?.name.trim() || busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/donor-segments/" + editList.id, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: editList.name }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "تعذر تعديل الاسم");
+      setEditList(null);
+      setMessage("تم تعديل اسم القائمة");
+      await refreshLists();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "تعذر تعديل الاسم");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function viewMembers(id: string) {
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/donor-segments/" + id, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "تعذر عرض الأعضاء");
+      setActiveList({ id, members: Array.isArray(data.members) ? data.members : [] });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "تعذر عرض الأعضاء");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main dir="rtl" className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
       <header className="space-y-2">
@@ -136,11 +176,40 @@ export function DonorSegmentsClient() {
               <div key={list.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                 <span className="font-medium">{list.name}</span>
                 <span className="text-sm text-muted-foreground">{list.membersCount} متبرع · {list.channels.join("، ")}</span>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" disabled={busy} onClick={() => viewMembers(list.id)}>عرض الأعضاء</Button>
+                  <Button size="sm" variant="outline" disabled={busy} onClick={() => setEditList({ id: list.id, name: list.name })}>تعديل الاسم</Button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </section>
+      {editList && (
+        <section className="rounded-xl border p-4">
+          <h2 className="font-medium">تعديل اسم القائمة</h2>
+          <label className="block text-sm">اسم القائمة
+            <Input value={editList.name} maxLength={100}
+              onChange={(e) => setEditList((prev) => prev && { ...prev, name: e.target.value })} />
+          </label>
+          <div className="mt-3 flex gap-2">
+            <Button disabled={busy || !editList.name.trim()} onClick={renameList}>حفظ</Button>
+            <Button variant="outline" onClick={() => setEditList(null)}>إلغاء</Button>
+          </div>
+        </section>
+      )}
+      {activeList && (
+        <section className="space-y-2 rounded-xl border p-4">
+          <div className="flex justify-between">
+            <h2 className="font-medium">أعضاء القائمة</h2>
+            <Button size="sm" variant="outline" onClick={() => setActiveList(null)}>إغلاق</Button>
+          </div>
+          {activeList.members.length === 0 ? <p className="text-sm">لا يوجد متبرعون في هذه القائمة.</p>
+            : <div className="max-h-80 divide-y overflow-auto">
+              {activeList.members.map((m) => <p key={m.id} className="py-2 text-sm">{m.name || "متبرع"} — {m.email || "دون بريد"}</p>)}
+            </div>}
+        </section>
+      )}
     </main>
   );
 }
