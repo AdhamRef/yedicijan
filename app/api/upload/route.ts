@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { UploadApiResponse } from 'cloudinary';
 import cloudinary from '@/lib/cloudinary';
-import { canDeleteCampaignMedia, normalizeCampaignAssetId } from '@/lib/uploads/campaign-media-access';
+import { canDeleteCampaignMedia, normalizeCampaignAssetId, uploadFolderForSession } from '@/lib/uploads/campaign-media-access';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/options';
 import {
@@ -72,7 +72,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await uploadBuffer(buffer, 'campaigns');
+    const folder = uploadFolderForSession(session);
+    if (!folder) return NextResponse.json({ error: 'يجب تسجيل الدخول' }, { status: 401 });
+    const result = await uploadBuffer(buffer, folder);
 
     const actor = auditActorFromSiteSession(session);
     queueAuditLog({
@@ -80,7 +82,7 @@ export async function POST(request: Request) {
       action: 'MEDIA_UPLOAD',
       messageAr: `${actor.actorName ?? 'مستخدم'} رفع ملفًا إلى التخزين (${file.name || 'ملف'})`,
       entityType: 'Media',
-      metadata: { publicId: result.public_id, bytes: buffer.byteLength },
+      metadata: { publicId: result.public_id, bytes: buffer.byteLength, folder },
       stream: auditStreamForRole(actor.actorRole),
     });
 
