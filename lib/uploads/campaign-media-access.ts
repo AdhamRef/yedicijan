@@ -23,3 +23,14 @@ export function normalizeCampaignAssetId(value: unknown): string | null {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(bare)) return null;
   return "campaigns/" + bare;
 }
+
+
+/**
+ * Existing avatar uploads use /api/upload too. Donors must never be able to
+ * place public objects in the campaigns Cloudinary namespace. They retain
+ * uploads in a separate avatars namespace; editorial staff use campaigns.
+ */
+export function uploadFolderForSession(session: Session | null): "campaigns" | "avatars" | null {
+  if (!session?.user) return null;
+  return canDeleteCampaignMedia(session) ? "campaigns" : "avatars";
+}
