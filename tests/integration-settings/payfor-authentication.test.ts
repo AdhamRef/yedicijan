@@ -65,3 +65,20 @@ test("PayFor diagnostics redact sensitive fields before logging", () => {
     assert.doesNotMatch(route, /JSON\.stringify\(raw, null, 2\)/);
   }
 });
+
+test("PayFor success requires original amount evidence and rejects missing amounts", () => {
+  const route = readFileSync("app/api/payfor/3dpay/ok/route.ts", "utf8");
+  assert.match(route, /typeof snapshot\?\.purchAmount === "string"/);
+  assert.match(route, /Number\.isFinite\(Number\(raw\.PurchAmount\)\)/);
+  assert.match(route, /if \(!amountMatches\)/);
+  assert.match(route, /reason: "unverified"/);
+});
+
+test("PayFor callback persistence never stores sensitive unredacted bank form", () => {
+  for (const routeType of ["ok", "fail"]) {
+    const route = readFileSync("app/api/payfor/3dpay/" + routeType + "/route.ts", "utf8");
+    assert.match(route, /const safeRaw = redactPayForResponse\(raw\)/);
+    assert.match(route, /providerRaw: safeRaw/);
+    assert.doesNotMatch(route, /providerRaw: raw\s+as\s+/);
+  }
+});
