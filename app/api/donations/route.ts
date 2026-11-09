@@ -215,7 +215,6 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     const body = await request.json();
-    if (body.paymentMethod === "CARD") { const limited = await enforceDonationIntakeBudget(request); if (limited) return limited; }
     const forwardedFor = request.headers.get("x-forwarded-for");
     const clientIp =
       forwardedFor?.split(",")[0]?.trim() ||
@@ -255,6 +254,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    if (body.paymentMethod === "CARD") { const limited = await enforceDonationIntakeBudget(request); if (limited) return limited; }
 
     // Resolve donorId — authenticated user or guest upsert
     let donorId: string;
