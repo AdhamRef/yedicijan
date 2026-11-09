@@ -1,3 +1,4 @@
+import { securityClientIp } from "@/lib/site-security/payment-initiation-budget";
 import { enforceDonationIntakeBudget } from "@/lib/site-security/payment-initiation-budget";
 import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { NextRequest, NextResponse } from "next/server";
@@ -215,11 +216,7 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     const body = await request.json();
-    const forwardedFor = request.headers.get("x-forwarded-for");
-    const clientIp =
-      forwardedFor?.split(",")[0]?.trim() ||
-      request.headers.get("x-real-ip") ||
-      undefined;
+    const clientIp = securityClientIp(request.headers) ?? undefined;
     const userAgent = request.headers.get("user-agent")?.slice(0, 500) || undefined;
     const attribution = sanitizeDonationAttribution({
       ...((body.attribution && typeof body.attribution === "object" && !Array.isArray(body.attribution)
