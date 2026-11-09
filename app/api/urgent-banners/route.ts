@@ -21,7 +21,20 @@ export async function GET(request: NextRequest) {
       take: 50,
       include: { translations: true },
     });
+    // Do not expose links to inactive/deleted projects, including after later
+    // project lifecycle changes. One bounded query, not N lookups.
+    const projectIds = [...new Set(rows.map((r) => r.campaignId))];
+    const projects = projectIds.length
+      ? await prisma.campaign.findMany({
+          where: { id: { in: projectIds } },
+          select: { id: true, isActive: true, isDeleted: true },
+        })
+      : [];
+    const validProjects = new Set(
+      projects.filter((p) => p.isActive && p.isDeleted !== true).map((p) => p.id),
+    );
     const items = rows.flatMap((row) => {
+      if (!validProjects.has(row.campaignId)) return [];
       if ((row.startsAt && row.startsAt > now) || (row.endsAt && row.endsAt <= now)) return [];
       const copy = locale === "ar" ? {
         title: row.title, description: row.description, ctaLabel: row.ctaLabel,
