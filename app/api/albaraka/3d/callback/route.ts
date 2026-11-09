@@ -81,7 +81,12 @@ export async function POST(req: NextRequest) {
   const raw: Record<string, string> = {};
   for (const [key, value] of form.entries()) raw[key] = String(value);
 
-  console.log("[Albaraka CALLBACK] Bank response:", JSON.stringify(raw, null, 2));
+  // Never persist CAVV, MD, secure transaction identifiers, or MAC in logs.
+  const safeBankFields = Object.fromEntries(
+    ["OrderId", "Amount", "Currency", "MerchantId", "MdStatus", "MdErrorMessage"]
+      .filter(key => key in raw).map(key => [key, raw[key]]),
+  );
+  console.log("[Albaraka CALLBACK] Verified response diagnostics:", safeBankFields);
 
   const cfg = albarakaConfig();
   const mdStatus = String(raw.MdStatus ?? "");
@@ -237,7 +242,10 @@ export async function POST(req: NextRequest) {
       { correlationId: orderId || expectedOrderId || donationId }
     );
 
-    console.log("[Albaraka CALLBACK] Sale response:", JSON.stringify(sale, null, 2));
+    console.log("[Albaraka CALLBACK] Sale response status:", {
+      responseCode: sale.ServiceResponseData?.ResponseCode ?? null,
+      responseDescription: sale.ServiceResponseData?.ResponseDescription ?? null,
+    });
 
     const responseCode = sale.ServiceResponseData?.ResponseCode ?? "";
     const responseDescription = sale.ServiceResponseData?.ResponseDescription ?? "";
