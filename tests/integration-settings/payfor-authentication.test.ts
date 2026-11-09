@@ -38,3 +38,12 @@ test("verified decline adapter requires exact bank order linkage", () => {
   assert.match(code, /verifyPayForResponseHash\(response, process.env.PAYFOR_MERCHANT_PASS\)/);
   assert.match(code, /DONATION_ABUSE_GUARD_ENABLED !== "true"/);
 });
+
+test("PayFor approval callback cannot mark a donation paid without signed order", () => {
+  const code = readFileSync("app/api/payfor/3dpay/ok/route.ts", "utf8");
+  const signedAt = code.indexOf("verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS)");
+  const isSuccessAt = code.indexOf("const isSuccess =");
+  const writeAt = code.indexOf('status: "PAID"');
+  assert.ok(signedAt >= 0 && isSuccessAt > signedAt && writeAt > signedAt);
+  assert.match(code, /reason: "unverified"/);
+});
