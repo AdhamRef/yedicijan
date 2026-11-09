@@ -1,0 +1,46 @@
+name: YediCihan category-create isolated QA
+on:
+  push:
+    branches:
+      - fix/yedi-category-create-content-20261109
+  pull_request:
+    branches:
+      - main
+      - integration/yedicijan-unified-safe-20261109
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  category-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # The historical repo has a gitlink named gozbebekleri without a
+      # matching .gitmodules entry. actions/checkout invokes submodule
+      # cleanup even with submodules disabled, so fetch the exact event SHA
+      # as an archive instead; no submodule commands or branch mutation.
+      - name: Retrieve exact reviewed source without broken gitlink checkout
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output /tmp/yedi-source.tar.gz
+          tar -xzf /tmp/yedi-source.tar.gz --strip-components=1
+          test -f package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install repository dependencies
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Validate Prisma schema and generate clients
+        run: |
+          npx --no-install prisma validate --schema prisma/schema.prisma
+          npx --no-install prisma generate --schema prisma/schema.prisma
+          npx --no-install prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Run category creation input contracts (no DB, no production)
+        run: node --import tsx --test tests/finance/category-create-payload.test.ts
