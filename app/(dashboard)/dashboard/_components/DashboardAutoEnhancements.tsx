@@ -62,24 +62,38 @@ function patchNetworkSaveEvents() {
   const originalOpen = window.XMLHttpRequest.prototype.open;
   const originalSend = window.XMLHttpRequest.prototype.send;
 
-  window.XMLHttpRequest.prototype.open = function patchedOpen(method: string, url: string | URL, ...rest: any[]) {
-    (this as any).__dashboardMethod = method;
-    (this as any).__dashboardUrl = String(url);
-    return originalOpen.call(this, method, url, ...rest as [boolean?, string?, string?]);
+  // Preserve the original XMLHttpRequest contract without mutating native
+  // objects with untyped custom fields.
+  const requestMetadata = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
+
+  window.XMLHttpRequest.prototype.open = function patchedOpen(
+    this: XMLHttpRequest,
+    method: string,
+    url: string | URL,
+    async = true,
+    username?: string | null,
+    password?: string | null,
+  ) {
+    requestMetadata.set(this, { method, url: String(url) });
+    return originalOpen.call(this, method, url, async, username, password);
   } as typeof window.XMLHttpRequest.prototype.open;
 
-  window.XMLHttpRequest.prototype.send = function patchedSend(...args: any[]) {
-    const method = (this as any).__dashboardMethod;
-    const url = (this as any).__dashboardUrl;
+  window.XMLHttpRequest.prototype.send = function patchedSend(
+    this: XMLHttpRequest,
+    body?: Document | XMLHttpRequestBodyInit | null,
+  ) {
+    const metadata = requestMetadata.get(this);
+    const method = metadata?.method ?? "GET";
+    const url = metadata?.url ?? "";
     const shouldTrack = isDashboardSaveRequest(method, url);
     if (shouldTrack) {
       dispatchSaveEvent({ phase: "start", method, url });
       this.addEventListener("loadend", () => {
         const ok = this.status >= 200 && this.status < 300;
         dispatchSaveEvent({ phase: ok ? "success" : "error", method, url, status: this.status });
-      });
+      }, { once: true });
     }
-    return originalSend.apply(this, args as [Document | XMLHttpRequestBodyInit | null | undefined]);
+    return originalSend.call(this, body);
   } as typeof window.XMLHttpRequest.prototype.send;
 
   const originalFetch = window.fetch.bind(window);
