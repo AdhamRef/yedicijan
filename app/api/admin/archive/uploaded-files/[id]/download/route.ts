@@ -13,7 +13,9 @@ export async function GET(_request: Request, context: Params) {
 
   const { id } = await Promise.resolve(context.params);
   const row = await prisma.auditLog.findUnique({ where: { id }, select: { id: true, metadata: true, action: true, entityType: true } });
-  if (!isArchiveUploadedFile(row)) return new Response("Not found", { status: 404 });
+  if (!row || row.action !== "archive.uploadedFile.create" || row.entityType !== "ArchiveUploadedFile") {
+    return new Response("Not found", { status: 404 });
+  }
 
   const metadata = metadataObject(row.metadata);
   if (stringField(metadata.category) === "DOCUMENTS") {
@@ -33,10 +35,6 @@ export async function GET(_request: Request, context: Params) {
   if (!base64) return new Response("Not found", { status: 404 });
 
   return fileResponse(Buffer.from(base64, "base64"), fileName, mimeType);
-}
-
-function isArchiveUploadedFile(row: { action: string; entityType: string } | null): row is { id: string; metadata: unknown; action: string; entityType: string } {
-  return Boolean(row && row.action === "archive.uploadedFile.create" && row.entityType === "ArchiveUploadedFile");
 }
 
 async function streamBlobFile(url: string, fileName: string, fallbackMimeType: string) {
