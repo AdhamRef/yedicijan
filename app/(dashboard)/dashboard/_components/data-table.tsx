@@ -170,7 +170,7 @@ export function DataTable<TData, TValue>({
 
   // Function to export table data as CSV
   const exportToCSV = useCallback(() => {
-    const filteredData = table.getFilteredRowModel().rows.map(row => row.original);
+    const filteredData = table.getFilteredRowModel().rows;
     const headers = columns.map(column => column.header);
     const csvContent = [
       headers.join(","),

@@ -144,7 +144,7 @@ const ImageForm: React.FC<ImageFormProps> = ({ initialData, postId }) => {
                   alt="صورة المقال بالعربية"
                   fill
                   className="object-cover rounded-md"
-                  src={initialData?.imageAR || initialData?.image}
+                  src={initialData?.imageAR || initialData?.image || ""}
                 />
               ) : (
                 <div className="flex items-center justify-center h-60 bg-slate-200 rounded-md">

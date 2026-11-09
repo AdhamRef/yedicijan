@@ -8,8 +8,7 @@ export const ImageResizer = ({ editor }: { editor: Editor }) => {
     ) as HTMLImageElement;
     if (imageInfo) {
       const selection = editor.state.selection;
-      editor.commands.setImage({
-        src: imageInfo.src,
+      editor.commands.updateAttributes("image", {
         width: Number(imageInfo.style.width.replace("px", "")),
         height: Number(imageInfo.style.height.replace("px", "")),
       });

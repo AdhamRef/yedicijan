@@ -54,7 +54,7 @@ export async function generateMetadata({ params }: CategoryProps): Promise<Metad
       images: [category.image || "/default-category-bg.jpg"],
     },
     alternates: {
-      canonical: `${SITE_URL}/${params.locale || "ar"}/blog/category/${(category as any)?.slug || params.categoryId}`,
+      canonical: `${SITE_URL}/${locale || "ar"}/blog/category/${category.slug || categoryId}`,
     },
   };
 }
