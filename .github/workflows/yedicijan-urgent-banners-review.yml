@@ -1,0 +1,61 @@
+name: YediCihan urgent banner review (no publishing)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/api/admin/urgent-banners/**"
+      - "app/api/urgent-banners/**"
+      - "app/(dashboard)/dashboard/urgent-banners/**"
+      - "app/[locale]/page.tsx"
+      - "components/yedicihan/UrgentBannerStrip.tsx"
+      - "lib/content/yedicihan-urgent-banner.ts"
+      - "lib/dashboard/nav-config.ts"
+      - "lib/dashboard/permissions.ts"
+      - "prisma/schema.prisma"
+      - "tests/finance/yedicihan-urgent-banners.test.ts"
+      - ".github/workflows/yedicijan-urgent-banners-review.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  banner-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedicijan_ci_never_connected?replicaSet=rs0
+      CI: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Fetch exact PR revision without legacy gitlink checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Validate and generate Prisma offline
+        run: |
+          npx prisma validate --schema prisma/schema.prisma
+          npx prisma generate --schema prisma/schema.prisma
+      - name: Synthetic banner and active-locale contracts
+        run: |
+          node --import tsx --test tests/finance/yedicihan-urgent-banners.test.ts
+          npm run locale:audit:strict
+      - name: Scoped TypeScript validation
+        run: |
+          npm run typecheck:communication-runtime
+          npm run typecheck:integration-release
+      - name: Complete project TypeScript diagnostic
+        run: npx tsc --noEmit --incremental false
