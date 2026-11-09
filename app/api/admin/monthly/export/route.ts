@@ -27,6 +27,7 @@ import {
   type ExportFormat,
 } from "@/lib/dashboard/donation-export";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
+import { reportDonationPeriodWhere, reportDonationStatusWhere } from "@/lib/dashboard/report-donation-filter";
 
 export async function GET(request: NextRequest) {
   try {
@@ -67,8 +68,7 @@ export async function GET(request: NextRequest) {
       subscriptionId: { not: null },
       ...(campaignId && campaignId !== "all" && { items: { some: { campaignId } } }),
       ...(userId && userId !== "all" && { donorId: userId }),
-      ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
-      ...(status && ["PAID", "FAILED"].includes(status) && { status: status as "PAID" | "FAILED" }),
+
     };
     if (categoryId && categoryId !== "all") {
       donationWhere.OR = [
@@ -78,6 +78,10 @@ export async function GET(request: NextRequest) {
     }
 
     const donationFilters: Prisma.DonationWhereInput[] = [donationWhere];
+    const periodWhere = reportDonationPeriodWhere(dateFilter);
+    if (periodWhere) donationFilters.push(periodWhere);
+    const statusWhere = reportDonationStatusWhere(status);
+    if (statusWhere) donationFilters.push(statusWhere);
     if (locale && locale !== "all") {
       donationFilters.push(
         locale === "__unset"
@@ -147,7 +151,7 @@ export async function GET(request: NextRequest) {
     const chargeAggregates = subIds.length
       ? await prisma.donation.groupBy({
           by: ["subscriptionId"],
-          where: { subscriptionId: { in: subIds }, status: "PAID" },
+          where: { subscriptionId: { in: subIds }, status: "PAID", paidAt: { not: null } },
           _count: { _all: true },
           _sum: { amount: true, amountUSD: true },
         })

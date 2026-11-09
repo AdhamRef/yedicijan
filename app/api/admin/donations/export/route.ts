@@ -32,6 +32,7 @@ import {
   type ExportFormat,
 } from "@/lib/dashboard/donation-export";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
+import { reportDonationPeriodWhere, reportDonationStatusWhere } from "@/lib/dashboard/report-donation-filter";
 
 export async function GET(request: NextRequest) {
   try {
@@ -75,8 +76,7 @@ export async function GET(request: NextRequest) {
       ...(referralId && referralId !== "all" && { referralId }),
       ...(subscriptionOnly && { subscriptionId: { not: null } }),
       ...(donationType === "MONTHLY" && { subscriptionId: { not: null } }),
-      ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
-      ...(status && ["PAID", "FAILED"].includes(status) && { status: status as "PAID" | "FAILED" }),
+
     };
     if (categoryId && categoryId !== "all") {
       baseWhere.OR = [
@@ -86,6 +86,10 @@ export async function GET(request: NextRequest) {
     }
 
     const filters: Prisma.DonationWhereInput[] = [baseWhere];
+    const periodWhere = reportDonationPeriodWhere(dateFilter);
+    if (periodWhere) filters.push(periodWhere);
+    const statusWhere = reportDonationStatusWhere(status);
+    if (statusWhere) filters.push(statusWhere);
     if (locale && locale !== "all") {
       filters.push(
         locale === "__unset"

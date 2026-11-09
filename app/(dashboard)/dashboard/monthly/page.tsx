@@ -1956,10 +1956,10 @@ export default function MonthlySubscriptionsDashboardPage() {
                               </button>
                             ) : (
                               <span
-                                className={cn("inline-block px-1.5 py-px rounded-full text-[11px] font-medium", d.status === "PAID" && (d.paidAt || d.type === "MONTHLY") ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")}
-                                title={d.status === "PAID" && !d.paidAt && d.type !== "MONTHLY" ? "تم بدء الدفع ولم يؤكده مزود الدفع بعد — لا يُحتسب في الإيرادات" : undefined}
+                                className={cn("inline-block px-1.5 py-px rounded-full text-[11px] font-medium", d.status === "PAID" && d.paidAt ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")}
+                                title={d.status === "PAID" && !d.paidAt ? "تم بدء الدفع ولم يؤكده مزود الدفع بعد — لا يُحتسب في الإيرادات" : undefined}
                               >
-                                {d.status === "PAID" ? ((d.paidAt || d.type === "MONTHLY") ? "ناجح" : "قيد التأكيد") : "معلق"}
+                                {d.status === "PAID" ? (d.paidAt ? "ناجح" : "قيد التأكيد") : "معلق"}
                               </span>
                             )}
                           </td>
