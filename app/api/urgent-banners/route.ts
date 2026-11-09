@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       const copy = locale === "ar" ? {
         title: row.title, description: row.description, ctaLabel: row.ctaLabel,
       } : row.translations.find((t) => t.locale === locale);
-      if (!copy?.title) return [];
+      if (!copy?.title || !copy?.ctaLabel) return [];
       return [{
         id: row.id,
         title: copy.title,
