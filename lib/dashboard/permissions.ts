@@ -98,6 +98,7 @@ const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
   // `messages` — a staffer granted the inbox was bounced straight back out of it.
   { prefix: "/dashboard/inbox", key: "messages" },
   { prefix: "/dashboard/templates", key: "templates" },
+  { prefix: "/dashboard/urgent-banners", key: "campaigns" },
   { prefix: "/dashboard/campaigns", key: "campaigns" },
   { prefix: "/dashboard/categories", key: "categories" },
   { prefix: "/dashboard/blog", key: "blog" },

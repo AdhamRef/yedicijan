@@ -1,3 +1,4 @@
+import { UrgentBannerStrip, type YediCihanUrgentBanner } from "@/components/yedicihan/UrgentBannerStrip";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { LOCALE_SEO, buildPageMetadata, SITE_URL } from "@/lib/seo";
@@ -85,7 +86,7 @@ export default async function HomePage({ params }: Props) {
   // as initial state. This eliminates the empty-section → skeleton → real-content swap
   // (which was the root cause of CLS=0.92) and avoids a client waterfall on hydration.
   // All requests run in parallel with a 3 s hard timeout each.
-  const [slidesData, campaignsData, categoriesData, postsData] = await Promise.all([
+  const [slidesData, campaignsData, categoriesData, postsData, bannersData] = await Promise.all([
     safeFetch<{ items?: SlideItem[] }>(
       `${base}/api/slides?locale=${locale}`,
       { items: [] }
@@ -101,6 +102,10 @@ export default async function HomePage({ params }: Props) {
     safeFetch<{ items?: unknown[] }>(
       `${base}/api/posts?locale=${locale}&limit=3`,
       { items: [] }
+    ),
+    safeFetch<{ items?: YediCihanUrgentBanner[] }>(
+      `${base}/api/urgent-banners?locale=${locale}`,
+      { items: [] }, 0
     ),
   ]);
 
@@ -134,6 +139,7 @@ export default async function HomePage({ params }: Props) {
           fetchPriority="high"
         />
       )}
+      <UrgentBannerStrip items={Array.isArray(bannersData?.items) ? bannersData.items : []} />
       <HomePageContent
         firstHeroImage={firstHeroImage}
         initialSlides={initialSlides}
