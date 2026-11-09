@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { UploadApiResponse } from 'cloudinary';
 import cloudinary from '@/lib/cloudinary';
+import { canDeleteCampaignMedia, normalizeCampaignAssetId } from '@/lib/uploads/campaign-media-access';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/options';
 import {
@@ -105,19 +106,21 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json({ error: 'يجب تسجيل الدخول' }, { status: 401 });
+    }
+    if (!canDeleteCampaignMedia(session)) {
+      return NextResponse.json({ error: 'ليس لديك صلاحية حذف صور المشاريع' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
-    const publicId = searchParams.get('publicId');
-
+    const publicId = normalizeCampaignAssetId(searchParams.get('publicId'));
     if (!publicId) {
-      return NextResponse.json({ error: 'Public ID is required' }, { status: 400 });
+      return NextResponse.json({ error: 'معرف صورة المشروع غير صالح' }, { status: 400 });
     }
 
-    // Delete from Cloudinary
-    await cloudinary.uploader.destroy(`campaigns/${publicId}`);
+    // Delete ONLY from the campaigns folder; never accept arbitrary folders.
+    await cloudinary.uploader.destroy(publicId);
 
     const actor = auditActorFromSiteSession(session);
     queueAuditLog({
