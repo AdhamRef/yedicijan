@@ -63,7 +63,8 @@ jobs:
             tests/finance/yedicihan-urgent-banners.test.ts \
             tests/finance/urgent-banner-permissions.test.ts \
             tests/finance/settled-attribution.test.ts \
-            tests/finance/campaign-media-access.test.ts
+            tests/finance/campaign-media-access.test.ts \
+            tests/finance/mongo-raw-command.test.ts
       - name: Existing integration contracts
         run: npm run test:integration-settings
       - name: Scoped runtime TypeScript
