@@ -1,3 +1,4 @@
+import { enforcePaymentInitiationBudget } from "@/lib/site-security/payment-initiation-budget";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -41,6 +42,8 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    const abuseGate = await enforcePaymentInitiationBudget(_req, id);
+    if (abuseGate) return abuseGate;
     if (!id) {
       return NextResponse.json({ error: "Donation ID required" }, { status: 400 });
     }
