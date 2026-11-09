@@ -45,4 +45,6 @@ jobs:
           GOOGLE_CLIENT_SECRET: ci-only-placeholder-not-a-credential
           NEXTAUTH_SECRET: ci-only-placeholder-long-and-not-for-production-0000
           NEXTAUTH_URL: http://localhost:3000
+          STRIPE_SECRET_KEY: sk_test_ci_fixture_never_use_for_network
+          STRIPE_WEBHOOK_SECRET: whsec_ci_fixture_not_real
         run: npm run build
