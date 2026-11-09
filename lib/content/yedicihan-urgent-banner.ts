@@ -5,7 +5,7 @@ const localeSchema = z.enum(SUPPORTED_LOCALES);
 const contentSchema = z.object({
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(800).optional().default(""),
-  ctaLabel: z.string().trim().min(1).max(80).optional().default("ساهم الآن"),
+  ctaLabel: z.string().trim().min(1).max(80),
 }).strict();
 
 export const bannerInputSchema = z.object({
