@@ -4,7 +4,8 @@ This backlog is independent of the source-only audit at `/home/runner/work/yedic
 
 ## P0 — Confirm measurement ownership and access boundaries
 
-**Title:** Verify YediCihan Clarity project ownership, host coverage, and duplicate initialization  
+**Title:** Verify YediCihan Clarity project ownership, host coverage, and duplicate initialization
+
 **Acceptance criteria:**
 - Confirm the canonical production host for `yedicihan.org` and `www.yedicihan.org`.
 - Verify the effective production project ID from the approved deployment configuration and confirm the Clarity project’s allowed/observed hosts.
@@ -14,7 +15,8 @@ This backlog is independent of the source-only audit at `/home/runner/work/yedic
 
 ## P1 — Complete the authorized seven-day behavioral review
 
-**Title:** Review YediCihan donation and campaign sessions for 2026-11-02–2026-11-09  
+**Title:** Review YediCihan donation and campaign sessions for 2026-11-02–2026-11-09
+
 **Acceptance criteria:**
 - Use the exact interval in `/home/runner/work/yedicijan/yedicijan/docs/clarity-audit/2026-11-02-to-09.md`; report export coverage, session/replay denominators, and every selected sampling stratum.
 - Inspect available dashboard and recordings filters, daily/hourly trends, route/device/browser/OS/country/channel, and evidence-based bot/acquisition distinctions.
@@ -25,7 +27,8 @@ This backlog is independent of the source-only audit at `/home/runner/work/yedic
 
 ## P1 — Review URL/referrer and traffic-cohort telemetry
 
-**Title:** Assess whether Clarity/GA4/GTM engagement telemetry exposes URL or referrer parameters  
+**Title:** Assess whether Clarity/GA4/GTM engagement telemetry exposes URL or referrer parameters
+
 **Acceptance criteria:**
 - Using approved configuration and a synthetic browser session, determine which sinks receive click IDs, UTM values, full referrers, route search strings, and outbound URLs.
 - Verify actual retention/processing policy and avoid copying live identifiers into findings.
@@ -34,7 +37,8 @@ This backlog is independent of the source-only audit at `/home/runner/work/yedic
 
 ## P2 — Validate engagement event semantics and duplicates
 
-**Title:** Reconcile custom Clarity engagement events with built-in Clarity, GA4, and GTM events  
+**Title:** Reconcile custom Clarity engagement events with built-in Clarity, GA4, and GTM events
+
 **Acceptance criteria:**
 - Compare the custom pointer-burst `rage_click` definition with Clarity’s built-in rage-click signal and review dead clicks, quick backs, excessive scroll, form errors, repeated submissions, and JavaScript errors.
 - Inventory GA4/GTM/Clarity definitions and identify actual duplicates with evidence rather than name similarity.
@@ -42,7 +46,8 @@ This backlog is independent of the source-only audit at `/home/runner/work/yedic
 
 ## P2 — Assess donation journey UX and heatmaps
 
-**Title:** Review donation funnel heatmaps and mobile/locale usability after access is available  
+**Title:** Review donation funnel heatmaps and mobile/locale usability after access is available
+
 **Acceptance criteria:**
 - Inspect heatmaps/scroll-click clusters for donation landing, project/category, cart, form, checkout, and error routes across the eight enabled locales (`ar`, `en`, `fr`, `tr`, `id`, `pt`, `es`, `de`) and mobile/desktop.
 - Separate traffic, intent, checkout initiation, provider return, and independently confirmed settlement denominators.
