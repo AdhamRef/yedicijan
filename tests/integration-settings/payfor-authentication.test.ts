@@ -53,12 +53,15 @@ test("PayFor approval callback cannot mark a donation paid without signed order"
 test("PayFor diagnostics redact sensitive fields before logging", () => {
   const redacted = redactPayForResponse({
     OrderId: "test-order", ResponseHash: "secret-hash",
-    CardNumber: "4111111111111111", CVV: "123",
+    CardNumber: "4111111111111111", CVV: "123", AuthCode: "auth-private", HostRefNum: "host-private", CardHolderName: "Private Name",
   });
   assert.equal(redacted.OrderId, "test-order");
   assert.equal(redacted.ResponseHash, "[REDACTED]");
   assert.equal(redacted.CardNumber, "[REDACTED]");
   assert.equal(redacted.CVV, "[REDACTED]");
+  assert.equal(redacted.AuthCode, "[REDACTED]");
+  assert.equal(redacted.HostRefNum, "[REDACTED]");
+  assert.equal(redacted.CardHolderName, "[REDACTED]");
   for (const flow of ["ok", "fail"]) {
     const route = readFileSync("app/api/payfor/3dpay/" + flow + "/route.ts", "utf8");
     assert.match(route, /redactPayForResponse\(raw\)/);
