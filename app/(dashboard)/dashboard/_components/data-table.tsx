@@ -177,7 +177,7 @@ export function DataTable<TData, TValue>({
       ...filteredData.map(row =>
         columns.map(column => {
           const key = 'accessorKey' in column ? String(column.accessorKey) : 'id' in column ? String(column.id) : '';
-          const value = key ? table.getRowModel().rows.find((r) => r.id === row.id)?.getValue(key) : undefined;
+          const value = key ? row.getValue(key) : undefined;
           return typeof value === "string" || typeof value === "number" ? value : "";
         }).join(",")
       ),
