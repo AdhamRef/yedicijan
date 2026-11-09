@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { recordConversionEvent } from "@/lib/tracking/conversion-event-log";
+import { recordConversionEvent, type ConversionPlatform } from "@/lib/tracking/conversion-event-log";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +32,9 @@ export async function POST(request: NextRequest) {
     donationId,
     eventId,
     eventName: body?.eventName || "Donate",
-    platform: body?.platform || "META",
-    channel: body?.channel || "browser",
+    platform: (["META", "GA4", "GOOGLE_ADS", "TIKTOK", "X", "VERCEL"] as const).includes(body?.platform as ConversionPlatform)
+      ? body!.platform as ConversionPlatform : "META",
+    channel: body?.channel === "server" ? "server" : "browser",
     status: statusFrom(body?.status),
     value: typeof body?.value === "number" ? body.value : undefined,
     currency: body?.currency,

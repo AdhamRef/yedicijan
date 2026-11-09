@@ -6,6 +6,8 @@ export type ConversionAuditStage =
   | "track_conversion_allowed"
   | "meta_capi_attempt"
   | "meta_capi_result"
+  | "meta_capi_retry_attempt"
+  | "meta_capi_retry_result"
   | "ga4_purchase_attempt";
 
 export async function writeConversionAudit(input: {

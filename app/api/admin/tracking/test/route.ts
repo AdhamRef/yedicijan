@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       },
       { pixelId, accessToken }
     );
-    await audit(p, result.ok ? "success" : "failed", eventName, eventId, result, result.error || result.reason);
+    await audit(p, result.ok ? "success" : "failed", eventName, eventId, { ok: result.ok, reason: result.reason, error: result.error, fbtrace_id: result.fbtrace_id }, result.error || result.reason);
     return NextResponse.json({
       ok: result.ok,
       platform: p,

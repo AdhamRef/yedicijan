@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
     ? batch.filter((row: unknown): row is JsonMap => typeof row === "object" && row !== null && !Array.isArray(row))
     : [];
 
-  const summary = rows.reduce((acc, row) => {
+  const summary = rows.reduce<{ spend: number; impressions: number; clicks: number; conversions: number; revenue: number }>((acc, row) => {
     if (typeof row === "object" && row) {
       const r = row as JsonMap;
       acc.spend += readNumber(r.spend);
