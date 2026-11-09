@@ -1,4 +1,4 @@
-import { LOCALES, isKnownLocale, type AnyLocale } from "@/lib/locales";
+import { LOCALES, isValidLocale, type SupportedLocale } from "@/lib/locales";
 
 /**
  * Language coverage for a campaign: given the locales present among recipients and the
@@ -12,10 +12,10 @@ import { LOCALES, isKnownLocale, type AnyLocale } from "@/lib/locales";
 export type CoverageStatus = "EXISTS" | "FALLBACK" | "MISSING";
 
 export type LocaleCoverage = {
-  locale: AnyLocale;
+  locale: SupportedLocale;
   label: string;
   status: CoverageStatus;
-  fallbackLocale?: AnyLocale;
+  fallbackLocale?: SupportedLocale;
   recipientCount: number;
 };
 
@@ -29,7 +29,7 @@ function normalizeSet(locales: string[]): Set<string> {
   const out = new Set<string>();
   for (const raw of locales) {
     const code = raw?.trim().toLowerCase();
-    if (code && isKnownLocale(code)) out.add(code);
+    if (code && isValidLocale(code)) out.add(code);
   }
   return out;
 }
@@ -43,10 +43,10 @@ export function computeLanguageCoverage(
   const locales: LocaleCoverage[] = [];
   for (const [raw, count] of Object.entries(recipientLocaleCounts)) {
     const code = raw.trim().toLowerCase();
-    if (!isKnownLocale(code)) continue;
+    if (!isValidLocale(code)) continue;
     const meta = LOCALES[code];
     let status: CoverageStatus = "MISSING";
-    let fallbackLocale: AnyLocale | undefined;
+    let fallbackLocale: SupportedLocale | undefined;
     if (available.has(code)) {
       status = "EXISTS";
     } else if (available.has(meta.fallbackLocale)) {
