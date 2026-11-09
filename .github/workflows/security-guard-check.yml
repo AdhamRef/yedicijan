@@ -34,3 +34,10 @@ jobs:
         run: npm run typecheck:integration-release
       - name: Run isolated security guard tests
         run: node --import tsx --test tests/integration-settings/donation-abuse-policy.test.ts tests/integration-settings/payment-initiation-budget.test.ts tests/integration-settings/emergency-maintenance-contract.test.ts tests/integration-settings/donation-fraud-persistence-contract.test.ts tests/integration-settings/verified-gateway-decline-wiring.test.ts tests/integration-settings/payfor-authentication.test.ts tests/integration-settings/trusted-donor-exemption.test.ts
+      - name: Verify production Next.js build with guard disabled
+        env:
+          DATABASE_URL: mongodb://127.0.0.1:27017/yedicihan_ci_build
+          DONATION_ABUSE_GUARD_ENABLED: "false"
+          EMERGENCY_MAINTENANCE_FORCE: "false"
+          NODE_ENV: production
+        run: npm run build
