@@ -1,4 +1,7 @@
-import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
+import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { metaDonationEventId } from "@/lib/tracking/canonical";
@@ -110,11 +113,11 @@ function buildBrowserAdvancedMatching(row: DonationTrackingRow) {
 }
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  if (!id) {
+  if (!isDonationId(id)) {
     return NextResponse.json<TrackingResponseFail>({ ok: false, reason: "missing donation id" }, { status: 400 });
   }
 
@@ -126,6 +129,10 @@ export async function GET(
   if (!row) {
     return NextResponse.json<TrackingResponseFail>({ ok: false, reason: "not found" }, { status: 404 });
   }
+  const session = await getServerSession(authOptions);
+  const access = donationAccessLevel(req, session, row);
+  if (!access) return NextResponse.json<TrackingResponseFail>({ ok:false, reason:"forbidden" }, { status:403 });
+
 
   if (row.status !== "PAID") {
     return NextResponse.json<TrackingResponseFail>({ ok: false, reason: `not paid (status=${row.status})` }, { status: 200 });
@@ -187,11 +194,11 @@ export async function GET(
     paymentInfoAvailable: true,
     donationType: isMonthly ? "MONTHLY" : "ONE_TIME",
     paymentMethod: (row.paymentMethod ?? "CARD").toLowerCase(),
-    browserAdvancedMatching: buildBrowserAdvancedMatching(row),
+    browserAdvancedMatching: access === "guest" ? undefined : buildBrowserAdvancedMatching(row),
   };
 
   return NextResponse.json<TrackingResponseOk>(payload, {
     status: 200,
-    headers: { "Cache-Control": "private, max-age=300" },
+    headers: { "Cache-Control": "private, no-store" },
   });
 }
