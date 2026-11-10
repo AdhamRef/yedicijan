@@ -108,6 +108,17 @@ test("isolated Stripe payment mismatch rejected and concurrent valid settlement 
  assert.equal((await prisma.category.findUnique({where:{id:categoryId}})).currentAmount,37.25);
  assert.equal(await stripe.settleVerifiedStripeDonation(proof),"skipped");
 });
+test("isolated recurring invoice unique ledger rejects parallel replay",async()=>{
+  const invoiceId="in_synthetic_concurrency_"+nonce;
+  const data={invoiceId,subscriptionId:owner.id,donorId:owner.id,
+    currency:"usd",amountSmallestUnit:5025};
+  const results=await Promise.allSettled(Array.from({length:8},()=>
+    prisma.stripeInvoiceSettlement.create({data})));
+  const winners=results.filter(r=>r.status==="fulfilled");
+  assert.equal(winners.length,1,JSON.stringify(results.map(r=>r.status)));
+  assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),1);
+  await prisma.stripeInvoiceSettlement.deleteMany({where:{invoiceId}});
+});
 after(async()=>{
  for(const id of donationIds){
   await prisma.donationItem.deleteMany({where:{donationId:id}});
