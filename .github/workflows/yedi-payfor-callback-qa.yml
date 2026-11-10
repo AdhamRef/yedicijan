@@ -10,6 +10,7 @@ on:
       - "app/api/payfor/3dpay/**"
       - "tests/finance/payfor-response-hash.test.ts"
       - "tests/finance/payfor-guest-intent.test.ts"
+      - "tests/db/payfor-http-isolated.integration.mjs"
       - "lib/payfor-guest-intent.ts"
       - "app/api/donations/route.ts"
       - "app/api/cart/payment/route.ts"
@@ -30,3 +31,71 @@ jobs:
           node-version: "24"
       - name: Test bank signature and amount verification without network/payment calls
         run: node --experimental-strip-types --test tests/finance/payfor-response-hash.test.ts tests/finance/payfor-guest-intent.test.ts
+
+  payment-http:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "1"
+      CI_MONGO_ISOLATED: "1"
+      DATABASE_URL: "mongodb://127.0.0.1:27017/yedi_ci_payfor_http?replicaSet=rs0&directConnection=true"
+      NEXTAUTH_URL: "http://127.0.0.1:3109"
+      NEXTAUTH_SECRET: "synthetic-payfor-http-session-secret-long-enough-987654"
+      PAYFOR_GUEST_INTENT_SECRET: "synthetic-payfor-guest-intent-secret-9876543210"
+      PAYFOR_MERCHANT_ID: "synthetic-merchant"
+      PAYFOR_MERCHANT_PASS: "synthetic-merchant-key"
+      PAYFOR_USER_CODE: "synthetic-user"
+      GOOGLE_CLIENT_ID: "synthetic-google-client"
+      GOOGLE_CLIENT_SECRET: "synthetic-google-secret"
+      FACEBOOK_CLIENT_ID: "synthetic-facebook-client"
+      FACEBOOK_CLIENT_SECRET: "synthetic-facebook-secret"
+    steps:
+      - name: Fetch exact reviewed source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install and generate Prisma (no real credentials)
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx --no-install prisma generate --schema prisma/schema.prisma
+      - name: Start disposable local MongoDB replica set
+        run: |
+          set -euo pipefail
+          docker run --detach --name yedi-payfor-ci -p 127.0.0.1:27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec yedi-payfor-ci mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx '1'; then break; fi
+            sleep 2
+          done
+          docker exec yedi-payfor-ci mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec yedi-payfor-ci mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx 'true'; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Apply schema to disposable database only
+        run: npx --no-install prisma db push --schema prisma/schema.prisma
+      - name: Test real HTTP with synthetic donors; no payment network
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3109 > /tmp/yedi-payfor-http-server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          if ! node --import tsx --test tests/db/payfor-http-isolated.integration.mjs; then
+            tail -n 100 /tmp/yedi-payfor-http-server.log
+            exit 1
+          fi
+      - name: Destroy local database
+        if: always()
+        run: docker rm -f yedi-payfor-ci || true
