@@ -1731,3 +1731,18 @@ model UrgentBannerTranslation {
 
   @@unique([bannerId, locale])
 }
+
+
+// Dedicated, idempotent ledger key for Stripe recurring invoice settlements.
+// The unique bank invoice reference is inserted in the same Mongo transaction
+// as donations and project totals; replayed webhooks cannot credit twice.
+model StripeInvoiceSettlement {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceId          String   @unique
+  subscriptionId     String   @db.ObjectId
+  donorId            String   @db.ObjectId
+  amountSmallestUnit Int
+  currency           String
+  createdAt          DateTime @default(now())
+}
+
