@@ -102,11 +102,18 @@ test("real Chromium desktop dashboard: persistence after reload, multilingual UI
  const errors=[];page.on("pageerror",e=>errors.push(e.message));
  await page.goto(site+"/dashboard/platform-connections/tracking",{waitUntil:"domcontentloaded"});
  await page.getByText("Microsoft Clarity",{exact:true}).first().waitFor({timeout:25000});
+ const headings={ar:"إدارة Clarity وGTM",tr:"Clarity ve GTM",en:"Clarity and GTM",
+   fr:"Clarity et GTM",id:"Clarity dan GTM",pt:"Clarity e GTM",
+   es:"Clarity y GTM",de:"Clarity und GTM"};
+ await page.waitForFunction(()=>document.querySelector('section[aria-label="Google Tag Manager"] input')?.value==="GTM-ABCD1234",{},{timeout:12000});
+ for(const [code,heading] of Object.entries(headings)){
+   await page.getByRole("combobox",{name:"Language"}).selectOption(code);
+   await page.getByRole("heading",{name:heading}).waitFor({timeout:8000});
+ }
  await page.getByRole("combobox",{name:"Language"}).selectOption("en");
- await page.getByRole("heading",{name:"Clarity and GTM"}).waitFor({timeout:10000});
  assert.equal(await page.locator('section[aria-label="Google Tag Manager"] input').first().inputValue(),"GTM-ABCD1234");
  await page.getByRole("button",{name:"Reload"}).click();
- await page.locator('section[aria-label="Google Tag Manager"] input').first().waitFor();
+ await page.waitForFunction(()=>document.querySelector('section[aria-label="Google Tag Manager"] input')?.value==="GTM-ABCD1234",null,{timeout:10000});
  assert.equal(await page.locator('section[aria-label="Microsoft Clarity"] input').first().inputValue(),"u614k028k2");
  assert.equal(await page.locator("script[src*='/gtm.js']").count(),0);
  assert.equal(await page.locator("script[src*='clarity.ms/tag']").count(),0);
