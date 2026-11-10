@@ -26,3 +26,14 @@
 ## Evidence gaps
 - No VPS terminal access is available in this ChatGPT execution. Deployed commit, true process manager, remote backup status and live bank merchant capabilities remain unverified.
 - GitHub CI verifies the **candidate source tree only**, not the running production binary.
+
+## Receipt / retry safety hold (PR #24 follow-up)
+- Issuing an official PDF requires PAID + paidAt + an authenticated Stripe payment marker (one-time) or matching committed Stripe invoice ledger (recurring). Legacy transactions with missing provider proof, plus Albaraka/PayFor without an approved settlement attestation, are **blocked from official PDF generation pending manual reconciliation**. Do not fabricate proof or modify historical payment records to unblock.
+- Browser-initiated retry is temporarily disabled with HTTP 409, even for a previously FAILED sentinel, until the relevant bank exposes an authenticated final-state inquiry. No replacement donation is created. The preexisting reference remains available for staff reconciliation, but must not be exposed to an unauthorized browser.
+- Stripe payment_intent.payment_failed is a failed *attempt*, not a final donation verdict. Signed provider success with the exact donor, intent/order reference, amount and currency can settle the same attempt; paidAt transaction guards credit increments. A signed test fixture is not evidence of real financial settlement.
+
+## Mandatory dedicated guest key and rotation
+- Set DONATION_GUEST_ACCESS_SECRET to an independently generated high-entropy value of at least 32 bytes **via the actual YediCihan VPS secrets manager** before enabling new guest checkouts. Never reuse NEXTAUTH_SECRET, bank credentials, production database access, or another institution's key.
+- Key rotation: set a new DONATION_GUEST_ACCESS_SECRET and temporarily set DONATION_GUEST_ACCESS_PREVIOUS_SECRET plus DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL (Unix seconds). The previous key verifies old cookies only until the cutoff, at most 24 hours ahead; it never signs new cookies. Remove the old key after this window and confirm old tokens are invalid.
+- Tokens previously signed using the deprecated NEXTAUTH_SECRET fallback cannot be safely migrated silently to a new security domain. Allow authenticated ownership to work, and provide a separately reviewed authenticated donor recovery path for guest sessions whose old cookies become invalid. This is a release communication/compatibility gate, not permission to restore the insecure fallback.
+- Do not print any of these key values in logs, GitHub workflows, screenshots or PR comments.
