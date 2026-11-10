@@ -33,5 +33,31 @@ if command -v pm2 >/dev/null 2>&1; then
 else
   echo "PM2 not available to this user"
 fi
-echo "WARNING: this only identifies the cwd checkout. Verify process cwd/release symlink separately with an authorized operator."
+if command -v pm2 >/dev/null 2>&1 && [ -n "${YEDI_PM2_NAME:-}" ]; then
+  echo "Checking selected PM2 process (no environment dump): ${YEDI_PM2_NAME}"
+  pid="$(pm2 pid "$YEDI_PM2_NAME" 2>/dev/null | tr -d '\r\n ' || true)"
+  case "$pid" in
+    ''|0|*[!0-9]*)
+      echo "BLOCKED: specify a single running PM2 process with YEDI_PM2_NAME"
+      exit 4
+      ;;
+  esac
+  cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+  if [ -z "$cwd" ] || [ ! -d "$cwd" ]; then
+    echo "BLOCKED: cannot inspect the selected running process cwd"
+    exit 5
+  fi
+  process_remote="$(git -C "$cwd" remote get-url origin 2>/dev/null || true)"
+  case "$process_remote" in
+    *github.com[:/]AdhamRef/yedicijan|*github.com[:/]AdhamRef/yedicijan.git) ;;
+    *) echo "BLOCKED: PM2 process cwd does not identify YediCihan repository"; exit 6 ;;
+  esac
+  echo "PM2 PID: $pid"
+  echo "PM2 running-process cwd: $cwd"
+  echo "PM2 process cwd git SHA: $(git -C "$cwd" rev-parse HEAD)"
+  echo "IMPORTANT: a git SHA in process cwd is not an immutable artifact checksum."
+  echo "Verify the process's deployed build artifact and release manifest separately."
+else
+  echo "PM2 process identity not verified; operator may set YEDI_PM2_NAME after confirming exact service."
+fi
 echo "No deployment, restart, payment, rollback or database command was executed."
