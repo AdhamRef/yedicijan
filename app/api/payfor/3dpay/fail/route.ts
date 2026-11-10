@@ -15,7 +15,11 @@ export async function POST(req: NextRequest) {
   }
 
   const form = await req.formData();
-  const raw = Object.fromEntries(form.entries());
+  // Bank form fields are strings; normalize before assigning to Prisma JSON.
+  // This does not validate the callback. Signature/order verification is a separate P0 gate.
+  const raw: Record<string, string> = Object.fromEntries(
+    Array.from(form.entries(), ([key, value]) => [key, String(value)])
+  );
 
   console.error("[PayFor FAIL] Bank response:", JSON.stringify(raw, null, 2));
 
@@ -39,7 +43,7 @@ export async function POST(req: NextRequest) {
           providerProcReturnCode: procReturnCode || null,
           providerTxnResult: txnResult || null,
           providerErrorMessage: errorMessage || null,
-          providerRaw: raw as Record<string, unknown>,
+          providerRaw: raw,
         },
       });
       void dispatchEvent("DONATION_FAILED", { donationId });
