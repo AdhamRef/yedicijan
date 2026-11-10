@@ -1,3 +1,4 @@
+import { toast } from "react-hot-toast";
 "use client";
 
 import Image from "next/image";
@@ -404,6 +405,10 @@ const CartPaymentDialog = ({
     try {
       if (!session?.user?.id && !useGuestCheckout) {
         requestCheckoutSignIn(getPaymentInfoStepIndex());
+        return;
+      }
+      if (gateway === "UNAVAILABLE") {
+        toast.error("طريقة الدفع بهذه العملة غير متاحة حاليًا؛ لم تتم محاولة أي خصم.");
         return;
       }
       setLoading(true);
