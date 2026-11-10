@@ -6,8 +6,9 @@ import { resolveGateway, SUPPORTED_DONATION_CURRENCIES, MONTHLY_DONATIONS_ENABLE
 import { albarakaTargetCurrency, albarakaCurrencyCode } from "../../lib/albaraka.ts";
 
 const supported = [...SUPPORTED_DONATION_CURRENCIES];
+assert.equal(supported.length,14,"canonical currency selector currently exposes 14 currencies");
 const nonTurkish = supported.filter(c => c !== "TRY");
-test("each supported one-time currency: neither PayFor flag nor public ready flag can reroute to disabled provider", () => {
+test("all 14 canonical one-time currencies: neither PayFor flag nor public ready flag can reroute to disabled provider", () => {
   for (const flag of ["0", "1"]) {
     process.env.NEXT_PUBLIC_PAYFOR_SECURE_FLOW_READY = flag;
     for (const payforEnabled of [false, true]) {
@@ -21,7 +22,7 @@ test("each supported one-time currency: neither PayFor flag nor public ready fla
   delete process.env.NEXT_PUBLIC_PAYFOR_SECURE_FLOW_READY;
 });
 test("unsupported ISO codes cannot be silently treated as Turkish lira", () => {
-  for (const currency of ["", "INVALID", "CHF", "JPY", "CAD", "AUD", "UNKNOWN"]) {
+  for (const currency of ["", "INVALID", "EGP", "CHF", "JPY", "UNKNOWN"]) {
     assert.equal(resolveGateway({currency, payforEnabled:true}), "UNAVAILABLE");
     assert.equal(resolveGateway({currency, payforEnabled:false}), "UNAVAILABLE");
   }
