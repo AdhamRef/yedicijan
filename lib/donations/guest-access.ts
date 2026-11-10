@@ -73,7 +73,12 @@ export function verifyGuestDonationAccess(
   const parts = token.split(".");
   if (parts.length !== 2 || !parts.every(p => /^[A-Za-z0-9_-]+$/.test(p))) return false;
   try {
+    const payloadBytes = Buffer.from(parts[0], "base64url");
     const supplied = Buffer.from(parts[1], "base64url");
+    // Reject alternate base64url encodings with unused low bits. Otherwise
+    // mutating the final character may decode to the same valid HMAC bytes.
+    if (payloadBytes.toString("base64url") !== parts[0] ||
+        supplied.toString("base64url") !== parts[1]) return false;
     const authentic = secrets.some(secret => {
       const expected = mac(parts[0], secret);
       return supplied.length === expected.length && timingSafeEqual(supplied, expected);
