@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+// @ts-expect-error Standalone Node/tsx runner requires explicit .ts extension.
 import * as tokenModule from "../../lib/donations/guest-access.ts";
+// @ts-expect-error Standalone Node/tsx runner requires explicit .ts extension.
 import * as settlementModule from "../../lib/donations/stripe-settlement.ts";
 const { createGuestDonationAccess, verifyGuestDonationAccess } =
-  (tokenModule.default ?? tokenModule) as typeof tokenModule;
+  ((tokenModule as typeof tokenModule & {default?:typeof tokenModule}).default ?? tokenModule);
 const { stripePaymentMatches } =
-  (settlementModule.default ?? settlementModule) as typeof settlementModule;
+  ((settlementModule as typeof settlementModule & {default?:typeof settlementModule}).default ?? settlementModule);
 
 process.env.DONATION_GUEST_ACCESS_SECRET="synthetic-test-only-secret-not-production-0123456789";
 const now=Date.UTC(2026,10,10,14,0,0);
