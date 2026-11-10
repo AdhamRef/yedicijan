@@ -2173,30 +2173,9 @@ const DonationDialog = ({
         const { error: confirmError } =
           await stripeFormRef.current.confirmPayment(clientSecret);
         if (confirmError) {
-          // Mark the preemptively-created donation as FAILED so we keep an audit trail and
-          // prevent the row from incorrectly counting as PAID. Fire-and-forget — the
-          // donation-failed page works even if this PATCH fails.
-          axios
-            .patch(`/api/donations/${targetDonationId}/fail`, {
-              reason: confirmError.message ?? "stripe_confirm_failed",
-            })
-            .catch(() => {});
-          tracking?.trackPaymentFailed({
-            value: donationAmount,
-            currency: getCurrency(),
-            causeId: campaignId || categoryId || undefined,
-            reason: confirmError.message ?? "stripe_confirm_failed",
-            gateway: "stripe",
-            donationId: targetDonationId,
-          });
-          // Redirect to /donation-failed so the user lands on the explanatory page
-          // with the bank-transfer fallback — toast alone disappears too quickly.
-          router.push(
-            appendCurrencyQuery(
-              `/donation-failed?donationId=${encodeURIComponent(targetDonationId)}`,
-              getCurrencyCodeForLinks(),
-            ),
-          );
+          // A client-side confirmation error is not a bank-certified failure.
+          // Do not mutate transaction state or emit DonateFailed tracking.
+          router.push(appendCurrencyQuery(`/donation-pending?donationId=${encodeURIComponent(targetDonationId)}`, getCurrencyCodeForLinks()));
           return;
         }
 
@@ -2329,7 +2308,7 @@ const DonationDialog = ({
           payforPollRef.current = setInterval(async () => {
             polls++;
             try {
-              const res = await fetch(`/api/donations/${donationId}`);
+              const res = await fetch(`/api/donations/${donationId}/status`);
               if (!res.ok) return;
               const data = await res.json();
 
@@ -2349,7 +2328,7 @@ const DonationDialog = ({
               }
               if (data.status === "FAILED") {
                 if (payforPollRef.current) { clearInterval(payforPollRef.current); payforPollRef.current = null; }
-                router.push(appendCurrencyQuery(`/donation-pending?donationId=${encodeURIComponent(donationId)}`, getCurrencyCodeForLinks()));
+                router.push(appendCurrencyQuery(`/donation-failed?donationId=${encodeURIComponent(donationId)}`, getCurrencyCodeForLinks()));
                 return;
               }
               if (payforPopupRef.current?.closed || polls >= FALLBACK_AFTER_POLLS) {
@@ -2360,7 +2339,7 @@ const DonationDialog = ({
                 }
                 router.push(
                   appendCurrencyQuery(
-                    `/donation-failed?donationId=${encodeURIComponent(donationId)}`,
+                    `/donation-pending?donationId=${encodeURIComponent(donationId)}`,
                     getCurrencyCodeForLinks(),
                   ),
                 );
