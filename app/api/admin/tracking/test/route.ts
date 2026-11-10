@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       missing.push("facebookAccessToken");
       guidance.push("أضف Access Token الخاص بـ Meta CAPI من Business Settings > System Users.");
     }
-    if (missing.length) {
+    if (missing.length || !pixelId || !accessToken) {
       await audit(p, "missing_config", eventName, eventId, { missingFields: missing });
       return missingConfig(p, missing, guidance);
     }
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       },
       { pixelId, accessToken }
     );
-    await audit(p, result.ok ? "success" : "failed", eventName, eventId, result, result.error || result.reason);
+    await audit(p, result.ok ? "success" : "failed", eventName, eventId, { ok: result.ok, reason: result.reason, error: result.error, fbtrace_id: result.fbtrace_id }, result.error || result.reason);
     return NextResponse.json({
       ok: result.ok,
       platform: p,

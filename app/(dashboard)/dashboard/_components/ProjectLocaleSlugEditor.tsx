@@ -270,25 +270,25 @@ function setupApiFailureReporter() {
   if ((window as any).__campaignCreateFailureReporterMounted) return;
   (window as any).__campaignCreateFailureReporterMounted = true;
 
-  const OriginalXHR = window.XMLHttpRequest;
-  window.XMLHttpRequest = function PatchedXHR() {
-    const xhr = new OriginalXHR();
-    let method = "";
-    let url = "";
-    const originalOpen = xhr.open;
-    xhr.open = function patchedOpen(this: XMLHttpRequest, m: string, u: string | URL, ...rest: any[]) {
-      method = String(m || "").toUpperCase();
-      url = String(u || "");
-      return originalOpen.call(this, m, u, ...rest as [boolean?, string?, string?]);
-    } as XMLHttpRequest["open"];
-    xhr.addEventListener("loadend", () => {
-      if (method === "POST" && url.includes("/api/campaigns") && xhr.status >= 400) {
-        const reason = parseErrorMessage(xhr.responseText) || `فشل إنشاء المشروع. كود الخطأ: ${xhr.status}`;
-        showCreationReason(String(reason));
-      }
-    });
-    return xhr;
-  } as typeof XMLHttpRequest;
+  const originalOpen = window.XMLHttpRequest.prototype.open;
+  window.XMLHttpRequest.prototype.open = function trackedCreateRequest(
+    this: XMLHttpRequest,
+    method: string,
+    url: string | URL,
+    async = true,
+    username?: string | null,
+    password?: string | null,
+  ) {
+    if (String(method).toUpperCase() === "POST" && String(url).includes("/api/campaigns")) {
+      this.addEventListener("loadend", () => {
+        if (this.status >= 400) {
+          const reason = parseErrorMessage(this.responseText) || `فشل إنشاء المشروع. كود الخطأ: ${this.status}`;
+          showCreationReason(String(reason));
+        }
+      }, { once: true });
+    }
+    return Reflect.apply(originalOpen, this, [method, url, async, username, password]);
+  } as typeof window.XMLHttpRequest.prototype.open;
 }
 
 function setupArabicOnlyCreationFallback() {

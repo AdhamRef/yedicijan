@@ -15,7 +15,7 @@ export async function storeArchiveBlobFile(args: {
   category: string;
   fileName: string;
   contentType: string;
-  body: BodyInit | Buffer;
+  body: Blob | ArrayBuffer | Buffer | string;
 }): Promise<ArchiveBlobStoredFile> {
   const safeName = args.fileName.replace(/[^\p{L}\p{N}._-]+/gu, "-").replace(/^-+|-+$/g, "") || "archive-file";
   const folder = args.category === "DOCUMENTS" ? "documents" : "marketing";

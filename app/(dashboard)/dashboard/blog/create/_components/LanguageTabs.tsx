@@ -88,7 +88,6 @@ export default function LanguageTabs({ post, categories, campaignOptions = [], m
           post={post}
           categories={categories}
           campaignOptions={campaignOptions}
-          userId={undefined}
           redirectAfterCreate={"/blog"}
           isCreate={isCreate}
         />

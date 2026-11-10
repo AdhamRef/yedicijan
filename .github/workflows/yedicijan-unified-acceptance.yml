@@ -1,0 +1,142 @@
+name: YediCihan unified integration acceptance (no production)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/yedicijan-unified-acceptance.yml"
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "prisma/**"
+      - "scripts/**"
+      - "tests/**"
+      - "i18n/**"
+      - "middleware.ts"
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedicijan_ci_no_connection?replicaSet=rs0
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Fetch exact reviewed SHA without legacy submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Locked dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Offline Prisma schema validation
+        run: |
+          npx prisma validate --schema prisma/schema.prisma
+          npx prisma validate --schema prisma/integration-settings.schema.prisma
+          npx prisma validate --schema prisma/dashboard-foundation.schema.prisma
+          npx prisma generate --schema prisma/schema.prisma
+          npx prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Locale invariants and source audit
+        run: |
+          npm run locale:audit:strict
+          node --test tests/finance/repository-surface-audit.test.mjs tests/finance/locale-independence.test.mjs tests/finance/sitemap-runtime.test.mjs
+      - name: Synthetic acceptance contracts for packages A–E
+        run: |
+          node --import tsx --test \
+            tests/finance/donor-segment-validation.test.ts \
+            tests/finance/communication-active-locales.test.ts \
+            tests/finance/yedicihan-urgent-banners.test.ts \
+            tests/finance/urgent-banner-permissions.test.ts \
+            tests/finance/settled-attribution.test.ts \
+            tests/finance/campaign-media-access.test.ts \
+            tests/finance/mongo-raw-command.test.ts
+      - name: Existing integration contracts
+        run: npm run test:integration-settings
+      - name: Scoped runtime TypeScript
+        run: |
+          npm run typecheck:communication-runtime
+          npm run typecheck:integration-release
+
+  full-typescript:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedicijan_ci_no_connection?replicaSet=rs0
+    steps:
+      - name: Fetch exact reviewed SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies and generate Prisma clients
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx prisma generate --schema prisma/schema.prisma
+          npx prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Full TypeScript compilation (required for production)
+        run: npx tsc --noEmit --incremental false
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedicijan_ci_no_connection?replicaSet=rs0
+      NEXT_TELEMETRY_DISABLED: "1"
+      GOOGLE_CLIENT_ID: "synthetic-ci-only-google-client"
+      GOOGLE_CLIENT_SECRET: "synthetic-ci-only-google-secret"
+      NEXTAUTH_SECRET: "ci-only-not-a-real-secret"
+      NEXTAUTH_URL: "http://127.0.0.1:3000"
+      STRIPE_SECRET_KEY: "sk_test_synthetic_ci_only_no_payment"
+      STRIPE_WEBHOOK_SECRET: "whsec_synthetic_ci_only"
+    steps:
+      - name: Fetch exact reviewed SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies and generate Prisma clients
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx prisma generate --schema prisma/schema.prisma
+          npx prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Next compile / static generation with no production credentials
+        run: npx next build

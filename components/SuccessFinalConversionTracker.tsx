@@ -24,11 +24,6 @@ type DonateTrackingPayload = {
   paymentMethod?: string;
 };
 
-type FbqFn = (command: string, eventName: string, params?: Record<string, unknown>, options?: Record<string, unknown>) => void;
-
-declare global {
-  interface Window { fbq?: FbqFn; }
-}
 
 const MAX_ATTEMPTS = 20;
 const RETRY_MS = 750;

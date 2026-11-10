@@ -197,7 +197,7 @@ function ensureLocaleLinksSection(projectId: string) {
   if (document.getElementById(LOCALE_LINKS_ID)) return false;
 
   const firstSection = Array.from(form.children).find(
-    (child): child is HTMLElement => child instanceof HTMLElement && isSectionCandidate(child) && child.textContent?.includes("المعلومات الأساسية"),
+    (child): child is HTMLElement => child instanceof HTMLElement && isSectionCandidate(child) && (child.textContent?.includes("المعلومات الأساسية") ?? false),
   );
 
   const section = createLocaleLinksSection(projectId);

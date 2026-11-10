@@ -1,4 +1,5 @@
 import test from "node:test";
+import { syntheticProcessEnv } from "./synthetic-process-env";
 import assert from "node:assert/strict";
 import { IntegrationSettingsService, IntegrationSettingsError } from "../../lib/integration-settings/service";
 import type {
@@ -133,7 +134,7 @@ class MemoryRepository implements IntegrationSettingsRepository {
   }
 }
 
-function setup(options?: { env?: NodeJS.ProcessEnv; result?: ProviderConnectionTestResult }) {
+function setup(options?: { env?: Record<string, string | undefined>; result?: ProviderConnectionTestResult }) {
   const repository = new MemoryRepository();
   const audits: IntegrationSettingsAuditEntry[] = [];
   let clock = 1_000;
@@ -141,7 +142,7 @@ function setup(options?: { env?: NodeJS.ProcessEnv; result?: ProviderConnectionT
   let result: ProviderConnectionTestResult = options?.result ?? { success: true, connectionStatus: "CONNECTED", messageAr: "نجح الاختبار.", failureCode: null };
   const providerTester: IntegrationProviderTester = { test: async () => result };
   const service = new IntegrationSettingsService(repository, { write: async (entry) => { audits.push(entry); } }, {
-    env: options?.env ?? { NODE_ENV: "test" },
+    env: syntheticProcessEnv(options?.env),
     encryptionKey: () => KEY,
     now: () => new Date(++clock),
     candidateVersion: () => UUIDS[versionIndex++] ?? crypto.randomUUID(),

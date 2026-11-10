@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -88,11 +89,11 @@ function sanitizeScalar(value: unknown): string | boolean | null {
 }
 
 async function getRawTrackingSettings(): Promise<TrackingRaw | null> {
-  const result = await prisma.$runCommandRaw({
+  const result = await prisma.$runCommandRaw(mongoRawObject({
     find: COLLECTION,
     limit: 1,
     sort: { createdAt: 1 },
-  });
+  }));
   const batch = isPlainObject(result) && isPlainObject(result.cursor) && Array.isArray(result.cursor.firstBatch)
     ? result.cursor.firstBatch
     : [];
@@ -198,7 +199,7 @@ async function persistRawSettings(update: { $set: Record<string, unknown>; $unse
         },
       ],
     };
-    await prisma.$runCommandRaw(command);
+    await prisma.$runCommandRaw(mongoRawObject(command));
     return getRawTrackingSettings();
   }
 
@@ -208,7 +209,7 @@ async function persistRawSettings(update: { $set: Record<string, unknown>; $unse
     updatedAt: now,
     metaDonateEventName: update.$set.metaDonateEventName ?? "Donate",
   };
-  await prisma.$runCommandRaw({ insert: COLLECTION, documents: [insertDoc] });
+  await prisma.$runCommandRaw(mongoRawObject({ insert: COLLECTION, documents: [insertDoc] }));
   return getRawTrackingSettings();
 }
 

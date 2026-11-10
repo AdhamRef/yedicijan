@@ -824,7 +824,7 @@ export default function MonthlySubscriptionsDashboardPage() {
               icon={Repeat}
               eyebrow="الإيراد الشهري المتكرر (MRR)"
               badge="شهريًا"
-              value={formatMoney(Math.round(stats?.monthlyRecurringRevenue) ?? 0)}
+              value={formatMoney(Math.round(stats?.monthlyRecurringRevenue ?? 0))}
               note="مجموع قيم الاشتراكات النشطة شهريًا."
             />
             {/* ARR is MRR×12 — a projection of the current book, not money collected. The note

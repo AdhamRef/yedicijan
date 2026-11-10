@@ -9,13 +9,17 @@ import { useRouter } from "next/navigation";
 import { ImageIcon, Pencil, PlusCircle, Globe, Loader2, X, Upload } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { Post } from "@prisma/client";
+import type { Post, PostTranslation } from "@prisma/client";
 import Image from "next/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form } from "@/components/ui/form";
 
 interface ImageFormProps {
-  initialData: Post;
+  initialData: Post & {
+    imageAR?: string | null;
+    imageEN?: string | null;
+    translations?: Array<Pick<PostTranslation, "locale" | "image">>;
+  };
   postId: string;
 }
 
@@ -41,8 +45,8 @@ const ImageForm: React.FC<ImageFormProps> = ({ initialData, postId }) => {
 
   // Map initial data to new structure
   const mappedInitialData = {
-    imageAR: initialData?.imageAR || "",
-    imageEN: initialData?.imageEN || "",
+    imageAR: initialData?.imageAR || initialData?.image || "",
+    imageEN: initialData?.imageEN || initialData?.translations?.find((item) => item.locale === "en")?.image || "",
   };
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -140,7 +144,7 @@ const ImageForm: React.FC<ImageFormProps> = ({ initialData, postId }) => {
                   alt="صورة المقال بالعربية"
                   fill
                   className="object-cover rounded-md"
-                  src={initialData?.imageAR || initialData?.image}
+                  src={initialData?.imageAR || initialData?.image || ""}
                 />
               ) : (
                 <div className="flex items-center justify-center h-60 bg-slate-200 rounded-md">
@@ -151,12 +155,12 @@ const ImageForm: React.FC<ImageFormProps> = ({ initialData, postId }) => {
           </TabsContent>
           <TabsContent value="en" className="mt-2">
             <div className="relative aspect-video mt-2">
-              {initialData?.imageEN ? (
+              {(initialData?.imageEN || initialData?.translations?.find((item) => item.locale === "en")?.image) ? (
                 <Image
                   alt="Article image in English"
                   fill
                   className="object-cover rounded-md"
-                  src={initialData?.imageEN}
+                  src={initialData?.imageEN || initialData?.translations?.find((item) => item.locale === "en")?.image || ""}
                 />
               ) : (
                 <div className="flex items-center justify-center h-60 bg-slate-200 rounded-md">

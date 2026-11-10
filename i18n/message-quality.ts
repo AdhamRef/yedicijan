@@ -38,7 +38,8 @@ function pathSet(obj: MessageObject, path: string, value: MessageValue) {
   current[parts[parts.length - 1]] = cloneValue(value);
 }
 
-function mergeMissing(base: MessageValue, fallback: MessageValue): MessageValue {
+function mergeMissing(base: MessageValue, fallback: MessageValue | undefined): MessageValue {
+  if (fallback === undefined) return base;
   if (typeof base === "string") {
     if (!EMPTY_TEXT_RE.test(base)) return base;
     return typeof fallback === "string" ? fallback : base;

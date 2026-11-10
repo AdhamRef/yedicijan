@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
         isActive: cat.isActive ?? true,
         campaignCount: cat._count?.campaigns ?? undefined,
         campaigns: includeCampaigns ? (campaignsByCategory[cat.id] || []).map(c => {
-          const tC = pickTranslation(c.translations, locale);
+          const tC = pickTranslation<{ locale: string; title?: string | null; description?: string | null }>(c.translations, locale);
           return {
             id: c.id,
             slug: c.slug ?? null,

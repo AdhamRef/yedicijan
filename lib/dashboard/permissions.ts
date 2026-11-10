@@ -76,6 +76,7 @@ export function userCanExportReports(user: UserLike | undefined): boolean { retu
 
 const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
   { prefix: "/dashboard/platform-connections", key: "platformConnections" },
+  { prefix: "/dashboard/marketing/settled-attribution", key: "referrals" },
   { prefix: "/dashboard/marketing/attribution", key: "referrals" },
   { prefix: "/dashboard/marketing/tracking", key: "pixels" },
   { prefix: "/dashboard/marketing/connections", key: "platformConnections" },
@@ -98,6 +99,7 @@ const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
   // `messages` — a staffer granted the inbox was bounced straight back out of it.
   { prefix: "/dashboard/inbox", key: "messages" },
   { prefix: "/dashboard/templates", key: "templates" },
+  { prefix: "/dashboard/urgent-banners", key: "campaigns" },
   { prefix: "/dashboard/campaigns", key: "campaigns" },
   { prefix: "/dashboard/categories", key: "categories" },
   { prefix: "/dashboard/blog", key: "blog" },

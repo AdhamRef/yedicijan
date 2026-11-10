@@ -2,6 +2,10 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 import { SITE_URL, LOCALES } from "@/lib/seo";
 
+// Next.js MetadataRoute: resolve published links at request time, never during
+// "next build". CI must not require the production MongoDB.
+export const dynamic = "force-dynamic";
+
 const STATIC_PATHS = [
   { path: "", changeFreq: "daily" as const, priority: 1.0 },
   { path: "/campaigns", changeFreq: "daily" as const, priority: 0.9 },
@@ -90,7 +94,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         });
       }
     }
-  } catch {
+  } catch (error) {
+    // Never return a silently incomplete sitemap when the database is down.
+    console.error('Failed to load sitemap entities', error);
+    throw error;
   }
 
   try {
@@ -119,7 +126,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         });
       }
     }
-  } catch {
+  } catch (error) {
+    // Never return a silently incomplete sitemap when the database is down.
+    console.error('Failed to load sitemap entities', error);
+    throw error;
   }
 
   try {
@@ -151,7 +161,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         });
       }
     }
-  } catch {
+  } catch (error) {
+    // Never return a silently incomplete sitemap when the database is down.
+    console.error('Failed to load sitemap entities', error);
+    throw error;
   }
 
   return entries;

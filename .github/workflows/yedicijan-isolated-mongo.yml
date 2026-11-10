@@ -1,0 +1,64 @@
+name: YediCihan isolated MongoDB acceptance (never production)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "prisma/schema.prisma"
+      - "tests/db/isolated-mongo.integration.mjs"
+      - ".github/workflows/yedicijan-isolated-mongo.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  mongo-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      CI_MONGO_ISOLATED: "1"
+      DATABASE_URL: "mongodb://127.0.0.1:27017/yedi_ci_acceptance?replicaSet=rs0&directConnection=true"
+    steps:
+      - name: Fetch exact PR commit, no legacy submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+      - name: Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install lockfile and generate client
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx prisma generate --schema prisma/schema.prisma
+      - name: Start temporary local Mongo replica set
+        run: |
+          set -euo pipefail
+          docker run --detach --name yedicihan-ci-mongo -p 127.0.0.1:27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec yedicihan-ci-mongo mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx '1'; then break; fi
+            sleep 2
+          done
+          docker exec yedicihan-ci-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec yedicihan-ci-mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx 'true'; then exit 0; fi
+            sleep 2
+          done
+          echo 'Failed to start isolated replica set' >&2
+          exit 1
+      - name: Apply schema only to empty CI database
+        run: npx prisma db push --schema prisma/schema.prisma
+      - name: Execute real isolated MongoDB CRUD acceptance
+        run: node --test tests/db/isolated-mongo.integration.mjs
+      - name: Destroy temporary database container
+        if: always()
+        run: docker rm -f yedicihan-ci-mongo || true

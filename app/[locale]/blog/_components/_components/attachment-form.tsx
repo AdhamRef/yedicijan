@@ -9,8 +9,10 @@ import { useRouter } from "next/navigation";
 import { File, Loader2, PlusCircle, X } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
-// import { Attachment, Chapter } from "@prisma/client";
-// import { FileUpload } from "@/components/file-upload";
+// Legacy course-attachment UI: the current schema does not expose Chapter/Attachment.
+// Keep the local display contract explicit instead of relying on missing Prisma models.
+type Attachment = { id: string; name: string };
+type Chapter = { title?: string | null };
 
 interface AttachmentFormProps {
   initialData: Chapter & { attachments: Attachment[] };
@@ -38,13 +40,12 @@ const AttachmentForm: React.FC<AttachmentFormProps> = ({
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { pdfUrl: initialData?.title || "" },
+    defaultValues: { pdfUrl: "" },
   });
 
   const { isSubmitting, isValid } = form.formState;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    console.log("Submitting form with values:", values);
     try {
       await axios.post(
         `/api/courses/${courseId}/chapters/${chapterId}/attachments`,
@@ -90,22 +91,22 @@ const AttachmentForm: React.FC<AttachmentFormProps> = ({
       </div>
       {isEditing ? (
         <div>
-          <FileUpload
-            endpoint="courseAttachment"
-            onChange={async (pdfUrl) => {
-              console.log("File uploaded, received URL:", pdfUrl);
-              if (pdfUrl) {
-                try {
-                  await onSubmit({ pdfUrl: pdfUrl });
-                } catch (error) {
-                  console.error("Error during form submission:", error);
-                }
-              } else {
-                console.error("No URL returned from upload");
-                toast.error("Failed to get upload URL");
-              }
-            }}
-          />
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+            <label htmlFor="attachment-url" className="block text-sm font-medium">
+              رابط المرفق (PDF)
+            </label>
+            <input
+              id="attachment-url"
+              type="url"
+              required
+              {...form.register("pdfUrl")}
+              placeholder="https://example.org/file.pdf"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            />
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+              حفظ الرابط
+            </Button>
+          </form>
           <div className="text-xs text-muted-foreground mt-4">
             أرفع أي مرفق يمكن أن يحتاجه الطالب لمذاكرة الدرس
           </div>

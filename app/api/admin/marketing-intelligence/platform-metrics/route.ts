@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { createHash } from "crypto";
@@ -56,7 +57,7 @@ function metricKey(row: JsonMap) {
 }
 
 async function ensureIndexes() {
-  await prisma.$runCommandRaw({
+  await prisma.$runCommandRaw(mongoRawObject({
     createIndexes: "MarketingPlatformDailyMetric",
     indexes: [
       { key: { date: -1, platform: 1 }, name: "date_platform" },
@@ -65,7 +66,7 @@ async function ensureIndexes() {
       { key: { adId: 1, date: -1 }, name: "ad_date" },
       { key: { metricKey: 1 }, name: "metricKey_unique", unique: true },
     ],
-  }).catch(() => null);
+  })).catch(() => null);
 }
 
 function normalizeMetric(input: JsonMap) {
@@ -133,15 +134,18 @@ export async function GET(request: NextRequest) {
     if (dateTo) (filter.date as JsonMap).$lte = dateTo;
   }
 
-  const result = await prisma.$runCommandRaw({
+  const result = await prisma.$runCommandRaw(mongoRawObject({
     find: "MarketingPlatformDailyMetric",
     filter,
     sort: { date: -1, updatedAt: -1 },
     limit,
-  }) as JsonMap;
-  const rows = typeof result.cursor === "object" && result.cursor && Array.isArray((result.cursor as JsonMap).firstBatch) ? (result.cursor as JsonMap).firstBatch : [];
+  })) as JsonMap;
+  const batch = typeof result.cursor === "object" && result.cursor ? (result.cursor as JsonMap).firstBatch : null;
+  const rows: JsonMap[] = Array.isArray(batch)
+    ? batch.filter((row: unknown): row is JsonMap => typeof row === "object" && row !== null && !Array.isArray(row))
+    : [];
 
-  const summary = rows.reduce((acc, row) => {
+  const summary = rows.reduce<{ spend: number; impressions: number; clicks: number; conversions: number; revenue: number }>((acc, row) => {
     if (typeof row === "object" && row) {
       const r = row as JsonMap;
       acc.spend += readNumber(r.spend);
@@ -163,7 +167,7 @@ export async function POST(request: NextRequest) {
 
   await ensureIndexes();
   const body = await request.json().catch(() => ({}));
-  const rows = Array.isArray((body as JsonMap).rows) ? (body as JsonMap).rows : [body];
+  const rows: unknown[] = Array.isArray((body as JsonMap).rows) ? (body as { rows: unknown[] }).rows : [body];
   const normalized = rows.filter((row): row is JsonMap => typeof row === "object" && row !== null && !Array.isArray(row)).map(normalizeMetric);
   if (normalized.length === 0) return NextResponse.json({ ok: false, error: "missing rows" }, { status: 400 });
 
@@ -174,6 +178,6 @@ export async function POST(request: NextRequest) {
     upsert: true,
   }));
 
-  const result = await prisma.$runCommandRaw({ update: "MarketingPlatformDailyMetric", updates }) as JsonMap;
+  const result = await prisma.$runCommandRaw(mongoRawObject({ update: "MarketingPlatformDailyMetric", updates })) as JsonMap;
   return NextResponse.json({ ok: true, count: normalized.length, result });
 }

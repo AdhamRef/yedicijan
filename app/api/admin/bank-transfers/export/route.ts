@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -93,12 +94,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 
-    const result = await prisma.$runCommandRaw({
+    const result = await prisma.$runCommandRaw(mongoRawObject({
       find: COLLECTION,
       filter: buildFilter(url),
       sort: { transactionDate: -1, createdAt: -1 },
       limit: 10000,
-    });
+    }));
 
     const rows = isRecord(result) && isRecord(result.cursor) && Array.isArray(result.cursor.firstBatch)
       ? result.cursor.firstBatch as Record<string, unknown>[]

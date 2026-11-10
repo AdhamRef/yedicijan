@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -110,7 +111,7 @@ async function updateLink(filter: JsonMap, body: JsonMap, userId: string | null,
   if (payload.targetCountry !== undefined) editable.targetCountry = payload.targetCountry ?? null;
   if (payload.objective !== undefined) editable.objective = payload.objective ?? null;
   if (payload.internalNotes !== undefined) editable.internalNotes = payload.internalNotes ?? null;
-  const result = await prisma.$runCommandRaw({ update: "MarketingCampaignLink", updates: [{ q: filter, u: { $set: editable }, multi: false }] }) as JsonMap;
+  const result = await prisma.$runCommandRaw(mongoRawObject({ update: "MarketingCampaignLink", updates: [{ q: filter, u: { $set: editable }, multi: false }] })) as JsonMap;
   return jsonNoStore({ ok: true, matched: result.n ?? 0, action: "UPDATE" });
 }
 
@@ -119,6 +120,6 @@ async function setLinkStatus(filter: JsonMap, status: CampaignLinkStatus, userId
   if (status === "ARCHIVED") update.archivedAt = new Date();
   if (status === "DELETED") update.deletedAt = new Date();
   if (status === "ACTIVE") { update.restoredAt = new Date(); update.archivedAt = null; update.deletedAt = null; }
-  const result = await prisma.$runCommandRaw({ update: "MarketingCampaignLink", updates: [{ q: filter, u: { $set: update }, multi: false }] }) as JsonMap;
+  const result = await prisma.$runCommandRaw(mongoRawObject({ update: "MarketingCampaignLink", updates: [{ q: filter, u: { $set: update }, multi: false }] })) as JsonMap;
   return jsonNoStore({ ok: true, matched: result.n ?? 0, status });
 }

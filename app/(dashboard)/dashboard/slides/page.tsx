@@ -66,10 +66,10 @@ function DraggableSlideRow({
 
   return (
     <TableRow
-      ref={(node) => preview(drop(node))}
+      ref={(node) => { if (node) preview(drop(node)); }}
       className={`${isDragging ? 'opacity-50' : ''} ${!slide.isActive ? 'bg-muted/30' : ''} hover:bg-muted/50 transition-colors`}
     >
-      <TableCell className="w-12 p-2 cursor-grab active:cursor-grabbing" ref={drag}>
+      <TableCell className="w-12 p-2 cursor-grab active:cursor-grabbing" ref={(node) => { if (node) drag(node); }}>
         <GripVertical className="w-5 h-5 text-muted-foreground mx-auto" />
       </TableCell>
       {children}

@@ -1,3 +1,4 @@
+import { mongoRawObject } from "@/lib/db/mongo-raw-command";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -64,12 +65,12 @@ async function platformMetrics(days: number, platform?: string | null): Promise<
   from.setDate(to.getDate() - days + 1);
   const filter: JsonMap = { date: { $gte: dateKey(from), $lte: dateKey(to) } };
   if (platform && platform !== "ALL") filter.platform = platform.toUpperCase();
-  const result = await prisma.$runCommandRaw({
+  const result = await prisma.$runCommandRaw(mongoRawObject({
     find: "MarketingPlatformDailyMetric",
     filter,
     sort: { date: -1, spend: -1 },
     limit: 1000,
-  }) as JsonMap;
+  })) as JsonMap;
   const rows = isMap(result.cursor) && Array.isArray(result.cursor.firstBatch) ? result.cursor.firstBatch.filter(isMap) : [];
   return rows as MetricRow[];
 }

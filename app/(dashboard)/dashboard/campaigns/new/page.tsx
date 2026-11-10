@@ -642,14 +642,14 @@ const getTranslationStatus = () => {
               الترجمات: {translationStatus.completed}/{translationStatus.total}
             </span>
             {translationStatus.hasEn && (
-              <CheckCircle2 className="w-4 h-4 text-green-600" title="English ready" />
+              <CheckCircle2 className="w-4 h-4 text-green-600" aria-label="English ready" role="img" />
             )}
-            {translationStatus.hasFr && <CheckCircle2 className="w-4 h-4 text-brand" title="French ready" />}
-            {translationStatus.hasTr && <CheckCircle2 className="w-4 h-4 text-green-600" title="Turkish ready" />}
-            {translationStatus.hasId && <CheckCircle2 className="w-4 h-4 text-green-600" title="Indonesian ready" />}
-            {translationStatus.hasPt && <CheckCircle2 className="w-4 h-4 text-green-600" title="Portuguese ready" />}
-            {translationStatus.hasEs && <CheckCircle2 className="w-4 h-4 text-green-600" title="Spanish ready" />}
-            {translationStatus.hasDe && <CheckCircle2 className="w-4 h-4 text-green-600" title="German ready" />}
+            {translationStatus.hasFr && <CheckCircle2 className="w-4 h-4 text-brand" aria-label="French ready" role="img" />}
+            {translationStatus.hasTr && <CheckCircle2 className="w-4 h-4 text-green-600" aria-label="Turkish ready" role="img" />}
+            {translationStatus.hasId && <CheckCircle2 className="w-4 h-4 text-green-600" aria-label="Indonesian ready" role="img" />}
+            {translationStatus.hasPt && <CheckCircle2 className="w-4 h-4 text-green-600" aria-label="Portuguese ready" role="img" />}
+            {translationStatus.hasEs && <CheckCircle2 className="w-4 h-4 text-green-600" aria-label="Spanish ready" role="img" />}
+            {translationStatus.hasDe && <CheckCircle2 className="w-4 h-4 text-green-600" aria-label="German ready" role="img" />}
           </div>
         </div>
         <Button
@@ -926,8 +926,8 @@ const getTranslationStatus = () => {
                 </FormItem>
 
                 {/* Helper for partial translations */}
-                {(form.watch('title_fr') || form.watch('description_fr')) &&
-                 (!form.watch('title_fr') || !form.watch('description_fr')) && (
+                {Boolean(form.watch('title_fr') || !isDescEmpty(descriptionFr)) &&
+                 Boolean(!form.watch('title_fr') || isDescEmpty(descriptionFr)) && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription className='mt-[5px]'>
