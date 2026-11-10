@@ -1,3 +1,4 @@
+import { SUPPORTED_CURRENCY_CODES } from "@/lib/supported-currencies";
 /**
  * Payment rail selection is intentionally conservative.
  * There is NO automatic cross-bank fallback. The PayFor 3DPay initiate route
@@ -10,10 +11,8 @@
 export const MONTHLY_DONATIONS_ENABLED =
   process.env.NEXT_PUBLIC_MONTHLY_DONATIONS_ENABLED === "1";
 
-export const SUPPORTED_DONATION_CURRENCIES = [
-  "TRY", "USD", "EUR", "GBP", "SAR", "AED",
-  "KWD", "EGP", "QAR", "BHD", "OMR",
-] as const;
+export const SUPPORTED_DONATION_CURRENCIES = SUPPORTED_CURRENCY_CODES;
+
 
 export type ResolvedGateway = "ALBARAKA" | "PAYFOR" | "STRIPE" | "UNAVAILABLE";
 

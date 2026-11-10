@@ -1,7 +1,7 @@
 name: YediCihan payment-routing and pending-state QA (no bank network)
 on:
   push:
-    branches: [fix/yedi-payment-routing-pending-gates-20261110, integration/yedi-pr9-payfor19-routing21-qa-20261110]
+    branches: [fix/yedi-payment-routing-pending-gates-20261110]
   pull_request:
     paths:
       - "lib/payment-gateway.ts"
@@ -21,8 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-      - name: Run currency routing matrix (11 currencies and both flags, offline)
-        run: node --experimental-strip-types --test tests/finance/yedi-payment-routing.test.ts
+      - name: Install locked dependencies for canonical currency module
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Run currency routing matrix (14 currencies and both flags, offline)
+        run: node --import tsx --test tests/finance/yedi-payment-routing.test.ts
   types-and-build:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
