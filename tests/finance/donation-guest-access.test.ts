@@ -6,7 +6,7 @@ import * as tokenModule from "../../lib/donations/guest-access.ts";
 import * as settlementModule from "../../lib/donations/stripe-settlement.ts";
 const { createGuestDonationAccess, verifyGuestDonationAccess } =
   ((tokenModule as typeof tokenModule & {default?:typeof tokenModule}).default ?? tokenModule);
-const { stripePaymentMatches } =
+const { stripePaymentMatches, stripeRecurringInvoiceMatches } =
   ((settlementModule as typeof settlementModule & {default?:typeof settlementModule}).default ?? settlementModule);
 
 process.env.DONATION_GUEST_ACCESS_SECRET="synthetic-test-only-secret-not-production-0123456789";
@@ -52,4 +52,18 @@ test("financial comparison rejects any mismatch without touching database",()=>{
   assert.equal(stripePaymentMatches(donation({status:"FAILED"}),proof()),false);
   assert.equal(stripePaymentMatches(donation({subscriptionId:base.id}),proof()),false);
   assert.equal(stripePaymentMatches(donation({totalAmount:50.255}),proof()),false);
+});
+
+test("signed recurring invoice proof rejects amount, currency, order, owner and non-paid invoices",()=>{
+  const sub={id:"507f191e810c19729de860e9",donorId:base.donorId,payforToken:"sub_synthetic_123",
+    amount:50.25,teamSupport:0,coverFees:false,currency:"USD"};
+  const invoice={id:"in_synthetic_123",status:"paid",paid:true,currency:"usd",amount_paid:5025,amount_due:5025};
+  assert.equal(stripeRecurringInvoiceMatches(sub,invoice,"sub_synthetic_123"),true);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,amount_paid:5024},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,amount_due:5024},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,currency:"eur"},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,status:"open"},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,paid:false},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,id:"in_other"},"sub_wrong"),false);
+  assert.equal(stripeRecurringInvoiceMatches({...sub,donorId:""} as typeof sub,invoice,"sub_synthetic_123"),false);
 });
