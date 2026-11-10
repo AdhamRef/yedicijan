@@ -8,7 +8,7 @@ import { encode } from "next-auth/jwt";
 const db=process.env.DATABASE_URL||"";
 const site="http://127.0.0.1:3115";
 if(process.env.CI_MONGO_ISOLATED!=="1" ||
- !/^mongodb:\/\/127\.0\.0\.1:27017\/yedi_ci_[a-z_]+\?/.test(db) ||
+ !/^mongodb:\/\/127\.0\.0\.1:27017\/yedi_ci_[a-z0-9_]+\?/.test(db) ||
  process.env.NEXTAUTH_URL!==site)throw Error("REFUSED: real browser tests require isolated 127.0.0.1 MongoDB");
 const prisma=new PrismaClient();
 const nonce=randomBytes(5).toString("hex");
