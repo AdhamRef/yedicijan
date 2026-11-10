@@ -1,0 +1,38 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+// @ts-expect-error Node test runner tsx requires explicit TS path
+import * as managedModule from "../../lib/tracking/managed-tags.ts";
+const tags = (managedModule as typeof managedModule & { default?: typeof managedModule }).default ?? managedModule;
+
+test("Clarity/GTM strict allowlist rejects HTML, JS, malformed IDs and unknown keys",()=>{
+  for (const raw of [
+    { clarityProjectId:"<script>alert(1)</script>",clarityEnabled:true,gtmContainerId:"GTM-ABCD",gtmEnabled:true },
+    { clarityProjectId:"u614k028k2",clarityEnabled:true,gtmContainerId:"GTM-<IMG>",gtmEnabled:true },
+    { clarityProjectId:"ab",clarityEnabled:true,gtmContainerId:"GTM-ABCD",gtmEnabled:true },
+    { clarityProjectId:"u614k028k2",clarityEnabled:true,gtmContainerId:"GTM-",gtmEnabled:true },
+    { clarityProjectId:"u614k028k2",clarityEnabled:"true",gtmContainerId:"GTM-ABCD",gtmEnabled:true },
+    { clarityProjectId:"u614k028k2",clarityEnabled:true,gtmContainerId:"GTM-ABCD",gtmEnabled:true,gaApiSecret:"leak" },
+  ]) assert.throws(()=>tags.validateManagedTagsInput(raw));
+  assert.deepEqual(tags.validateManagedTagsInput({
+    clarityProjectId:" u614k028k2 ",clarityEnabled:true,
+    gtmContainerId:" gtm-abcd1234 ",gtmEnabled:true,
+  }),{
+    clarityProjectId:"u614k028k2",clarityEnabled:true,
+    gtmContainerId:"GTM-ABCD1234",gtmEnabled:true,
+  });
+});
+test("legacy tags remain visible until first explicit save; explicit disable wins",()=>{
+  const old=tags.effectiveManagedTags({facebookPixelId:"synthetic-existing-pixel"});
+  assert.equal(old.clarity.id,"u614k028k2");assert.equal(old.gtm.id,"GTM-MMNBQQWB");
+  assert.equal(old.clarity.source,"legacy");assert.equal(old.gtm.enabled,true);
+  const updated=tags.effectiveManagedTags({
+    facebookPixelId:"synthetic-existing-pixel",clarityProjectId:"u614k028k2",clarityEnabled:false,
+    gtmContainerId:"GTM-ABCD",gtmEnabled:false,
+  });
+  assert.equal(updated.clarity.enabled,false);assert.equal(updated.gtm.enabled,false);
+  assert.equal(updated.gtm.source,"database");
+  assert.equal(tags.shouldLoadManagedTag(old.gtm,null),false);
+  assert.equal(tags.shouldLoadManagedTag(old.gtm,"denied"),false);
+  assert.equal(tags.shouldLoadManagedTag(old.gtm,"granted"),true);
+  assert.equal(tags.shouldLoadManagedTag(updated.gtm,"granted"),false);
+});
