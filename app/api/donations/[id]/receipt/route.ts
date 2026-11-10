@@ -516,6 +516,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
+        'Cache-Control': 'private, no-store',
+        Vary: 'Cookie',
         'Content-Disposition': `attachment; filename="receipt-${receiptShortId}.pdf"`,
       },
     });
