@@ -1,3 +1,4 @@
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -163,9 +164,7 @@ function currencyFormat(amount: number, currency: string) {
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json({ error: 'Donation ID required' }, { status: 400 });
-    }
+    if (!isDonationId(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
     const requestedLocale = (request.nextUrl.searchParams.get('locale') || 'en').slice(0, 2);
     let locale = requestedLocale as LocaleKey;
 
@@ -246,16 +245,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: 'Donation not found' }, { status: 404 });
     }
 
-    // Guest donations have no session — the unguessable donation id acts as
-    // the access token. For authenticated users, keep ownership/revenue-admin
-    // enforcement to prevent cross-account receipt access.
-    if (session) {
-      const canViewReceipt =
-        userHasDashboardPermission(session.user, 'revenue') ||
-        session.user.id === donationRow.donorId;
-      if (!canViewReceipt) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    const access = donationAccessLevel(request, session, donationRow);
+    if (!access) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Do not leak personal donor details into a guest-capability receipt.
+    // Guest users can sign in to receive the complete official receipt.
+    if (access === 'guest') {
+      return NextResponse.json({ error: 'Sign in to download a personal receipt' }, { status: 403 });
     }
 
     const sub = donationRow.subscription;
