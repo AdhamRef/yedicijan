@@ -27,7 +27,7 @@ export default function ManagedTagsEditor({ canManage }: { canManage: boolean })
   const [lang, setLang] = useState<Locale>("ar");
   const [data, setData] = useState<Settings | null>(null);
   const [form, setForm] = useState({ clarityProjectId: "", clarityEnabled: false, gtmContainerId: "", gtmEnabled: false });
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
   const t = LABELS[lang];
   const rtl = lang === "ar";
