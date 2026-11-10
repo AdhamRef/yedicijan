@@ -1,7 +1,7 @@
 name: YediCihan payment-routing and pending-state QA (no bank network)
 on:
   push:
-    branches: [fix/yedi-payment-routing-pending-gates-20261110]
+    branches: [fix/yedi-payment-routing-pending-gates-20261110, integration/yedi-pr9-payfor19-routing21-qa-20261110]
   pull_request:
     paths:
       - "lib/payment-gateway.ts"
