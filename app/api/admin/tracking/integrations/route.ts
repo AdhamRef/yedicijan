@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { auditActorFromDashboardSession, writeAuditLog } from "@/lib/audit-log";
 import { getRawTrackingSettings } from "@/lib/tracking/tracking-settings";
 import { effectiveManagedTags, validateManagedTagsInput } from "@/lib/tracking/managed-tags";
@@ -95,10 +96,11 @@ export async function PUT(request: NextRequest) {
 
     if (row && !id) throw Error("Existing settings missing Mongo identifier");
     if (id) {
-      const result = await prisma.$runCommandRaw({
+      const command = {
         update: "TrackingSettings",
         updates: [{ q: { _id: { $oid: id } }, u: { $set: set }, upsert: false }],
-      });
+      } as unknown as Prisma.InputJsonObject;
+      const result = await prisma.$runCommandRaw(command);
       if ((result as Record<string, unknown>).n !== 1) throw Error("Tracking settings record changed during save");
     } else {
       await prisma.$runCommandRaw({
