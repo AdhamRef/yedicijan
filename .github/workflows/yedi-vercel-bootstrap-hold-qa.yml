@@ -1,0 +1,23 @@
+name: YediCihan Vercel identity hold security check (no deployment)
+on:
+  push:
+    branches: [fix/yedi-vercel-bootstrap-identity-hold-20261110]
+permissions:
+  contents: read
+jobs:
+  verify-hold:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure bootstrap has no ability to touch Vercel or other repositories
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=.github/workflows/bootstrap-integration-settings-vercel.yml
+          grep -q '^  identity-hold:' "$file"
+          grep -q 'exit 1' "$file"
+          if grep -Eq 'prj_[[:alnum:]]+|team_[[:alnum:]]+|VERCEL_TOKEN|gh pr comment|vercel[[:space:]]+(deploy|env|link|pull|promote)' "$file"; then
+            echo 'Unsafe project/team/credential/action reference detected'
+            exit 1
+          fi
+          echo 'PASS: bootstrap is a hard NO-GO with no external actions.'
