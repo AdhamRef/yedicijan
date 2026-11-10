@@ -1,0 +1,25 @@
+name: YediCihan PayFor callback security QA
+on:
+  push:
+    branches:
+      - fix/yedi-payfor-verified-callbacks-20261110
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/payfor.ts"
+      - "app/api/payfor/3dpay/**"
+      - "tests/finance/payfor-response-hash.test.ts"
+      - ".github/workflows/yedi-payfor-callback-qa.yml"
+permissions:
+  contents: read
+jobs:
+  response-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Test bank signature and amount verification without network/payment calls
+        run: node --experimental-strip-types --test tests/finance/payfor-response-hash.test.ts
