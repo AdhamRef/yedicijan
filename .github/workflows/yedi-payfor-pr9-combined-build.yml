@@ -12,6 +12,10 @@ jobs:
     env:
       DATABASE_URL: mongodb://127.0.0.1:27017/yedi_ci_no_connection?replicaSet=rs0
       CI: "1"
+      GOOGLE_CLIENT_ID: synthetic-ci-oauth-client
+      GOOGLE_CLIENT_SECRET: synthetic-ci-oauth-secret
+      NEXTAUTH_SECRET: synthetic-ci-nextauth-secret-only-for-nonproduction-build
+      NEXTAUTH_URL: http://127.0.0.1:3000
     steps:
       - name: Fetch exact reviewed commit without legacy gitlink
         env:
