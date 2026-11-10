@@ -1,0 +1,71 @@
+name: YediCihan stacked categories real Chromium UI (isolated only)
+on:
+  push:
+    branches: [test/yedi-categories-browser-e2e-20261110]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "1"
+      CI_MONGO_ISOLATED: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedi_ci_category_browser?replicaSet=rs0&directConnection=true
+      NEXTAUTH_URL: http://127.0.0.1:3110
+      NEXTAUTH_SECRET: synthetic-category-browser-secret-never-use-on-production
+      GOOGLE_CLIENT_ID: synthetic-google-client
+      GOOGLE_CLIENT_SECRET: synthetic-google-secret
+      STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
+    steps:
+      - name: Fetch exact PR #10 > #16 > #20 stack and this browser test
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Dependencies and Prisma client
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx --no-install prisma generate --schema prisma/schema.prisma
+          npm install --no-save --ignore-scripts --legacy-peer-deps --no-audit --no-fund @playwright/test@1.56.1
+      - name: Install isolated Chromium browser dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Start disposable MongoDB replica set
+        run: |
+          set -euo pipefail
+          docker run --detach --name yedi-categories-browser-ci -p 127.0.0.1:27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec yedi-categories-browser-ci mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx '1'; then break; fi
+            sleep 2
+          done
+          docker exec yedi-categories-browser-ci mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec yedi-categories-browser-ci mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx 'true'; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Apply schema to disposable database
+        run: npx --no-install prisma db push --schema prisma/schema.prisma
+      - name: Exercise actual dashboard in real headless Chromium
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3110 > /tmp/yedi-categories-browser-server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          if ! node --test tests/browser/category-dashboard.e2e.mjs; then
+            tail -n 140 /tmp/yedi-categories-browser-server.log
+            exit 1
+          fi
+      - name: Tear down disposable MongoDB
+        if: always()
+        run: docker rm -f yedi-categories-browser-ci || true
