@@ -119,6 +119,20 @@ test("isolated recurring invoice unique ledger rejects parallel replay",async()=
   assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),1);
   await prisma.stripeInvoiceSettlement.deleteMany({where:{invoiceId}});
 });
+test("HTTP donation comments are private to owner or revenue team",async()=>{
+  const path="/api/donations/"+guestDonation.id+"/comments";
+  const outsiderCookie=await cookie(outsider);
+  const denied=await get(path,outsiderCookie);
+  assert.equal(denied.status,403);
+  const count=await prisma.comment.count({where:{donationId:guestDonation.id}});
+  const posted=await fetch(base+path,{method:"POST",
+    headers:{"content-type":"application/json",cookie:outsiderCookie},
+    body:JSON.stringify({text:"synthetic unauthorized comment"})});
+  assert.equal(posted.status,403);
+  assert.equal(await prisma.comment.count({where:{donationId:guestDonation.id}}),count);
+  const allowed=await get(path,await cookie(admin));
+  assert.equal(allowed.status,200);
+});
 after(async()=>{
  for(const id of donationIds){
   await prisma.donationItem.deleteMany({where:{donationId:id}});
