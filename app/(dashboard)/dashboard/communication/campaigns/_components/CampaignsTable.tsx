@@ -144,7 +144,14 @@ export function CampaignsTable({
               return (
                 <tr
                   key={c.id}
-                  onClick={() => router.push(href)}
+                  onClick={event => {
+                    // A portalled confirmation click also travels through React's row.
+                    // Navigate only for genuine, non-interactive clicks inside the row.
+                    const target = event.target as HTMLElement;
+                    if (!event.currentTarget.contains(target) ||
+                        target.closest("button, a, input, select, textarea, [role='dialog'], [role='alertdialog'], [role='menu']")) return;
+                    router.push(href);
+                  }}
                   className="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50/70"
                 >
                   <td className="max-w-0 px-3 py-2.5 align-middle">
