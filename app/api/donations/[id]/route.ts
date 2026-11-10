@@ -12,76 +12,11 @@ import {
   auditActorFromSiteSession,
   auditStreamForRole,
 } from '@/lib/audit-log';
-import Stripe from 'stripe';
-import { dispatchDonationPaid } from "@/lib/events/dispatch";
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import {
   recomputeCampaignCurrentAmount as sharedRecomputeCampaign,
   recomputeCategoryCurrentAmount as sharedRecomputeCategory,
 } from "@/lib/campaign/current-amount";
-
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-03-25.dahlia' })
-  : null;
-
-/**
- * Self-heal donations whose webhook never landed: if Stripe already has the
- * PaymentIntent marked succeeded, set paidAt and increment campaign/category
- * totals. Idempotent — a paidAt guard inside the transaction prevents double
- * increments if the webhook arrives between the Stripe lookup and the update.
- */
-async function reconcileStripeDonation(donationId: string) {
-  if (!stripe) return;
-  const row = await prisma.donation.findUnique({
-    where: { id: donationId },
-    select: { provider: true, providerOrderId: true, paidAt: true },
-  });
-  if (!row || row.paidAt || row.provider !== 'STRIPE' || !row.providerOrderId) return;
-  if (!row.providerOrderId.startsWith('pi_')) return;
-
-  let intent: Stripe.PaymentIntent;
-  try {
-    intent = await stripe.paymentIntents.retrieve(row.providerOrderId);
-  } catch (err) {
-    console.error('[donation reconcile] Stripe retrieve failed:', err);
-    return;
-  }
-  if (intent.status !== 'succeeded') return;
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      const fresh = await tx.donation.findUnique({
-        where: { id: donationId },
-        include: { items: true, categoryItems: true },
-      });
-      if (!fresh || fresh.paidAt) return;
-
-      await tx.donation.update({
-        where: { id: donationId },
-        data: {
-          status: 'PAID',
-          paidAt: new Date(),
-          providerAuthCode: intent.id,
-          providerTxnResult: 'Success',
-        },
-      });
-      for (const item of fresh.items) {
-        await tx.campaign.update({
-          where: { id: item.campaignId },
-          data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-        });
-      }
-      for (const item of fresh.categoryItems) {
-        await tx.category.update({
-          where: { id: item.categoryId },
-          data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-        });
-      }
-    });
-    void dispatchDonationPaid(donationId);
-  } catch (err) {
-    console.error('[donation reconcile] Finalize failed:', err);
-  }
-}
 
 // GET /api/donations/[id] - Get donation (transaction) by ID; include type/status from subscription when applicable
 export async function GET(
@@ -90,16 +25,19 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json({ error: 'Donation ID required' }, { status: 400 });
+    if (!isDonationId(id)) {
+      return NextResponse.json({ error: 'Invalid donation ID' }, { status: 400 });
     }
     const session = await getServerSession(authOptions);
-
-    // Self-heal: if Stripe already confirmed the payment but the webhook
-    // hasn't landed yet (common in dev / with slow webhook delivery), finalize
-    // the donation and increment campaign totals here so the success page
-    // reflects reality. Safe for guests and logged-in donors alike.
-    await reconcileStripeDonation(id);
+    // Authorization always precedes loading personally identifying relations.
+    // GET is strictly read-only; payment settlement happens on trusted webhooks.
+    const identity = await prisma.donation.findUnique({
+      where: { id },
+      select: { id: true, donorId: true, createdAt: true, totalAmount: true, currency: true },
+    });
+    if (!identity) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const access = donationAccessLevel(request, session, identity);
+    if (!access) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const donation = await prisma.donation.findUnique({
       where: { id },
@@ -164,19 +102,6 @@ export async function GET(
       );
     }
 
-    // Guest donations have no session — the unguessable donation id acts as
-    // the access token (same posture as Stripe checkout session IDs). For
-    // authenticated users, still require ownership or revenue-dashboard
-    // permission to prevent cross-account snooping.
-    if (session) {
-      const canViewAllDonations =
-        userHasDashboardPermission(session.user, 'revenue') ||
-        userHasDashboardPermission(session.user, 'donationsEdit');
-      if (!canViewAllDonations && session.user.id !== donation.donorId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
-
     const sub = donation.subscription;
     const response = {
       ...donation,
@@ -190,7 +115,46 @@ export async function GET(
       nextBillingDate: sub?.nextBillingDate ?? null,
       lastBillingDate: sub?.lastBillingDate ?? null,
     };
-    return NextResponse.json(response);
+    if (access === 'guest') {
+      // A scoped cookie proves access to this checkout, not permission to read
+      // name, email, phone, address, provider payloads, or internal attribution.
+      return NextResponse.json({
+        id: donation.id,
+        donorId: null,
+        donor: null,
+        status: donation.status,
+        paidAt: donation.paidAt,
+        paymentStatus: donation.status,
+        paymentMethod: donation.paymentMethod ?? 'CARD',
+        type: response.type,
+        amount: donation.amount,
+        totalAmount: donation.totalAmount,
+        currency: donation.currency,
+        teamSupport: donation.teamSupport,
+        fees: donation.fees,
+        coverFees: donation.coverFees,
+        createdAt: donation.createdAt,
+        items: donation.items.map(item => ({
+          id: item.id, amount: item.amount,
+          campaign: { title: item.campaign.title, images: item.campaign.images,
+            translations: item.campaign.translations },
+        })),
+        categoryItems: donation.categoryItems.map(item => ({
+          id: item.id, amount: item.amount,
+          category: { name: item.category.name, image: item.category.image,
+            translations: item.category.translations },
+        })),
+        subscriptionStatus: response.subscriptionStatus,
+        nextBillingDate: response.nextBillingDate,
+        lastBillingDate: response.lastBillingDate,
+      }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+    // Authenticated owners and privileged dashboard users retain their existing
+    // detail contract so accounts and receipts keep working.
+    const { providerRaw: _raw, cardDetails: _cards, ...safe } = response as typeof response & {
+      providerRaw?: unknown; cardDetails?: unknown;
+    };
+    return NextResponse.json(safe, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Error fetching donation:', error);
     return NextResponse.json(
@@ -239,6 +203,9 @@ export async function PUT(
 
     const isAdmin = isRevenueDashboardUser(session);
     const isOwner = session.user.id === currentDonation.donorId;
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     if (!currentDonation.subscriptionId) {
       return NextResponse.json(
