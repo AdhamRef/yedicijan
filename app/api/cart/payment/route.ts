@@ -1,3 +1,4 @@
+import { issueGuestPayForIntent } from "@/lib/payfor-guest-intent";
 import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -414,6 +415,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       donation,
+      // Sent only in this checkout creation response; never in a URL, log, or DB.
+      paymentIntentToken: session?.user?.id ? undefined : issueGuestPayForIntent(donation),
     });
   } catch (error) {
     console.error("Error creating donation:", error);
