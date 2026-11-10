@@ -65,7 +65,8 @@ export async function POST(req: NextRequest) {
       )?.payforRequest;
 
       const linked =
-        donation.status === "PENDING" &&
+        donation.status !== "FAILED" &&
+        !donation.paidAt &&
         donation.provider === "PAYFOR" &&
         donation.providerOrderId === orderId &&
         snapshot?.orderId === orderId &&
@@ -82,7 +83,6 @@ export async function POST(req: NextRequest) {
       const written = await tx.donation.updateMany({
         where: {
           id: donation.id,
-          status: "PENDING",
           paidAt: null,
           provider: "PAYFOR",
           providerOrderId: orderId,
