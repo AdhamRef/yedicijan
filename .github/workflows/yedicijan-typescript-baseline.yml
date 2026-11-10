@@ -48,6 +48,9 @@ jobs:
           npx prisma generate --schema prisma/schema.prisma
           npx prisma generate --schema prisma/integration-settings.schema.prisma
       - name: Capture full TypeScript diagnostics without suppressing errors
+        # The pinned base is diagnostic-only: its known errors must not block a
+        # corrected PR head. The head matrix entry remains a strict required gate.
+        continue-on-error: ${{ matrix.revision != 'head' }}
         run: |
           set +e
           npx tsc --noEmit --incremental false --pretty false > /tmp/ts-errors.txt 2>&1
