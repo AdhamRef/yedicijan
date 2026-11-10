@@ -1,0 +1,82 @@
+name: YediCihan category Mongo acceptance (isolated only)
+on:
+  push:
+    branches:
+      - fix/yedi-category-mongo-acceptance-20261110
+  pull_request:
+    branches:
+      - fix/yedi-category-prisma-ci-env-20261109
+    paths:
+      - "tests/db/category-create-isolated.integration.ts"
+      - "tests/db/category-create-http.integration.mjs"
+      - ".github/workflows/yedi-category-mongo-acceptance.yml"
+permissions:
+  contents: read
+jobs:
+  category-mongo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "1"
+      CI_MONGO_ISOLATED: "1"
+      DATABASE_URL: "mongodb://127.0.0.1:27017/yedi_ci_category_acceptance?replicaSet=rs0&directConnection=true"
+    steps:
+      - name: Fetch exact revision without legacy gitlink
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$HEAD_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies and generate Prisma
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx --no-install prisma generate --schema prisma/schema.prisma
+      - name: Start isolated local MongoDB replica set
+        run: |
+          set -euo pipefail
+          docker run --detach --name yedi-category-ci -p 127.0.0.1:27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec yedi-category-ci mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx '1'; then break; fi
+            sleep 2
+          done
+          docker exec yedi-category-ci mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec yedi-category-ci mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx 'true'; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Apply isolated schema
+        run: npx --no-install prisma db push --schema prisma/schema.prisma
+      - name: Test category creation and atomic rollback
+        run: node --import tsx --test tests/db/category-create-isolated.integration.ts
+      - name: Run real Next.js HTTP authorization and category lifecycle acceptance
+        env:
+          NEXTAUTH_URL: http://127.0.0.1:3108
+          NEXTAUTH_SECRET: synthetic-http-secret-do-not-use-outside-ci-987654321012345
+          GOOGLE_CLIENT_ID: synthetic-ci-client-id
+          GOOGLE_CLIENT_SECRET: synthetic-ci-client-secret
+          FACEBOOK_CLIENT_ID: synthetic-ci-fb-id
+          FACEBOOK_CLIENT_SECRET: synthetic-ci-fb-secret
+          NODE_ENV: test
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3108 > /tmp/yedi-category-http-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          if ! node --test tests/db/category-create-http.integration.mjs; then
+            tail -n 120 /tmp/yedi-category-http-server.log
+            exit 1
+          fi
+      - name: Tear down isolated database
+        if: always()
+        run: docker rm -f yedi-category-ci || true
