@@ -8,6 +8,7 @@ on:
       - fix/yedi-category-prisma-ci-env-20261109
     paths:
       - "tests/db/category-create-isolated.integration.ts"
+      - "tests/db/category-create-http.integration.mjs"
       - ".github/workflows/yedi-category-mongo-acceptance.yml"
 permissions:
   contents: read
@@ -58,6 +59,24 @@ jobs:
         run: npx --no-install prisma db push --schema prisma/schema.prisma
       - name: Test category creation and atomic rollback
         run: node --import tsx --test tests/db/category-create-isolated.integration.ts
+      - name: Run real Next.js HTTP authorization and category lifecycle acceptance
+        env:
+          NEXTAUTH_URL: http://127.0.0.1:3108
+          NEXTAUTH_SECRET: synthetic-http-secret-do-not-use-outside-ci-987654321012345
+          GOOGLE_CLIENT_ID: synthetic-ci-client-id
+          GOOGLE_CLIENT_SECRET: synthetic-ci-client-secret
+          FACEBOOK_CLIENT_ID: synthetic-ci-fb-id
+          FACEBOOK_CLIENT_SECRET: synthetic-ci-fb-secret
+          NODE_ENV: test
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3108 > /tmp/yedi-category-http-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          if ! node --test tests/db/category-create-http.integration.mjs; then
+            tail -n 120 /tmp/yedi-category-http-server.log
+            exit 1
+          fi
       - name: Tear down isolated database
         if: always()
         run: docker rm -f yedi-category-ci || true
