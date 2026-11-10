@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
     )?.payforRequest;
 
     if (
-      donation?.status !== "PENDING" ||
+      donation?.status === "FAILED" ||
+      Boolean(donation?.paidAt) ||
       donation.provider !== "PAYFOR" ||
       donation.providerOrderId !== raw.OrderId ||
       snapshot?.orderId !== raw.OrderId ||
@@ -65,7 +66,6 @@ export async function POST(req: NextRequest) {
     const written = await prisma.donation.updateMany({
       where: {
         id: donationId,
-        status: "PENDING",
         paidAt: null,
         provider: "PAYFOR",
         providerOrderId: raw.OrderId,
