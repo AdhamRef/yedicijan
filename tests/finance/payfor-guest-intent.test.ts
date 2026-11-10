@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-// @ts-expect-error Node 24 strip-types requires a .ts suffix in standalone tests.
 import {
   issueGuestPayForIntent, verifyGuestPayForIntent,
   mayInitiateForActor, mayStartPayForAttempt,
+// @ts-expect-error Node 24 strip-types requires a .ts suffix in standalone tests.
 } from "../../lib/payfor-guest-intent.ts";
 
 process.env.PAYFOR_GUEST_INTENT_SECRET = "synthetic-no-real-credentials-long-enough-123456789";
