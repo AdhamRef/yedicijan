@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - integration/yedi-pr9-payfor19-qa-20261110
+      - integration/yedi-pr9-payfor19-routing21-qa-20261110
 permissions:
   contents: read
 jobs:
