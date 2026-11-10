@@ -1,0 +1,36 @@
+name: Isolated dashboard command search regression
+on:
+  push:
+    branches:
+      - port/minber-dashboard-command-search-20261109
+  pull_request:
+    branches:
+      - integration/yedicijan-unified-safe-20261109
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  command-search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Fetch exact source snapshot without legacy gitlink checkout
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            --output /tmp/source.tar.gz
+          tar -xzf /tmp/source.tar.gz --strip-components=1
+          test -f package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Verify scoped search and accessible dialog (no production calls)
+        run: node --test tests/ported-systems/dashboard-command-search.test.mjs
