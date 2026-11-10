@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     ? requestedLocale
     : "en";
   const destination = new URL(
-    "/" + locale + "/donation-failed?donationId=" + encodeURIComponent(donationId),
+    "/" + locale + "/donation-pending?donationId=" + encodeURIComponent(donationId),
     origin
   );
   if (!donationId) return NextResponse.redirect(destination);
