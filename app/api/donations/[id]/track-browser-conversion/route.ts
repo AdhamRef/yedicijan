@@ -49,10 +49,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const donation = await prisma.donation.findUnique({
     where: { id },
-    select: { id: true, status: true, paidAt: true, amount: true, amountUSD: true, totalAmount: true, teamSupport: true, fees: true, currency: true },
+    select: { id: true, donorId: true, createdAt: true, status: true, paidAt: true, amount: true, amountUSD: true, totalAmount: true, teamSupport: true, fees: true, currency: true },
   });
   const actor = await getServerSession(authOptions);
-  if (!donation || !donationAccessLevel(request, actor, donation as any)) {
+  if (!donation || !donationAccessLevel(request, actor, donation)) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
   if (!donation) return NextResponse.json({ ok: false, error: "donation not found" }, { status: 404 });
