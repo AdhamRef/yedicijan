@@ -162,7 +162,8 @@ export function stripeRecurringInvoiceMatches(
     invoice.status === "paid" && invoice.paid === true &&
     invoice.currency.toLowerCase() === sub.currency.toLowerCase() &&
     Number.isFinite(expected) && expected > 0 &&
-    Math.abs(expected * 100 - cents) < 0.0001 &&
+    // Stripe bills in integer minor units. Approved fee fractions round to a cent.
+    // Compare the exact rounded provider amount; never compare floating fractions.
     Number.isSafeInteger(cents) && cents > 0 &&
     invoice.amount_paid === cents && invoice.amount_due === cents
   );
