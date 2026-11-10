@@ -2345,30 +2345,17 @@ const DonationDialog = ({
                 );
                 return;
               }
-              if (
-                data.status === "FAILED" ||
-                payforPopupRef.current?.closed ||
-                polls >= FALLBACK_AFTER_POLLS
-              ) {
+              if (data.status === "FAILED") {
+                if (payforPollRef.current) { clearInterval(payforPollRef.current); payforPollRef.current = null; }
+                router.push(appendCurrencyQuery(`/donation-pending?donationId=${encodeURIComponent(donationId)}`, getCurrencyCodeForLinks()));
+                return;
+              }
+              if (payforPopupRef.current?.closed || polls >= FALLBACK_AFTER_POLLS) {
                 clearInterval(payforPollRef.current!);
                 payforPollRef.current = null;
                 if (payforPopupRef.current && !payforPopupRef.current.closed) {
                   payforPopupRef.current.close();
                 }
-                // Browser-side DonateFailed pixel — server CAPI fires the
-                // matching hit from /api/payfor/3dpay/fail; same event_id
-                // (`${donationId}_failed`) lets Meta dedup the pair.
-                tracking?.trackPaymentFailed({
-                  value: donationAmount,
-                  currency: getCurrency(),
-                  causeId: campaignId || categoryId || undefined,
-                  reason:
-                    data.providerErrorMessage ??
-                    data.status ??
-                    `${gatewayAnalyticsName(gateway)}_failed`,
-                  gateway: gatewayAnalyticsName(gateway),
-                  donationId,
-                });
                 router.push(
                   appendCurrencyQuery(
                     `/donation-failed?donationId=${encodeURIComponent(donationId)}`,
