@@ -81,8 +81,12 @@ export function proofFromCheckoutSession(session: Stripe.Checkout.Session): Stri
  * A conditional update inside a MongoDB transaction prevents parallel credits.
  */
 export async function settleVerifiedStripeDonation(proof: StripeProof): Promise<"paid" | "skipped"> {
-  if (!/^[a-f\d]{24}$/i.test(proof.donationId)) return "skipped";
-  return prisma.$transaction(async tx => {
+  if (!/^[a-f\\d]{24}$/i.test(proof.donationId)) return "skipped";
+  // Concurrent signed webhooks can provoke MongoDB transaction write
+  // conflicts. Retry only P2034, never relax bank proof predicates.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await prisma.$transaction(async tx => {
     const donation = await tx.donation.findUnique({
       where: { id: proof.donationId },
       include: { items: true, categoryItems: true },
@@ -124,7 +128,13 @@ export async function settleVerifiedStripeDonation(proof: StripeProof): Promise<
       });
     }
     return "paid";
-  }, { maxWait: 10_000, timeout: 20_000 });
+      }, { maxWait: 10_000, timeout: 20_000 });
+    } catch (error) {
+      if ((error as { code?: string })?.code !== "P2034" || attempt === 4) throw error;
+      await new Promise(resolve => setTimeout(resolve, 10 * (attempt + 1)));
+    }
+  }
+  return "skipped";
 }
 
 
