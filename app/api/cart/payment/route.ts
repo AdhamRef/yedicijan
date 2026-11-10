@@ -358,11 +358,15 @@ export async function POST(request: NextRequest) {
         stream: auditStreamForRole(actorRole),
       });
 
-      return NextResponse.json({
+      return attachGuestDonationAccess(NextResponse.json({
         success: true,
         subscription: result.subscription,
-        donation: result.donation,
-      });
+        donation: session?.user?.id ? result.donation : {
+          id: result.donation.id, amount: result.donation.amount,
+          totalAmount: result.donation.totalAmount, currency: result.donation.currency,
+          status: result.donation.status,
+        },
+      }), result.donation, session?.user?.id);
     }
 
     const donation = await prisma.$transaction(async (tx) => {
@@ -430,7 +434,11 @@ export async function POST(request: NextRequest) {
 
     return attachGuestDonationAccess(NextResponse.json({
       success: true,
-      donation,
+      donation: session?.user?.id ? donation : {
+        id: donation.id, amount: donation.amount,
+        totalAmount: donation.totalAmount, currency: donation.currency,
+        status: donation.status,
+      },
       paymentIntentToken: session?.user?.id ? undefined : issueGuestPayForIntent(donation),
     }), donation, session?.user?.id);
   } catch (error) {
