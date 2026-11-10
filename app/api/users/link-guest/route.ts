@@ -38,6 +38,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
     }
 
+    if (!isDonationId(donationId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    const access = donationAccessLevel(req, session, donation);
+    if (access !== "guest" && access !== "owner") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const result = await linkGuestUserToTarget(donation.donorId, session.user.id);
     if (!result.ok) {
       const status = result.reason === "GUEST_NOT_ELIGIBLE" ? 409 : 400;
