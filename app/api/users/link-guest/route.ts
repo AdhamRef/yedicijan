@@ -1,3 +1,4 @@
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     const donation = await prisma.donation.findUnique({
       where: { id: donationId },
-      select: { donorId: true },
+      select: { id: true, donorId: true, createdAt: true, totalAmount: true, currency: true },
     });
     if (!donation) {
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
