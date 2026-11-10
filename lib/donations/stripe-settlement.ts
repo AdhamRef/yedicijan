@@ -81,7 +81,7 @@ export function proofFromCheckoutSession(session: Stripe.Checkout.Session): Stri
  * A conditional update inside a MongoDB transaction prevents parallel credits.
  */
 export async function settleVerifiedStripeDonation(proof: StripeProof): Promise<"paid" | "skipped"> {
-  if (!/^[a-f\\d]{24}$/i.test(proof.donationId)) return "skipped";
+  if (!/^[a-f0-9]{24}$/i.test(proof.donationId)) return "skipped";
   // Concurrent signed webhooks can provoke MongoDB transaction write
   // conflicts. Retry only P2034, never relax bank proof predicates.
   for (let attempt = 0; attempt < 5; attempt++) {
