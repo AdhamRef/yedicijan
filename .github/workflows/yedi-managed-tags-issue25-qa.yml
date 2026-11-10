@@ -1,0 +1,116 @@
+name: YediCihan Issue25 Clarity GTM isolated HTTP/browser acceptance
+on:
+  push:
+    branches: [feat/yedi-clarity-gtm-management-issue25-20261110]
+permissions:
+  contents: read
+jobs:
+  typebuild:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27018/yedi_ci_tracking_schema_only?replicaSet=rs0
+      NEXTAUTH_URL: http://127.0.0.1:3115
+      NEXTAUTH_SECRET: synthetic-ci-test-auth-secret-0123456789012345
+      GOOGLE_CLIENT_ID: synthetic-ci-client
+      GOOGLE_CLIENT_SECRET: synthetic-ci-secret
+      STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
+    steps:
+      - name: Fetch exact branch SHA (avoid legacy broken gitlink)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Locked dependencies and schema-only Prisma clients
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx --no-install prisma generate --schema prisma/schema.prisma
+          npx --no-install prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Unit and strict TypeScript
+        run: |
+          node --import tsx --test tests/tracking/managed-tags.unit.test.ts
+          npx --no-install tsc --noEmit
+      - name: Production Next.js build with synthetic environment only
+        run: npm run build
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: "1"
+      CI_MONGO_ISOLATED: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedi_ci_tracking_issue25?replicaSet=rs0&directConnection=true
+      NEXTAUTH_URL: http://127.0.0.1:3115
+      NEXTAUTH_SECRET: synthetic-ci-test-auth-secret-0123456789012345
+      GOOGLE_CLIENT_ID: synthetic-ci-client
+      GOOGLE_CLIENT_SECRET: synthetic-ci-secret
+      STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
+    steps:
+      - name: Checkout exact source without gitlink cleanup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Dependencies and disposable-browser installation
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx --no-install prisma generate --schema prisma/schema.prisma
+          npm install --no-save --ignore-scripts --legacy-peer-deps --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start isolated local MongoDB 7 replica set
+        run: |
+          set -euo pipefail
+          docker run --detach --name yedi-tags-ci -p 127.0.0.1:27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec yedi-tags-ci mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx '1'; then break; fi
+            sleep 2
+          done
+          docker exec yedi-tags-ci mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec yedi-tags-ci mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx 'true'; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Push schema only to disposable MongoDB
+        run: npx --no-install prisma db push --schema prisma/schema.prisma
+      - name: Exercise real HTTP and Chromium public/admin flows
+        run: |
+          set -euo pipefail
+          node --import tsx --test tests/tracking/managed-tags.unit.test.ts
+          npm run dev -- --hostname 127.0.0.1 --port 3115 > /tmp/yedi-tags-next.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          if ! node --test tests/browser/managed-tags.e2e.mjs; then
+            tail -n 120 /tmp/yedi-tags-next.log
+            exit 1
+          fi
+      - name: Upload UI screenshots (synthetic data only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yedi-issue25-synthetic-browser
+          path: /tmp/yedi-managed-tags-*.png
+          if-no-files-found: ignore
+      - name: Delete disposable database
+        if: always()
+        run: docker rm -f yedi-tags-ci || true
