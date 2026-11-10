@@ -52,3 +52,58 @@ export function payForHash(params: {
   return crypto.createHash("sha1").update(raw, "utf8").digest("base64");
 }
 
+
+
+/**
+ * QNB/PayFor 3DPay response integrity verification.
+ * See https://vpos.qnbfinansbank.com/Help/responseHash
+ * Only bank-signed, exact-case fields are accepted. A browser redirect is
+ * never proof of settlement. Missing merchant credentials fail closed.
+ */
+export function verifyPayForResponseHash(
+  fields: Record<string, string>,
+  credentials: { merchantId?: string; merchantPass?: string; userCode?: string }
+): boolean {
+  const { merchantId, merchantPass, userCode } = credentials;
+  if (!merchantId || !merchantPass || !userCode) return false;
+
+  const orderId = fields.OrderId;
+  const responseRnd = fields.ResponseRnd;
+  const responseHash = fields.ResponseHash;
+  const procReturnCode = fields.ProcReturnCode;
+  const threeDStatus = fields["3DStatus"];
+  if (!orderId || !responseRnd || !responseHash || !procReturnCode || !threeDStatus) {
+    return false;
+  }
+  if (!/^[A-Za-z0-9+/]{27}=$/.test(responseHash)) return false;
+
+  const input = [
+    merchantId,
+    merchantPass,
+    orderId,
+    fields.AuthCode || "",
+    procReturnCode,
+    threeDStatus,
+    responseRnd,
+    userCode,
+  ].join("");
+
+  const expected = crypto.createHash("sha1").update(input, "utf8").digest();
+  const received = Buffer.from(responseHash, "base64");
+  return received.length === expected.length && crypto.timingSafeEqual(received, expected);
+}
+
+/** Compare bank amounts at cent precision without accepting missing/invalid values. */
+export function payForAmountMatches(
+  response: string | undefined,
+  expected: string | undefined
+): boolean {
+  if (!response || !expected) return false;
+  const valid = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
+  if (!valid.test(response) || !valid.test(expected)) return false;
+  const a = Number(response);
+  const b = Number(expected);
+  return Number.isFinite(a) && a > 0 && Number.isSafeInteger(Math.round(a * 100)) &&
+    Number.isFinite(b) && b > 0 && Number.isSafeInteger(Math.round(b * 100)) &&
+    Math.round(a * 100) === Math.round(b * 100);
+}

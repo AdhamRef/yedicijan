@@ -58,7 +58,12 @@ export function resolveGateway({
   if (donationType === "MONTHLY") return "STRIPE";
   const c = String(currency || "").toUpperCase();
   if (c === "TRY" || c === "TL") return "ALBARAKA";
-  return payforEnabled ? "PAYFOR" : "ALBARAKA";
+  // Fail closed on the unsafe PayFor browser credential flow. The existing
+  // Albaraka fallback is already used when PayFor is administratively disabled.
+  // Public flag alone can never re-enable PayFor: its server handler stays on HOLD.
+  return payforEnabled && process.env.NEXT_PUBLIC_PAYFOR_SECURE_FLOW_READY === "1"
+    ? "PAYFOR"
+    : "ALBARAKA";
 }
 
 /** Lower-case name used by the analytics/pixel layer. */
