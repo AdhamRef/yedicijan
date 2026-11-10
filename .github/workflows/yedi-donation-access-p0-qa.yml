@@ -1,0 +1,79 @@
+name: YediCihan P0 donor privacy / Stripe settlement isolated acceptance
+on:
+  push:
+    branches: [security/yedi-donation-read-capability-20261110]
+  pull_request:
+    paths:
+      - "app/api/donations/**"
+      - "app/api/stripe/webhook/route.ts"
+      - "lib/donations/guest-access.ts"
+      - "lib/donations/stripe-settlement.ts"
+      - "tests/db/donation-read-security-http.integration.mjs"
+      - "tests/finance/donation-guest-access.test.ts"
+permissions:
+  contents: read
+jobs:
+  isolated-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "1"
+      CI_MONGO_ISOLATED: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedi_ci_donor_security?replicaSet=rs0&directConnection=true
+      NEXTAUTH_URL: http://127.0.0.1:3112
+      NEXTAUTH_SECRET: synthetic-ci-session-secret-unique-never-use-production-123456
+      DONATION_GUEST_ACCESS_SECRET: synthetic-test-only-secret-not-production-0123456789
+      GOOGLE_CLIENT_ID: synthetic-ci-google-id
+      GOOGLE_CLIENT_SECRET: synthetic-ci-google-secret
+      STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
+    steps:
+      - name: Checkout exact revision without legacy gitlink
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Dependencies and Prisma
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx --no-install prisma generate --schema prisma/schema.prisma
+      - name: Start disposable isolated MongoDB replica set
+        run: |
+          set -euo pipefail
+          docker run --detach --name yedi-donor-security-ci -p 127.0.0.1:27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec yedi-donor-security-ci mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx '1'; then break; fi
+            sleep 2
+          done
+          docker exec yedi-donor-security-ci mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec yedi-donor-security-ci mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx 'true'; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Prisma schema on isolated database
+        run: npx --no-install prisma db push --schema prisma/schema.prisma
+      - name: "Synthetic unit tests: scope and financial proof"
+        run: node --import tsx --test tests/finance/donation-guest-access.test.ts
+      - name: Actual Next.js HTTP + MongoDB access control / settlement
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3112 > /tmp/yedi-donor-security-ci.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          if ! node --import tsx --test tests/db/donation-read-security-http.integration.mjs; then
+            tail -n 125 /tmp/yedi-donor-security-ci.log
+            exit 1
+          fi
+      - name: Remove disposable database
+        if: always()
+        run: docker rm -f yedi-donor-security-ci || true
