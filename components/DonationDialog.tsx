@@ -1966,6 +1966,10 @@ const DonationDialog = ({
         requestCheckoutSignIn(getPaymentInfoStepIndex());
         return;
       }
+      if (gateway === "UNAVAILABLE") {
+        toast.error("طريقة الدفع بهذه العملة غير متاحة حاليًا؛ لم تتم محاولة أي خصم.");
+        return;
+      }
       setLoading(true);
       // Persist any inline-collected profile fields onto the user record
       // (Google sign-in sends users straight to payment, so we backfill
