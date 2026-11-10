@@ -1,3 +1,4 @@
+import { hasBankVerifiedFinancialSettlement } from "@/lib/payfor-bank-settlement";
 import { NextRequest, NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/public-origin";
 import { prisma } from "@/lib/prisma";
@@ -38,6 +39,13 @@ export async function POST(req: NextRequest) {
   });
   if (!signed || raw.OrderId !== donationId) {
     console.warn("[PayFor OK] Unverified callback ignored", { donationId });
+    return NextResponse.redirect(failUrl);
+  }
+
+  // ResponseHash authenticates QNB's reply but not PurchAmount/Currency.
+  // OrderInquiry alone cannot attest those fields. Hold financial writes.
+  if (!hasBankVerifiedFinancialSettlement(null)) {
+    console.warn("[PayFor OK] Bank amount/currency attestation unavailable", { donationId });
     return NextResponse.redirect(failUrl);
   }
 
