@@ -13,7 +13,7 @@ import {
   convertAmountInCurrencyToTry,
   getUsdBaseRatesForServer,
 } from "@/lib/exchange/rates-service";
-import { decryptCard } from "@/lib/card-crypto";
+import { mayInitiateForActor, mayStartPayForAttempt } from "@/lib/payfor-guest-intent";
 import { resolveGateway } from "@/lib/payment-gateway";
 
 /** Convert any amount to TRY using USD-base rates from the database (same as donations). */
@@ -25,10 +25,9 @@ async function toTRY(amount: number, fromCurrency: string): Promise<number> {
 type InitiateBody = {
   donationId: string;
   locale?: string;
-  /** Optional saved-card id. When provided, the server fills Pan/Expiry/CardHolderName
-   *  in the returned fields by decrypting the stored card. Only the user's own cards
-   *  are accepted. The browser still appends Cvv2 (CVC isn't stored). */
+  /** Temporarily unsupported until bank tokenization is approved. */
   savedCardId?: string;
+  paymentIntentToken?: string;
 };
 
 export async function POST(req: NextRequest) {
@@ -63,16 +62,28 @@ export async function POST(req: NextRequest) {
     if (!donation) {
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
     }
-    // Authenticated users: verify ownership. Guests have no session — trust the donationId.
-    if (session?.user?.id && donation.donorId !== session.user.id) {
+    // Exact checkout ownership: a donationId alone must never authorize a guest.
+    if (!mayInitiateForActor(donation, session?.user?.id, body.paymentIntentToken)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    if (donation.status === "FAILED") {
-      return NextResponse.json(
-        { error: `Donation has already failed (status=${donation.status})` },
-        { status: 400 }
-      );
+    if (body.savedCardId) {
+      return NextResponse.json({ error: "Saved cards are unavailable until bank tokenization is approved." }, { status: 403 });
     }
+    // The legacy status 'PAID' is also used for unconfirmed checkout records.
+    // Only paidAt proves settlement; any existing provider attempt is locked.
+    if (!mayStartPayForAttempt(donation)) {
+      return NextResponse.json({ error: "Payment already settled or in progress; check its status first." }, { status: 409 });
+    }
+    // QNB 3DPay form needs UserPass in browser form data. No approved
+    // server-side/hosted credential-free replacement has been verified yet.
+    // Fail closed before a provider order is allocated or card data is handled.
+    if (process.env.PAYFOR_SECURE_BROWSER_FLOW_VERIFIED !== "1") {
+      return NextResponse.json({ error: "PayFor requires an approved secure hosted payment flow." }, { status: 503 });
+    }
+    // Even if the flag is configured, the legacy browser flow remains blocked.
+    // A verified implementation must replace this handler, not toggle a flag.
+    return NextResponse.json({ error: "PayFor legacy browser form is disabled." }, { status: 503 });
+
     // Enforce the same routing the dialogs use: PayFor takes every currency except
     // lira, which belongs to Albaraka.
     const resolved = resolveGateway({
