@@ -1,4 +1,6 @@
 import test from "node:test";
+// @ts-expect-error Standalone Node/tsx import.
+import { confirmedDonationForReceipt } from "../../lib/donations/receipt-confirmation.ts";
 import assert from "node:assert/strict";
 // @ts-expect-error Standalone Node/tsx runner requires explicit .ts extension.
 import * as tokenModule from "../../lib/donations/guest-access.ts";
@@ -49,7 +51,7 @@ test("financial comparison rejects any mismatch without touching database",()=>{
   for(const testProof of invalid)assert.equal(stripePaymentMatches(donation(),testProof),false);
   assert.equal(stripePaymentMatches(donation({paidAt:new Date()}),proof()),false);
   assert.equal(stripePaymentMatches(donation({provider:"PAYFOR"}),proof()),false);
-  assert.equal(stripePaymentMatches(donation({status:"FAILED"}),proof()),false);
+  assert.equal(stripePaymentMatches(donation({status:"FAILED"}),proof()),true); // trusted later success supersedes legacy failed attempt
   assert.equal(stripePaymentMatches(donation({subscriptionId:base.id}),proof()),false);
   assert.equal(stripePaymentMatches(donation({totalAmount:50.255}),proof()),false);
 });
@@ -66,4 +68,48 @@ test("signed recurring invoice proof rejects amount, currency, order, owner and 
   assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,paid:false},"sub_synthetic_123"),false);
   assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,id:"in_other"},"sub_wrong"),false);
   assert.equal(stripeRecurringInvoiceMatches({...sub,donorId:""} as typeof sub,invoice,"sub_synthetic_123"),false);
+});
+
+test("official receipts are held for unsettled, failed, unverified and mismatched bank records",()=>{
+  const row={
+    id:base.id,donorId:base.donorId,status:"PAID",paidAt:new Date(now),
+    provider:"STRIPE",providerOrderId:"pi_synthetic_123",
+    providerAuthCode:"pi_synthetic_123",providerTxnResult:"Success",
+    providerHostRefNum:null,providerProcReturnCode:null,subscriptionId:null,
+    totalAmount:50.25,currency:"USD",
+    providerRaw:{verifiedStripe:{reference:"pi_synthetic_123",intentId:"pi_synthetic_123",
+      amount:5025,currency:"usd"}},
+  };
+  assert.equal(confirmedDonationForReceipt(row),true);
+  assert.equal(confirmedDonationForReceipt({...row,paidAt:null}),false);
+  assert.equal(confirmedDonationForReceipt({...row,status:"FAILED"}),false);
+  assert.equal(confirmedDonationForReceipt({...row,providerRaw:null}),false);
+  assert.equal(confirmedDonationForReceipt({...row,providerRaw:{verifiedStripe:{reference:"pi_wrong",amount:5025}}}),false);
+  const monthly={...row,subscriptionId:base.id,providerOrderId:"in_synthetic_123",providerAuthCode:"sub_synthetic_123"};
+  const ledger={invoiceId:"in_synthetic_123",subscriptionId:base.id,donorId:base.donorId,
+    amountSmallestUnit:5025,currency:"usd"};
+  assert.equal(confirmedDonationForReceipt(monthly,ledger),true);
+  assert.equal(confirmedDonationForReceipt(monthly,null),false);
+  assert.equal(confirmedDonationForReceipt(monthly,{...ledger,amountSmallestUnit:5024}),false);
+});
+test("guest capability has mandatory independent secret and bounded previous-key rotation",()=>{
+  const current=process.env.DONATION_GUEST_ACCESS_SECRET!;
+  const prior="synthetic-previous-guest-only-key-0123456789";
+  try {
+    process.env.DONATION_GUEST_ACCESS_SECRET=prior;
+    const legacy=createGuestDonationAccess(base,now)!;
+    delete process.env.DONATION_GUEST_ACCESS_SECRET;
+    process.env.NEXTAUTH_SECRET="synthetic-nextauth-secret-must-not-sign-012345";
+    assert.equal(createGuestDonationAccess(base,now),null);
+    process.env.DONATION_GUEST_ACCESS_SECRET=current;
+    assert.equal(verifyGuestDonationAccess(legacy,base,now),false);
+    process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET=prior;
+    process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL=String(Math.floor(now/1000)+3600);
+    assert.equal(verifyGuestDonationAccess(legacy,base,now),true);
+    assert.equal(verifyGuestDonationAccess(legacy,base,now+3601*1000),false);
+  } finally {
+    process.env.DONATION_GUEST_ACCESS_SECRET=current;
+    delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET;
+    delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL;
+  }
 });
