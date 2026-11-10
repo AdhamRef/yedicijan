@@ -87,6 +87,15 @@ test("actual dashboard browser creates, edits, archives, publishes eight-locale 
   assert.equal((await prisma.category.findUnique({where:{id:categoryId}}))?.isActive,false);
   await page.getByRole("button",{name:/أرشيف الحملات/}).click();
   await page.getByText(title+" محررة").first().waitFor({timeout:15000});
+  await page.getByRole("dialog").getByRole("button",{name:"إعادة تفعيل"}).click();
+  await page.getByRole("alertdialog").getByRole("button",{name:/تفعيل|نشر|تأكيد/}).last().click();
+  await page.waitForFunction(async id => {
+    const response=await fetch("/api/categories/"+id+"?allTranslations=true");
+    if(!response.ok)return false;
+    const data=await response.json();
+    return data.isActive===true;
+  },categoryId,{timeout:15000});
+  assert.equal((await prisma.category.findUnique({where:{id:categoryId}}))?.isActive,true);
   await page.screenshot({path:"/tmp/yedi-category-browser.png",fullPage:true});
   assert.deepEqual(jsErrors,[],"no uncaught JS errors in actual browser");
   await page.close();
