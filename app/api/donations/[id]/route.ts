@@ -203,6 +203,9 @@ export async function PUT(
 
     const isAdmin = isRevenueDashboardUser(session);
     const isOwner = session.user.id === currentDonation.donorId;
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
     if (!currentDonation.subscriptionId) {
       return NextResponse.json(
