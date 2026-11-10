@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale } from "next-intl";
 
 const translations: Record<string, { title: string; description: string; refresh: string; home: string; pending: string }> = {
   ar: { title: "عملية الدفع قيد التحقق", description: "لم نتلقَّ تأكيدًا بنكيًا نهائيًا حتى الآن. هذا لا يعني نجاح الدفع أو فشله. تجنب تكرار الدفع قبل مراجعة كشف البنك أو التواصل مع الدعم.", refresh: "التحقق من الحالة", home: "العودة للموقع", pending: "بانتظار التحقق البنكي" },
@@ -17,7 +18,7 @@ const translations: Record<string, { title: string; description: string; refresh
 export default function DonationPendingPage() {
   const params = useSearchParams();
   const router = useRouter();
-  const locale = typeof window === "undefined" ? "en" : window.location.pathname.split("/")[1];
+  const locale = useLocale();
   const copy = translations[locale] || translations.en;
   const donationId = params.get("donationId") || "";
   const [checking, setChecking] = useState(false);
