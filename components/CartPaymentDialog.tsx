@@ -608,7 +608,7 @@ const CartPaymentDialog = ({
         payforPollRef.current = setInterval(async () => {
           polls++;
           try {
-            const check = await fetch(`/api/donations/${donationId}`);
+            const check = await fetch(`/api/donations/${donationId}/status`);
             if (!check.ok) return;
             const data = await check.json();
 
