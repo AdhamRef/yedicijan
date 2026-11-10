@@ -1,0 +1,153 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import Clarity from "@microsoft/clarity";
+import { shouldLoadManagedTag, validClarityId, validGtmId, type ManagedTag } from "@/lib/tracking/managed-tags";
+
+/**
+ * No browser marketing script runs without an affirmative consent cookie.
+ * No donor identifiers, basket contents, payment events or form values are
+ * passed to either tool. Existing GA4/Ads event ownership is unchanged.
+ */
+const COOKIE_NAME = "yedi_analytics_consent";
+type Consent = "granted" | "denied" | null;
+type Locale = "ar" | "en" | "tr" | "fr" | "id" | "pt" | "es" | "de";
+const COPY: Record<Locale, { title: string; body: string; accept: string; reject: string; change: string; close: string }> = {
+  ar: { title: "خصوصية التحليلات", body: "هل توافق على استخدام Clarity وGoogle Tag Manager لتحسين الموقع؟ لا نرسل بيانات التبرع أو الدفع إلى هذه الأدوات مباشرة.", accept: "أوافق", reject: "رفض", change: "خصوصية التتبع", close: "إغلاق" },
+  en: { title: "Analytics privacy", body: "Allow Clarity and Google Tag Manager for site analytics? We do not directly send donation or payment details to these tools.", accept: "Allow", reject: "Decline", change: "Tracking privacy", close: "Close" },
+  tr: { title: "Analiz gizliliği", body: "Site analizi için Clarity ve Google Tag Manager kullanımına izin veriyor musunuz? Bağış veya ödeme bilgilerini doğrudan bu araçlara göndermiyoruz.", accept: "İzin ver", reject: "Reddet", change: "İzleme gizliliği", close: "Kapat" },
+  fr: { title: "Confidentialité", body: "Autorisez-vous Clarity et Google Tag Manager pour les analyses du site ? Aucune donnée de don ou de paiement n'est transmise directement.", accept: "Autoriser", reject: "Refuser", change: "Confidentialité", close: "Fermer" },
+  id: { title: "Privasi analitik", body: "Izinkan Clarity dan Google Tag Manager untuk analitik situs? Data donasi dan pembayaran tidak dikirim langsung.", accept: "Izinkan", reject: "Tolak", change: "Privasi pelacakan", close: "Tutup" },
+  pt: { title: "Privacidade analítica", body: "Permitir Clarity e Google Tag Manager para analisar o site? Não enviamos diretamente dados de doações ou pagamentos.", accept: "Permitir", reject: "Recusar", change: "Privacidade", close: "Fechar" },
+  es: { title: "Privacidad analítica", body: "¿Permitir Clarity y Google Tag Manager para analizar el sitio? No enviamos directamente datos de donaciones ni pagos.", accept: "Permitir", reject: "Rechazar", change: "Privacidad", close: "Cerrar" },
+  de: { title: "Analyse-Datenschutz", body: "Clarity und Google Tag Manager zur Website-Analyse erlauben? Spenden- oder Zahlungsdaten werden nicht direkt übermittelt.", accept: "Erlauben", reject: "Ablehnen", change: "Tracking-Datenschutz", close: "Schließen" },
+};
+type PublicTags = {
+  clarityProjectId: string | null; clarityEnabled: boolean;
+  gtmContainerId: string | null; gtmEnabled: boolean;
+};
+type TagWindow = Window & {
+  __yediClarityProject?: string;
+  __yediGtmContainer?: string;
+  clarity?: (...args: unknown[]) => void;
+  yediGtmLayer?: Record<string, unknown>[];
+};
+function cookieConsent(): Consent {
+  if (typeof document === "undefined") return null;
+  const record = document.cookie.split("; ").find(x => x.startsWith(COOKIE_NAME+"="));
+  const v = record?.split("=")[1];
+  return v === "granted" || v === "denied" ? v : null;
+}
+function persistConsent(v: Exclude<Consent, null>) {
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${COOKIE_NAME}=${v}; Max-Age=15552000; Path=/; SameSite=Lax${secure}`;
+}
+function restrictedPath(path: string): boolean {
+  // A dashboard or a personal-payment page is never a tag initialization
+  // surface. Clarity is masked site-wide on all allowed pages.
+  return /^\/dashboard(\/|$)/.test(path) ||
+    /\/(auth|account|success|donation-failed|donation-pending|checkout)(\/|$)/.test(path);
+}
+function ensureGtm(id: string): void {
+  const w = window as TagWindow;
+  if (w.__yediGtmContainer) return;
+  const already = Array.from(document.scripts).some(script => {
+    try {
+      const url = new URL(script.src);
+      return url.hostname === "www.googletagmanager.com" &&
+        url.pathname === "/gtm.js" && url.searchParams.get("id") === id;
+    } catch { return false; }
+  });
+  w.__yediGtmContainer = id;
+  if (already) return;
+  // This isolated layer intentionally receives NO donation, purchase,
+  // email, phone or transaction payload. Existing GA4/Ads use dataLayer.
+  // Tag configuration in the external container still needs a separate
+  // audit to prove it has no automatic duplicate purchase/pageview tags.
+  w.yediGtmLayer = w.yediGtmLayer || [];
+  w.yediGtmLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+  const script = document.createElement("script");
+  script.async = true;
+  script.dataset.yediManagedTag = "gtm";
+  script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(id)}&l=yediGtmLayer`;
+  document.head.appendChild(script);
+}
+function ensureClarity(id: string): void {
+  const w = window as TagWindow;
+  if (w.__yediClarityProject) return;
+  // Microsoft Clarity masks content marked with data-clarity-mask; apply
+  // it to the whole page BEFORE the SDK starts recording any DOM.
+  document.body.setAttribute("data-clarity-mask", "");
+  w.__yediClarityProject = id;
+  try {
+    Clarity.init(id);
+    w.clarity?.("consentv2", { ad_Storage: "denied", analytics_Storage: "granted" });
+  } catch {
+    delete w.__yediClarityProject;
+  }
+}
+export default function ManagedMarketingTags() {
+  const pathname = usePathname() || "/";
+  const [consent, setConsent] = useState<Consent>(null);
+  const [ready, setReady] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [tags, setTags] = useState<PublicTags | null>(null);
+  const code = pathname.split("/")[1] as Locale;
+  const locale = code in COPY ? code : "ar";
+  const t = COPY[locale];
+  const isRestricted = restrictedPath(pathname);
+
+  useEffect(() => {
+    setConsent(cookieConsent());
+    setReady(true);
+    if (restrictedPath(window.location.pathname)) return;
+    const controller = new AbortController();
+    fetch("/api/tracking/config", { cache: "no-store", signal: controller.signal })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setTags(data as PublicTags); })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (isRestricted || consent !== "granted" || !tags) return;
+    const clarity: ManagedTag = { id: tags.clarityProjectId, enabled: tags.clarityEnabled, source: "database" };
+    const gtm: ManagedTag = { id: tags.gtmContainerId, enabled: tags.gtmEnabled, source: "database" };
+    if (shouldLoadManagedTag(clarity, consent) && validClarityId(clarity.id)) ensureClarity(clarity.id);
+    if (shouldLoadManagedTag(gtm, consent) && validGtmId(gtm.id)) ensureGtm(gtm.id);
+  }, [consent, tags, isRestricted]);
+
+  function choose(value: Exclude<Consent, null>) {
+    persistConsent(value);
+    const loaded = Boolean((window as TagWindow).__yediClarityProject ||
+      (window as TagWindow).__yediGtmContainer);
+    if (value === "denied" && loaded) {
+      (window as TagWindow).clarity?.("consentv2", { ad_Storage: "denied", analytics_Storage: "denied" });
+      window.location.reload(); // only reliable way to unload an already-injected GTM runtime
+      return;
+    }
+    setConsent(value);
+    setEditing(false);
+  }
+  if (!ready || isRestricted) return null;
+  const opened = consent === null || editing;
+  const rtl = locale === "ar";
+  return opened ? (
+    <section aria-label={t.title} dir={rtl ? "rtl" : "ltr"}
+      className="fixed bottom-4 left-4 right-4 z-[90] max-w-md rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-900 shadow-xl sm:right-auto">
+      <h2 className="font-bold">{t.title}</h2>
+      <p className="mt-2 leading-6 text-slate-700">{t.body}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={() => choose("granted")} className="rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white">{t.accept}</button>
+        <button type="button" onClick={() => choose("denied")} className="rounded-lg border px-4 py-2 font-semibold">{t.reject}</button>
+        {consent !== null ? <button type="button" className="px-2 py-2 underline" onClick={() => setEditing(false)}>{t.close}</button> : null}
+      </div>
+    </section>
+  ) : (
+    <button type="button" onClick={() => setEditing(true)}
+      className="fixed bottom-3 left-3 z-[70] rounded-lg border border-slate-200 bg-white/95 px-2 py-1 text-[11px] text-slate-600 shadow-sm">
+      {t.change}
+    </button>
+  );
+}

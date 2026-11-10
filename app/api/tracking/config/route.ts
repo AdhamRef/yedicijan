@@ -15,6 +15,8 @@ export async function GET() {
       googleAdsConversionLabel: null,
       tiktokPixelId: null,
       xPixelId: null,
+      clarityProjectId: null, clarityEnabled: false,
+      gtmContainerId: null, gtmEnabled: false,
     }, { status: 200, headers: { "Cache-Control": "no-store, max-age=0" } });
   }
 }

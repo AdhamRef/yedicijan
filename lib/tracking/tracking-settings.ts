@@ -1,3 +1,4 @@
+import { effectiveManagedTags } from "@/lib/tracking/managed-tags";
 import { prisma } from "@/lib/prisma";
 
 export const TRACKING_SETTINGS_COLLECTION = "TrackingSettings";
@@ -11,6 +12,10 @@ export type PublicTrackingConfig = {
   googleAdsConversionLabel: string | null;
   tiktokPixelId: string | null;
   xPixelId: string | null;
+  clarityProjectId: string | null;
+  clarityEnabled: boolean;
+  gtmContainerId: string | null;
+  gtmEnabled: boolean;
 };
 
 export type MetaCapiCredentials = {
@@ -51,6 +56,7 @@ export async function getRawTrackingSettings(): Promise<RawTrackingSettings | nu
 
 export async function getPublicTrackingConfig(): Promise<PublicTrackingConfig> {
   const row = await getRawTrackingSettings();
+  const tags = effectiveManagedTags(row);
   return {
     facebookPixelId: trackingString(row, "facebookPixelId"),
     gaMeasurementId: trackingString(row, "gaMeasurementId"),
@@ -58,6 +64,10 @@ export async function getPublicTrackingConfig(): Promise<PublicTrackingConfig> {
     googleAdsConversionLabel: trackingString(row, "googleAdsConversionLabel"),
     tiktokPixelId: trackingString(row, "tiktokPixelId"),
     xPixelId: trackingString(row, "xPixelId"),
+    clarityProjectId: tags.clarity.id,
+    clarityEnabled: tags.clarity.enabled,
+    gtmContainerId: tags.gtm.id,
+    gtmEnabled: tags.gtm.enabled,
   };
 }
 
