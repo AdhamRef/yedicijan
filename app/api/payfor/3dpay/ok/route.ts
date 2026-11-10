@@ -64,6 +64,8 @@ export async function POST(req: NextRequest) {
         } | null
       )?.payforRequest;
 
+      if (!snapshot) return "unverified" as const;
+
       const linked =
         donation.status !== "FAILED" &&
         !donation.paidAt &&
