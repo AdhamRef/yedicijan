@@ -1961,6 +1961,7 @@ const DonationDialog = ({
 
   const handleSubmit = async () => {
     let isRedirecting = false;
+    let createdDonationId: string | null = null;
     try {
       if (!session?.user?.id && !useGuestCheckout) {
         requestCheckoutSignIn(getPaymentInfoStepIndex());
@@ -2216,6 +2217,7 @@ const DonationDialog = ({
 
       if (response.data.success) {
         const donationId = response.data.donation.id as string;
+        createdDonationId = donationId;
 
         if (paymentMethod === "CARD" && useBank3D) {
           const newPan = cardDetails.cardNumber.replace(/\s/g, "");
@@ -2383,22 +2385,14 @@ const DonationDialog = ({
       }
       onClose();
     } catch (error) {
-      console.error("Payment failed:", error);
-      tracking?.trackPaymentFailed({
-        value: donationAmount,
-        currency: getCurrency(),
-        causeId: campaignId || categoryId || undefined,
-        reason: error instanceof Error ? error.message : "unknown",
-        gateway: gatewayAnalyticsName(gateway),
-      });
-      // Land on the explanatory failure page (with bank-transfer fallback) instead of
-      // a toast that disappears in 3s. We may not have a donationId yet (e.g. /api/donations
-      // itself threw) — the page handles a missing query param gracefully.
-      isRedirecting = true;
-      setRedirecting(true);
-      router.push(
-        appendCurrencyQuery("/donation-failed", getCurrencyCodeForLinks()),
-      );
+      // An unknown network/API error is not proof that the bank declined.
+      if (createdDonationId) {
+        isRedirecting = true;
+        setRedirecting(true);
+        router.push(appendCurrencyQuery(`/donation-pending?donationId=${encodeURIComponent(createdDonationId)}`, getCurrencyCodeForLinks()));
+      } else {
+        toast.error("تعذّر بدء عملية الدفع. لم يتم تأكيد أي خصم.");
+      }
     } finally {
       if (!isRedirecting) setLoading(false);
     }
