@@ -62,7 +62,7 @@ jobs:
           exit 1
       - name: Prisma schema on isolated database
         run: npx --no-install prisma db push --schema prisma/schema.prisma
-      - name: Synthetic unit tests: scope and financial proof
+      - name: "Synthetic unit tests: scope and financial proof"
         run: node --import tsx --test tests/finance/donation-guest-access.test.ts
       - name: Actual Next.js HTTP + MongoDB access control / settlement
         run: |
