@@ -1,3 +1,4 @@
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -54,11 +55,8 @@ export async function POST(
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
     }
 
-    // Only the donor (or an admin) can retry. Guests with the link are ok too
-    // — the donation id is the only secret.
-    if (session && session.user.id !== source.donorId && session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const access = donationAccessLevel(_req, session, source);
+    if (!access || access === 'staff') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Refuse to retry an already-paid donation — that would charge twice.
     if (source.paidAt) {
