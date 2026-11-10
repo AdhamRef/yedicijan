@@ -128,10 +128,28 @@ test("signed success/failure callbacks racing and replayed cannot settle without
     request(urls[i%2]+"?donationId="+orderId+"&locale=en",
       signedResponse(orderId,i%2===0?"ok":"fail"))));
   assert.ok(results.every(r=>r.status===303||r.status===302||r.status===307),JSON.stringify(results));
+  assert.ok(results.every(r => r.location.includes("/en/donation-pending?donationId=")), JSON.stringify(results));
   const d=await prisma.donation.findUnique({where:{id:orderId}});
   assert.equal(d.paidAt,null);
   assert.equal(d.provider,null);
   assert.notEqual(d.status,"FAILED");
+});
+test("HTTP foreign-currency checkout rejects before guest user or donation creation", async()=>{
+  const email="rejected-"+random+"@example.invalid";
+  const payload={
+    currency:"USD", paymentMethod:"CARD", type:"ONE_TIME",
+    items:[{campaignId:"507f191e810c19729de860ea",amount:20}],
+    guest:{firstName:"Synthetic",lastName:"Donor",email},
+  };
+  const donorsBefore=await prisma.user.count({where:{email}});
+  const donationsBefore=await prisma.donation.count({where:{donorId:guest.id}});
+  for(const endpoint of ["/api/donations","/api/cart/payment"]) {
+    const response=await request(endpoint,payload);
+    assert.equal(response.status,409,JSON.stringify(response));
+    assert.equal(response.body?.code,"PAYMENT_RAIL_UNAVAILABLE");
+  }
+  assert.equal(await prisma.user.count({where:{email}}),donorsBefore);
+  assert.equal(await prisma.donation.count({where:{donorId:guest.id}}),donationsBefore);
 });
 test("card vault POST is refused without storing any card",async()=>{
   const r=await request("/api/credit-cards",{ cardNumber:"4111111111111111",
