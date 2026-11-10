@@ -1,126 +1,109 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/public-origin";
 import { prisma } from "@/lib/prisma";
-// Donate (success) CAPI now fires server-side from `dispatchDonationPaid`
-// the moment the donation flips to PAID — that's the only path that
-// reliably catches donors whose browser never returns from 3DS (mobile
-// tab killed, ad-blocker, slow network, no Pixel ID configured). The
-// /success page still triggers /api/donations/:id/track-conversion as a
-// fallback claim + to fire the browser Pixel using the same stable
-// event_id so Meta dedupes browser ↔ server into one conversion.
-// DonateFailed stays here so abandoned-card lookalike audiences still
-// get the signal on bank rejects.
-import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversion-server";
-import { dispatchDonationPaid, dispatchEvent } from "@/lib/events/dispatch";
+import { dispatchDonationPaid } from "@/lib/events/dispatch";
+import { payForAmountMatches, verifyPayForResponseHash } from "@/lib/payfor";
+
+const safeLocale = (locale: string | null) =>
+  ["ar", "en", "fr", "tr", "id", "pt", "es", "de"].includes(locale || "")
+    ? locale!
+    : "en";
 
 export async function POST(req: NextRequest) {
   const origin = publicOrigin(req);
   const { searchParams } = new URL(req.url);
   const donationId = searchParams.get("donationId") || "";
-  const locale = (searchParams.get("locale") || "en").toLowerCase();
+  const locale = safeLocale(searchParams.get("locale"));
+  const failUrl = new URL(
+    "/" + locale + "/donation-failed?donationId=" + encodeURIComponent(donationId),
+    origin
+  );
+  if (!donationId) return NextResponse.redirect(failUrl);
 
-  if (!donationId) {
-    return NextResponse.redirect(new URL(`/${locale}/donation-failed`, origin));
+  // Accept scalar bank values only; reject ambiguous duplicated inputs.
+  const form = await req.formData();
+  const raw: Record<string, string> = {};
+  for (const [key, value] of form.entries()) {
+    if (typeof value !== "string" || Object.prototype.hasOwnProperty.call(raw, key)) {
+      return NextResponse.redirect(failUrl);
+    }
+    raw[key] = value;
   }
 
-  const form = await req.formData();
-  const raw = Object.fromEntries(form.entries());
+  // A return to this URL alone is not proof of settlement.
+  const signed = verifyPayForResponseHash(raw, {
+    merchantId: process.env.PAYFOR_MERCHANT_ID,
+    merchantPass: process.env.PAYFOR_MERCHANT_PASS,
+    userCode: process.env.PAYFOR_USER_CODE,
+  });
+  if (!signed || raw.OrderId !== donationId) {
+    console.warn("[PayFor OK] Unverified callback ignored", { donationId });
+    return NextResponse.redirect(failUrl);
+  }
 
-  // Log full bank response for debugging
-  console.log("[PayFor OK] Bank response:", JSON.stringify(raw, null, 2));
-
-  const orderId = String(raw.OrderId || raw.orderId || "");
-  const procReturnCode = String(raw.ProcReturnCode || raw.ProcReturnCode?.toString?.() || raw.procReturnCode || "");
-  const txnResult = String(raw.TxnResult || raw.txnResult || "");
-  const errorMessage = String(raw.ErrMsg || raw.ErrorMessage || raw.errorMessage || "");
-  const authCode = String(raw.AuthCode || raw.authCode || "");
-  const hostRefNum = String(raw.HostRefNum || raw.hostRefNum || "");
-  const threeDStatus = String(raw["3DStatus"] ?? "");
+  const orderId = raw.OrderId;
+  const procReturnCode = raw.ProcReturnCode;
+  const threeDStatus = raw["3DStatus"];
+  const authCode = raw.AuthCode || "";
+  const hostRefNum = raw.HostRefNum || "";
 
   try {
     const result = await prisma.$transaction(async (tx) => {
       const donation = await tx.donation.findUnique({
         where: { id: donationId },
-        include: {
-          items: true,
-          categoryItems: true,
-        },
+        include: { items: true, categoryItems: true },
       });
-      if (!donation) return { ok: false as const, reason: "not_found" as const };
+      if (!donation) return "not_found" as const;
 
-      // Idempotency: if already confirmed by a prior callback, just redirect to success
-      if (donation.paidAt !== null) return { ok: true as const };
+      // A repeated verified callback must not re-credit revenue.
+      if (donation.status === "PAID" && donation.paidAt) return "already_paid" as const;
 
-      // Basic linkage check
-      if (donation.providerOrderId && orderId && donation.providerOrderId !== orderId) {
-        await tx.donation.update({
-          where: { id: donation.id },
-          data: {
-            status: "FAILED",
-            provider: "PAYFOR",
-            providerProcReturnCode: procReturnCode || null,
-            providerTxnResult: txnResult || null,
-            providerAuthCode: authCode || null,
-            providerHostRefNum: hostRefNum || null,
-            providerErrorMessage: `OrderId mismatch`,
-            providerRaw: raw as any,
-          },
-        });
-        return { ok: false as const, reason: "order_mismatch" as const };
+      const snapshot = (
+        donation.providerRaw as {
+          payforRequest?: { orderId?: string; purchAmount?: string; currency?: string };
+        } | null
+      )?.payforRequest;
+
+      const linked =
+        donation.status === "PENDING" &&
+        donation.provider === "PAYFOR" &&
+        donation.providerOrderId === orderId &&
+        snapshot?.orderId === orderId &&
+        snapshot?.currency === "949" &&
+        raw.Currency === snapshot.currency &&
+        payForAmountMatches(raw.PurchAmount, snapshot.purchAmount);
+
+      if (!linked) return "unverified" as const;
+      if (procReturnCode !== "00" || threeDStatus !== "1" || !authCode) {
+        return "not_approved" as const;
       }
 
-      // 3D Secure is the only mode this merchant runs. A payment settles only when
-      // the bank both authenticated the cardholder in full (3DStatus 1 — 2/3/4 are
-      // "half 3D" attempts) and approved the charge (ProcReturnCode 00). A bare
-      // TxnResult "Success" is no longer enough on its own.
-      const snapshot = (donation.providerRaw as { payforRequest?: { purchAmount?: string } } | null)
-        ?.payforRequest;
-      const amountMatches =
-        !snapshot?.purchAmount ||
-        Number(raw.PurchAmount) === Number(snapshot.purchAmount);
-      const isSuccess =
-        procReturnCode === "00" &&
-        threeDStatus === "1" &&
-        amountMatches;
-      if (!isSuccess) {
-        await tx.donation.update({
-          where: { id: donation.id },
-          data: {
-            status: "FAILED",
-            provider: "PAYFOR",
-            providerProcReturnCode: procReturnCode || null,
-            providerTxnResult: txnResult || null,
-            providerAuthCode: authCode || null,
-            providerHostRefNum: hostRefNum || null,
-            providerErrorMessage:
-              errorMessage ||
-              (!amountMatches
-                ? `Amount mismatch (expected ${snapshot?.purchAmount}, got ${raw.PurchAmount})`
-                : threeDStatus !== "1"
-                  ? `3D Secure not completed (3DStatus ${threeDStatus || "empty"})`
-                  : "Payment failed"),
-            providerRaw: raw as any,
-          },
-        });
-        return { ok: false as const, reason: "failed" as const };
-      }
-
-      await tx.donation.update({
-        where: { id: donation.id },
+      // Atomic compare-and-set also protects the project increment.
+      const written = await tx.donation.updateMany({
+        where: {
+          id: donation.id,
+          status: "PENDING",
+          paidAt: null,
+          provider: "PAYFOR",
+          providerOrderId: orderId,
+        },
         data: {
           status: "PAID",
           paidAt: new Date(),
-          provider: "PAYFOR",
-          providerProcReturnCode: procReturnCode || null,
-          providerTxnResult: txnResult || null,
-          providerAuthCode: authCode || null,
+          providerProcReturnCode: procReturnCode,
+          providerTxnResult: raw.TxnResult || null,
+          providerAuthCode: authCode,
           providerHostRefNum: hostRefNum || null,
           providerErrorMessage: null,
-          providerRaw: raw as any,
+          // Raw bank fields may contain card details; keep only approved fields.
+          providerRaw: {
+            payforRequest: snapshot,
+            payforVerifiedResponse: { orderId, procReturnCode, threeDStatus, hostRefNum },
+          },
         },
       });
+      if (written.count !== 1) return "duplicate_or_changed" as const;
 
-      // Apply increments only on confirmed payment
       for (const item of donation.items) {
         await tx.campaign.update({
           where: { id: item.campaignId },
@@ -133,30 +116,19 @@ export async function POST(req: NextRequest) {
           data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
         });
       }
-
-      return { ok: true as const };
+      return "newly_paid" as const;
     });
 
-    if (result.ok) {
-      void dispatchDonationPaid(donationId);
-      return NextResponse.redirect(new URL(`/${locale}/success/${donationId}`, origin));
+    if (result === "newly_paid") void dispatchDonationPaid(donationId);
+    if (result === "newly_paid" || result === "already_paid") {
+      return NextResponse.redirect(new URL("/" + locale + "/success/" + donationId, origin));
     }
-    if (result.reason === "failed") {
-      void dispatchEvent("DONATION_FAILED", { donationId });
-      void sendDonationFailedConversions(donationId);
-    }
-    if (result.reason === "order_mismatch") {
-      void sendDonationFailedConversions(donationId);
-    }
-
-    return NextResponse.redirect(
-      new URL(`/${locale}/donation-failed?donationId=${encodeURIComponent(donationId)}`, origin)
-    );
-  } catch (e) {
-    console.error("PayFor OK callback error:", e);
-    return NextResponse.redirect(
-      new URL(`/${locale}/donation-failed?donationId=${encodeURIComponent(donationId)}`, origin)
-    );
+    console.warn("[PayFor OK] Callback held for reconciliation", { donationId, reason: result });
+  } catch (error) {
+    console.error("[PayFor OK] Settlement transaction failed", {
+      donationId,
+      error: error instanceof Error ? error.name : "unknown",
+    });
   }
+  return NextResponse.redirect(failUrl);
 }
-
