@@ -59,7 +59,7 @@ export type QueuedToast = {
   id: string;
   title?: React.ReactNode;
   description?: React.ReactNode;
-  action?: unknown;
+  action?: React.ReactNode;
 };
 
 export function useToast() {
