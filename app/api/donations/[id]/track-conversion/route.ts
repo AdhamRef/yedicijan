@@ -24,6 +24,7 @@ export async function POST(
     where: { id },
     select: {
       id: true,
+      donorId: true,
       status: true,
       paidAt: true,
       createdAt: true,
@@ -38,7 +39,7 @@ export async function POST(
   });
 
   const actor = await getServerSession(authOptions);
-  if (!row || !donationAccessLevel(req, actor, row as any)) {
+  if (!row || !donationAccessLevel(req, actor, row)) {
     return NextResponse.json({ allowed: false, reason: "Forbidden" }, { status: 403 });
   }
   if (!row) {
