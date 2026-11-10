@@ -52,6 +52,8 @@ export async function POST(req: NextRequest) {
       } | null
     )?.payforRequest;
 
+    if (!snapshot) return NextResponse.redirect(destination);
+
     if (
       donation?.status === "FAILED" ||
       Boolean(donation?.paidAt) ||
