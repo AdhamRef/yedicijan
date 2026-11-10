@@ -1,3 +1,4 @@
+import { attachGuestDonationAccess, canIssueGuestDonationAccess } from "@/lib/donations/guest-access";
 import { resolveGateway, PAYMENT_ROUTE_UNAVAILABLE_MESSAGE } from "@/lib/payment-gateway";
 import { issueGuestPayForIntent } from "@/lib/payfor-guest-intent";
 import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
@@ -131,6 +132,10 @@ export async function POST(request: NextRequest) {
     }) === "UNAVAILABLE") {
       return NextResponse.json({ error: PAYMENT_ROUTE_UNAVAILABLE_MESSAGE,
         code: "PAYMENT_RAIL_UNAVAILABLE" }, { status: 409 });
+    }
+
+    if (!session?.user?.id && !canIssueGuestDonationAccess()) {
+      return NextResponse.json({ error: "Guest checkout is temporarily unavailable" }, { status: 503 });
     }
 
     // Resolve donor
@@ -423,12 +428,11 @@ export async function POST(request: NextRequest) {
       stream: auditStreamForRole(actorRole),
     });
 
-    return NextResponse.json({
+    return attachGuestDonationAccess(NextResponse.json({
       success: true,
       donation,
-      // Sent only in this checkout creation response; never in a URL, log, or DB.
       paymentIntentToken: session?.user?.id ? undefined : issueGuestPayForIntent(donation),
-    });
+    }), donation, session?.user?.id);
   } catch (error) {
     console.error("Error creating donation:", error);
     return NextResponse.json(
