@@ -131,7 +131,7 @@ export async function settleVerifiedStripeDonation(proof: StripeProof): Promise<
 export type RecurringInvoiceSource = {
   id: string;
   status: string | null;
-  paid: boolean;
+  paid?: boolean;
   currency: string;
   amount_paid: number;
   amount_due: number;
@@ -159,7 +159,7 @@ export function stripeRecurringInvoiceMatches(
     sub.payforToken === linkedStripeSubscriptionId &&
     linkedStripeSubscriptionId.startsWith("sub_") &&
     invoice.id.startsWith("in_") &&
-    invoice.status === "paid" && invoice.paid === true &&
+    invoice.status === "paid" && invoice.paid !== false &&
     invoice.currency.toLowerCase() === sub.currency.toLowerCase() &&
     Number.isFinite(expected) && expected > 0 &&
     // Stripe bills in integer minor units. Approved fee fractions round to a cent.
