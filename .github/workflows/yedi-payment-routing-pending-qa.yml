@@ -1,0 +1,62 @@
+name: YediCihan payment-routing and pending-state QA (no bank network)
+on:
+  push:
+    branches: [fix/yedi-payment-routing-pending-gates-20261110]
+  pull_request:
+    paths:
+      - "lib/payment-gateway.ts"
+      - "tests/finance/yedi-payment-routing.test.ts"
+      - "app/api/payfor/3dpay/**"
+      - "app/[locale]/donation-pending/**"
+      - "components/DonationDialog.tsx"
+      - "components/CartPaymentDialog.tsx"
+      - ".github/workflows/yedi-payment-routing-pending-qa.yml"
+permissions:
+  contents: read
+jobs:
+  currency-matrix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Run currency routing matrix (11 currencies and both flags, offline)
+        run: node --experimental-strip-types --test tests/finance/yedi-payment-routing.test.ts
+  types-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedi_ci_never_connect?replicaSet=rs0
+      GOOGLE_CLIENT_ID: synthetic-ci-oauth-client
+      GOOGLE_CLIENT_SECRET: synthetic-ci-oauth-secret
+      NEXTAUTH_SECRET: synthetic-ci-nextauth-secret-only-for-nonproduction-build
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
+    steps:
+      - name: Fetch exact commit without legacy gitlink
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Generate Prisma
+        run: |
+          npx --no-install prisma generate --schema prisma/schema.prisma
+          npx --no-install prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: TypeScript (no error suppression)
+        run: npx --no-install tsc --noEmit --incremental false --pretty false
+      - name: Build with synthetic placeholders only
+        run: npm run build
