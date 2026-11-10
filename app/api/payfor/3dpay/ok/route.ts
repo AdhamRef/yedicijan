@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const donationId = searchParams.get("donationId") || "";
   const locale = safeLocale(searchParams.get("locale"));
   const failUrl = new URL(
-    "/" + locale + "/donation-failed?donationId=" + encodeURIComponent(donationId),
+    "/" + locale + "/donation-pending?donationId=" + encodeURIComponent(donationId),
     origin
   );
   if (!donationId) return NextResponse.redirect(failUrl);

@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "react-hot-toast";
+
 import Image from "next/image";
 import { PayForCardForm, type PayForCardState } from "@/components/PayForCardForm";
 import { SignInPanel } from "@/components/SignInDialog";
@@ -401,9 +403,14 @@ const CartPaymentDialog = ({
   // ── submit ─────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     let isRedirecting = false;
+    let createdDonationId: string | null = null;
     try {
       if (!session?.user?.id && !useGuestCheckout) {
         requestCheckoutSignIn(getPaymentInfoStepIndex());
+        return;
+      }
+      if (gateway === "UNAVAILABLE") {
+        toast.error("طريقة الدفع بهذه العملة غير متاحة حاليًا؛ لم تتم محاولة أي خصم.");
         return;
       }
       setLoading(true);
@@ -494,6 +501,7 @@ const CartPaymentDialog = ({
         const res = await axios.post("/api/cart/payment", basePayload);
         if (!res.data?.success) { onClose(); return; }
         const donationId = res.data.donation.id as string;
+        createdDonationId = donationId;
         const newPan = cardDetails.cardNumber.replace(/\s/g, "");
 
         // Albaraka signs the card fields into the request MAC, so the card has to go
@@ -586,7 +594,7 @@ const CartPaymentDialog = ({
           if (payforPopupRef.current && !payforPopupRef.current.closed) payforPopupRef.current.close();
           router.push(
             appendCurrencyQuery(
-              `/donation-failed?donationId=${encodeURIComponent(donationId)}`,
+              `/donation-pending?donationId=${encodeURIComponent(donationId)}`,
               getCurrencyCodeForLinks()
             )
           );
@@ -600,7 +608,7 @@ const CartPaymentDialog = ({
         payforPollRef.current = setInterval(async () => {
           polls++;
           try {
-            const check = await fetch(`/api/donations/${donationId}`);
+            const check = await fetch(`/api/donations/${donationId}/status`);
             if (!check.ok) return;
             const data = await check.json();
 
@@ -613,7 +621,12 @@ const CartPaymentDialog = ({
               );
               return;
             }
-            if (data.status === "FAILED" || payforPopupRef.current?.closed || polls >= FAILURE_AFTER) {
+            if (data.status === "FAILED") {
+              router.push(appendCurrencyQuery(`/donation-failed?donationId=${encodeURIComponent(donationId)}`, getCurrencyCodeForLinks()));
+              if (payforPollRef.current) { clearInterval(payforPollRef.current); payforPollRef.current = null; }
+              return;
+            }
+            if (payforPopupRef.current?.closed || polls >= FAILURE_AFTER) {
               handlePayforFailure();
             }
           } catch { /* ignore transient errors */ }
@@ -634,11 +647,14 @@ const CartPaymentDialog = ({
         onClose();
       }
     } catch (error) {
-      console.error("Cart payment failed:", error);
-      // Send to the explanatory failure page rather than relying on a transient toast.
-      isRedirecting = true;
-      setRedirecting(true);
-      router.push(appendCurrencyQuery("/donation-failed", getCurrencyCodeForLinks()));
+      // An API/network exception is not a bank refusal; keep a created attempt pending.
+      if (createdDonationId) {
+        isRedirecting = true;
+        setRedirecting(true);
+        router.push(appendCurrencyQuery(`/donation-pending?donationId=${encodeURIComponent(createdDonationId)}`, getCurrencyCodeForLinks()));
+      } else {
+        toast.error("تعذّر بدء عملية الدفع. لم يتم تأكيد أي خصم.");
+      }
     } finally {
       if (!isRedirecting) setLoading(false);
     }

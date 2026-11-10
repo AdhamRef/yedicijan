@@ -1,0 +1,29 @@
+name: YediCihan currency matrix QA (no bank network)
+on:
+  push:
+    branches: [fix/yedi-payment-routing-pending-gates-20261110]
+  pull_request:
+    paths:
+      - "lib/payment-gateway.ts"
+      - "tests/finance/yedi-payment-routing.test.ts"
+      - "app/api/payfor/3dpay/**"
+      - "app/[locale]/donation-pending/**"
+      - "components/DonationDialog.tsx"
+      - "components/CartPaymentDialog.tsx"
+      - ".github/workflows/yedi-payment-routing-pending-qa.yml"
+permissions:
+  contents: read
+jobs:
+  # Full TypeScript/build is validated on the composed PR9+PR19+PR21 QA branch,
+  # not on the incomplete standalone PR19 stack missing PR9 baseline repairs.
+  currency-matrix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install locked dependencies for canonical currency module
+        run: npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+      - name: Run currency routing matrix (14 currencies and both flags, offline)
+        run: node --import tsx --test tests/finance/yedi-payment-routing.test.ts

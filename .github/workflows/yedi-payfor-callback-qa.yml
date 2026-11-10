@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - fix/yedi-payfor-verified-callbacks-20261110
+      - fix/yedi-payment-routing-pending-gates-20261110
+      - integration/yedi-pr9-payfor19-routing21-qa-20261110
   pull_request:
     branches: [main]
     paths:

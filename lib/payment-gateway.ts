@@ -1,79 +1,49 @@
+import { SUPPORTED_CURRENCY_CODES } from "@/lib/supported-currencies";
 /**
- * Which gateway a given donation is charged through.
+ * Payment rail selection is intentionally conservative.
+ * There is NO automatic cross-bank fallback. The PayFor 3DPay initiate route
+ * remains fail-closed (503), regardless of browser-exposed feature flags.
  *
- * MONTHLY DONATIONS ARE CURRENTLY SWITCHED OFF — see MONTHLY_DONATIONS_ENABLED below.
- *
- * Routing is fixed, not configurable — there is no "main gateway" choice any more:
- *
- *   - **ALBARAKA** (Albaraka Türk 3D Secure)  — one-time donations in Turkish lira.
- *   - **PAYFOR**   (Ziraat Katılım 3D Secure) — every other one-time donation
- *                  (converted to TRY and charged in lira).
- *   - **STRIPE**   — monthly subscriptions only, and nothing else.
- *
- * Stripe was removed from one-time donations entirely. It survives for monthly
- * because it is the only gateway here that can bill a second cycle: both 3D Secure
- * rails authenticate a single transaction and hand back no reusable credential, so
- * a recurring charge is simply not expressible through them.
- *
- * ALBARAKA_RECURRING_ENABLED does not change this: Albaraka has no documented
- * recurring API for this merchant, so monthly stays on Stripe either way.
- *
- * `payforEnabled` is the one remaining switch. Turning PayFor off doesn't fall back
- * to Stripe — every one-time donation moves to Albaraka, which charges in TL anyway.
- */
-
-/**
- * Master switch for monthly donations, and with them Stripe at checkout. Off unless
- * NEXT_PUBLIC_MONTHLY_DONATIONS_ENABLED=1.
- *
- * To bring monthly back: set the variable to 1 and rebuild (NEXT_PUBLIC_ values are
- * compiled in). Nothing else needs changing; every surface reads this constant.
- *
- * While off, the checkout is one-time only, Stripe's script isn't loaded, and the server
- * refuses new subscriptions. Subscriptions that already exist keep billing on Stripe, so
- * /api/stripe/webhook, the STRIPE_* keys and the profile's manage/cancel controls must
- * stay in place for as long as any subscription is active.
+ * A non-TRY donation must not silently switch to Albaraka. That bank's
+ * multi-currency merchant acceptance has not been independently approved.
+ * Legacy completed transactions retain their original provider.
  */
 export const MONTHLY_DONATIONS_ENABLED =
   process.env.NEXT_PUBLIC_MONTHLY_DONATIONS_ENABLED === "1";
 
-/** Gateway actually used to charge a specific donation. */
-export type ResolvedGateway = "ALBARAKA" | "PAYFOR" | "STRIPE";
+export const SUPPORTED_DONATION_CURRENCIES = SUPPORTED_CURRENCY_CODES;
+
+
+export type ResolvedGateway = "ALBARAKA" | "PAYFOR" | "STRIPE" | "UNAVAILABLE";
 
 export type GatewayResolutionInput = {
-  /** Admin switch for the PayFor rail. When off, every one-time donation goes to Albaraka. */
   payforEnabled: boolean;
-  /** ISO currency the donor is giving in, e.g. "TRY". */
   currency: string;
-  /** Monthly donations create a subscription and can only run on Stripe. */
   donationType?: "ONE_TIME" | "MONTHLY" | null;
 };
 
 export function resolveGateway({
-  payforEnabled,
+  payforEnabled: _payforEnabled,
   currency,
   donationType = "ONE_TIME",
 }: GatewayResolutionInput): ResolvedGateway {
-  // The only remaining Stripe case. Neither 3D rail can bill the next cycle.
   if (donationType === "MONTHLY") return "STRIPE";
-  const c = String(currency || "").toUpperCase();
-  if (c === "TRY" || c === "TL") return "ALBARAKA";
-  // Fail closed on the unsafe PayFor browser credential flow. The existing
-  // Albaraka fallback is already used when PayFor is administratively disabled.
-  // Public flag alone can never re-enable PayFor: its server handler stays on HOLD.
-  return payforEnabled && process.env.NEXT_PUBLIC_PAYFOR_SECURE_FLOW_READY === "1"
-    ? "PAYFOR"
-    : "ALBARAKA";
+  const code = String(currency || "").trim().toUpperCase();
+  if (code === "TRY" || code === "TL") return "ALBARAKA";
+  // PayFor requires an approved new server/hosted implementation.
+  // NEXT_PUBLIC_PAYFOR_SECURE_FLOW_READY is not an authorization.
+  return "UNAVAILABLE";
 }
 
-/** Lower-case name used by the analytics/pixel layer. */
 export function gatewayAnalyticsName(
   gateway: ResolvedGateway
-): "stripe" | "albaraka" | "payfor" {
-  return gateway.toLowerCase() as "stripe" | "albaraka" | "payfor";
+): "stripe" | "albaraka" | "payfor" | "unavailable" {
+  return gateway.toLowerCase() as "stripe" | "albaraka" | "payfor" | "unavailable";
 }
 
-/** True when the gateway needs raw card inputs rendered on our own checkout step. */
 export function gatewayUsesOwnCardForm(gateway: ResolvedGateway): boolean {
   return gateway === "PAYFOR" || gateway === "ALBARAKA";
 }
+
+export const PAYMENT_ROUTE_UNAVAILABLE_MESSAGE =
+  "Card checkout is temporarily unavailable for this currency pending bank approval. No payment was attempted.";

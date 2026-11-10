@@ -1961,9 +1961,14 @@ const DonationDialog = ({
 
   const handleSubmit = async () => {
     let isRedirecting = false;
+    let createdDonationId: string | null = null;
     try {
       if (!session?.user?.id && !useGuestCheckout) {
         requestCheckoutSignIn(getPaymentInfoStepIndex());
+        return;
+      }
+      if (gateway === "UNAVAILABLE") {
+        toast.error("طريقة الدفع بهذه العملة غير متاحة حاليًا؛ لم تتم محاولة أي خصم.");
         return;
       }
       setLoading(true);
@@ -2168,30 +2173,9 @@ const DonationDialog = ({
         const { error: confirmError } =
           await stripeFormRef.current.confirmPayment(clientSecret);
         if (confirmError) {
-          // Mark the preemptively-created donation as FAILED so we keep an audit trail and
-          // prevent the row from incorrectly counting as PAID. Fire-and-forget — the
-          // donation-failed page works even if this PATCH fails.
-          axios
-            .patch(`/api/donations/${targetDonationId}/fail`, {
-              reason: confirmError.message ?? "stripe_confirm_failed",
-            })
-            .catch(() => {});
-          tracking?.trackPaymentFailed({
-            value: donationAmount,
-            currency: getCurrency(),
-            causeId: campaignId || categoryId || undefined,
-            reason: confirmError.message ?? "stripe_confirm_failed",
-            gateway: "stripe",
-            donationId: targetDonationId,
-          });
-          // Redirect to /donation-failed so the user lands on the explanatory page
-          // with the bank-transfer fallback — toast alone disappears too quickly.
-          router.push(
-            appendCurrencyQuery(
-              `/donation-failed?donationId=${encodeURIComponent(targetDonationId)}`,
-              getCurrencyCodeForLinks(),
-            ),
-          );
+          // A client-side confirmation error is not a bank-certified failure.
+          // Do not mutate transaction state or emit DonateFailed tracking.
+          router.push(appendCurrencyQuery(`/donation-pending?donationId=${encodeURIComponent(targetDonationId)}`, getCurrencyCodeForLinks()));
           return;
         }
 
@@ -2212,6 +2196,7 @@ const DonationDialog = ({
 
       if (response.data.success) {
         const donationId = response.data.donation.id as string;
+        createdDonationId = donationId;
 
         if (paymentMethod === "CARD" && useBank3D) {
           const newPan = cardDetails.cardNumber.replace(/\s/g, "");
@@ -2323,7 +2308,7 @@ const DonationDialog = ({
           payforPollRef.current = setInterval(async () => {
             polls++;
             try {
-              const res = await fetch(`/api/donations/${donationId}`);
+              const res = await fetch(`/api/donations/${donationId}/status`);
               if (!res.ok) return;
               const data = await res.json();
 
@@ -2341,33 +2326,20 @@ const DonationDialog = ({
                 );
                 return;
               }
-              if (
-                data.status === "FAILED" ||
-                payforPopupRef.current?.closed ||
-                polls >= FALLBACK_AFTER_POLLS
-              ) {
+              if (data.status === "FAILED") {
+                if (payforPollRef.current) { clearInterval(payforPollRef.current); payforPollRef.current = null; }
+                router.push(appendCurrencyQuery(`/donation-failed?donationId=${encodeURIComponent(donationId)}`, getCurrencyCodeForLinks()));
+                return;
+              }
+              if (payforPopupRef.current?.closed || polls >= FALLBACK_AFTER_POLLS) {
                 clearInterval(payforPollRef.current!);
                 payforPollRef.current = null;
                 if (payforPopupRef.current && !payforPopupRef.current.closed) {
                   payforPopupRef.current.close();
                 }
-                // Browser-side DonateFailed pixel — server CAPI fires the
-                // matching hit from /api/payfor/3dpay/fail; same event_id
-                // (`${donationId}_failed`) lets Meta dedup the pair.
-                tracking?.trackPaymentFailed({
-                  value: donationAmount,
-                  currency: getCurrency(),
-                  causeId: campaignId || categoryId || undefined,
-                  reason:
-                    data.providerErrorMessage ??
-                    data.status ??
-                    `${gatewayAnalyticsName(gateway)}_failed`,
-                  gateway: gatewayAnalyticsName(gateway),
-                  donationId,
-                });
                 router.push(
                   appendCurrencyQuery(
-                    `/donation-failed?donationId=${encodeURIComponent(donationId)}`,
+                    `/donation-pending?donationId=${encodeURIComponent(donationId)}`,
                     getCurrencyCodeForLinks(),
                   ),
                 );
@@ -2392,22 +2364,14 @@ const DonationDialog = ({
       }
       onClose();
     } catch (error) {
-      console.error("Payment failed:", error);
-      tracking?.trackPaymentFailed({
-        value: donationAmount,
-        currency: getCurrency(),
-        causeId: campaignId || categoryId || undefined,
-        reason: error instanceof Error ? error.message : "unknown",
-        gateway: gatewayAnalyticsName(gateway),
-      });
-      // Land on the explanatory failure page (with bank-transfer fallback) instead of
-      // a toast that disappears in 3s. We may not have a donationId yet (e.g. /api/donations
-      // itself threw) — the page handles a missing query param gracefully.
-      isRedirecting = true;
-      setRedirecting(true);
-      router.push(
-        appendCurrencyQuery("/donation-failed", getCurrencyCodeForLinks()),
-      );
+      // An unknown network/API error is not proof that the bank declined.
+      if (createdDonationId) {
+        isRedirecting = true;
+        setRedirecting(true);
+        router.push(appendCurrencyQuery(`/donation-pending?donationId=${encodeURIComponent(createdDonationId)}`, getCurrencyCodeForLinks()));
+      } else {
+        toast.error("تعذّر بدء عملية الدفع. لم يتم تأكيد أي خصم.");
+      }
     } finally {
       if (!isRedirecting) setLoading(false);
     }
