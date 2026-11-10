@@ -1,3 +1,4 @@
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from 'next-auth';
@@ -22,6 +23,15 @@ export async function GET(
         { error: 'Unauthorized' },
         { status: 401 }
       );
+    }
+
+    if (!isDonationId(id)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    const identity = await prisma.donation.findUnique({
+      where: { id },
+      select: { id: true, donorId: true, createdAt: true, totalAmount: true, currency: true },
+    });
+    if (!identity || !donationAccessLevel(request, session, identity)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -110,6 +120,10 @@ export async function POST(
       );
     }
 
+    if (!donationAccessLevel(request, session, donation)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Create comment
     const comment = await prisma.comment.create({
       data: {
@@ -185,6 +199,9 @@ export async function DELETE(
       );
     }
 
+    if (comment.donationId !== (await params).id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const canModerate = userHasDashboardPermission(session.user, 'revenue');
     if (!canModerate && session.user.id !== comment.userId) {
       return NextResponse.json(
