@@ -1,3 +1,4 @@
+import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation } from "@/lib/donations/stripe-settlement";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import Stripe from "stripe";
@@ -58,60 +59,19 @@ export async function POST(req: NextRequest) {
 
         const isMonthly = session.mode === "subscription";
 
-        if (session.payment_status === "paid" || isMonthly) {
-          await prisma.$transaction(async (tx) => {
-            const donation = await tx.donation.findUnique({
-              where: { id: donationId },
-              include: { items: true, categoryItems: true },
-            });
-            // Idempotency: the row is created with status=PAID by /api/stripe/intent
-            // before Stripe confirms payment, so we key off paidAt (only set here).
-            if (!donation || donation.paidAt != null) return;
-
-            // Mark donation as paid
-            await tx.donation.update({
-              where: { id: donationId },
-              data: {
-                status: "PAID",
-                paidAt: new Date(),
-                provider: "STRIPE",
-                providerOrderId: session.id,
-                providerAuthCode: session.payment_intent as string ?? null,
-                providerTxnResult: "Success",
-                providerRaw: session as any,
-              },
-            });
-
-            // Apply campaign/category amount increments
-            for (const item of donation.items) {
-              await tx.campaign.update({
-                where: { id: item.campaignId },
-                data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-              });
-            }
-            for (const item of donation.categoryItems) {
-              await tx.category.update({
-                where: { id: item.categoryId },
-                data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-              });
-            }
-
-            // If monthly subscription, store Stripe subscription ID
-            if (isMonthly && subscriptionDbId && session.subscription) {
-              await tx.subscription.update({
-                where: { id: subscriptionDbId },
-                data: {
-                  // Reuse payforToken field to store Stripe subscription ID
-                  payforToken: session.subscription as string,
-                },
-              });
-            }
-          });
-          void dispatchDonationPaid(donationId);
-          if (isMonthly && subscriptionDbId) {
-            void dispatchEvent("SUBSCRIPTION_CREATED", { donationId });
+        if (!isMonthly) {
+          const proof = proofFromCheckoutSession(session);
+          if (!proof) {
+            console.warn("[Stripe webhook] Checkout held for verified bank reconciliation");
+            break;
           }
+          const result = await settleVerifiedStripeDonation(proof);
+          if (result === "paid") void dispatchDonationPaid(donationId);
+          break;
         }
+        // Monthly first-invoice settlement must use the independently verified
+        // invoice.payment_succeeded path. Never mark a donation paid just
+        // because a subscription Checkout session was completed.
         break;
       }
 
@@ -404,42 +364,13 @@ export async function POST(req: NextRequest) {
         const donationId = intent.metadata?.donationId;
         if (!donationId) break;
 
-        await prisma.$transaction(async (tx) => {
-          const donation = await tx.donation.findUnique({
-            where: { id: donationId },
-            include: { items: true, categoryItems: true },
-          });
-          // Idempotency: the row is created with status=PAID by /api/stripe/intent
-          // before Stripe confirms payment, so we key off paidAt (only set here).
-          if (!donation || donation.paidAt != null) return;
-
-          await tx.donation.update({
-            where: { id: donationId },
-            data: {
-              status: "PAID",
-              paidAt: new Date(),
-              provider: "STRIPE",
-              providerOrderId: intent.id,
-              providerAuthCode: intent.id,
-              providerTxnResult: "Success",
-              providerRaw: intent as never,
-            },
-          });
-
-          for (const item of donation.items) {
-            await tx.campaign.update({
-              where: { id: item.campaignId },
-              data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-            });
-          }
-          for (const item of donation.categoryItems) {
-            await tx.category.update({
-              where: { id: item.categoryId },
-              data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-            });
-          }
-        });
-        void dispatchDonationPaid(donationId);
+        const proof = proofFromPaymentIntent(intent);
+        if (!proof) {
+          console.warn("[Stripe webhook] Intent held for verified bank reconciliation");
+          break;
+        }
+        const result = await settleVerifiedStripeDonation(proof);
+        if (result === "paid") void dispatchDonationPaid(donationId);
         break;
       }
 

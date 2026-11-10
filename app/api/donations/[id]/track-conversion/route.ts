@@ -1,3 +1,6 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendDonationServerConversions } from "@/lib/tracking/donation-conversion-server";
@@ -9,11 +12,11 @@ import {
 } from "@/lib/tracking/conversion-audit";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  if (!id) {
+  if (!isDonationId(id)) {
     return NextResponse.json({ allowed: false, reason: "missing donation id" }, { status: 400 });
   }
 
@@ -21,6 +24,7 @@ export async function POST(
     where: { id },
     select: {
       id: true,
+      donorId: true,
       status: true,
       paidAt: true,
       createdAt: true,
@@ -34,6 +38,10 @@ export async function POST(
     },
   });
 
+  const actor = await getServerSession(authOptions);
+  if (!row || !donationAccessLevel(req, actor, row)) {
+    return NextResponse.json({ allowed: false, reason: "Forbidden" }, { status: 403 });
+  }
   if (!row) {
     await writeConversionAudit({
       donationId: id,
