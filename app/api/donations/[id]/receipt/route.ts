@@ -247,12 +247,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const access = donationAccessLevel(request, session, donationRow);
     if (!access) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    // Do not leak personal donor details into a guest-capability receipt.
-    // Guest users can sign in to receive the complete official receipt.
-    if (access === 'guest') {
-      return NextResponse.json({ error: 'Sign in to download a personal receipt' }, { status: 403 });
-    }
-
+    // The short-lived HttpOnly guest capability grants this one donor's receipt,
+    // preserving legitimate guest checkout without accepting ObjectId alone.
     const sub = donationRow.subscription;
     const donation = {
       ...donationRow,
