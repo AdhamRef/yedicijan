@@ -125,7 +125,6 @@ export async function POST(req: NextRequest) {
 
     // Hash = hex(SHA1(MbrId + OrderId + PurchAmount + OkUrl + FailUrl + TxnType + InstallmentCount + Rnd + MerchantPass))
     // Docs formula confirmed; MerchantID and UserCode are NOT part of the hash for this bank.
-    const hashInput = [mbrId, orderId, purchAmount, okUrl, failUrl, txnType, installmentCount, rnd, merchantPass].join("");
     const hash = payForHash({
       mbrId,
       orderId,
@@ -138,20 +137,7 @@ export async function POST(req: NextRequest) {
       merchantPass,
     });
 
-    console.log("[PayFor INITIATE] Hash debug:", {
-      mbrId,
-      orderId,
-      purchAmount,
-      okUrl,
-      failUrl,
-      txnType,
-      installmentCount,
-      rnd,
-      merchantPass: merchantPass.slice(0, 3) + "***", // partial for security
-      hashInput,
-      hash,
-      currency,
-    });
+
 
     await prisma.donation.update({
       where: { id: donation.id },
@@ -231,10 +217,7 @@ export async function POST(req: NextRequest) {
       formFields.CardHolderName = savedCard.cardholderName ?? "";
     }
 
-    console.log("[PayFor INITIATE] Sending fields to bank:", {
-      ...formFields,
-      UserPass: "***",
-    });
+
 
     return NextResponse.json({
       actionUrl: gatewayUrl,
