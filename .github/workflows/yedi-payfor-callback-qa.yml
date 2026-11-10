@@ -9,6 +9,13 @@ on:
       - "lib/payfor.ts"
       - "app/api/payfor/3dpay/**"
       - "tests/finance/payfor-response-hash.test.ts"
+      - "tests/finance/payfor-guest-intent.test.ts"
+      - "lib/payfor-guest-intent.ts"
+      - "app/api/donations/route.ts"
+      - "app/api/cart/payment/route.ts"
+      - "app/api/credit-cards/route.ts"
+      - "components/DonationDialog.tsx"
+      - "components/CartPaymentDialog.tsx"
       - ".github/workflows/yedi-payfor-callback-qa.yml"
 permissions:
   contents: read
@@ -22,4 +29,4 @@ jobs:
         with:
           node-version: "24"
       - name: Test bank signature and amount verification without network/payment calls
-        run: node --experimental-strip-types --test tests/finance/payfor-response-hash.test.ts
+        run: node --experimental-strip-types --test tests/finance/payfor-response-hash.test.ts tests/finance/payfor-guest-intent.test.ts
