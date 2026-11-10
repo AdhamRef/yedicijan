@@ -1,3 +1,4 @@
+import { hasBankVerifiedFinancialSettlement } from "@/lib/payfor-bank-settlement";
 import { NextRequest, NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/public-origin";
 import { prisma } from "@/lib/prisma";
@@ -38,6 +39,12 @@ export async function POST(req: NextRequest) {
     })
   ) {
     console.warn("[PayFor FAIL] Unverified callback ignored", { donationId });
+    return NextResponse.redirect(destination);
+  }
+
+  // No signed amount/currency proof yet: do not mark FAILED or emit events.
+  if (!hasBankVerifiedFinancialSettlement(null)) {
+    console.warn("[PayFor FAIL] Awaiting verified bank reconciliation", { donationId });
     return NextResponse.redirect(destination);
   }
 
