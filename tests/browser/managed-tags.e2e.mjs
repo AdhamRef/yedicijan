@@ -103,11 +103,11 @@ test("real Chromium desktop dashboard: persistence after reload, multilingual UI
  await page.goto(site+"/dashboard/platform-connections/tracking",{waitUntil:"domcontentloaded"});
  await page.getByText("Microsoft Clarity",{exact:true}).first().waitFor({timeout:25000});
  await page.getByRole("combobox",{name:"Language"}).selectOption("en");
- await page.getByRole("textbox",{name:"Clarity project ID"}).waitFor();
- assert.equal(await page.getByRole("textbox",{name:"GTM container ID"}).inputValue(),"GTM-ABCD1234");
+ await page.getByRole("heading",{name:"Clarity and GTM"}).waitFor({timeout:10000});
+ assert.equal(await page.locator('section[aria-label="Google Tag Manager"] input').first().inputValue(),"GTM-ABCD1234");
  await page.getByRole("button",{name:"Reload"}).click();
- await page.getByRole("textbox",{name:"GTM container ID"}).waitFor();
- assert.equal(await page.getByRole("textbox",{name:"Clarity project ID"}).inputValue(),"u614k028k2");
+ await page.locator('section[aria-label="Google Tag Manager"] input').first().waitFor();
+ assert.equal(await page.locator('section[aria-label="Microsoft Clarity"] input').first().inputValue(),"u614k028k2");
  assert.equal(await page.locator("script[src*='/gtm.js']").count(),0);
  assert.equal(await page.locator("script[src*='clarity.ms/tag']").count(),0);
  await page.screenshot({path:"/tmp/yedi-managed-tags-desktop.png",fullPage:true});
@@ -125,7 +125,7 @@ test("real Chromium public site: consent gate, one injection, masked page and no
  assert.equal(await page.locator("script[data-yedi-managed-tag='gtm']").count(),0);
  assert.equal(await page.evaluate(()=>Boolean(window.__yediClarityProject)),false);
  await page.getByRole("button",{name:"Allow"}).click();
- await page.locator("script[data-yedi-managed-tag='gtm']").waitFor({timeout:15000});
+ await page.waitForFunction(()=>document.querySelectorAll('script[data-yedi-managed-tag="gtm"]').length===1,null,{timeout:15000});
  await page.waitForFunction(()=>Boolean(window.__yediClarityProject),null,{timeout:15000});
  assert.equal(await page.locator("script[data-yedi-managed-tag='gtm']").count(),1);
  assert.equal(await page.evaluate(()=>document.body.hasAttribute("data-clarity-mask")),true);
