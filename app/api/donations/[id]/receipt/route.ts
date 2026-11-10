@@ -1,3 +1,4 @@
+import { confirmedDonationForReceipt } from "@/lib/donations/receipt-confirmation";
 import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -247,6 +248,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const access = donationAccessLevel(request, session, donationRow);
     if (!access) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Receipt is financial evidence, never merely an authenticated document.
+    // Verify the atomically committed Stripe invoice ledger for subscriptions.
+    const invoiceLedger = donationRow.provider === "STRIPE" &&
+      donationRow.subscriptionId && donationRow.providerOrderId?.startsWith("in_")
+      ? await prisma.stripeInvoiceSettlement.findUnique({
+          where: { invoiceId: donationRow.providerOrderId },
+          select: {
+            invoiceId: true, subscriptionId: true, donorId: true,
+            amountSmallestUnit: true, currency: true,
+          },
+        })
+      : null;
+    if (!confirmedDonationForReceipt(donationRow, invoiceLedger)) {
+      return NextResponse.json({
+        error: "Verified payment settlement required before an official receipt",
+        code: "RECEIPT_AWAITING_SETTLEMENT",
+      }, { status: 409, headers: { "Cache-Control": "private, no-store" } });
+    }
     // The short-lived HttpOnly guest capability grants this one donor's receipt,
     // preserving legitimate guest checkout without accepting ObjectId alone.
     const sub = donationRow.subscription;
