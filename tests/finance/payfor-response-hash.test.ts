@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { test } from "node:test";
+// @ts-expect-error Node 24 strip-types requires a .ts suffix in standalone tests.
 import { verifyPayForResponseHash, payForAmountMatches } from "../../lib/payfor.ts";
 
 const keys = { merchantId: "merchant-test", merchantPass: "private-test", userCode: "user-test" };
