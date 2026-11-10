@@ -1,4 +1,4 @@
-import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
+import { attachGuestDonationAccess, donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -136,12 +136,12 @@ export async function POST(
       });
     }
 
-    return NextResponse.json({
+    return attachGuestDonationAccess(NextResponse.json({
       id: clone.id,
       provider: source.provider ?? null,
       paymentMethod: source.paymentMethod,
       currency: source.currency,
-    });
+    }), clone, session?.user?.id);
   } catch (err) {
     console.error("[donation retry] failed:", err);
     return NextResponse.json(
