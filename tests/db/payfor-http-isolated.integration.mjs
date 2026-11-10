@@ -3,7 +3,9 @@ import test, { before, after } from "node:test";
 import { randomBytes, createHash } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { encode } from "next-auth/jwt";
-import { issueGuestPayForIntent } from "../../lib/payfor-guest-intent.ts";
+import * as guestIntentModule from "../../lib/payfor-guest-intent.ts";
+const issueGuestPayForIntent = guestIntentModule.issueGuestPayForIntent ?? guestIntentModule.default?.issueGuestPayForIntent;
+if (typeof issueGuestPayForIntent !== "function") throw new Error("Guest capability helper unavailable");
 
 const url = process.env.DATABASE_URL || "";
 if (process.env.CI_MONGO_ISOLATED !== "1" ||
