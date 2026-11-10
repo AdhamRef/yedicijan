@@ -126,3 +126,44 @@ export async function settleVerifiedStripeDonation(proof: StripeProof): Promise<
     return "paid";
   }, { maxWait: 10_000, timeout: 20_000 });
 }
+
+
+export type RecurringInvoiceSource = {
+  id: string;
+  status: string | null;
+  paid: boolean;
+  currency: string;
+  amount_paid: number;
+  amount_due: number;
+};
+export type StoredSubscriptionForStripe = {
+  id: string;
+  donorId: string;
+  payforToken: string | null;
+  amount: number;
+  teamSupport: number;
+  coverFees: boolean;
+  currency: string;
+};
+/** A signed webhook alone is insufficient if invoice value/currency differ. */
+export function stripeRecurringInvoiceMatches(
+  sub: StoredSubscriptionForStripe,
+  invoice: RecurringInvoiceSource,
+  linkedStripeSubscriptionId: string
+): boolean {
+  const total = sub.amount + sub.teamSupport;
+  const expected = total + (sub.coverFees ? total * 0.03 : 0);
+  const cents = Math.round(expected * 100);
+  return Boolean(
+    sub.id && sub.donorId &&
+    sub.payforToken === linkedStripeSubscriptionId &&
+    linkedStripeSubscriptionId.startsWith("sub_") &&
+    invoice.id.startsWith("in_") &&
+    invoice.status === "paid" && invoice.paid === true &&
+    invoice.currency.toLowerCase() === sub.currency.toLowerCase() &&
+    Number.isFinite(expected) && expected > 0 &&
+    Math.abs(expected * 100 - cents) < 0.0001 &&
+    Number.isSafeInteger(cents) && cents > 0 &&
+    invoice.amount_paid === cents && invoice.amount_due === cents
+  );
+}
