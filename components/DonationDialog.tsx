@@ -430,7 +430,8 @@ const DonationDialog = ({
     }
   }, [isOpen]);
 
-  // Load saved cards when dialog opens (authenticated users only)
+  // Legacy saved-card selection is disabled pending bank tokenization.
+
   useEffect(() => {
     if (!isOpen || !session?.user?.id) return;
     axios
@@ -2215,23 +2216,6 @@ const DonationDialog = ({
         if (paymentMethod === "CARD" && useBank3D) {
           const newPan = cardDetails.cardNumber.replace(/\s/g, "");
 
-          // Save new card (fire-and-forget, non-blocking)
-          if (
-            useOwnCardForm &&
-            !selectedCardId &&
-            session?.user?.id &&
-            newPan.length >= 13
-          ) {
-            axios
-              .post("/api/credit-cards", {
-                cardNumber: newPan,
-                expiryDate: cardDetails.expiryDate,
-                cvc: cardDetails.cvv,
-                cardholderName: cardDetails.cardholderName || undefined,
-              })
-              .catch(() => {});
-          }
-
           // Albaraka signs the card fields into the request MAC, so the card has to
           // go to our server to be signed. PayFor leaves them out of its hash, so the
           // browser appends them below and the PAN never reaches us.
@@ -2242,6 +2226,7 @@ const DonationDialog = ({
             {
               donationId,
               locale,
+              paymentIntentToken: response.data.paymentIntentToken ?? undefined,
               savedCardId: selectedCardId ?? undefined,
               ...(useAlbaraka && useOwnCardForm
                 ? {
