@@ -28,7 +28,7 @@ export default function DonationPendingPage() {
     if (!/^[a-f0-9]{24}$/i.test(donationId)) return;
     setChecking(true);
     try {
-      const response = await fetch("/api/donations/" + encodeURIComponent(donationId), { cache: "no-store" });
+      const response = await fetch("/api/donations/" + encodeURIComponent(donationId) + "/status", { cache: "no-store" });
       if (response.ok) {
         const data = await response.json();
         if (data.status === "PAID" && data.paidAt) {
