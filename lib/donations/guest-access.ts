@@ -22,9 +22,22 @@ type SessionShape = {
   user?: { id?: string | null; role?: string | null; dashboardPermissions?: string[] | null };
 } | null;
 
-function signingSecret() {
-  const key = process.env.DONATION_GUEST_ACCESS_SECRET || process.env.NEXTAUTH_SECRET;
-  return key && key.length >= 32 ? key : null;
+function signingSecret(): string | null {
+  // NEVER use NEXTAUTH_SECRET for guest capabilities: separate rotation domain.
+  const key = process.env.DONATION_GUEST_ACCESS_SECRET;
+  return key && Buffer.byteLength(key, "utf8") >= 32 ? key : null;
+}
+function verificationSecrets(now: number): string[] {
+  const active = signingSecret();
+  const result = active ? [active] : [];
+  const previous = process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET;
+  const until = Number(process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL);
+  // Previous key may verify already-issued tokens only inside a bounded
+  // migration period; it never signs new cookies.
+  if (previous && Buffer.byteLength(previous, "utf8") >= 32 &&
+      Number.isSafeInteger(until) && until >= Math.floor(now / 1000) &&
+      until <= Math.floor(now / 1000) + TTL_SECONDS) result.push(previous);
+  return result;
 }
 function mac(payload: string, secret: string) {
   return createHmac("sha256", secret)
@@ -55,14 +68,17 @@ export function verifyGuestDonationAccess(
   donation: DonationIdentity,
   now = Date.now()
 ): boolean {
-  const secret = signingSecret();
-  if (!secret || typeof token !== "string" || token.length > 2048) return false;
+  const secrets = verificationSecrets(now);
+  if (secrets.length === 0 || typeof token !== "string" || token.length > 2048) return false;
   const parts = token.split(".");
   if (parts.length !== 2 || !parts.every(p => /^[A-Za-z0-9_-]+$/.test(p))) return false;
   try {
     const supplied = Buffer.from(parts[1], "base64url");
-    const expected = mac(parts[0], secret);
-    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return false;
+    const authentic = secrets.some(secret => {
+      const expected = mac(parts[0], secret);
+      return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+    });
+    if (!authentic) return false;
     const claims = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
     const current = Math.floor(now / 1000);
     return claims?.version === 1 &&

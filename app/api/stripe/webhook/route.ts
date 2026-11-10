@@ -389,74 +389,15 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      case "payment_intent.payment_failed": {
-        // Direct PaymentIntent (Stripe Elements) declined or otherwise failed.
-        // Mark the corresponding donation as FAILED so the row reflects reality
-        // (donations are created with status=PAID preemptively in /api/stripe/intent).
-        // We deliberately key off paidAt — a parallel "succeeded" event must always win.
-        const intent = event.data.object as Stripe.PaymentIntent;
-        if ((intent as any).invoice) break; // subscription invoice — handled elsewhere
-
-        const donationId = intent.metadata?.donationId;
-        if (!donationId) break;
-
-        const donation = await prisma.donation.findUnique({
-          where: { id: donationId },
-          select: { paidAt: true, status: true },
-        });
-        if (!donation || donation.paidAt || donation.status === "FAILED") break;
-
-        const lastError =
-          (intent.last_payment_error?.message as string | undefined) ??
-          "payment_intent.payment_failed";
-
-        await prisma.donation.update({
-          where: { id: donationId },
-          data: {
-            status: "FAILED",
-            provider: "STRIPE",
-            providerOrderId: intent.id,
-            providerTxnResult: "Failed",
-            providerErrorMessage: lastError,
-            providerRaw: intent as never,
-          },
-        });
-        void dispatchEvent("DONATION_FAILED", { donationId });
-        // Browser may have closed before /api/donations/:id/fail PATCH fired —
-        // seed DonateFailed from here so the lookalike audience never misses a
-        // failed Stripe Elements attempt.
-        void sendDonationFailedConversions(donationId);
-        break;
-      }
-
+      case "payment_intent.payment_failed":
       case "checkout.session.expired":
       case "checkout.session.async_payment_failed": {
-        // Hosted Stripe Checkout failed or expired without a successful payment.
-        const session = event.data.object as Stripe.Checkout.Session;
-        const donationId = session.metadata?.donationId;
-        if (!donationId) break;
-
-        const donation = await prisma.donation.findUnique({
-          where: { id: donationId },
-          select: { paidAt: true, status: true },
-        });
-        if (!donation || donation.paidAt || donation.status === "FAILED") break;
-
-        await prisma.donation.update({
-          where: { id: donationId },
-          data: {
-            status: "FAILED",
-            provider: "STRIPE",
-            providerOrderId: session.id,
-            providerTxnResult: "Failed",
-            providerErrorMessage: event.type,
-            providerRaw: session as never,
-          },
-        });
-        void dispatchEvent("DONATION_FAILED", { donationId });
-        // Hosted Stripe Checkout expired/failed before payment — seed Meta
-        // DonateFailed so the abandoned-checkout cohort feeds lookalikes.
-        void sendDonationFailedConversions(donationId);
+        // A failed *attempt* is not definitive payment failure; the SAME
+        // PaymentIntent may succeed with another payment method later.
+        // Nor can an expired/async Checkout event override a settled row.
+        // Keep these donations for bank reconciliation; no FAILED state,
+        // provider reference overwrite, failure notifications or conversions.
+        // Webhook signature verification occurred above this switch.
         break;
       }
 

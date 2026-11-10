@@ -1,7 +1,7 @@
 name: YediCihan P0 donor privacy / Stripe settlement isolated acceptance
 on:
   push:
-    branches: [security/yedi-donation-read-capability-20261110, integration/yedi-pr9-19-21-security24-qa-20261110]
+    branches: [security/yedi-donation-read-capability-20261110]
   pull_request:
     paths:
       - "app/api/donations/**"
@@ -26,6 +26,7 @@ jobs:
       GOOGLE_CLIENT_ID: synthetic-ci-google-id
       GOOGLE_CLIENT_SECRET: synthetic-ci-google-secret
       STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
+      STRIPE_WEBHOOK_SECRET: whsec_synthetic_donor_p0_isolated_no_real_event_20261110
     steps:
       - name: Checkout exact revision without legacy gitlink
         env:

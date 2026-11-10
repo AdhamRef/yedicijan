@@ -43,7 +43,7 @@ export function stripePaymentMatches(d: StoredPayment, proof: StripeProof): bool
     proof.intentId.startsWith("pi_") &&
     proof.reference === d.providerOrderId &&
     d.provider === "STRIPE" &&
-    d.status !== "FAILED" &&
+    (d.status === "PAID" || d.status === "FAILED") &&
     d.paidAt == null;
 }
 
@@ -94,7 +94,7 @@ export async function settleVerifiedStripeDonation(proof: StripeProof): Promise<
         donorId: donation.donorId,
         provider: "STRIPE",
         providerOrderId: proof.reference,
-        status: "PAID",
+        status: { in: ["PAID", "FAILED"] },
         AND: [donationFieldEmpty("paidAt")],
       },
       data: {
