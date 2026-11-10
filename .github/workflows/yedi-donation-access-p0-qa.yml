@@ -1,7 +1,7 @@
 name: YediCihan P0 donor privacy / Stripe settlement isolated acceptance
 on:
   push:
-    branches: [security/yedi-donation-read-capability-20261110]
+    branches: [security/yedi-donation-read-capability-20261110, integration/yedi-pr9-19-21-security24-qa-20261110]
   pull_request:
     paths:
       - "app/api/donations/**"
