@@ -544,11 +544,15 @@ export async function POST(request: NextRequest) {
         stream: auditStreamForRole(actorRole),
       });
 
-      return NextResponse.json({
+      return attachGuestDonationAccess(NextResponse.json({
         success: true,
         subscription: subscription.subscription,
-        donation: subscription.donation,
-      });
+        donation: session?.user?.id ? subscription.donation : {
+          id: subscription.donation.id, amount: subscription.donation.amount,
+          totalAmount: subscription.donation.totalAmount, currency: subscription.donation.currency,
+          status: subscription.donation.status,
+        },
+      }), subscription.donation, session?.user?.id);
     }
 
     // One-time: create a single Donation (transaction) only
@@ -630,7 +634,11 @@ export async function POST(request: NextRequest) {
 
     return attachGuestDonationAccess(NextResponse.json({
       success: true,
-      donation,
+      donation: session?.user?.id ? donation : {
+        id: donation.id, amount: donation.amount,
+        totalAmount: donation.totalAmount, currency: donation.currency,
+        status: donation.status,
+      },
     }), donation, session?.user?.id);
   } catch (error) {
     console.error("Error creating donation:", error);
