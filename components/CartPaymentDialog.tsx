@@ -591,7 +591,7 @@ const CartPaymentDialog = ({
           if (payforPopupRef.current && !payforPopupRef.current.closed) payforPopupRef.current.close();
           router.push(
             appendCurrencyQuery(
-              `/donation-failed?donationId=${encodeURIComponent(donationId)}`,
+              `/donation-pending?donationId=${encodeURIComponent(donationId)}`,
               getCurrencyCodeForLinks()
             )
           );
@@ -618,7 +618,12 @@ const CartPaymentDialog = ({
               );
               return;
             }
-            if (data.status === "FAILED" || payforPopupRef.current?.closed || polls >= FAILURE_AFTER) {
+            if (data.status === "FAILED") {
+              router.push(appendCurrencyQuery(`/donation-failed?donationId=${encodeURIComponent(donationId)}`, getCurrencyCodeForLinks()));
+              if (payforPollRef.current) { clearInterval(payforPollRef.current); payforPollRef.current = null; }
+              return;
+            }
+            if (payforPopupRef.current?.closed || polls >= FAILURE_AFTER) {
               handlePayforFailure();
             }
           } catch { /* ignore transient errors */ }
