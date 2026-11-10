@@ -1,4 +1,4 @@
-import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation } from "@/lib/donations/stripe-settlement";
+import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation, stripeRecurringInvoiceMatches } from "@/lib/donations/stripe-settlement";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import Stripe from "stripe";
@@ -86,6 +86,10 @@ export async function POST(req: NextRequest) {
           include: { items: true, categoryItems: true },
         });
         if (!dbSubscription) break;
+        if (!stripeRecurringInvoiceMatches(dbSubscription, invoice, stripeSubscriptionId)) {
+          console.warn("[Stripe webhook] Recurring invoice held: unverified order/amount/currency");
+          break;
+        }
 
         // Idempotency: skip if we've already settled this invoice. The original
         // "checkout started" donation for the first invoice also carries this
@@ -140,6 +144,17 @@ export async function POST(req: NextRequest) {
           undefined;
 
         await prisma.$transaction(async (tx) => {
+          // Unique signed invoice id is committed atomically with money/totals.
+          // Two concurrent replays cannot both create this record.
+          await tx.stripeInvoiceSettlement.create({
+            data: {
+              invoiceId: invoice.id,
+              subscriptionId: dbSubscription.id,
+              donorId: dbSubscription.donorId,
+              amountSmallestUnit: invoice.amount_paid,
+              currency: invoice.currency.toLowerCase(),
+            },
+          });
           // Find the original "checkout started" donation for this subscription
           // (status=PAID is the optimistic sentinel; paidAt=null means it never
           // settled). For the FIRST invoice we update that row instead of
