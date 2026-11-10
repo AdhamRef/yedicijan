@@ -215,6 +215,19 @@ test("signed HTTP Stripe failure-before-success, success-before-failure and conc
     assert.equal(after,before+20,"project credit exactly once: "+order);
   }
 });
+test("HTTP unsigned or invalid-signature success cannot settle",async()=>{
+ const d=await createDonation({donorId:owner.id,provider:"STRIPE",providerOrderId:"pi_unsigned_"+nonce});
+ const payload=JSON.stringify({id:"evt_unsigned_"+nonce,object:"event",
+   type:"payment_intent.succeeded",created:Math.floor(Date.now()/1000),
+   data:{object:{id:d.providerOrderId,object:"payment_intent",
+     status:"succeeded",amount:5025,amount_received:5025,currency:"usd",
+     metadata:{donationId:d.id,userId:owner.id}}}});
+ const r=await fetch(base+"/api/stripe/webhook",{method:"POST",
+   headers:{"content-type":"application/json","stripe-signature":"t=1,v1=invalid"},
+   body:payload});
+ assert.equal(r.status,400);
+ assert.equal((await prisma.donation.findUnique({where:{id:d.id}})).paidAt,null);
+});
 test("signed HTTP Stripe amount/currency/owner/reference mismatches never settle",async()=>{
  const d=await createDonation({donorId:owner.id,provider:"STRIPE",providerOrderId:"pi_mismatch_"+nonce});
  const mismatches=[
