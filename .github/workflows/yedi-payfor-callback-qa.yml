@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - fix/yedi-payfor-verified-callbacks-20261110
+      - integration/yedi-pr9-payfor19-qa-20261110
   pull_request:
     branches: [main]
     paths:
