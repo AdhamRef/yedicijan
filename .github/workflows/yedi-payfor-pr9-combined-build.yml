@@ -16,6 +16,7 @@ jobs:
       GOOGLE_CLIENT_SECRET: synthetic-ci-oauth-secret
       NEXTAUTH_SECRET: synthetic-ci-nextauth-secret-only-for-nonproduction-build
       NEXTAUTH_URL: http://127.0.0.1:3000
+      STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
     steps:
       - name: Fetch exact reviewed commit without legacy gitlink
         env:
