@@ -1,4 +1,4 @@
-import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation, stripeRecurringInvoiceMatches, stripeRecurringCustomerMatches } from "@/lib/donations/stripe-settlement";
+import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation, stripeRecurringInvoiceMatches, stripeRecurringCustomerMatches, stripeFailedRecurringInvoiceMatches } from "@/lib/donations/stripe-settlement";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import Stripe from "stripe";
@@ -342,8 +342,9 @@ export async function POST(req: NextRequest) {
           break;
         }
         const dbSubscription = candidates[0];
-        if (!stripeRecurringCustomerMatches(dbSubscription, invoice, stripeSubscriptionId)) {
-          console.warn("[Stripe webhook] Failed invoice held: customer ownership not verified");
+        if (!stripeRecurringCustomerMatches(dbSubscription, invoice, stripeSubscriptionId) ||
+            !stripeFailedRecurringInvoiceMatches(dbSubscription, invoice)) {
+          console.warn("[Stripe webhook] Failed invoice held: customer, amount or currency mismatch");
           break;
         }
 
