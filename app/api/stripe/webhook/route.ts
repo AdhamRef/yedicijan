@@ -442,6 +442,13 @@ export async function POST(req: NextRequest) {
           break;
         }
         const dbSubscription = matches[0];
+        const cancellingCustomerId = typeof stripeSub.customer === "string"
+          ? stripeSub.customer : stripeSub.customer?.id;
+        if (!dbSubscription.stripeCustomerId ||
+            dbSubscription.stripeCustomerId !== cancellingCustomerId) {
+          console.warn("[Stripe webhook] Subscription cancellation held: Customer mismatch");
+          break;
+        }
         if (dbSubscription) {
           await prisma.subscription.update({
             where: { id: dbSubscription.id },
