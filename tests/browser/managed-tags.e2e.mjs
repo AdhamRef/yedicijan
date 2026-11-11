@@ -171,6 +171,25 @@ test("Chromium denies legacy pixels and optional tags without consent, then clea
   assert.equal(await page.evaluate(()=>Boolean(window.__yediGtmContainer)),false,"hard reload must unload tag container");
   await context.close();
 });
+test("Chromium public-to-private-to-public route history unloads and reinitializes tags",async()=>{
+ const context=await browser.newContext({viewport:{width:390,height:844}});
+ await context.addCookies([{name:"yedi_analytics_consent",value:"granted",url:site,sameSite:"Lax"}]);
+ const page=await context.newPage();
+ await page.route(/(googletagmanager\\.com\\/gtm\\.js|clarity\\.ms\\/tag\\/)/,route=>
+   route.fulfill({status:200,contentType:"application/javascript",body:""}));
+ await page.goto(site+"/en/privacy",{waitUntil:"domcontentloaded"});
+ await page.waitForFunction(()=>Boolean(window.__yediGtmContainer),null,{timeout:15000});
+ await page.evaluate(()=>window.history.pushState({},"","/en/checkout"));
+ await page.waitForFunction(()=>location.pathname.includes("/checkout"),null,{timeout:15000});
+ await page.waitForFunction(()=>!Boolean(window.__yediGtmContainer),null,{timeout:15000});
+ assert.equal(await page.locator("script[data-yedi-managed-tag='gtm']").count(),0);
+ await page.goBack({waitUntil:"domcontentloaded"});
+ await page.waitForFunction(()=>Boolean(window.__yediGtmContainer),null,{timeout:15000});
+ assert.equal(await page.locator("script[data-yedi-managed-tag='gtm']").count(),1);
+ await page.goForward({waitUntil:"domcontentloaded"});
+ assert.equal(await page.evaluate(()=>Boolean(window.__yediGtmContainer)),false);
+ await context.close();
+});
 test("real HTTP disable persists; fresh browser with consent does not inject tags",async()=>{
  const disabled={...good,clarityEnabled:false,gtmEnabled:false};
  const put=await request("/api/admin/tracking/integrations","PUT",admin,disabled);
