@@ -416,9 +416,15 @@ export async function POST(req: NextRequest) {
       case "customer.subscription.deleted": {
         // Stripe subscription cancelled
         const stripeSub = event.data.object as Stripe.Subscription;
-        const dbSubscription = await prisma.subscription.findFirst({
+        const matches = await prisma.subscription.findMany({
           where: { payforToken: stripeSub.id },
+          take: 2,
         });
+        if (matches.length !== 1) {
+          console.warn("[Stripe webhook] Subscription cancellation held: ambiguous provider ownership");
+          break;
+        }
+        const dbSubscription = matches[0];
         if (dbSubscription) {
           await prisma.subscription.update({
             where: { id: dbSubscription.id },
