@@ -23,6 +23,23 @@ export function saveTrackingConsent(value: Exclude<TrackingConsent, null>): void
   if (typeof document === "undefined" || typeof window === "undefined") return;
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
   document.cookie = TRACKING_CONSENT_COOKIE + "=" + value + "; Max-Age=15552000; Path=/; SameSite=Lax" + secure;
+  if (value === "denied") {
+    // First-party opt-out: clear our cached advertising click IDs and any
+    // first-party vendor cookies we can control. Third-party cookies must
+    // also be addressed through provider-level revocation and retention policy.
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.removeItem("_ttclid");
+        sessionStorage.removeItem("_gclid");
+      }
+      for (const entry of document.cookie.split(";")) {
+        const name = entry.trim().split("=")[0];
+        if (/^(_fbp|_fbc|_ga(?:_.*)?|_gid|_gcl_.*|_ttp|_tt_enable_cookie)$/.test(name)) {
+          document.cookie = encodeURIComponent(name) + "=; Max-Age=0; Path=/; SameSite=Lax" + secure;
+        }
+      }
+    } catch { /* Do not block consent withdrawal if cookie storage is restricted. */ }
+  }
   window.dispatchEvent(new Event(TRACKING_CONSENT_EVENT));
 }
 
