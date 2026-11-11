@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
+import { canRunOptionalTracking } from "@/lib/tracking/consent";
 import {
   fireGoogleAdsDonationConversion,
   fireTikTokDonationConversion,
@@ -124,6 +125,11 @@ export function SuccessFinalConversionTracker() {
   useEffect(() => {
     const id = donationIdFromPath(pathname);
     if (!id || typeof window === "undefined") return;
+    // This component only dispatches OPTIONAL browser advertising pixels.
+    // A success URL is private: do not fetch identity-derived payloads or
+    // fire pixels merely because someone visited/revisited it. Confirmed
+    // server-side conversion/settlement remains independently owned.
+    if (!canRunOptionalTracking(window.location.pathname)) return;
     if (activeRef.current === id) return;
     activeRef.current = id;
 
