@@ -25,3 +25,9 @@ export function saveTrackingConsent(value: Exclude<TrackingConsent, null>): void
   document.cookie = TRACKING_CONSENT_COOKIE + "=" + value + "; Max-Age=15552000; Path=/; SameSite=Lax" + secure;
   window.dispatchEvent(new Event(TRACKING_CONSENT_EVENT));
 }
+
+/** Permit opaque ad click IDs only, never free-form query strings or PII. */
+export function safeOpaqueClickId(value: string | undefined): string | undefined {
+  if (!value || value.length > 256) return undefined;
+  return /^[A-Za-z0-9._-]{4,256}$/.test(value) ? value : undefined;
+}
