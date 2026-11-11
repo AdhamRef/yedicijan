@@ -175,7 +175,7 @@ test("Chromium public-to-private-to-public route history unloads and reinitializ
  const context=await browser.newContext({viewport:{width:390,height:844}});
  await context.addCookies([{name:"yedi_analytics_consent",value:"granted",url:site,sameSite:"Lax"}]);
  const page=await context.newPage();
- await page.route(/(googletagmanager\\.com\\/gtm\\.js|clarity\\.ms\\/tag\\/)/,route=>
+ await page.route(/(googletagmanager|clarity)/,route=>
    route.fulfill({status:200,contentType:"application/javascript",body:""}));
  await page.goto(site+"/en/privacy",{waitUntil:"domcontentloaded"});
  await page.waitForFunction(()=>Boolean(window.__yediGtmContainer),null,{timeout:15000});
