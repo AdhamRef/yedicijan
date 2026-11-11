@@ -83,16 +83,48 @@ export default function ManagedMarketingTags() {
   const isRestricted = trackingSensitivePath(pathname);
 
   useEffect(() => {
-    setConsent(readTrackingConsent());
     setReady(true);
-    if (trackingSensitivePath(window.location.pathname)) return;
+    let active = true;
     const controller = new AbortController();
-    fetch("/api/tracking/config", { cache: "no-store", signal: controller.signal })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data) setTags(data as PublicTags); })
-      .catch(() => {});
-    return () => controller.abort();
-  }, []);
+    const refresh = () => {
+      if (!active) return;
+      const currentConsent = readTrackingConsent();
+      setConsent(currentConsent);
+      const w = window as TagWindow & { fbq?: unknown; gtag?: unknown; ttq?: unknown; twq?: unknown };
+      const anyLoaded = Boolean(w.__yediClarityProject || w.__yediGtmContainer ||
+        w.fbq || w.gtag || w.ttq || w.twq);
+      if (currentConsent !== "granted" && anyLoaded) {
+        window.location.reload();
+        return;
+      }
+      if (trackingSensitivePath(window.location.pathname)) return;
+      fetch("/api/tracking/config", { cache: "no-store", signal: controller.signal })
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (!active || !data) return;
+          const next = data as PublicTags;
+          // Third-party runtimes cannot safely switch site IDs or disable
+          // themselves in an SPA. A fresh document is required when admin
+          // settings changed during the visit (checked on focus/route).
+          if ((w.__yediClarityProject &&
+              (!next.clarityEnabled || w.__yediClarityProject !== next.clarityProjectId)) ||
+              (w.__yediGtmContainer &&
+              (!next.gtmEnabled || w.__yediGtmContainer !== next.gtmContainerId))) {
+            window.location.reload();
+            return;
+          }
+          setTags(next);
+        })
+        .catch(() => {});
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      controller.abort();
+      window.removeEventListener("focus", refresh);
+    };
+  }, [pathname]);
 
   // Client-side navigation does not unload already injected third-party SDKs.
   // A hard reload on entry into a sensitive route resets the document and
