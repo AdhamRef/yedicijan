@@ -83,6 +83,8 @@ test("privacy: query parameters never expose donor IDs or credentials to marketi
     Object.defineProperty(globalThis, "window", { value: { location: { search: "?email=donor%40fixture.invalid" } }, configurable: true });
     assert.equal(consent.canRunOptionalTracking("/en/about"), false);
     assert.equal(consent.canRunOptionalTracking("/en/about?access_token=fixture"), false);
+    assert.equal(consent.canRunOptionalTracking("/en/about?utm_source=google"), false);
+    globalThis.window.location.search = "?utm_source=google";
     assert.equal(consent.canRunOptionalTracking("/en/about?utm_source=google"), true);
   } finally {
     if (oldDocument) Object.defineProperty(globalThis, "document", oldDocument);
