@@ -36,3 +36,26 @@ test("legacy tags remain visible until first explicit save; explicit disable win
   assert.equal(tags.shouldLoadManagedTag(old.gtm,"granted"),true);
   assert.equal(tags.shouldLoadManagedTag(updated.gtm,"granted"),false);
 });
+
+test("single consent authority denies missing/denied and sensitive routes", async () => {
+  const consent = await import("../../lib/tracking/consent.ts");
+  const oldDocument = globalThis.document;
+  const oldWindow = globalThis.window;
+  try {
+    globalThis.document = { cookie: "" };
+    globalThis.window = { location: { protocol: "https:", pathname: "/en/privacy" }, dispatchEvent() {} };
+    assert.equal(consent.readTrackingConsent(),null);
+    assert.equal(consent.canRunOptionalTracking("/en/privacy"),false);
+    globalThis.document.cookie="yedi_analytics_consent=denied";
+    assert.equal(consent.canRunOptionalTracking("/en/privacy"),false);
+    globalThis.document.cookie="yedi_analytics_consent=granted";
+    assert.equal(consent.canRunOptionalTracking("/en/privacy"),true);
+    for(const path of ["/en/checkout","/ar/account","/dashboard","/tr/success/receipt-id","/en/payment"]) {
+      assert.equal(consent.canRunOptionalTracking(path),false,path);
+    }
+    assert.equal(consent.canRunOptionalTracking("/en/privacy"),true);
+  } finally {
+    globalThis.document=oldDocument;
+    globalThis.window=oldWindow;
+  }
+});
