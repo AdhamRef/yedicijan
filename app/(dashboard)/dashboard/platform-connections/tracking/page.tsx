@@ -1,3 +1,8 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import { userHasDashboardPermission } from "@/lib/dashboard/permissions";
+import { redirect } from "next/navigation";
+import ManagedTagsEditor from "./ManagedTagsEditor";
 import Link from "next/link";
 import { getTrackingReadiness } from "@/lib/platform-connections/readiness";
 import { PageHeader, Card, CardHeader, StatusBadge } from "../_components/ui";
@@ -6,6 +11,9 @@ export const metadata = { title: "بكسلات التتبع | ربط المنص�
 export const dynamic = "force-dynamic";
 
 export default async function TrackingPage() {
+  const session = await getServerSession(authOptions);
+  if (!userHasDashboardPermission(session?.user, "platformConnections")) redirect("/dashboard");
+  const canManage = userHasDashboardPermission(session?.user, "platformConnectionsManage");
   const { rows, configuredCount, total } = await getTrackingReadiness();
 
   return (
@@ -13,8 +21,10 @@ export default async function TrackingPage() {
       <PageHeader
         eyebrow="ربط المنصات والإرسال / بكسلات التتبع"
         title="بكسلات التتبع"
-        subtitle="جاهزية بكسلات وواجهات التتبع كما هي مضبوطة حاليًا. هذه الصفحة للعرض فقط — لا تغيّر إطلاق الأحداث أو السكربتات."
+        subtitle="إدارة مباشرة لـMicrosoft Clarity وGoogle Tag Manager مع إبقاء إعدادات Meta وGA4 وبقية البكسلات دون تغيير."
       />
+
+      <ManagedTagsEditor canManage={canManage} />
 
       <Card>
         <CardHeader title="حالة البكسلات" description={`${configuredCount} من ${total} مُعدّة. التتبع الفعلي والأحداث تُدار كما هي دون تغيير.`} />
@@ -54,7 +64,7 @@ export default async function TrackingPage() {
       </Card>
 
       <p className="max-w-2xl rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-6 text-slate-500">
-        تُدار قيم البكسلات ورموز التتبع من <Link href="/dashboard/pixels" className="font-bold text-brand hover:underline">صفحة إعدادات البكسلات</Link>. لا تُعرض أي مفاتيح أو رموز سرية هنا.
+        باقي قيم البكسلات ورموز التتبع تُدار من <Link href="/dashboard/pixels" className="font-bold text-brand hover:underline">صفحة إعدادات البكسلات</Link>. لا تُعرض أي مفاتيح أو رموز سرية هنا.
       </p>
     </main>
   );

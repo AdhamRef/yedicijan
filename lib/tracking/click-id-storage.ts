@@ -1,3 +1,5 @@
+import { readTrackingConsent, safeOpaqueClickId } from "@/lib/tracking/consent";
+
 export interface StoredClickIds {
   ttclid?: string;
   gclid?: string;
@@ -39,10 +41,11 @@ function setStoredValue(storageKey: string, value: string | undefined) {
 
 export function captureStoredClickIds(): StoredClickIds {
   const out: StoredClickIds = {};
+  if (readTrackingConsent() !== "granted") return out;
 
   for (const key of Object.keys(CLICK_ID_STORAGE_KEYS) as Array<keyof StoredClickIds>) {
     const storageKey = CLICK_ID_STORAGE_KEYS[key];
-    const value = getSearchParam(key) || getStoredValue(storageKey);
+    const value = safeOpaqueClickId(getSearchParam(key)) || safeOpaqueClickId(getStoredValue(storageKey));
     if (value) {
       out[key] = value;
       setStoredValue(storageKey, value);

@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef, createContext, useContext, useCallback, useState } from "react";
 import { track as vercelTrack } from "@vercel/analytics";
+import { usePathname } from "next/navigation";
+import { canRunOptionalTracking, safeOpaqueClickId, TRACKING_CONSENT_EVENT } from "@/lib/tracking/consent";
 import {
   generateEventId,
   metaDonationEventId,
@@ -247,9 +249,9 @@ function getUrlParam(key: string): string | undefined {
 /** Persist ttclid / gclid / fbclid in sessionStorage so they survive page navigations */
 function captureClickIds(): { ttclid?: string; gclid?: string; fbclid?: string } {
   if (typeof window === "undefined") return {};
-  const ttclid = getUrlParam("ttclid") || sessionStorage.getItem("_ttclid") || undefined;
-  const gclid  = getUrlParam("gclid")  || sessionStorage.getItem("_gclid")  || undefined;
-  const fbclid = getUrlParam("fbclid") || undefined;
+  const ttclid = safeOpaqueClickId(getUrlParam("ttclid")) || safeOpaqueClickId(sessionStorage.getItem("_ttclid") || undefined);
+  const gclid  = safeOpaqueClickId(getUrlParam("gclid")) || safeOpaqueClickId(sessionStorage.getItem("_gclid") || undefined);
+  const fbclid = safeOpaqueClickId(getUrlParam("fbclid"));
   if (ttclid) sessionStorage.setItem("_ttclid", ttclid);
   if (gclid)  sessionStorage.setItem("_gclid",  gclid);
   return { ttclid, gclid, fbclid };
@@ -275,76 +277,48 @@ function buildGa4Items(
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export default function TrackingPixels({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() || "/";
   const configRef = useRef<TrackingConfig | null>(null);
   const [config, setConfig] = useState<TrackingConfig | null>(null);
   // Mutable user data — updated by DonationDialog when user fills in details
   const userDataRef = useRef<Partial<CanonicalUser>>({});
 
-  // ── Load pixel config ───────────────────────────────────────────────────────
-  // Defer the config fetch + script injection until either the user interacts with the
-  // page or 6 s have elapsed. Ad/marketing pixels (FB ~226KiB, TikTok, X) used to
-  // compete with the LCP image for bandwidth and ate ~700 ms of TBT during the first
-  // second; the interaction-or-long-idle gate moves all of that off the critical path
-  // (Lighthouse never interacts so it never sees them) while still firing well before
-  // any real user can convert.
-  //
-  // EXCEPTION: /success/[id] is a conversion page — we need fbq ready immediately so
-  // `trackDonate` can fire the Meta "Donate" event without waiting for scroll or 6 s
-  // idle. Donors often arrive there post-redirect and may close the tab quickly.
+  // Optional browser pixels are never loaded by timer, synthetic interaction or
+  // an unconsented success redirect. Payment verification remains server-owned.
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    let fired = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const load = () => {
-      if (fired) return;
-      fired = true;
-      cleanup();
-
-      fetch("/api/tracking/config")
-        .then((r) => r.json())
-        .then((data) => {
+    let cancelled = false;
+    const loadApproved = () => {
+      if (!canRunOptionalTracking(window.location.pathname)) {
+        configRef.current = null;
+        setConfig(null);
+        return;
+      }
+      fetch("/api/tracking/config", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (cancelled || !data || !canRunOptionalTracking(window.location.pathname)) return;
           const c: TrackingConfig = {
             facebookPixelId: data.facebookPixelId || null,
             gaMeasurementId: data.gaMeasurementId || null,
-            tiktokPixelId:   data.tiktokPixelId   || null,
-            xPixelId:        data.xPixelId        || null,
+            tiktokPixelId: data.tiktokPixelId || null,
+            xPixelId: data.xPixelId || null,
           };
           configRef.current = c;
           setConfig(c);
-        })
-        .catch(() => setConfig(null));
+        }).catch(() => {});
     };
-
-    const cleanup = () => {
-      if (timeoutId !== null) clearTimeout(timeoutId);
-      window.removeEventListener("scroll", load);
-      window.removeEventListener("pointerdown", load);
-      window.removeEventListener("keydown", load);
-      window.removeEventListener("touchstart", load);
+    loadApproved();
+    window.addEventListener(TRACKING_CONSENT_EVENT, loadApproved);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(TRACKING_CONSENT_EVENT, loadApproved);
     };
-
-    // Fire-now path for conversion pages. The match is locale-agnostic — any
-    // pathname segment "/success/<id>" qualifies.
-    const isConversionPage = /\/success\/[^/]+/.test(window.location.pathname);
-    if (isConversionPage) {
-      load();
-      return cleanup;
-    }
-
-    timeoutId = setTimeout(load, 6000);
-    window.addEventListener("scroll", load, { passive: true, once: true });
-    window.addEventListener("pointerdown", load, { once: true });
-    window.addEventListener("keydown", load, { once: true });
-    window.addEventListener("touchstart", load, { passive: true, once: true });
-
-    return cleanup;
-  }, []);
+  }, [pathname]);
 
   // ── Inject pixel scripts once config is ready ────────────────────────────────
   useEffect(() => {
-    if (!config) return;
+    if (!config || !canRunOptionalTracking(window.location.pathname)) return;
 
     // Facebook Pixel (Meta)
     if (config.facebookPixelId) {
@@ -495,6 +469,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
   const sendCanonical = useCallback(
     (partial: Omit<CanonicalEvent, "event_time"> & { event_time?: number }) => {
       if (typeof window !== "undefined") {
+        if (!canRunOptionalTracking(window.location.pathname)) return;
         const path = window.location.pathname;
         if (/\/(success|donation-failed)(\/|$)/.test(path)) {
           if (process.env.NODE_ENV !== "production") {
@@ -511,25 +486,34 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       const event: CanonicalEvent = {
         event_time: Math.floor(Date.now() / 1000),
         ...partial,
+        // Optional telemetry must not include arbitrary donor input, error
+        // messages, transaction identifiers or caller-controlled custom maps.
+        // Stripe/bank verified purchase dispatchers are unaffected.
+        custom: undefined,
+        payment: partial.payment ? {
+          method: partial.payment.method,
+          gateway: partial.payment.gateway,
+          is_3ds: partial.payment.is_3ds,
+          payment_status: partial.payment.payment_status,
+        } : undefined,
         page: {
-          url:      typeof window !== "undefined" ? window.location.href  : undefined,
-          referrer: typeof document !== "undefined" ? document.referrer   : undefined,
+          url:      typeof window !== "undefined" ? window.location.origin : undefined,
+          referrer: undefined,
           title:    typeof document !== "undefined" ? document.title      : undefined,
           language: typeof navigator !== "undefined" ? navigator.language : undefined,
-          ...partial.page,
+          // Do not accept caller-provided URLs, query strings or referrers.
         },
         session: {
           ttclid: ids.ttclid,
           gclid:  ids.gclid,
           fbclid: ids.fbclid,
-          ...partial.session,
         },
         user: {
-          fbp:        getCookieValue("_fbp"),
-          fbc:        getCookieValue("_fbc") || (ids.fbclid ? `fb.1.${Date.now()}.${ids.fbclid}` : undefined),
-          user_agent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
-          ...userDataRef.current,
-          ...partial.user,
+          fbp:        safeOpaqueClickId(getCookieValue("_fbp")),
+          fbc:        safeOpaqueClickId(getCookieValue("_fbc")) || (ids.fbclid ? `fb.1.${Date.now()}.${ids.fbclid}` : undefined),
+          // Optional engagement events never include donor contact details.
+          // Provider/browser click identifiers above require granted consent;
+          // server-verified purchases have their own independent dispatcher.
         },
       };
 
@@ -586,7 +570,6 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       if (c?.gaMeasurementId && window.gtag && ga4EventName) {
         const d  = event.donation ?? {};
         const p  = event.payment  ?? {};
-        const u  = event.user     ?? {};
         const ga4: Record<string, unknown> = {};
         if (d.amount ?? d.amount_usd) ga4.value    = d.amount ?? d.amount_usd;
         if (d.currency)               ga4.currency  = d.currency;
@@ -600,23 +583,10 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
             quantity:      i.quantity ?? 1,
           }));
         }
-        // User / customer info — for GTM enhanced matching and Meta CAPI via GTM
-        if (u.email)            ga4.email            = u.email;
-        if (u.phone)            ga4.phone            = u.phone;
-        if (u.first_name)       ga4.first_name       = u.first_name;
-        if (u.last_name)        ga4.last_name        = u.last_name;
-        if (u.gender)           ga4.gender           = u.gender;
-        if (u.date_of_birth)    ga4.date_of_birth    = u.date_of_birth;
-        if (u.city)             ga4.city             = u.city;
-        if (u.state)            ga4.state            = u.state;
-        if (u.zip)              ga4.zip              = u.zip;
-        if (u.country_code)     ga4.country          = u.country_code;
-        if (u.external_id)      ga4.external_id      = u.external_id;
-        if (u.fbp)              ga4.fbp              = u.fbp;
-        if (u.fbc)              ga4.fbc              = u.fbc;
-        if (u.subscription_id)  ga4.subscription_id  = u.subscription_id;
-        if (u.user_agent)       ga4.user_agent       = u.user_agent;
-        if (event.custom) Object.assign(ga4, event.custom);
+        // Never put donor PII or external identifiers into GA4/dataLayer.
+        // Do not forward caller-controlled custom fields to third-party GA4.
+        // Arbitrary fields may contain donor identifiers or unredacted URLs.
+        // Verified financial purchase signals remain server-owned.
         window.gtag("event", ga4EventName, ga4);
       }
 
@@ -650,15 +620,9 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
 
   const setUserData = useCallback((user: Partial<CanonicalUser>) => {
     userDataRef.current = { ...userDataRef.current, ...user };
-    // Also identify in TikTok Pixel
-    if (configRef.current?.tiktokPixelId && window.ttq?.identify) {
-      const u = userDataRef.current;
-      window.ttq.identify({
-        external_id: u.external_id,
-        email:       u.email,
-        phone_number: u.phone,
-      });
-    }
+    // Donor contact details are kept only in the app's local tracking context.
+    // Optional third-party identity matching requires a separate, explicit,
+    // provider-specific approval and is disabled for this privacy release.
   }, []);
 
   const trackPageView = useCallback((pagePath?: string, pageTitle?: string) => {
@@ -827,7 +791,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
    * so Meta dedupes the browser↔server pair into a single conversion.
    */
   const trackDonate = useCallback((options: TrackDonateSuccessOptions) => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !canRunOptionalTracking(window.location.pathname)) return;
 
     const eventId = metaDonationEventId(options.donationId, "success");
 
@@ -880,6 +844,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
     // silent-bail behaviour was the root cause of "Donate event missing"
     // when the donor's success page beat the deferred pixel config to ready.
     const tryFire = (): boolean => {
+      if (!canRunOptionalTracking(window.location.pathname)) return false;
       const fbq = window.fbq;
       if (!fbq) return false;
       if (!configRef.current?.facebookPixelId) return false;
@@ -914,9 +879,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       custom:   { custom_event_name: customEventName, ...data },
     });
     // Also fire as a custom GA4 event
-    if (configRef.current?.gaMeasurementId && window.gtag) {
-      window.gtag("event", customEventName, data ?? {});
-    }
+    // Never send caller-defined event names/payloads directly to GA4.
   }, [sendCanonical]);
 
   const value: TrackingContextValue = {
