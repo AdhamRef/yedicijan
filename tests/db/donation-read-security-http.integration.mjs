@@ -285,7 +285,7 @@ async function sendSyntheticRecurringInvoiceEvent(type,sub,invoiceId,reason="sub
     id:"evt_invoice_"+nonce+"_"+Date.now()+"_"+randomBytes(3).toString("hex"),
     object:"event",type,created:Math.floor(Date.now()/1000),livemode:false,
     data:{object:{
-      id:invoiceId,object:"invoice",created:Math.floor(Date.now()/1000),
+      id:invoiceId,object:"invoice",created:Math.floor(Date.now()/1000)-86400,
       customer:customerOverride ?? sub.stripeCustomerId,
       parent:{subscription_details:{subscription:sub.payforToken}},
       billing_reason:reason,status:paid?"paid":"open",paid,
@@ -328,6 +328,7 @@ test("signed subscription invoices: failure-success orders and replay credit a c
     const entries=await prisma.donation.findMany({where:{subscriptionId:sub.id,providerOrderId:invoiceId}});
     donationIds.push(...entries.map(x=>x.id));
     assert.equal(entries.filter(x=>x.status==="PAID"&&x.paidAt).length,1,order);
+    assert.ok(entries.find(x=>x.paidAt)?.paidAt.getTime()>Date.now()-120000,"paidAt must use paid transition not yesterday invoice creation");
     assert.equal(entries.length,1,order+": same invoice must not leave duplicate donation rows");
     assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),1,order);
     assert.equal((await prisma.campaign.findUnique({where:{id:campaignId}})).currentAmount,before+20,order);
