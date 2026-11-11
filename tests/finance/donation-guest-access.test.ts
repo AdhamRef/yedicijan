@@ -108,7 +108,7 @@ test("guest secret reuse of NextAuth or previous key is rejected",()=>{
    assert.equal(verifyGuestDonationAccess(legacy,base,now),false);
  } finally {
    process.env.DONATION_GUEST_ACCESS_SECRET=current;
-   if(auth===undefined)delete process.env.NEXTAUTH_SECRET;else process.env.NEXTAUTH_SECRET=auth;
+   if(auth===undefined)Reflect.deleteProperty(process.env,"NEXTAUTH_SECRET");else process.env.NEXTAUTH_SECRET=auth;
    delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET;
    delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL;
  }
