@@ -502,9 +502,9 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         user: {
           fbp:        getCookieValue("_fbp"),
           fbc:        getCookieValue("_fbc") || (ids.fbclid ? `fb.1.${Date.now()}.${ids.fbclid}` : undefined),
-          user_agent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
-          ...userDataRef.current,
-          ...partial.user,
+          // Optional engagement events never include donor contact details.
+          // Provider/browser click identifiers above require granted consent;
+          // server-verified purchases have their own independent dispatcher.
         },
       };
 
