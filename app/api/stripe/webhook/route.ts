@@ -1,4 +1,4 @@
-import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation, stripeRecurringInvoiceMatches } from "@/lib/donations/stripe-settlement";
+import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation, stripeRecurringInvoiceMatches, stripeRecurringCustomerMatches } from "@/lib/donations/stripe-settlement";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import Stripe from "stripe";
@@ -93,6 +93,10 @@ export async function POST(req: NextRequest) {
           break;
         }
         const dbSubscription = linkedSubscriptions[0];
+        if (!stripeRecurringCustomerMatches(dbSubscription, invoice, stripeSubscriptionId)) {
+          console.warn("[Stripe webhook] Recurring invoice held: customer ownership not verified");
+          break;
+        }
         if (!stripeRecurringInvoiceMatches(dbSubscription, invoice, stripeSubscriptionId)) {
           console.warn("[Stripe webhook] Recurring invoice held: unverified order/amount/currency");
           break;
@@ -338,6 +342,10 @@ export async function POST(req: NextRequest) {
           break;
         }
         const dbSubscription = candidates[0];
+        if (!stripeRecurringCustomerMatches(dbSubscription, invoice, stripeSubscriptionId)) {
+          console.warn("[Stripe webhook] Failed invoice held: customer ownership not verified");
+          break;
+        }
 
         // Idempotency: skip if already recorded
         const existingFailed = await prisma.donation.findFirst({
