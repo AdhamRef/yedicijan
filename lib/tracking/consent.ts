@@ -33,8 +33,10 @@ export function trackingSensitiveQuery(search: string): boolean {
 export function canRunOptionalTracking(path: string): boolean {
   const query = path.includes("?") ? path.slice(path.indexOf("?")) :
     typeof window !== "undefined" ? window.location.search || "" : "";
+  const liveQuery = typeof window !== "undefined" ? window.location.search || "" : "";
   return readTrackingConsent() === "granted" &&
-    !trackingSensitivePath(path.split("?")[0]) && !trackingSensitiveQuery(query);
+    !trackingSensitivePath(path.split("?")[0]) &&
+    !trackingSensitiveQuery(query) && !trackingSensitiveQuery(liveQuery);
 }
 
 export function saveTrackingConsent(value: Exclude<TrackingConsent, null>): void {
