@@ -7,12 +7,28 @@ export type TrackingConsent = "granted" | "denied" | null;
 
 export function readTrackingConsent(): TrackingConsent {
   if (typeof document === "undefined") return null;
-  const value = document.cookie.split("; ").find(part => part.startsWith(TRACKING_CONSENT_COOKIE + "="))?.split("=")[1];
+  const value = document.cookie.split(";").map(part => part.trim())
+    .find(part => part.startsWith(TRACKING_CONSENT_COOKIE + "="))?.slice(TRACKING_CONSENT_COOKIE.length + 1);
   return value === "granted" || value === "denied" ? value : null;
 }
 
+const PRIVATE_TRACKING_SEGMENT = /^(?:dashboard|admin|api|auth|account|my-account|login|signin|signup|register|registration|profile|settings|cart|checkout|payment|payments|donate|donation|donations|donation-failed|donation-pending|success|receipt|receipts|certificate|certificates|subscription|subscriptions|billing|invoice|invoices|orders|order|donor|verify|verification|reset-password|callback|webhook)$/i;
+
 export function trackingSensitivePath(path: string): boolean {
-  return /(?:^|\/)(?:dashboard|auth|account|login|register|profile|cart|checkout|payment|donate|donations|receipt|donation-failed|donation-pending|success)(?:\/|$)/i.test(path);
+  try {
+    let decoded = path.split("?")[0].split("#")[0];
+    for (let n = 0; n < 3; n++) {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    }
+    // Check decoded segments, not a raw string that can disguise /receipt/
+    // as /%2572eceipt/ across multiple URL decoding layers.
+    return decoded.split("/").some(segment => PRIVATE_TRACKING_SEGMENT.test(segment));
+  } catch {
+    // Invalid URI encoding must never authorize third-party recording.
+    return true;
+  }
 }
 
 /** Only explicitly approved acquisition parameters may enter a recorder URL.
