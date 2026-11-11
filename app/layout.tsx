@@ -294,7 +294,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
         />
         {children}
-        <ManagedMarketingTags />
+        <Suspense fallback={null}>
+          <ManagedMarketingTags />
+        </Suspense>
         <Suspense fallback={null}>
           <EngagementInstrumentation />
         </Suspense>
