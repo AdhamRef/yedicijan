@@ -13,6 +13,8 @@
  *   3. GTM dataLayer (`window.dataLayer`) — picked up by anything wired into GTM.
  */
 
+import { canRunOptionalTracking } from "@/lib/tracking/consent";
+
 type AnyRecord = Record<string, unknown>;
 
 declare global {
@@ -54,7 +56,7 @@ function safeEngagementData(data?: AnyRecord): AnyRecord {
 
 /** Tag the current Clarity session with key=value (filterable, smart segments). */
 export function clarityTag(key: string, value: string | string[]): void {
-  if (typeof window === "undefined" || key !== "is_paid_traffic") return;
+  if (typeof window === "undefined" || !canRunOptionalTracking(window.location.pathname) || key !== "is_paid_traffic") return;
   if (typeof value !== "string" || value.length > 150 || !/^[a-zA-Z0-9._/-]+$/.test(value)) return;
   try {
     window.clarity?.("set", key, value);
@@ -65,7 +67,7 @@ export function clarityTag(key: string, value: string | string[]): void {
 
 /** Fire a custom Clarity event (filterable, alerts, smart segments). */
 export function clarityEvent(name: string): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !canRunOptionalTracking(window.location.pathname)) return;
   try {
     window.clarity?.("event", name);
   } catch {
@@ -113,7 +115,7 @@ function isDataLayerBlockedPath(): boolean {
  * leg is suppressed — see `DATALAYER_BLOCKED_PATH_RE` for why.
  */
 export function trackEngagement(name: string, data?: AnyRecord): void {
-  if (typeof window === "undefined" || !SAFE_ENGAGEMENT_EVENTS.has(name)) return;
+  if (typeof window === "undefined" || !canRunOptionalTracking(window.location.pathname) || !SAFE_ENGAGEMENT_EVENTS.has(name)) return;
   const safeData = safeEngagementData(data);
 
   // Clarity — emit the event for filtering, and copy any string params as tags.
