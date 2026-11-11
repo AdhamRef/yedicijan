@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, createContext, useContext, useCallback, useState } from "react";
 import { track as vercelTrack } from "@vercel/analytics";
 import { usePathname } from "next/navigation";
-import { canRunOptionalTracking, TRACKING_CONSENT_EVENT } from "@/lib/tracking/consent";
+import { canRunOptionalTracking, safeOpaqueClickId, TRACKING_CONSENT_EVENT } from "@/lib/tracking/consent";
 import {
   generateEventId,
   metaDonationEventId,
@@ -244,15 +244,6 @@ function getCookieValue(name: string): string | undefined {
 function getUrlParam(key: string): string | undefined {
   if (typeof window === "undefined") return undefined;
   return new URLSearchParams(window.location.search).get(key) ?? undefined;
-}
-
-/** Advertising IDs are opaque tokens, never arbitrary URL text.
- * Reject email, phone-like text with separators, URLs and attacker-controlled
- * query strings before persisting or forwarding optional analytics requests.
- */
-function safeOpaqueClickId(value: string | undefined): string | undefined {
-  if (!value || value.length > 256) return undefined;
-  return /^[A-Za-z0-9._-]{4,256}$/.test(value) ? value : undefined;
 }
 
 /** Persist ttclid / gclid / fbclid in sessionStorage so they survive page navigations */
