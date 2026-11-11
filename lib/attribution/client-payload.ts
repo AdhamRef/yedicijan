@@ -2,11 +2,26 @@
 
 import { DONATION_ATTRIBUTION_KEYS, type DonationAttributionKey } from "./sanitize";
 import { captureStoredClickIds } from "@/lib/tracking/click-id-storage";
+import { readTrackingConsent, trackingSensitivePath } from "@/lib/tracking/consent";
 
 const PREFIX = "ala_attr_";
 const MAX_AGE_DAYS = 30;
 const SESSION_KEY = "ala_tracking_session_id";
 const FBCLID_SESSION_KEY = "ala_fbclid";
+
+/** Keep attribution URLs free of query secrets, fragments and login tokens.
+ * Individual allowed campaign fields are stored in separate attribution keys.
+ */
+function safePageAttributionUrl(input: string): string | undefined {
+  try {
+    const url = new URL(input, typeof window !== "undefined" ? window.location.origin : undefined);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return undefined;
+    if (url.username || url.password) return undefined;
+    const path = trackingSensitivePath(url.pathname) ? "/" : url.pathname;
+    return url.origin + path;
+  } catch { return undefined; }
+}
+
 
 function setCookie(name: string, value: string) {
   const expires = new Date(Date.now() + MAX_AGE_DAYS * 864e5).toUTCString();
@@ -107,18 +122,23 @@ export function captureAttributionFromUrl(): void {
     if (fromUrl) setIfClean(key, fromUrl, true);
   }
 
-  const currentUrl = window.location.href.split("#")[0].slice(0, 2048);
-  setIfClean("first_landing_page", currentUrl, false);
-  setIfClean("landing_page", currentUrl, true);
+  const currentUrl = safePageAttributionUrl(window.location.href);
+  if (currentUrl) {
+    setIfClean("first_landing_page", currentUrl, false);
+    setIfClean("landing_page", currentUrl, true);
+  }
   if (document.referrer) {
-    setIfClean("first_referrer", document.referrer.slice(0, 2048), false);
-    setIfClean("referrer", document.referrer.slice(0, 2048), true);
+    const safeReferrer = safePageAttributionUrl(document.referrer);
+    if (safeReferrer) {
+      setIfClean("first_referrer", safeReferrer, false);
+      setIfClean("referrer", safeReferrer, true);
+    }
   }
 
   const sessionId = getOrCreateSessionId();
   if (sessionId) setIfClean("session_id", sessionId, false);
 
-  persistMetaClickIds(params);
+  if (readTrackingConsent() === "granted" && !trackingSensitivePath(window.location.pathname)) persistMetaClickIds(params);
 
   const ga = getRawCookie("_ga");
   if (ga) {
@@ -143,11 +163,11 @@ export function getDonationAttributionPayload(): Record<string, string> {
     if (v) out[key] = v;
   }
 
-  const currentUrl = window.location.href.split("#")[0].slice(0, 2048);
+  const currentUrl = safePageAttributionUrl(window.location.href) || window.location.origin;
   out.conversion_page = currentUrl;
   out.landing_page = out.landing_page || currentUrl;
   out.first_landing_page = out.first_landing_page || out.landing_page;
-  if (document.referrer) out.referrer = out.referrer || document.referrer.slice(0, 2048);
+  if (document.referrer) out.referrer = out.referrer || safePageAttributionUrl(document.referrer);
 
   const sessionId = getOrCreateSessionId();
   if (sessionId) out.session_id = out.session_id || sessionId;
@@ -156,17 +176,23 @@ export function getDonationAttributionPayload(): Record<string, string> {
     const fbclid = sessionGet(FBCLID_SESSION_KEY);
     if (fbclid) out.fbclid = fbclid;
   }
-  if (!out.fbp) {
-    const fbp = getRawCookie("_fbp") || getOrCreateFbp();
-    if (fbp) out.fbp = fbp;
-  }
-  if (!out.fbc) {
-    const fbc = getRawCookie("_fbc") || (out.fbclid ? buildFbc(out.fbclid) : undefined);
-    if (fbc) {
-      out.fbc = fbc;
-      setRawCookie("_fbc", fbc, false);
-      setIfClean("fbc", fbc, false);
+  // No new advertising identifier or vendor cookie may be generated on
+  // checkout or without affirmative analytics consent.
+  if (readTrackingConsent() === "granted") {
+    if (!out.fbp) {
+      const fbp = getRawCookie("_fbp");
+      if (fbp) out.fbp = fbp;
     }
+    if (!out.fbc) {
+      const fbc = getRawCookie("_fbc");
+      if (fbc) out.fbc = fbc;
+    }
+  } else {
+    delete out.fbp;
+    delete out.fbc;
+    delete out.fbclid;
+    delete out.ttclid;
+    delete out.gclid;
   }
   if (!out.ga_client_id) {
     const ga = getRawCookie("_ga");
