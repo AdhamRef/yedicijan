@@ -10,7 +10,7 @@ jobs:
     timeout-minutes: 35
     env:
       CI: "1"
-      DATABASE_URL: mongodb://127.0.0.1:27018/yedi_ci_tracking_schema_only?replicaSet=rs0
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedi_ci_tracking_build?replicaSet=rs0&directConnection=true
       NEXTAUTH_URL: http://127.0.0.1:3115
       NEXTAUTH_SECRET: synthetic-ci-test-auth-secret-0123456789012345
       GOOGLE_CLIENT_ID: synthetic-ci-client
@@ -37,6 +37,22 @@ jobs:
           npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
           npx --no-install prisma generate --schema prisma/schema.prisma
           npx --no-install prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Start disposable build MongoDB replica set (no external data)
+        run: |
+          set -euo pipefail
+          docker run --detach --name yedi-tags-build-ci -p 127.0.0.1:27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec yedi-tags-build-ci mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx '1'; then break; fi
+            sleep 2
+          done
+          docker exec yedi-tags-build-ci mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec yedi-tags-build-ci mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx 'true'; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Apply isolated schema for build-time sitemap and metadata
+        run: npx --no-install prisma db push --schema prisma/schema.prisma
       - name: Unit and baseline-aware TypeScript diagnosis (no new tracking errors)
         run: |
           set -euo pipefail
@@ -57,6 +73,9 @@ jobs:
           fi
       - name: Production Next.js build with synthetic environment only
         run: npm run build
+      - name: Tear down isolated build MongoDB
+        if: always()
+        run: docker rm -f yedi-tags-build-ci || true
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
