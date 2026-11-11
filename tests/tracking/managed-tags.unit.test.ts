@@ -39,14 +39,15 @@ test("legacy tags remain visible until first explicit save; explicit disable win
 
 test("single consent authority denies missing/denied and sensitive routes", async () => {
   const consent = await import("../../lib/tracking/consent.ts");
-  const oldDocument = globalThis.document;
-  const oldWindow = globalThis.window;
+  const oldDocument = Object.getOwnPropertyDescriptor(globalThis,"document");
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis,"window");
   try {
-    globalThis.document = { cookie: "" };
-    globalThis.window = { location: { protocol: "https:", pathname: "/en/privacy" }, dispatchEvent() {} };
+    const fakeDocument = { cookie: "" };
+    Object.defineProperty(globalThis,"document",{value:fakeDocument,configurable:true,writable:true});
+    Object.defineProperty(globalThis,"window",{value:{location:{protocol:"https:",pathname:"/en/privacy"},dispatchEvent(){}},configurable:true,writable:true});
     assert.equal(consent.readTrackingConsent(),null);
     assert.equal(consent.canRunOptionalTracking("/en/privacy"),false);
-    globalThis.document.cookie="yedi_analytics_consent=denied";
+    fakeDocument.cookie="yedi_analytics_consent=denied";
     assert.equal(consent.canRunOptionalTracking("/en/privacy"),false);
     globalThis.document.cookie="yedi_analytics_consent=granted";
     assert.equal(consent.canRunOptionalTracking("/en/privacy"),true);
@@ -55,7 +56,9 @@ test("single consent authority denies missing/denied and sensitive routes", asyn
     }
     assert.equal(consent.canRunOptionalTracking("/en/privacy"),true);
   } finally {
-    globalThis.document=oldDocument;
-    globalThis.window=oldWindow;
+    if(oldDocument) Object.defineProperty(globalThis,"document",oldDocument);
+    else Reflect.deleteProperty(globalThis,"document");
+    if(oldWindow) Object.defineProperty(globalThis,"window",oldWindow);
+    else Reflect.deleteProperty(globalThis,"window");
   }
 });
