@@ -64,6 +64,19 @@ test("single consent authority denies missing/denied and sensitive routes", asyn
 });
 
 
+test("privacy: encoded and previously omitted private routes deny session recorders", async () => {
+  const consent = await import("../../lib/tracking/consent");
+  for (const path of [
+    "/ar/subscriptions", "/en/subscription/fixture", "/tr/receipt/fixture",
+    "/en/certificate/fixture", "/ar/invoices/fixture", "/fr/billing",
+    "/en/settings", "/en/verification", "/ar/donor/account",
+    "/en/%72eceipt/fixture", "/en/%2572eceipt/fixture", "/en/%ZZ",
+  ]) assert.equal(consent.trackingSensitivePath(path), true, path);
+  for (const path of ["/ar", "/en/about", "/tr/campaigns", "/en/privacy"]) {
+    assert.equal(consent.trackingSensitivePath(path), false, path);
+  }
+});
+
 test("privacy: query parameters never expose donor IDs or credentials to marketing SDKs", async () => {
   const consent = await import("../../lib/tracking/consent");
   for (const query of [
