@@ -113,8 +113,17 @@ export async function POST(req: NextRequest) {
         });
         if (existingForInvoice) break;
 
-        // Compute paidAt from invoice timestamp
-        const paidAt = new Date((invoice as any).created * 1000);
+        // Invoice creation is NOT payment time. Require an authenticated paid
+        // transition from the signed Stripe invoice before recording settlement.
+        // A missing transition is held for Test Mode/provider reconciliation,
+        // never silently backdated to invoice creation.
+        const paidTimestamp = invoice.status_transitions?.paid_at;
+        if (typeof paidTimestamp !== "number" || !Number.isSafeInteger(paidTimestamp) ||
+            paidTimestamp <= 0 || paidTimestamp > Math.floor(Date.now() / 1000) + 300) {
+          console.warn("[Stripe webhook] Paid invoice held: missing/invalid payment timestamp");
+          break;
+        }
+        const paidAt = new Date(paidTimestamp * 1000);
 
         // Stripe's own first-vs-renewal marker. "subscription_create" is the signup
         // charge; "subscription_cycle" is an automatic renewal. Anything else
