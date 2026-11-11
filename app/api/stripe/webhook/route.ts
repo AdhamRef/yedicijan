@@ -81,11 +81,18 @@ export async function POST(req: NextRequest) {
         if (!stripeSubscriptionId) break;
 
         // Find our DB subscription by Stripe subscription ID (stored in payforToken)
-        const dbSubscription = await prisma.subscription.findFirst({
+        const linkedSubscriptions = await prisma.subscription.findMany({
           where: { payforToken: stripeSubscriptionId },
+          take: 2,
           include: { items: true, categoryItems: true },
         });
-        if (!dbSubscription) break;
+        // payforToken is not unique in the historical schema. Never allocate
+        // a verified invoice to an arbitrary donor when two rows share it.
+        if (linkedSubscriptions.length !== 1) {
+          console.warn("[Stripe webhook] Recurring invoice held: subscription binding missing or ambiguous");
+          break;
+        }
+        const dbSubscription = linkedSubscriptions[0];
         if (!stripeRecurringInvoiceMatches(dbSubscription, invoice, stripeSubscriptionId)) {
           console.warn("[Stripe webhook] Recurring invoice held: unverified order/amount/currency");
           break;
@@ -313,10 +320,15 @@ export async function POST(req: NextRequest) {
         const stripeSubscriptionId = getStripeSubscriptionIdFromInvoice(invoice);
         if (!stripeSubscriptionId) break;
 
-        const dbSubscription = await prisma.subscription.findFirst({
+        const candidates = await prisma.subscription.findMany({
           where: { payforToken: stripeSubscriptionId },
+          take: 2,
         });
-        if (!dbSubscription) break;
+        if (candidates.length !== 1) {
+          console.warn("[Stripe webhook] Failure invoice ignored: ambiguous subscription binding");
+          break;
+        }
+        const dbSubscription = candidates[0];
 
         // Idempotency: skip if already recorded
         const existingFailed = await prisma.donation.findFirst({

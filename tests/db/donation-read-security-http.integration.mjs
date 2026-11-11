@@ -277,6 +277,81 @@ test("isolated recurring invoice unique ledger rejects parallel replay",async()=
   assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),1);
   await prisma.stripeInvoiceSettlement.deleteMany({where:{invoiceId}});
 });
+
+async function sendSyntheticRecurringInvoiceEvent(type,sub,invoiceId,reason="subscription_cycle") {
+  if(!stripeSecret)throw Error("Synthetic Stripe webhook secret missing");
+  const paid=type==="invoice.payment_succeeded";
+  const payload=JSON.stringify({
+    id:"evt_invoice_"+nonce+"_"+Date.now()+"_"+randomBytes(3).toString("hex"),
+    object:"event",type,created:Math.floor(Date.now()/1000),livemode:false,
+    data:{object:{
+      id:invoiceId,object:"invoice",created:Math.floor(Date.now()/1000),
+      parent:{subscription_details:{subscription:sub.payforToken}},
+      billing_reason:reason,status:paid?"paid":"open",paid,
+      currency:"usd",amount_paid:paid?5025:0,amount_due:5025
+    }},
+  });
+  const t=Math.floor(Date.now()/1000);
+  const signature=createHmac("sha256",stripeSecret).update(t+"."+payload).digest("hex");
+  const response=await fetch(base+"/api/stripe/webhook",{
+    method:"POST",headers:{"content-type":"application/json",
+      "stripe-signature":"t="+t+",v1="+signature},body:payload
+  });
+  return {status:response.status,text:(await response.text()).slice(0,400)};
+}
+test("signed subscription invoices: failure-success orders and replay credit a campaign once",async()=>{
+  for(const order of ["failed-first","success-first","pending-first"]){
+    const invoiceId="in_order_"+order+"_"+nonce;
+    const sub=await prisma.subscription.create({data:{
+      donorId:owner.id,payforToken:"sub_order_"+order+"_"+nonce,
+      status:"ACTIVE",amount:50.25,currency:"USD",
+      paymentMethod:"CARD",teamSupport:0,coverFees:false,
+    }});
+    subscriptionIds.push(sub.id);
+    await prisma.subscriptionItem.create({data:{
+      subscriptionId:sub.id,campaignId,amount:20,amountUSD:20,
+    }});
+    if(order==="pending-first"){
+      await createDonation({donorId:owner.id,subscriptionId:sub.id,
+        provider:"STRIPE",providerOrderId:invoiceId,paidAt:null});
+    }
+    invoiceIds.push(invoiceId);
+    const before=(await prisma.campaign.findUnique({where:{id:campaignId}})).currentAmount;
+    const failed=()=>sendSyntheticRecurringInvoiceEvent("invoice.payment_failed",sub,invoiceId);
+    const paid=()=>sendSyntheticRecurringInvoiceEvent("invoice.payment_succeeded",sub,invoiceId);
+    const responses=order==="failed-first"?
+      [await failed(),await paid(),await failed(),await paid()]:
+      [await paid(),await failed(),await paid()];
+    assert.ok(responses.every(r=>r.status===200),JSON.stringify({order,responses}));
+    const entries=await prisma.donation.findMany({where:{subscriptionId:sub.id,providerOrderId:invoiceId}});
+    donationIds.push(...entries.map(x=>x.id));
+    assert.equal(entries.filter(x=>x.status==="PAID"&&x.paidAt).length,1,order);
+    assert.equal(entries.length,1,order+": same invoice must not leave duplicate donation rows");
+    assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),1,order);
+    assert.equal((await prisma.campaign.findUnique({where:{id:campaignId}})).currentAmount,before+20,order);
+  }
+});
+
+
+test("signed recurring invoice cannot choose between duplicate Stripe subscription references",async()=>{
+  const token="sub_duplicate_"+nonce;
+  const invoiceId="in_duplicate_"+nonce;
+  const subs=[];
+  for(const donorId of [owner.id,outsider.id]){
+    const row=await prisma.subscription.create({data:{
+      donorId,payforToken:token,amount:50.25,currency:"USD",
+      paymentMethod:"CARD",status:"ACTIVE",teamSupport:0,coverFees:false,
+    }});
+    subs.push(row);subscriptionIds.push(row.id);
+  }
+  const before=await prisma.stripeInvoiceSettlement.count({where:{invoiceId}});
+  assert.equal(before,0);
+  const result=await sendSyntheticRecurringInvoiceEvent("invoice.payment_succeeded",subs[0],invoiceId);
+  assert.equal(result.status,200,result.text);
+  assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),0);
+  assert.equal(await prisma.donation.count({where:{providerOrderId:invoiceId}}),0);
+});
+
 test("HTTP donation comments are private to owner or revenue team",async()=>{
   const path="/api/donations/"+guestDonation.id+"/comments";
   const outsiderCookie=await cookie(outsider);
@@ -298,7 +373,11 @@ after(async()=>{
   await prisma.donationCategoryItem.deleteMany({where:{donationId:id}});
   await prisma.donation.deleteMany({where:{id}});
  }
- for(const id of subscriptionIds)await prisma.subscription.deleteMany({where:{id}});
+ for(const id of subscriptionIds){
+  await prisma.subscriptionItem.deleteMany({where:{subscriptionId:id}});
+  await prisma.subscriptionCategoryItem.deleteMany({where:{subscriptionId:id}});
+  await prisma.subscription.deleteMany({where:{id}});
+ }
  if(campaignId)await prisma.campaign.deleteMany({where:{id:campaignId}});
  if(categoryId)await prisma.category.deleteMany({where:{id:categoryId}});
  for(const id of userIds)await prisma.user.deleteMany({where:{id}});

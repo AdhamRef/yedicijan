@@ -25,7 +25,7 @@ type SessionShape = {
 function signingSecret(): string | null {
   // NEVER use NEXTAUTH_SECRET for guest capabilities: separate rotation domain.
   const key = process.env.DONATION_GUEST_ACCESS_SECRET;
-  return key && Buffer.byteLength(key, "utf8") >= 32 ? key : null;
+  return key && key !== process.env.NEXTAUTH_SECRET && Buffer.byteLength(key, "utf8") >= 32 ? key : null;
 }
 function verificationSecrets(now: number): string[] {
   const active = signingSecret();
@@ -34,7 +34,7 @@ function verificationSecrets(now: number): string[] {
   const until = Number(process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL);
   // Previous key may verify already-issued tokens only inside a bounded
   // migration period; it never signs new cookies.
-  if (previous && Buffer.byteLength(previous, "utf8") >= 32 &&
+  if (active && previous && previous !== active && previous !== process.env.NEXTAUTH_SECRET && Buffer.byteLength(previous, "utf8") >= 32 &&
       Number.isSafeInteger(until) && until >= Math.floor(now / 1000) &&
       until <= Math.floor(now / 1000) + TTL_SECONDS) result.push(previous);
   return result;
