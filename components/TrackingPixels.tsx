@@ -575,7 +575,9 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
           }));
         }
         // Never put donor PII or external identifiers into GA4/dataLayer.
-        if (event.custom) Object.assign(ga4, event.custom);
+        // Do not forward caller-controlled custom fields to third-party GA4.
+        // Arbitrary fields may contain donor identifiers or unredacted URLs.
+        // Verified financial purchase signals remain server-owned.
         window.gtag("event", ga4EventName, ga4);
       }
 
@@ -609,15 +611,9 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
 
   const setUserData = useCallback((user: Partial<CanonicalUser>) => {
     userDataRef.current = { ...userDataRef.current, ...user };
-    // Also identify in TikTok Pixel
-    if (canRunOptionalTracking(window.location.pathname) && configRef.current?.tiktokPixelId && window.ttq?.identify) {
-      const u = userDataRef.current;
-      window.ttq.identify({
-        external_id: u.external_id,
-        email:       u.email,
-        phone_number: u.phone,
-      });
-    }
+    // Donor contact details are kept only in the app's local tracking context.
+    // Optional third-party identity matching requires a separate, explicit,
+    // provider-specific approval and is disabled for this privacy release.
   }, []);
 
   const trackPageView = useCallback((pagePath?: string, pageTitle?: string) => {
@@ -786,7 +782,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
    * so Meta dedupes the browser↔server pair into a single conversion.
    */
   const trackDonate = useCallback((options: TrackDonateSuccessOptions) => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !canRunOptionalTracking(window.location.pathname)) return;
 
     const eventId = metaDonationEventId(options.donationId, "success");
 
@@ -839,6 +835,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
     // silent-bail behaviour was the root cause of "Donate event missing"
     // when the donor's success page beat the deferred pixel config to ready.
     const tryFire = (): boolean => {
+      if (!canRunOptionalTracking(window.location.pathname)) return false;
       const fbq = window.fbq;
       if (!fbq) return false;
       if (!configRef.current?.facebookPixelId) return false;
@@ -873,9 +870,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       custom:   { custom_event_name: customEventName, ...data },
     });
     // Also fire as a custom GA4 event
-    if (configRef.current?.gaMeasurementId && window.gtag) {
-      window.gtag("event", customEventName, data ?? {});
-    }
+    // Never send caller-defined event names/payloads directly to GA4.
   }, [sendCanonical]);
 
   const value: TrackingContextValue = {
