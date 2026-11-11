@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     if (donation.subscriptionId) {
       await prisma.subscription.update({
         where: { id: donation.subscriptionId },
-        data: { payforToken: subscription.id },
+        data: { payforToken: subscription.id, stripeCustomerId: customer.id },
       });
     }
 
