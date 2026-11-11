@@ -2,7 +2,17 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { trackEngagement, clarityTag } from "@/lib/analytics";
+import { trackEngagement as emitEngagement, clarityTag as emitClarityTag } from "@/lib/analytics";
+import { canRunOptionalTracking } from "@/lib/tracking/consent";
+
+function trackEngagement(name: string, data?: Record<string, unknown>) {
+  if (typeof window === "undefined" || !canRunOptionalTracking(window.location.pathname)) return;
+  emitEngagement(name, data);
+}
+function clarityTag(key: string, value: string) {
+  if (typeof window === "undefined" || !canRunOptionalTracking(window.location.pathname)) return;
+  emitClarityTag(key, value);
+}
 
 /**
  * Mounts a tiny set of always-on listeners that record real engagement

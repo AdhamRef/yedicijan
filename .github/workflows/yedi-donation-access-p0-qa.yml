@@ -1,7 +1,7 @@
 name: YediCihan P0 donor privacy / Stripe settlement isolated acceptance
 on:
   push:
-    branches: [security/yedi-donation-read-capability-20261110, integration/yedi-pr9-19-21-security24-qa-20261110]
+    branches: [security/yedi-donation-read-capability-20261110]
   pull_request:
     paths:
       - "app/api/donations/**"
@@ -77,6 +77,11 @@ jobs:
             tail -n 125 /tmp/yedi-donor-security-ci.log
             exit 1
           fi
+      - name: Full TypeScript check (required release evidence)
+        run: npx --no-install tsc --noEmit
+      - name: Next.js production build (synthetic CI only; separate from strict TypeScript result)
+        if: success() || failure()
+        run: npm run build
       - name: Remove disposable database
         if: always()
         run: docker rm -f yedi-donor-security-ci || true

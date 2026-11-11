@@ -1,0 +1,82 @@
+name: Yedi P0 combined isolation candidate (NO DEPLOY)
+on:
+  push:
+    branches: [qa/yedi-p0-combined-no-deploy-20261111]
+permissions:
+  contents: read
+jobs:
+  combined:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CI: "1"
+      CI_MONGO_ISOLATED: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedi_ci_candidate?replicaSet=rs0&directConnection=true
+      NEXTAUTH_SECRET: synthetic-ci-isolated-never-production-auth-secret-123456
+      DONATION_GUEST_ACCESS_SECRET: synthetic-isolated-guest-secret-not-production-1234567
+      GOOGLE_CLIENT_ID: synthetic-ci-google-id
+      GOOGLE_CLIENT_SECRET: synthetic-ci-google-secret
+      STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
+      STRIPE_WEBHOOK_SECRET: whsec_synthetic_donor_p0_isolated_no_real_event_20261110
+    steps:
+      - name: Checkout candidate exact SHA
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install locked dependencies and test Chromium
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx --no-install prisma generate --schema prisma/schema.prisma
+          npx --no-install prisma generate --schema prisma/integration-settings.schema.prisma
+          npm install --no-save --ignore-scripts --legacy-peer-deps --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Disposable MongoDB (not production)
+        run: |
+          docker run --detach --name yedi-p0-combined-ci -p 127.0.0.1:27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+          for i in $(seq 1 40); do
+            if docker exec yedi-p0-combined-ci mongosh --quiet --eval 'db.adminCommand({ping:1}).ok' 2>/dev/null | grep -qx 1; then break; fi
+            sleep 2
+          done
+          docker exec yedi-p0-combined-ci mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for i in $(seq 1 40); do
+            if docker exec yedi-p0-combined-ci mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -qx true; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Apply schema ONLY to disposable database
+        run: npx --no-install prisma db push --schema prisma/schema.prisma
+      - name: Security unique index and key evidence
+        run: node scripts/yedi-security-readonly-evidence.mjs
+      - name: Stripe + receipts unit
+        run: node --import tsx --test tests/finance/donation-guest-access.test.ts
+      - name: Stripe signed HTTP + 5 concurrent invoices
+        env:
+          NEXTAUTH_URL: http://127.0.0.1:3112
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3112 > /tmp/yedi-candidate-finance.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          node --import tsx --test tests/db/donation-read-security-http.integration.mjs
+      - name: Browser consent + privacy HTTP unit
+        run: node --import tsx --test tests/tracking/managed-tags.unit.test.ts
+      - name: Chromium consent + admin HTTP
+        env:
+          NEXTAUTH_URL: http://127.0.0.1:3115
+        run: |
+          set -euo pipefail
+          npm run dev -- --hostname 127.0.0.1 --port 3115 > /tmp/yedi-candidate-privacy.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          node --test tests/browser/managed-tags.e2e.mjs
+      - name: Full strict TypeScript on combined SHA
+        run: npx --no-install tsc --noEmit --pretty false
+      - name: Production-style Next Build (still no deployment)
+        run: npm run build
+      - name: Cleanup disposable database
+        if: always()
+        run: docker rm -f yedi-p0-combined-ci || true

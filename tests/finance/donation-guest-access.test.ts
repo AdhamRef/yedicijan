@@ -8,7 +8,7 @@ import * as tokenModule from "../../lib/donations/guest-access.ts";
 import * as settlementModule from "../../lib/donations/stripe-settlement.ts";
 const { createGuestDonationAccess, verifyGuestDonationAccess } =
   ((tokenModule as typeof tokenModule & {default?:typeof tokenModule}).default ?? tokenModule);
-const { stripePaymentMatches, stripeRecurringInvoiceMatches } =
+const { stripePaymentMatches, stripeRecurringInvoiceMatches, stripeRecurringCustomerMatches, stripeFailedRecurringInvoiceMatches } =
   ((settlementModule as typeof settlementModule & {default?:typeof settlementModule}).default ?? settlementModule);
 
 process.env.DONATION_GUEST_ACCESS_SECRET="synthetic-test-only-secret-not-production-0123456789";
@@ -133,4 +133,17 @@ test("guest capability has mandatory independent secret and bounded previous-key
     delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET;
     delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL;
   }
+});
+
+test("recurring signed customer ownership and failed invoice amount are strict",()=>{
+ const sub={id:"507f191e810c19729de860e9",donorId:base.donorId,payforToken:"sub_test_abc",
+  stripeCustomerId:"cus_original_123",amount:50.25,teamSupport:0,coverFees:false,currency:"USD"};
+ const invoice={customer:"cus_original_123",id:"in_test_123",currency:"usd",amount_due:5025};
+ assert.equal(stripeRecurringCustomerMatches(sub,invoice,"sub_test_abc"),true);
+ assert.equal(stripeRecurringCustomerMatches(sub,{...invoice,customer:"cus_other_456"},"sub_test_abc"),false);
+ assert.equal(stripeRecurringCustomerMatches({...sub,stripeCustomerId:null},invoice,"sub_test_abc"),false);
+ assert.equal(stripeRecurringCustomerMatches(sub,invoice,"sub_wrong"),false);
+ assert.equal(stripeFailedRecurringInvoiceMatches(sub,invoice),true);
+ assert.equal(stripeFailedRecurringInvoiceMatches(sub,{...invoice,amount_due:5024}),false);
+ assert.equal(stripeFailedRecurringInvoiceMatches(sub,{...invoice,currency:"eur"}),false);
 });

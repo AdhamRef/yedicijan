@@ -178,3 +178,42 @@ export function stripeRecurringInvoiceMatches(
     invoice.amount_paid === cents && invoice.amount_due === cents
   );
 }
+
+/**
+ * Strict recurring ownership proof. Historical rows without the customer binding
+ * are deliberately held: payforToken by itself is not ownership evidence.
+ */
+export function stripeRecurringCustomerMatches(
+  sub: { donorId: string; stripeCustomerId?: string | null; payforToken: string | null },
+  invoice: { customer?: string | { id?: string } | null; parent?: unknown },
+  stripeSubscriptionId: string,
+): boolean {
+  const customer = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+  return Boolean(
+    sub.donorId &&
+    sub.payforToken === stripeSubscriptionId &&
+    stripeSubscriptionId.startsWith("sub_") &&
+    typeof sub.stripeCustomerId === "string" &&
+    sub.stripeCustomerId.startsWith("cus_") &&
+    customer === sub.stripeCustomerId
+  );
+}
+
+/** Failed invoices are audit events, never credit; still reject cross-account,
+ * cross-currency and wrong-amount attribution before writing a FAILED row.
+ */
+export function stripeFailedRecurringInvoiceMatches(
+  sub: StoredSubscriptionForStripe,
+  invoice: { id: string; currency: string; amount_due: number },
+): boolean {
+  const total = sub.amount + sub.teamSupport;
+  const expected = total + (sub.coverFees ? total * 0.03 : 0);
+  const amount = Math.round(expected * 100);
+  return Boolean(
+    sub.donorId && invoice.id.startsWith("in_") &&
+    Number.isFinite(expected) && expected > 0 &&
+    Number.isSafeInteger(amount) && amount > 0 &&
+    invoice.amount_due === amount &&
+    invoice.currency.toLowerCase() === sub.currency.toLowerCase()
+  );
+}

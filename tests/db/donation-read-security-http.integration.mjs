@@ -278,16 +278,18 @@ test("isolated recurring invoice unique ledger rejects parallel replay",async()=
   await prisma.stripeInvoiceSettlement.deleteMany({where:{invoiceId}});
 });
 
-async function sendSyntheticRecurringInvoiceEvent(type,sub,invoiceId,reason="subscription_cycle") {
+async function sendSyntheticRecurringInvoiceEvent(type,sub,invoiceId,reason="subscription_cycle",customerOverride=null) {
   if(!stripeSecret)throw Error("Synthetic Stripe webhook secret missing");
   const paid=type==="invoice.payment_succeeded";
   const payload=JSON.stringify({
     id:"evt_invoice_"+nonce+"_"+Date.now()+"_"+randomBytes(3).toString("hex"),
     object:"event",type,created:Math.floor(Date.now()/1000),livemode:false,
     data:{object:{
-      id:invoiceId,object:"invoice",created:Math.floor(Date.now()/1000),
+      id:invoiceId,object:"invoice",created:Math.floor(Date.now()/1000)-86400,
+      customer:customerOverride ?? sub.stripeCustomerId,
       parent:{subscription_details:{subscription:sub.payforToken}},
       billing_reason:reason,status:paid?"paid":"open",paid,
+      status_transitions:{paid_at:paid?Math.floor(Date.now()/1000):null},
       currency:"usd",amount_paid:paid?5025:0,amount_due:5025
     }},
   });
@@ -303,7 +305,7 @@ test("signed subscription invoices: failure-success orders and replay credit a c
   for(const order of ["failed-first","success-first","pending-first"]){
     const invoiceId="in_order_"+order+"_"+nonce;
     const sub=await prisma.subscription.create({data:{
-      donorId:owner.id,payforToken:"sub_order_"+order+"_"+nonce,
+      donorId:owner.id,payforToken:"sub_order_"+order+"_"+nonce,stripeCustomerId:"cus_order_"+order+"_"+nonce,
       status:"ACTIVE",amount:50.25,currency:"USD",
       paymentMethod:"CARD",teamSupport:0,coverFees:false,
     }});
@@ -326,6 +328,7 @@ test("signed subscription invoices: failure-success orders and replay credit a c
     const entries=await prisma.donation.findMany({where:{subscriptionId:sub.id,providerOrderId:invoiceId}});
     donationIds.push(...entries.map(x=>x.id));
     assert.equal(entries.filter(x=>x.status==="PAID"&&x.paidAt).length,1,order);
+    assert.ok(entries.find(x=>x.paidAt)?.paidAt.getTime()>Date.now()-120000,"paidAt must use paid transition not yesterday invoice creation");
     assert.equal(entries.length,1,order+": same invoice must not leave duplicate donation rows");
     assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),1,order);
     assert.equal((await prisma.campaign.findUnique({where:{id:campaignId}})).currentAmount,before+20,order);
@@ -334,10 +337,35 @@ test("signed subscription invoices: failure-success orders and replay credit a c
 
 
 
+test("signed recurring invoice with matching amount but different customer is held",async()=>{
+  const invoiceId="in_wrong_customer_"+nonce;
+  const sub=await prisma.subscription.create({data:{
+    donorId:owner.id,payforToken:"sub_wrong_customer_"+nonce,stripeCustomerId:"cus_expected_"+nonce,
+    status:"ACTIVE",amount:50.25,currency:"USD",paymentMethod:"CARD",teamSupport:0,coverFees:false,
+  }});
+  subscriptionIds.push(sub.id);
+  const before=await prisma.stripeInvoiceSettlement.count({where:{invoiceId}});
+  const paid=await sendSyntheticRecurringInvoiceEvent("invoice.payment_succeeded",sub,invoiceId,"subscription_cycle","cus_attacker_"+nonce);
+  const failed=await sendSyntheticRecurringInvoiceEvent("invoice.payment_failed",sub,invoiceId,"subscription_cycle","cus_attacker_"+nonce);
+  assert.equal(paid.status,200);assert.equal(failed.status,200);
+  assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),before);
+  assert.equal(await prisma.donation.count({where:{subscriptionId:sub.id,providerOrderId:invoiceId}}),0);
+});
+test("historical subscription without Stripe Customer binding stays unverified",async()=>{
+  const invoiceId="in_historical_customer_"+nonce;
+  const sub=await prisma.subscription.create({data:{
+    donorId:owner.id,payforToken:"sub_historical_"+nonce,
+    status:"ACTIVE",amount:50.25,currency:"USD",paymentMethod:"CARD",teamSupport:0,coverFees:false,
+  }});
+  subscriptionIds.push(sub.id);
+  const result=await sendSyntheticRecurringInvoiceEvent("invoice.payment_succeeded",sub,invoiceId,"subscription_cycle","cus_unlinked_"+nonce);
+  assert.equal(result.status,200);
+  assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),0);
+});
 test("concurrent signed paid invoices cannot credit monthly project more than once",async()=>{
   const invoiceId="in_parallel_"+nonce;
   const sub=await prisma.subscription.create({data:{
-    donorId:owner.id,payforToken:"sub_parallel_"+nonce,status:"ACTIVE",
+    donorId:owner.id,payforToken:"sub_parallel_"+nonce,stripeCustomerId:"cus_parallel_"+nonce,status:"ACTIVE",
     amount:50.25,currency:"USD",paymentMethod:"CARD",teamSupport:0,coverFees:false,
   }});
   subscriptionIds.push(sub.id);
@@ -370,7 +398,7 @@ test("signed recurring invoice cannot choose between duplicate Stripe subscripti
   const subs=[];
   for(const donorId of [owner.id,outsider.id]){
     const row=await prisma.subscription.create({data:{
-      donorId,payforToken:token,amount:50.25,currency:"USD",
+      donorId,payforToken:token,stripeCustomerId:"cus_duplicate_"+nonce,amount:50.25,currency:"USD",
       paymentMethod:"CARD",status:"ACTIVE",teamSupport:0,coverFees:false,
     }});
     subs.push(row);subscriptionIds.push(row.id);

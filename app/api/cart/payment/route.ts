@@ -1,6 +1,4 @@
 import { attachGuestDonationAccess, canIssueGuestDonationAccess } from "@/lib/donations/guest-access";
-import { resolveGateway, PAYMENT_ROUTE_UNAVAILABLE_MESSAGE } from "@/lib/payment-gateway";
-import { issueGuestPayForIntent } from "@/lib/payfor-guest-intent";
 import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -122,16 +120,6 @@ export async function POST(request: NextRequest) {
         { error: "Items, currency, and payment method are required" },
         { status: 400 }
       );
-    }
-
-    // Preflight BEFORE resolving guest identity or writing a donation record.
-    // Never silently reroute a foreign-currency donation to another bank.
-    if (paymentMethod === "CARD" && resolveGateway({
-      payforEnabled: false, currency: String(currency),
-      donationType: type === "MONTHLY" ? "MONTHLY" : "ONE_TIME",
-    }) === "UNAVAILABLE") {
-      return NextResponse.json({ error: PAYMENT_ROUTE_UNAVAILABLE_MESSAGE,
-        code: "PAYMENT_RAIL_UNAVAILABLE" }, { status: 409 });
     }
 
     if (!session?.user?.id && !canIssueGuestDonationAccess()) {
@@ -439,7 +427,6 @@ export async function POST(request: NextRequest) {
         totalAmount: donation.totalAmount, currency: donation.currency,
         status: donation.status,
       },
-      paymentIntentToken: session?.user?.id ? undefined : issueGuestPayForIntent(donation),
     }), donation, session?.user?.id);
   } catch (error) {
     console.error("Error creating donation:", error);

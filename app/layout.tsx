@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Poppins, Tajawal } from "next/font/google";
-import DeferredGTM from "@/components/DeferredGTM";
-import MicrosoftClarity from "@/components/MicrosoftClarity";
+import ManagedMarketingTags from "@/components/ManagedMarketingTags";
 import EngagementInstrumentation from "@/components/EngagementInstrumentation";
-import { Analytics } from "@vercel/analytics/next";
 import "./[locale]/globals.css";
 
 const poppins = Poppins({
@@ -274,19 +272,11 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://i.ibb.co" />
         <link rel="preload" href="/bg.webp" as="image" type="image/webp" />
 
-        <script src="https://t.contentsquare.net/uxa/e81365186c19c.js" async />
+        {/* Contentsquare disabled until consent/route-scoped loading is audited. Never load session recording unconditionally. */}
       </head>
       <body
         className={`${poppins.variable} ${tajawal.variable} font-arabic antialiased`}
       >
-        <noscript>
-          <iframe
-            src="https://www.googletagmanager.com/ns.html?id=GTM-MMNBQQWB"
-            height="0"
-            width="0"
-            style={{ display: "none", visibility: "hidden" }}
-          />
-        </noscript>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
@@ -304,12 +294,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
         />
         {children}
-        <MicrosoftClarity />
+        <ManagedMarketingTags />
         <Suspense fallback={null}>
           <EngagementInstrumentation />
         </Suspense>
-        <DeferredGTM />
-        <Analytics />
       </body>
     </html>
   );

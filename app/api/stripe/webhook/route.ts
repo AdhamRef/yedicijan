@@ -1,4 +1,4 @@
-import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation, stripeRecurringInvoiceMatches } from "@/lib/donations/stripe-settlement";
+import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation, stripeRecurringInvoiceMatches, stripeRecurringCustomerMatches, stripeFailedRecurringInvoiceMatches } from "@/lib/donations/stripe-settlement";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import Stripe from "stripe";
@@ -93,6 +93,10 @@ export async function POST(req: NextRequest) {
           break;
         }
         const dbSubscription = linkedSubscriptions[0];
+        if (!stripeRecurringCustomerMatches(dbSubscription, invoice, stripeSubscriptionId)) {
+          console.warn("[Stripe webhook] Recurring invoice held: customer ownership not verified");
+          break;
+        }
         if (!stripeRecurringInvoiceMatches(dbSubscription, invoice, stripeSubscriptionId)) {
           console.warn("[Stripe webhook] Recurring invoice held: unverified order/amount/currency");
           break;
@@ -113,8 +117,17 @@ export async function POST(req: NextRequest) {
         });
         if (existingForInvoice) break;
 
-        // Compute paidAt from invoice timestamp
-        const paidAt = new Date((invoice as any).created * 1000);
+        // Invoice creation is NOT payment time. Require an authenticated paid
+        // transition from the signed Stripe invoice before recording settlement.
+        // A missing transition is held for Test Mode/provider reconciliation,
+        // never silently backdated to invoice creation.
+        const paidTimestamp = invoice.status_transitions?.paid_at;
+        if (typeof paidTimestamp !== "number" || !Number.isSafeInteger(paidTimestamp) ||
+            paidTimestamp <= 0 || paidTimestamp > Math.floor(Date.now() / 1000) + 300) {
+          console.warn("[Stripe webhook] Paid invoice held: missing/invalid payment timestamp");
+          break;
+        }
+        const paidAt = new Date(paidTimestamp * 1000);
 
         // Stripe's own first-vs-renewal marker. "subscription_create" is the signup
         // charge; "subscription_cycle" is an automatic renewal. Anything else
@@ -184,7 +197,7 @@ export async function POST(req: NextRequest) {
             (await tx.donation.findFirst({
               where: {
                 AND: [
-                  { subscriptionId: dbSubscription.id, providerOrderId: invoice.id },
+                  { subscriptionId: dbSubscription.id, donorId: dbSubscription.donorId, provider: "STRIPE", providerOrderId: invoice.id },
                   donationFieldEmpty("paidAt"),
                 ],
               },
@@ -193,7 +206,7 @@ export async function POST(req: NextRequest) {
               ? await tx.donation.findFirst({
                   where: {
                     AND: [
-                      { subscriptionId: dbSubscription.id, status: "PAID" },
+                      { subscriptionId: dbSubscription.id, donorId: dbSubscription.donorId, provider: "STRIPE", status: "PAID" },
                       donationFieldEmpty("paidAt"),
                     ],
                   },
@@ -329,6 +342,11 @@ export async function POST(req: NextRequest) {
           break;
         }
         const dbSubscription = candidates[0];
+        if (!stripeRecurringCustomerMatches(dbSubscription, invoice, stripeSubscriptionId) ||
+            !stripeFailedRecurringInvoiceMatches(dbSubscription, invoice)) {
+          console.warn("[Stripe webhook] Failed invoice held: customer, amount or currency mismatch");
+          break;
+        }
 
         // Idempotency: skip if already recorded
         const existingFailed = await prisma.donation.findFirst({
@@ -425,6 +443,13 @@ export async function POST(req: NextRequest) {
           break;
         }
         const dbSubscription = matches[0];
+        const cancellingCustomerId = typeof stripeSub.customer === "string"
+          ? stripeSub.customer : stripeSub.customer?.id;
+        if (!dbSubscription.stripeCustomerId ||
+            dbSubscription.stripeCustomerId !== cancellingCustomerId) {
+          console.warn("[Stripe webhook] Subscription cancellation held: Customer mismatch");
+          break;
+        }
         if (dbSubscription) {
           await prisma.subscription.update({
             where: { id: dbSubscription.id },

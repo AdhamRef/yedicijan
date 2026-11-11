@@ -22,9 +22,40 @@ declare global {
   }
 }
 
+/** Engagement telemetry is deliberately non-financial and must not forward URLs,
+ * query parameters, click identifiers, contact details or donor identifiers.
+ * Payment/conversion events use their separate, canonical dispatchers.
+ */
+const SAFE_ENGAGEMENT_FIELDS = new Set([
+  "target_host", "target_tag", "is_paid_traffic",
+  "ms_since_navigation_start", "hidden_for_ms", "samples", "x", "y",
+]);
+const SAFE_ENGAGEMENT_EVENTS = new Set([
+  "landing_page_view", "page_view_change", "page_became_hidden",
+  "page_visible_again", "first_scroll", "first_click",
+  "rage_click", "outbound_link_click", "donation_flow_started",
+]);
+function safeEngagementData(data?: AnyRecord): AnyRecord {
+  const safe: AnyRecord = {};
+  if (!data) return safe;
+  for (const [key, value] of Object.entries(data)) {
+    if (!SAFE_ENGAGEMENT_FIELDS.has(key)) continue;
+    if (key === "target_host") {
+      if (typeof value !== "string" || !/^[a-z0-9.-]{1,150}$/i.test(value)) continue;
+    } else if (key === "target_tag") {
+      if (typeof value !== "string" || !/^[a-z]{1,20}$/i.test(value)) continue;
+    } else if (key === "is_paid_traffic") {
+      if (value !== 0 && value !== 1) continue;
+    } else if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > 1e9) continue;
+    safe[key] = value;
+  }
+  return safe;
+}
+
 /** Tag the current Clarity session with key=value (filterable, smart segments). */
 export function clarityTag(key: string, value: string | string[]): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || key !== "is_paid_traffic") return;
+  if (typeof value !== "string" || value.length > 150 || !/^[a-zA-Z0-9._/-]+$/.test(value)) return;
   try {
     window.clarity?.("set", key, value);
   } catch {
@@ -50,11 +81,9 @@ export function clarityIdentify(
   friendlyName?: string
 ): void {
   if (typeof window === "undefined") return;
-  try {
-    window.clarity?.("identify", userId, sessionId, pageId, friendlyName);
-  } catch {
-    /* noop */
-  }
+  // Deliberately disabled: identity must never reach session-recording vendors.
+  void userId; void sessionId; void pageId; void friendlyName;
+  return;
 }
 
 /**
@@ -84,12 +113,13 @@ function isDataLayerBlockedPath(): boolean {
  * leg is suppressed — see `DATALAYER_BLOCKED_PATH_RE` for why.
  */
 export function trackEngagement(name: string, data?: AnyRecord): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !SAFE_ENGAGEMENT_EVENTS.has(name)) return;
+  const safeData = safeEngagementData(data);
 
   // Clarity — emit the event for filtering, and copy any string params as tags.
   clarityEvent(name);
-  if (data) {
-    for (const [k, v] of Object.entries(data)) {
+  if (safeData) {
+    for (const [k, v] of Object.entries(safeData)) {
       if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
         clarityTag(k, String(v));
       }
@@ -98,7 +128,7 @@ export function trackEngagement(name: string, data?: AnyRecord): void {
 
   // GA4 — passthrough, doesn't throw if gtag is undefined.
   try {
-    window.gtag?.("event", name, data ?? {});
+    window.gtag?.("event", name, safeData);
   } catch {
     /* noop */
   }
@@ -110,7 +140,7 @@ export function trackEngagement(name: string, data?: AnyRecord): void {
   if (!isDataLayerBlockedPath()) {
     try {
       if (Array.isArray(window.dataLayer)) {
-        window.dataLayer.push({ event: name, ...(data ?? {}) });
+        window.dataLayer.push({ event: name, ...safeData });
       }
     } catch {
       /* noop */
@@ -119,6 +149,6 @@ export function trackEngagement(name: string, data?: AnyRecord): void {
 
   if (process.env.NODE_ENV !== "production") {
     // eslint-disable-next-line no-console
-    console.debug("[analytics]", name, data ?? {});
+    console.debug("[analytics]", name, safeData);
   }
 }
