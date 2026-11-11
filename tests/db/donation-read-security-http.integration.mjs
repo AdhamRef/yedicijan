@@ -381,6 +381,20 @@ test("signed recurring invoice cannot choose between duplicate Stripe subscripti
   assert.equal(result.status,200,result.text);
   assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),0);
   assert.equal(await prisma.donation.count({where:{providerOrderId:invoiceId}}),0);
+  // Cancellation must not choose an arbitrary account sharing the same
+  // legacy provider reference either.
+  const t=Math.floor(Date.now()/1000);
+  const body=JSON.stringify({id:"evt_cancel_ambiguous_"+nonce,object:"event",
+    type:"customer.subscription.deleted",livemode:false,created:t,
+    data:{object:{id:token,object:"subscription"}}});
+  const signature=createHmac("sha256",stripeSecret).update(t+"."+body).digest("hex");
+  const cancellation=await fetch(base+"/api/stripe/webhook",{method:"POST",
+    headers:{"content-type":"application/json","stripe-signature":"t="+t+",v1="+signature},
+    body});
+  assert.equal(cancellation.status,200);
+  for(const sub of subs){
+    assert.equal((await prisma.subscription.findUnique({where:{id:sub.id}})).status,"ACTIVE");
+  }
 });
 
 test("HTTP donation comments are private to owner or revenue team",async()=>{
