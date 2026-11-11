@@ -487,11 +487,11 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         event_time: Math.floor(Date.now() / 1000),
         ...partial,
         page: {
-          url:      typeof window !== "undefined" ? window.location.href  : undefined,
-          referrer: typeof document !== "undefined" ? document.referrer   : undefined,
+          url:      typeof window !== "undefined" ? window.location.origin : undefined,
+          referrer: undefined,
           title:    typeof document !== "undefined" ? document.title      : undefined,
           language: typeof navigator !== "undefined" ? navigator.language : undefined,
-          ...partial.page,
+          // Do not accept caller-provided URLs, query strings or referrers.
         },
         session: {
           ttclid: ids.ttclid,
@@ -561,7 +561,6 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       if (c?.gaMeasurementId && window.gtag && ga4EventName) {
         const d  = event.donation ?? {};
         const p  = event.payment  ?? {};
-        const u  = event.user     ?? {};
         const ga4: Record<string, unknown> = {};
         if (d.amount ?? d.amount_usd) ga4.value    = d.amount ?? d.amount_usd;
         if (d.currency)               ga4.currency  = d.currency;
@@ -575,22 +574,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
             quantity:      i.quantity ?? 1,
           }));
         }
-        // User / customer info — for GTM enhanced matching and Meta CAPI via GTM
-        if (u.email)            ga4.email            = u.email;
-        if (u.phone)            ga4.phone            = u.phone;
-        if (u.first_name)       ga4.first_name       = u.first_name;
-        if (u.last_name)        ga4.last_name        = u.last_name;
-        if (u.gender)           ga4.gender           = u.gender;
-        if (u.date_of_birth)    ga4.date_of_birth    = u.date_of_birth;
-        if (u.city)             ga4.city             = u.city;
-        if (u.state)            ga4.state            = u.state;
-        if (u.zip)              ga4.zip              = u.zip;
-        if (u.country_code)     ga4.country          = u.country_code;
-        if (u.external_id)      ga4.external_id      = u.external_id;
-        if (u.fbp)              ga4.fbp              = u.fbp;
-        if (u.fbc)              ga4.fbc              = u.fbc;
-        if (u.subscription_id)  ga4.subscription_id  = u.subscription_id;
-        if (u.user_agent)       ga4.user_agent       = u.user_agent;
+        // Never put donor PII or external identifiers into GA4/dataLayer.
         if (event.custom) Object.assign(ga4, event.custom);
         window.gtag("event", ga4EventName, ga4);
       }
