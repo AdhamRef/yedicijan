@@ -78,3 +78,15 @@ test("privacy regression: no donor identity in public tracking response or brows
  }
  assert.equal(consent.trackingSensitivePath("/tr/privacy"),false);
 });
+
+test("ad click ID parser rejects PII URLs, emails, separators, and oversized tokens",async()=>{
+ const {safeOpaqueClickId}=await import("../../lib/tracking/consent");
+ for(const bad of [
+   "donor@example.com","https://example.com/?token=secret",
+   "phone:+905551234567","secret=token","abc/def","abc%40mail",
+   "a".repeat(257),"",undefined,
+ ]) assert.equal(safeOpaqueClickId(bad),undefined,String(bad));
+ for(const token of ["EAIaIQobChMIabcdef1234","fb.1.1712345678.ABC_DEF-123","tok_abcDEF.12345"]){
+   assert.equal(safeOpaqueClickId(token),token);
+ }
+});
