@@ -178,3 +178,23 @@ export function stripeRecurringInvoiceMatches(
     invoice.amount_paid === cents && invoice.amount_due === cents
   );
 }
+
+/**
+ * Strict recurring ownership proof. Historical rows without the customer binding
+ * are deliberately held: payforToken by itself is not ownership evidence.
+ */
+export function stripeRecurringCustomerMatches(
+  sub: { donorId: string; stripeCustomerId?: string | null; payforToken: string | null },
+  invoice: { customer?: string | { id?: string } | null; parent?: unknown },
+  stripeSubscriptionId: string,
+): boolean {
+  const customer = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+  return Boolean(
+    sub.donorId &&
+    sub.payforToken === stripeSubscriptionId &&
+    stripeSubscriptionId.startsWith("sub_") &&
+    typeof sub.stripeCustomerId === "string" &&
+    sub.stripeCustomerId.startsWith("cus_") &&
+    customer === sub.stripeCustomerId
+  );
+}
