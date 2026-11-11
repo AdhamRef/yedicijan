@@ -333,6 +333,37 @@ test("signed subscription invoices: failure-success orders and replay credit a c
 });
 
 
+
+test("concurrent signed paid invoices cannot credit monthly project more than once",async()=>{
+  const invoiceId="in_parallel_"+nonce;
+  const sub=await prisma.subscription.create({data:{
+    donorId:owner.id,payforToken:"sub_parallel_"+nonce,status:"ACTIVE",
+    amount:50.25,currency:"USD",paymentMethod:"CARD",teamSupport:0,coverFees:false,
+  }});
+  subscriptionIds.push(sub.id);
+  await prisma.subscriptionItem.create({data:{
+    subscriptionId:sub.id,campaignId,amount:20,amountUSD:20,
+  }});
+  invoiceIds.push(invoiceId);
+  const before=(await prisma.campaign.findUnique({where:{id:campaignId}})).currentAmount;
+  const responses=await Promise.all(Array.from({length:5},()=>
+    sendSyntheticRecurringInvoiceEvent("invoice.payment_succeeded",sub,invoiceId)
+  ));
+  // Transient Mongo transaction conflicts may return 500 and be retried by
+  // Stripe; a subsequent authentic replay must acknowledge the settled row.
+  assert.ok(responses.every(r=>r.status===200||r.status===500),JSON.stringify(responses));
+  const replay=await sendSyntheticRecurringInvoiceEvent("invoice.payment_succeeded",sub,invoiceId);
+  assert.equal(replay.status,200,replay.text);
+  const entries=await prisma.donation.findMany({where:{
+    subscriptionId:sub.id,providerOrderId:invoiceId,
+  }});
+  donationIds.push(...entries.map(x=>x.id));
+  assert.equal(entries.filter(x=>x.status==="PAID"&&x.paidAt).length,1);
+  assert.equal(entries.length,1,"a paid invoice has one donation row");
+  assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),1);
+  assert.equal((await prisma.campaign.findUnique({where:{id:campaignId}})).currentAmount,before+20);
+});
+
 test("signed recurring invoice cannot choose between duplicate Stripe subscription references",async()=>{
   const token="sub_duplicate_"+nonce;
   const invoiceId="in_duplicate_"+nonce;
