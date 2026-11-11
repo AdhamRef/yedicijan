@@ -1,0 +1,70 @@
+name: YediCihan TypeScript three-ref P0 diagnostic (read-only)
+on:
+  push:
+    branches: [security/yedi-donation-read-capability-20261110]
+permissions:
+  contents: read
+jobs:
+  compare-tsc:
+    name: strict-tsc / ${{ matrix.ref_name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ref_name: main
+            revision: main
+          - ref_name: security24
+            revision: security/yedi-donation-read-capability-20261110
+          - ref_name: integration-security24
+            revision: integration/yedi-pr9-19-21-security24-qa-20261110
+    env:
+      CI: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/yedi_ci_tsc_review?replicaSet=rs0&directConnection=true
+      NEXTAUTH_URL: http://127.0.0.1:3112
+      NEXTAUTH_SECRET: synthetic-ci-no-production-session-secret-01234567890
+      GOOGLE_CLIENT_ID: synthetic-test
+      GOOGLE_CLIENT_SECRET: synthetic-test
+      STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
+    steps:
+      - name: Checkout selected revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "${{ matrix.revision }}"
+          git checkout --force --detach FETCH_HEAD
+          git rev-parse HEAD | tee /tmp/tsc-ref-sha.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install exact locked dependencies and generate clients
+        run: |
+          npm ci --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+          npx --no-install prisma generate --schema prisma/schema.prisma
+          npx --no-install prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Run unsuppressed strict TypeScript, retain every diagnostic
+        shell: bash
+        run: |
+          set +e
+          npx --no-install tsc --noEmit --pretty false > /tmp/tsc-diagnostics.txt 2>&1
+          rc=$?
+          set -e
+          echo "Ref: ${{ matrix.ref_name }}"
+          echo "Revision: $(cat /tmp/tsc-ref-sha.txt)"
+          echo "Strict TypeScript exit: $rc"
+          echo "Diagnostic count: $(grep -c 'error TS[0-9]' /tmp/tsc-diagnostics.txt || true)"
+          printf 'revision=%s\nexit=%s\n' "$(cat /tmp/tsc-ref-sha.txt)" "$rc" > /tmp/tsc-result.txt
+          cat /tmp/tsc-diagnostics.txt >> /tmp/tsc-result.txt
+      - name: Upload complete diagnostics for exact refs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yedi-tsc-${{ matrix.ref_name }}-${{ github.run_id }}
+          path: /tmp/tsc-result.txt
+          if-no-files-found: error
