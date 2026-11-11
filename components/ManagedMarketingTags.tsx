@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Clarity from "@microsoft/clarity";
+import { readTrackingConsent, saveTrackingConsent, trackingSensitivePath } from "@/lib/tracking/consent";
 import { shouldLoadManagedTag, validClarityId, validGtmId, type ManagedTag } from "@/lib/tracking/managed-tags";
 
 /**
@@ -10,7 +11,6 @@ import { shouldLoadManagedTag, validClarityId, validGtmId, type ManagedTag } fro
  * No donor identifiers, basket contents, payment events or form values are
  * passed to either tool. Existing GA4/Ads event ownership is unchanged.
  */
-const COOKIE_NAME = "yedi_analytics_consent";
 type Consent = "granted" | "denied" | null;
 type Locale = "ar" | "en" | "tr" | "fr" | "id" | "pt" | "es" | "de";
 const COPY: Record<Locale, { title: string; body: string; accept: string; reject: string; change: string; close: string }> = {
@@ -33,22 +33,6 @@ type TagWindow = Window & {
   clarity?: (...args: unknown[]) => void;
   yediGtmLayer?: Record<string, unknown>[];
 };
-function cookieConsent(): Consent {
-  if (typeof document === "undefined") return null;
-  const record = document.cookie.split("; ").find(x => x.startsWith(COOKIE_NAME+"="));
-  const v = record?.split("=")[1];
-  return v === "granted" || v === "denied" ? v : null;
-}
-function persistConsent(v: Exclude<Consent, null>) {
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${COOKIE_NAME}=${v}; Max-Age=15552000; Path=/; SameSite=Lax${secure}`;
-}
-function restrictedPath(path: string): boolean {
-  // A dashboard or a personal-payment page is never a tag initialization
-  // surface. Clarity is masked site-wide on all allowed pages.
-  return /^\/dashboard(\/|$)/.test(path) ||
-    /\/(auth|account|success|donation-failed|donation-pending|checkout)(\/|$)/.test(path);
-}
 function ensureGtm(id: string): void {
   const w = window as TagWindow;
   if (w.__yediGtmContainer) return;
@@ -96,12 +80,12 @@ export default function ManagedMarketingTags() {
   const code = pathname.split("/")[1] as Locale;
   const locale = code in COPY ? code : "ar";
   const t = COPY[locale];
-  const isRestricted = restrictedPath(pathname);
+  const isRestricted = trackingSensitivePath(pathname);
 
   useEffect(() => {
-    setConsent(cookieConsent());
+    setConsent(readTrackingConsent());
     setReady(true);
-    if (restrictedPath(window.location.pathname)) return;
+    if (trackingSensitivePath(window.location.pathname)) return;
     const controller = new AbortController();
     fetch("/api/tracking/config", { cache: "no-store", signal: controller.signal })
       .then(res => res.ok ? res.json() : null)
@@ -119,7 +103,7 @@ export default function ManagedMarketingTags() {
   }, [consent, tags, isRestricted]);
 
   function choose(value: Exclude<Consent, null>) {
-    persistConsent(value);
+    saveTrackingConsent(value);
     const loaded = Boolean((window as TagWindow).__yediClarityProject ||
       (window as TagWindow).__yediGtmContainer);
     if (value === "denied" && loaded) {
