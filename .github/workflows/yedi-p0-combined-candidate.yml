@@ -79,10 +79,16 @@ jobs:
           npm run dev -- --hostname 127.0.0.1 --port 3115 > /tmp/yedi-candidate-privacy.log 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
-          node --test tests/browser/managed-tags.e2e.mjs
+          if ! node --test tests/browser/managed-tags.e2e.mjs; then
+            echo "=== Candidate Next.js privacy test server log (sanitized CI only) ==="
+            tail -n 150 /tmp/yedi-candidate-privacy.log
+            exit 1
+          fi
       - name: Full strict TypeScript on combined SHA
+        if: success() || failure()
         run: npx --no-install tsc --noEmit --pretty false
       - name: Production-style Next Build (still no deployment)
+        if: success() || failure()
         run: npm run build
       - name: Cleanup disposable database
         if: always()
