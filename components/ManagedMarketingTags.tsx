@@ -94,6 +94,18 @@ export default function ManagedMarketingTags() {
     return () => controller.abort();
   }, []);
 
+  // Client-side navigation does not unload already injected third-party SDKs.
+  // A hard reload on entry into a sensitive route resets the document and
+  // prevents replay tools and legacy pixels from continuing across SPA routes.
+  useEffect(() => {
+    if (!isRestricted) return;
+    const w = window as TagWindow & { fbq?: unknown; gtag?: unknown; ttq?: unknown; twq?: unknown };
+    if (w.__yediClarityProject || w.__yediGtmContainer ||
+        w.fbq || w.gtag || w.ttq || w.twq) {
+      window.location.reload();
+    }
+  }, [isRestricted]);
+
   useEffect(() => {
     if (isRestricted || consent !== "granted" || !tags) return;
     const clarity: ManagedTag = { id: tags.clarityProjectId, enabled: tags.clarityEnabled, source: "database" };
