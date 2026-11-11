@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Clarity from "@microsoft/clarity";
-import { readTrackingConsent, saveTrackingConsent, trackingSensitivePath } from "@/lib/tracking/consent";
+import { canRunOptionalTracking, readTrackingConsent, saveTrackingConsent, trackingSensitivePath, trackingSensitiveQuery } from "@/lib/tracking/consent";
 import { shouldLoadManagedTag, validClarityId, validGtmId, type ManagedTag } from "@/lib/tracking/managed-tags";
 
 /**
@@ -73,6 +73,8 @@ function ensureClarity(id: string): void {
 }
 export default function ManagedMarketingTags() {
   const pathname = usePathname() || "/";
+  const params = useSearchParams();
+  const queryString = params?.toString() || "";
   const [consent, setConsent] = useState<Consent>(null);
   const [ready, setReady] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -80,7 +82,7 @@ export default function ManagedMarketingTags() {
   const code = pathname.split("/")[1] as Locale;
   const locale = code in COPY ? code : "ar";
   const t = COPY[locale];
-  const isRestricted = trackingSensitivePath(pathname);
+  const isRestricted = trackingSensitivePath(pathname) || trackingSensitiveQuery(queryString);
 
   useEffect(() => {
     setReady(true);
@@ -97,7 +99,7 @@ export default function ManagedMarketingTags() {
         window.location.reload();
         return;
       }
-      if (trackingSensitivePath(window.location.pathname)) return;
+      if (!canRunOptionalTracking(window.location.pathname)) return;
       fetch("/api/tracking/config", { cache: "no-store", signal: controller.signal })
         .then(res => res.ok ? res.json() : null)
         .then(data => {
@@ -124,7 +126,7 @@ export default function ManagedMarketingTags() {
       controller.abort();
       window.removeEventListener("focus", refresh);
     };
-  }, [pathname]);
+  }, [pathname, queryString]);
 
   // Client-side navigation does not unload already injected third-party SDKs.
   // A hard reload on entry into a sensitive route resets the document and
@@ -139,7 +141,7 @@ export default function ManagedMarketingTags() {
   }, [isRestricted]);
 
   useEffect(() => {
-    if (isRestricted || consent !== "granted" || !tags) return;
+    if (isRestricted || consent !== "granted" || !tags || !canRunOptionalTracking(window.location.pathname)) return;
     const clarity: ManagedTag = { id: tags.clarityProjectId, enabled: tags.clarityEnabled, source: "database" };
     const gtm: ManagedTag = { id: tags.gtmContainerId, enabled: tags.gtmEnabled, source: "database" };
     if (shouldLoadManagedTag(clarity, consent) && validClarityId(clarity.id)) ensureClarity(clarity.id);
