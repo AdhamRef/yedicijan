@@ -145,6 +145,32 @@ test("real Chromium public site: consent gate, one injection, masked page and no
  assert.deepEqual(errors,[]);
  await context.close();
 });
+test("Chromium denies legacy pixels and optional tags without consent, then clears on withdrawal",async()=>{
+  const context=await browser.newContext({viewport:{width:390,height:844}});
+  const page=await context.newPage();
+  const blockedHosts=[];
+  await page.route(/(connect\\.facebook\\.net|analytics\\.tiktok\\.com|ads-twitter\\.com|googletagmanager\\.com|clarity\\.ms|contentsquare\\.net)/, route=>{
+    blockedHosts.push(route.request().url());
+    return route.fulfill({status:200,contentType:"application/javascript",body:""});
+  });
+  await page.goto(site+"/en/privacy",{waitUntil:"domcontentloaded"});
+  await page.getByRole("heading",{name:"Analytics privacy"}).waitFor({timeout:25000});
+  await page.waitForTimeout(800);
+  assert.equal(blockedHosts.length,0,"optional vendor network must stay quiet before consent");
+  await page.getByRole("button",{name:"Decline"}).click();
+  await page.waitForTimeout(800);
+  assert.equal(blockedHosts.length,0,"denial must not initialize a legacy loader");
+  await page.getByRole("button",{name:"Tracking privacy"}).click();
+  await page.getByRole("button",{name:"Allow"}).click();
+  await page.waitForFunction(()=>Boolean(window.__yediGtmContainer),null,{timeout:12000});
+  await page.getByRole("button",{name:"Tracking privacy"}).click();
+  await page.getByRole("button",{name:"Decline"}).click();
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForTimeout(500);
+  assert.equal(await page.evaluate(()=>document.cookie.includes("yedi_analytics_consent=denied")),true);
+  assert.equal(await page.evaluate(()=>Boolean(window.__yediGtmContainer)),false,"hard reload must unload tag container");
+  await context.close();
+});
 test("real HTTP disable persists; fresh browser with consent does not inject tags",async()=>{
  const disabled={...good,clarityEnabled:false,gtmEnabled:false};
  const put=await request("/api/admin/tracking/integrations","PUT",admin,disabled);
