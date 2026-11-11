@@ -40,9 +40,7 @@ function safeEngagementData(data?: AnyRecord): AnyRecord {
   if (!data) return safe;
   for (const [key, value] of Object.entries(data)) {
     if (!SAFE_ENGAGEMENT_FIELDS.has(key)) continue;
-    if (key === "path") {
-      if (typeof value !== "string" || !/^\\/[A-Za-z0-9_\\/-]{0,150}$/.test(value)) continue;
-    } else if (key === "target_host") {
+    if (key === "target_host") {
       if (typeof value !== "string" || !/^[a-z0-9.-]{1,150}$/i.test(value)) continue;
     } else if (key === "target_tag") {
       if (typeof value !== "string" || !/^[a-z]{1,20}$/i.test(value)) continue;
