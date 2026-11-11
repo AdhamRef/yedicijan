@@ -65,9 +65,9 @@ jobs:
           NEXTAUTH_URL: http://127.0.0.1:3112
         run: |
           set -euo pipefail
-          npm run dev -- --hostname 127.0.0.1 --port 3112 > /tmp/yedi-candidate-finance.log 2>&1 &
+          setsid node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3112 > /tmp/yedi-candidate-finance.log 2>&1 &
           pid=$!
-          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          trap 'kill -- "-$pid" 2>/dev/null || true; kill "$pid" 2>/dev/null || true' EXIT
           node --import tsx --test tests/db/donation-read-security-http.integration.mjs
       - name: Browser consent + privacy HTTP unit
         run: node --import tsx --test tests/tracking/managed-tags.unit.test.ts
@@ -76,9 +76,9 @@ jobs:
           NEXTAUTH_URL: http://127.0.0.1:3115
         run: |
           set -euo pipefail
-          npm run dev -- --hostname 127.0.0.1 --port 3115 > /tmp/yedi-candidate-privacy.log 2>&1 &
+          setsid node node_modules/next/dist/bin/next dev --hostname 127.0.0.1 --port 3115 > /tmp/yedi-candidate-privacy.log 2>&1 &
           pid=$!
-          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          trap 'kill -- "-$pid" 2>/dev/null || true; kill "$pid" 2>/dev/null || true' EXIT
           if ! node --test tests/browser/managed-tags.e2e.mjs; then
             echo "=== Candidate Next.js privacy test server log (sanitized CI only) ==="
             tail -n 150 /tmp/yedi-candidate-privacy.log
