@@ -35,3 +35,26 @@
 
 ## Evidence gaps (not claimed)
 Provider verification, consent law review, authorized staging network trace, all-locale visual signoff, and VPS running commit remain outstanding even if isolated CI is green.
+
+
+## Branch proof, code parity and independent release boundary (11 November 2026)
+
+- The QA branch `integration/yedi-issue25-pr9-strict-qa-20261110` starts from PR #9 head `090cafa8dd211fbe0af05b4da8f69094df4c7dcb` and overlays Issue #25 code. It does **not** incorporate PR #24 or the security integration branch. The PR #26 implementation blobs on the inspected release heads were identical in admin API, editor, public loader, layout, tracking settings, validation and browser/unit tests; the QA workflow differs to enforce full strict TS on PR #9's independently validated baseline.
+- The original independent PR #26 CI had **green browser tests but red build**, not an acceptable independent build. Failure occurred at Next `sitemap.xml` static generation because the synthetic MongoDB server was absent; the workflow now starts disposable MongoDB for its build job. Independent latest-commit CI must turn green before claiming the PR stands alone.
+- Both PRs remain Draft/NO-GO. A green PR #9+Issue #25 QA build confirms **compatible composite source**, not that PR #26 can be merged independently until its own clean-branch CI passes.
+
+## Privacy and GTM data ownership limitations
+
+- Existing root `app/layout.tsx` still includes an unconditional Contentsquare script. This is independent of the managed Clarity/GTM consent cookie. It requires a consent policy decision and removal/gating before a production claim of privacy compliance.
+- Existing `TrackingPixelBootstrap` eagerly activates `TrackingPixels` direct Meta/GA4/TikTok/X loading **before managed-tag consent**; `EngagementInstrumentation` and `lib/analytics.ts` can push URL, query, referrer and ad click identifiers to direct analytics. This is a concrete pre-consent exposure outside the new two-tag manager. Do not claim that the new cookie applies to all trackers, or that all routes and telemetry are safe, until the organization authorizes a unified cross-provider consent and PII filtering policy.
+- A previously initialized Clarity/GTM runtime persists on client-side route navigation. The loader avoids first initialization on restricted paths, but does not prove pre-existing third-party scripts are fully unloaded or unable to observe protected pages on SPA transitions. Server-side privacy policy and browser network traces are required before deployment.
+- The managed GTM runtime uses `yediGtmLayer`, whereas existing gtag/direct GA4 uses `dataLayer`. No new purchase is emitted by the managed loader; external GTM container triggers, especially automatic All Pages/GA4/Ads tags, remain uninspected and could duplicate events. Run Tag Assistant and audit every active and paused container tag, exception and conversion ID in authorized staging.
+- The dashboard displays external connection as `not_verified`, which is accurate; a script tag does not prove recording or conversion acceptance.
+
+## External acceptance checklist for approved staging (never live payments)
+
+1. Inspect network before any consent: zero requests to Clarity and GTM expected from the *managed* loader, inventory all legacy Contentsquare/Meta/GA4/TikTok/X/Vercel calls separately; reject if policy forbids pre-consent trackers.
+2. Accept/decline/revoke consent on public Arabic and Turkish routes, then navigate client-side into checkout/account/receipt and watch every outbound request. Confirm no donor names, email, phone, payment IDs, full URLs with secrets, payment amounts or card fields leak to third parties.
+3. Open a synthetic public route after allowing consent. Check the registered Clarity project receives one masked test visit; compare request count and any visible DOM exposure in the real recording. Check 8 UI locale presentations and narrow mobile widths.
+4. Use Google Tag Assistant preview on the *authorized test container*. Export an audit of each GA4/Ads/purchase tag and trigger, verify no duplicate `page_view`, `purchase` or Ads conversion across direct `gtag` and managed GTM; ensure there is a single confirmed-financial owner for each conversion.
+5. Record redacted test evidence, sign off by privacy/security and marketing, then request a separate authorized release review. Do not change GTM Live, Stripe Live, VPS or production donor data during acceptance.
