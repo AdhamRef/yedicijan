@@ -25,7 +25,7 @@ async function auth(user){
  return "next-auth.session-token="+encodeURIComponent(token);
 }
 async function request(path,method="GET",session=null,payload=null,extra={}){
- const headers={...(session?{cookie:await auth(session)}:{}),...(payload?{"content-type":"application/json"}:{}),...extra};
+ const headers={...(session?{cookie:await auth(session)}:{}),...(payload?{"content-type":"application/json",origin:site}:{}),...extra};
  const response=await fetch(site+path,{method,headers,body:payload?JSON.stringify(payload):undefined});
  const text=await response.text();let body=null;try{body=JSON.parse(text)}catch{}
  return {status:response.status,body,text,headers:response.headers};
@@ -72,6 +72,7 @@ test("real HTTP: protected GET/PUT, platform manager role and strict validation"
  assert.equal((await request(url,"PUT",manager,{...good,clarityProjectId:"<script>"})).status,400);
  assert.equal((await request(url,"PUT",manager,{...good,clarityEnabled:"true"})).status,400);
  assert.equal((await request(url,"PUT",manager,good,{origin:"https://evil.example.invalid"})).status,403);
+ assert.equal((await request(url,"PUT",manager,good,{origin:""})).status,403);
  const saved=await request(url,"PUT",manager,good);
  assert.equal(saved.status,200,saved.text);
  assert.equal(saved.body.clarity.enabled,true);assert.equal(saved.body.gtm.enabled,true);
