@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { metaDonationEventId } from "@/lib/tracking/canonical";
-import { buildMetaUserData } from "@/lib/tracking/meta-capi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,19 +14,6 @@ export const dynamic = "force-dynamic";
  * an actually-missing include.
  */
 const donationTrackingInclude = {
-  donor: {
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      countryCode: true,
-      city: true,
-      region: true,
-      gender: true,
-      birthdate: true,
-    },
-  },
   items: { include: { campaign: { select: { id: true, title: true } } } },
   categoryItems: { include: { category: { select: { id: true, name: true } } } },
 } satisfies Prisma.DonationInclude;
@@ -61,52 +47,11 @@ interface TrackingResponseOk {
   paymentInfoAvailable: true;
   donationType: "ONE_TIME" | "MONTHLY";
   paymentMethod: string;
-  browserAdvancedMatching?: Record<string, string>;
 }
 
 interface TrackingResponseFail {
   ok: false;
   reason: string;
-}
-
-function firstString(value: unknown): string | undefined {
-  if (typeof value === "string" && value.length > 0) return value;
-  if (Array.isArray(value) && typeof value[0] === "string" && value[0].length > 0) return value[0];
-  return undefined;
-}
-
-function paidDonationValue(row: DonationTrackingRow) {
-  const total = Number(row.totalAmount ?? 0);
-  if (Number.isFinite(total) && total > 0) return total;
-  const amount = Number(row.amount ?? 0);
-  const teamSupport = Number(row.teamSupport ?? 0);
-  const fees = Number(row.fees ?? 0);
-  const fallback = amount + teamSupport + fees;
-  return Number.isFinite(fallback) ? fallback : 0;
-}
-
-function buildBrowserAdvancedMatching(row: DonationTrackingRow) {
-  const donor = row.donor;
-  const [firstName, ...rest] = (donor?.name ?? "").trim().split(/\s+/);
-  const metaUserData = buildMetaUserData({
-    external_id: donor?.id ?? null,
-    email: donor?.email ?? null,
-    phone: donor?.phone ?? null,
-    first_name: firstName || null,
-    last_name: rest.join(" ") || null,
-    city: donor?.city ?? null,
-    state: donor?.region ?? null,
-    country_code: donor?.countryCode ?? row.donorCountryCode ?? null,
-    gender: donor?.gender ?? null,
-    date_of_birth: donor?.birthdate ?? null,
-  });
-
-  const out: Record<string, string> = {};
-  for (const key of ["em", "ph", "fn", "ln", "ct", "st", "country", "ge", "db", "external_id"] as const) {
-    const value = firstString(metaUserData[key]);
-    if (value) out[key] = value;
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 export async function GET(
@@ -187,7 +132,6 @@ export async function GET(
     paymentInfoAvailable: true,
     donationType: isMonthly ? "MONTHLY" : "ONE_TIME",
     paymentMethod: (row.paymentMethod ?? "CARD").toLowerCase(),
-    browserAdvancedMatching: buildBrowserAdvancedMatching(row),
   };
 
   return NextResponse.json<TrackingResponseOk>(payload, {
