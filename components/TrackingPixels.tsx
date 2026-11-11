@@ -246,12 +246,21 @@ function getUrlParam(key: string): string | undefined {
   return new URLSearchParams(window.location.search).get(key) ?? undefined;
 }
 
+/** Advertising IDs are opaque tokens, never arbitrary URL text.
+ * Reject email, phone-like text with separators, URLs and attacker-controlled
+ * query strings before persisting or forwarding optional analytics requests.
+ */
+function safeOpaqueClickId(value: string | undefined): string | undefined {
+  if (!value || value.length > 256) return undefined;
+  return /^[A-Za-z0-9._-]{4,256}$/.test(value) ? value : undefined;
+}
+
 /** Persist ttclid / gclid / fbclid in sessionStorage so they survive page navigations */
 function captureClickIds(): { ttclid?: string; gclid?: string; fbclid?: string } {
   if (typeof window === "undefined") return {};
-  const ttclid = getUrlParam("ttclid") || sessionStorage.getItem("_ttclid") || undefined;
-  const gclid  = getUrlParam("gclid")  || sessionStorage.getItem("_gclid")  || undefined;
-  const fbclid = getUrlParam("fbclid") || undefined;
+  const ttclid = safeOpaqueClickId(getUrlParam("ttclid")) || safeOpaqueClickId(sessionStorage.getItem("_ttclid") || undefined);
+  const gclid  = safeOpaqueClickId(getUrlParam("gclid")) || safeOpaqueClickId(sessionStorage.getItem("_gclid") || undefined);
+  const fbclid = safeOpaqueClickId(getUrlParam("fbclid"));
   if (ttclid) sessionStorage.setItem("_ttclid", ttclid);
   if (gclid)  sessionStorage.setItem("_gclid",  gclid);
   return { ttclid, gclid, fbclid };
@@ -509,8 +518,8 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
           fbclid: ids.fbclid,
         },
         user: {
-          fbp:        getCookieValue("_fbp"),
-          fbc:        getCookieValue("_fbc") || (ids.fbclid ? `fb.1.${Date.now()}.${ids.fbclid}` : undefined),
+          fbp:        safeOpaqueClickId(getCookieValue("_fbp")),
+          fbc:        safeOpaqueClickId(getCookieValue("_fbc")) || (ids.fbclid ? `fb.1.${Date.now()}.${ids.fbclid}` : undefined),
           // Optional engagement events never include donor contact details.
           // Provider/browser click identifiers above require granted consent;
           // server-verified purchases have their own independent dispatcher.
