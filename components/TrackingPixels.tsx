@@ -486,6 +486,16 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       const event: CanonicalEvent = {
         event_time: Math.floor(Date.now() / 1000),
         ...partial,
+        // Optional telemetry must not include arbitrary donor input, error
+        // messages, transaction identifiers or caller-controlled custom maps.
+        // Stripe/bank verified purchase dispatchers are unaffected.
+        custom: undefined,
+        payment: partial.payment ? {
+          method: partial.payment.method,
+          gateway: partial.payment.gateway,
+          is_3ds: partial.payment.is_3ds,
+          payment_status: partial.payment.payment_status,
+        } : undefined,
         page: {
           url:      typeof window !== "undefined" ? window.location.origin : undefined,
           referrer: undefined,
@@ -497,7 +507,6 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
           ttclid: ids.ttclid,
           gclid:  ids.gclid,
           fbclid: ids.fbclid,
-          ...partial.session,
         },
         user: {
           fbp:        getCookieValue("_fbp"),
