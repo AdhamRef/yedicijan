@@ -126,7 +126,7 @@ test("real Chromium public site: consent gate, one injection, masked page and no
  const context=await browser.newContext({viewport:{width:390,height:844}});
  const page=await context.newPage();
  const errors=[];page.on("pageerror",e=>errors.push(e.message));
- await page.route(/(googletagmanager\.com\/gtm\.js|clarity\.ms\/tag\/)/,route=>
+ await page.route(/(googletagmanager|clarity)/,route=>
    route.fulfill({status:200,contentType:"application/javascript",body:""}));
  await page.goto(site+"/en/privacy",{waitUntil:"domcontentloaded"});
  await page.getByRole("heading",{name:"Analytics privacy"}).waitFor({timeout:25000});
