@@ -12,7 +12,7 @@ export function readTrackingConsent(): TrackingConsent {
 }
 
 export function trackingSensitivePath(path: string): boolean {
-  return /(?:^|\/)(?:dashboard|auth|account|login|register|profile|checkout|payment|donation-failed|donation-pending|success)(?:\/|$)/i.test(path);
+  return /(?:^|\/)(?:dashboard|auth|account|login|register|profile|cart|checkout|payment|donate|donations|receipt|donation-failed|donation-pending|success)(?:\/|$)/i.test(path);
 }
 
 export function canRunOptionalTracking(path: string): boolean {
