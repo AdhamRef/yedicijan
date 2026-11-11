@@ -61,7 +61,7 @@ jobs:
           npx --no-install tsc --noEmit > /tmp/yedi-issue25-tsc.log 2>&1
           tsc_code=$?
           set -e
-          if grep -E '^((app/api/admin/tracking/integrations/route.ts)|(app/\\(dashboard\\)/dashboard/platform-connections/tracking/)|(components/ManagedMarketingTags.tsx)|(lib/tracking/managed-tags.ts)|(lib/tracking/tracking-settings.ts)|(tests/tracking/managed-tags.unit.test.ts))' /tmp/yedi-issue25-tsc.log; then
+          if grep -E '^((app/api/admin/tracking/integrations/route.ts)|(app/\\(dashboard\\)/dashboard/platform-connections/tracking/)|(components/ManagedMarketingTags.tsx)|(components/TrackingPixels.tsx)|(components/TrackingPixelBootstrap.tsx)|(components/EngagementInstrumentation.tsx)|(components/MarketingRuntime.tsx)|(lib/tracking/consent.ts)|(lib/analytics.ts)|(app/layout.tsx)|(app/\\[locale\\]/layout.tsx)|(lib/tracking/managed-tags.ts)|(lib/tracking/tracking-settings.ts)|(tests/tracking/managed-tags.unit.test.ts))' /tmp/yedi-issue25-tsc.log; then
             echo 'Issue 25 changes contain TypeScript errors'
             exit 1
           fi
