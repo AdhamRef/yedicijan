@@ -64,7 +64,7 @@ export async function PUT(request: NextRequest) {
   if (process.env.NEXTAUTH_URL) {
     try { allowedOrigins.add(new URL(process.env.NEXTAUTH_URL).origin); } catch {}
   }
-  if (origin && !allowedOrigins.has(origin)) {
+  if (!origin || !allowedOrigins.has(origin)) {
     return NextResponse.json({ error: "Invalid origin" }, { status: 403, headers: HEADERS });
   }
   if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
