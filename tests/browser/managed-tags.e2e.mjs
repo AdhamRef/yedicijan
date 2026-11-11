@@ -187,6 +187,9 @@ test("Chromium public-to-private-to-public route history unloads and reinitializ
  await page.waitForFunction(()=>Boolean(window.__yediGtmContainer),null,{timeout:15000});
  assert.equal(await page.locator("script[data-yedi-managed-tag='gtm']").count(),1);
  await page.goForward({waitUntil:"domcontentloaded"});
+ // Back/Forward may restore a cached document before React commits the route.
+ // Wait for the sensitive-route unload rather than asserting the first frame.
+ await page.waitForFunction(()=>!Boolean(window.__yediGtmContainer),null,{timeout:15000});
  assert.equal(await page.evaluate(()=>Boolean(window.__yediGtmContainer)),false);
  await context.close();
 });
