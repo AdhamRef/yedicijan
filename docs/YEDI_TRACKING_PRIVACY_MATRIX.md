@@ -24,3 +24,14 @@
 - Clarity/Contentsquare site ownership, masking, replay and retention approval; approved consent-mode handling.
 - Source-level no-leak claim cannot be generalized to all legacy tags, which have not been independently verified.
 - Independently run Chromium, HTTP, strict TypeScript and Build on latest PR SHA; compare against PR9 overlay. Do not merge or deploy.
+
+## P0 follow-up, source changes pending acceptance
+- Central consent authority: lib/tracking/consent.ts. Missing and denied consent block optional script load and engagement emission, even after pointerdown, scroll and timeouts.
+- Legacy TrackingPixels now loads only on public routes with explicit granted consent; TrackingPixelBootstrap no longer synthesizes pointerdown.
+- EngagementInstrumentation dispatch is guarded; the analytics dispatcher also limits event fields, and direct Clarity identity forwarding is disabled in that adapter.
+- All root and locale unconditional Vercel Analytics/SpeedInsights mounts are removed, pending a deliberate approved consent integration.
+- Consent withdrawal checks legacy pixels in addition to managed tags and triggers full page reload to unload already injected runtimes. Entering a sensitive SPA route after loading scripts triggers hard reload; verify this behavior with Chromium.
+- GA4/dataLayer legacy enrichment no longer includes raw email, phone, name, birth date, external ID or other donor fields. Generic canonical page telemetry no longer forwards query strings or referrer URLs. Financial/payment verification and server settlement are unchanged.
+- TODO for independent acceptance: verify all languages, private route transitions, mobile, exact network requests after withdrawal, settings save/disable, duplicate purchase triggers inside the external GTM container, and absence of PII in URLs and event payloads.
+- IMPORTANT: browser financial conversion attribution may differ after gating optional pixels. Server settlement proof is unchanged; quantify attribution impact and confirm the canonical server purchase signal independently before releasing.
+- CI workflow watches newly changed tracking files for TypeScript errors; full strict TypeScript on main may still have unrelated baseline errors. Draft / NO-GO.
