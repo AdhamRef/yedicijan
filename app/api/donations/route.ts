@@ -1,3 +1,4 @@
+import { attachGuestDonationAccess, canIssueGuestDonationAccess } from "@/lib/donations/guest-access";
 import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -252,6 +253,10 @@ export async function POST(request: NextRequest) {
         { error: "Items or categoryItems, currency, and payment method are required" },
         { status: 400 }
       );
+    }
+
+    if (!session?.user?.id && !canIssueGuestDonationAccess()) {
+      return NextResponse.json({ error: "Guest checkout is temporarily unavailable" }, { status: 503 });
     }
 
     // Resolve donorId — authenticated user or guest upsert
@@ -539,11 +544,15 @@ export async function POST(request: NextRequest) {
         stream: auditStreamForRole(actorRole),
       });
 
-      return NextResponse.json({
+      return attachGuestDonationAccess(NextResponse.json({
         success: true,
         subscription: subscription.subscription,
-        donation: subscription.donation,
-      });
+        donation: session?.user?.id ? subscription.donation : {
+          id: subscription.donation.id, amount: subscription.donation.amount,
+          totalAmount: subscription.donation.totalAmount, currency: subscription.donation.currency,
+          status: subscription.donation.status,
+        },
+      }), subscription.donation, session?.user?.id);
     }
 
     // One-time: create a single Donation (transaction) only
@@ -623,10 +632,14 @@ export async function POST(request: NextRequest) {
       stream: auditStreamForRole(actorRole),
     });
 
-    return NextResponse.json({
+    return attachGuestDonationAccess(NextResponse.json({
       success: true,
-      donation,
-    });
+      donation: session?.user?.id ? donation : {
+        id: donation.id, amount: donation.amount,
+        totalAmount: donation.totalAmount, currency: donation.currency,
+        status: donation.status,
+      },
+    }), donation, session?.user?.id);
   } catch (error) {
     console.error("Error creating donation:", error);
     return NextResponse.json(

@@ -1,3 +1,6 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { metaDonationEventId } from "@/lib/tracking/canonical";
@@ -28,7 +31,7 @@ function paidDonationValue(donation: { amount: number; totalAmount: number; team
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (!id) return NextResponse.json({ ok: false, error: "missing donation id" }, { status: 400 });
+  if (!isDonationId(id)) return NextResponse.json({ ok: false, error: "missing donation id" }, { status: 400 });
 
   const body = await request.json().catch(() => ({}));
   const platform = str((body as Record<string, unknown>).platform) as ConversionPlatform | null;
@@ -46,8 +49,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const donation = await prisma.donation.findUnique({
     where: { id },
-    select: { id: true, status: true, paidAt: true, amount: true, amountUSD: true, totalAmount: true, teamSupport: true, fees: true, currency: true },
+    select: { id: true, donorId: true, createdAt: true, status: true, paidAt: true, amount: true, amountUSD: true, totalAmount: true, teamSupport: true, fees: true, currency: true },
   });
+  const actor = await getServerSession(authOptions);
+  if (!donation || !donationAccessLevel(request, actor, donation)) {
+    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
   if (!donation) return NextResponse.json({ ok: false, error: "donation not found" }, { status: 404 });
 
   const receivedValue = num((body as Record<string, unknown>).value);

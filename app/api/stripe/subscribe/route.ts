@@ -1,3 +1,4 @@
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -44,8 +45,8 @@ export async function POST(req: NextRequest) {
     if (!donation) {
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
     }
-    // Authenticated users: verify ownership. Guests have no session — trust the donationId.
-    if (session?.user?.id && donation.donorId !== session.user.id) {
+    if (!donationAccessLevel(req, session, donation) ||
+        (session?.user?.id && session.user.id !== donation.donorId)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     if (donation.status === "FAILED") {
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
     if (donation.subscriptionId) {
       await prisma.subscription.update({
         where: { id: donation.subscriptionId },
-        data: { payforToken: subscription.id },
+        data: { payforToken: subscription.id, stripeCustomerId: customer.id },
       });
     }
 

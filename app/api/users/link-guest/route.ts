@@ -1,3 +1,4 @@
+import { donationAccessLevel, isDonationId } from "@/lib/donations/guest-access";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -31,12 +32,15 @@ export async function POST(req: NextRequest) {
 
     const donation = await prisma.donation.findUnique({
       where: { id: donationId },
-      select: { donorId: true },
+      select: { id: true, donorId: true, createdAt: true, totalAmount: true, currency: true },
     });
     if (!donation) {
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
     }
 
+    if (!isDonationId(donationId)) return NextResponse.json({ error: "Invalid ID" }, { status: 400 });
+    const access = donationAccessLevel(req, session, donation);
+    if (access !== "guest" && access !== "owner") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const result = await linkGuestUserToTarget(donation.donorId, session.user.id);
     if (!result.ok) {
       const status = result.reason === "GUEST_NOT_ELIGIBLE" ? 409 : 400;

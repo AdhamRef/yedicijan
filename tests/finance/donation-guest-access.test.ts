@@ -1,0 +1,149 @@
+import test from "node:test";
+// @ts-expect-error Standalone Node/tsx import.
+import { confirmedDonationForReceipt } from "../../lib/donations/receipt-confirmation.ts";
+import assert from "node:assert/strict";
+// @ts-expect-error Standalone Node/tsx runner requires explicit .ts extension.
+import * as tokenModule from "../../lib/donations/guest-access.ts";
+// @ts-expect-error Standalone Node/tsx runner requires explicit .ts extension.
+import * as settlementModule from "../../lib/donations/stripe-settlement.ts";
+const { createGuestDonationAccess, verifyGuestDonationAccess } =
+  ((tokenModule as typeof tokenModule & {default?:typeof tokenModule}).default ?? tokenModule);
+const { stripePaymentMatches, stripeRecurringInvoiceMatches, stripeRecurringCustomerMatches, stripeFailedRecurringInvoiceMatches } =
+  ((settlementModule as typeof settlementModule & {default?:typeof settlementModule}).default ?? settlementModule);
+
+process.env.DONATION_GUEST_ACCESS_SECRET="synthetic-test-only-secret-not-production-0123456789";
+const now=Date.UTC(2026,10,10,14,0,0);
+const base={
+  id:"507f191e810c19729de860ea", donorId:"507f1f77bcf86cd799439011",
+  createdAt:new Date(now-2000), totalAmount:50.25, currency:"USD",
+};
+test("guest token is owner-, donation-, amount- and expiry-bound",()=>{
+  const t=createGuestDonationAccess(base,now)!;
+  assert.ok(verifyGuestDonationAccess(t,base,now));
+  assert.equal(verifyGuestDonationAccess(t,base,now+24*60*60*1000+2000),false);
+  assert.equal(verifyGuestDonationAccess(t,{...base,id:"507f191e810c19729de860eb"},now),false);
+  assert.equal(verifyGuestDonationAccess(t,{...base,donorId:"507f1f77bcf86cd799439012"},now),false);
+  assert.equal(verifyGuestDonationAccess(t,{...base,totalAmount:50.26},now),false);
+  assert.equal(verifyGuestDonationAccess(t,{...base,currency:"EUR"},now),false);
+  assert.equal(verifyGuestDonationAccess(t,t as any,now),false);
+  assert.equal(verifyGuestDonationAccess(t+"a",base,now),false);
+  assert.equal(verifyGuestDonationAccess(base.id,base,now),false);
+});
+function donation(override={}) {
+  return {...base, status:"PAID",paidAt:null,provider:"STRIPE",
+    providerOrderId:"pi_synthetic_123",subscriptionId:null,...override};
+}
+function proof(override={}) {
+  return {kind:"intent" as const,reference:"pi_synthetic_123",
+    intentId:"pi_synthetic_123",donationId:base.id,donorId:base.donorId,
+    currency:"usd",amountSmallestUnit:5025,paidSmallestUnit:5025,
+    status:"succeeded",...override};
+}
+test("financial comparison rejects any mismatch without touching database",()=>{
+  assert.equal(stripePaymentMatches(donation(),proof()),true);
+  const invalid=[
+    proof({reference:"pi_wrong"}),proof({intentId:"bad-reference"}),
+    proof({donationId:"507f191e810c19729de860eb"}),
+    proof({donorId:"507f1f77bcf86cd799439012"}),
+    proof({currency:"eur"}),proof({amountSmallestUnit:5024}),
+    proof({paidSmallestUnit:5024}),proof({status:"processing"}),
+  ];
+  for(const testProof of invalid)assert.equal(stripePaymentMatches(donation(),testProof),false);
+  assert.equal(stripePaymentMatches(donation({paidAt:new Date()}),proof()),false);
+  assert.equal(stripePaymentMatches(donation({provider:"PAYFOR"}),proof()),false);
+  assert.equal(stripePaymentMatches(donation({status:"FAILED"}),proof()),true); // trusted later success supersedes legacy failed attempt
+  assert.equal(stripePaymentMatches(donation({subscriptionId:base.id}),proof()),false);
+  assert.equal(stripePaymentMatches(donation({totalAmount:50.255}),proof()),false);
+});
+
+test("signed recurring invoice proof rejects amount, currency, order, owner and non-paid invoices",()=>{
+  const sub={id:"507f191e810c19729de860e9",donorId:base.donorId,payforToken:"sub_synthetic_123",
+    amount:50.25,teamSupport:0,coverFees:false,currency:"USD"};
+  const invoice={id:"in_synthetic_123",status:"paid",paid:true,currency:"usd",amount_paid:5025,amount_due:5025};
+  assert.equal(stripeRecurringInvoiceMatches(sub,invoice,"sub_synthetic_123"),true);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,amount_paid:5024},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,amount_due:5024},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,currency:"eur"},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,status:"open"},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,paid:false},"sub_synthetic_123"),false);
+  assert.equal(stripeRecurringInvoiceMatches(sub,{...invoice,id:"in_other"},"sub_wrong"),false);
+  assert.equal(stripeRecurringInvoiceMatches({...sub,donorId:""} as typeof sub,invoice,"sub_synthetic_123"),false);
+});
+
+test("official receipts are held for unsettled, failed, unverified and mismatched bank records",()=>{
+  const row={
+    id:base.id,donorId:base.donorId,status:"PAID",paidAt:new Date(now),
+    provider:"STRIPE",providerOrderId:"pi_synthetic_123",
+    providerAuthCode:"pi_synthetic_123",providerTxnResult:"Success",
+    providerHostRefNum:null,providerProcReturnCode:null,subscriptionId:null,
+    totalAmount:50.25,currency:"USD",
+    providerRaw:{verifiedStripe:{reference:"pi_synthetic_123",intentId:"pi_synthetic_123",
+      amount:5025,currency:"usd"}},
+  };
+  assert.equal(confirmedDonationForReceipt(row),true);
+  assert.equal(confirmedDonationForReceipt({...row,paidAt:null}),false);
+  assert.equal(confirmedDonationForReceipt({...row,status:"FAILED"}),false);
+  assert.equal(confirmedDonationForReceipt({...row,providerRaw:null}),false);
+  assert.equal(confirmedDonationForReceipt({...row,providerRaw:{verifiedStripe:{reference:"pi_wrong",amount:5025}}}),false);
+  const monthly={...row,subscriptionId:base.id,providerOrderId:"in_synthetic_123",providerAuthCode:"sub_synthetic_123"};
+  const ledger={invoiceId:"in_synthetic_123",subscriptionId:base.id,donorId:base.donorId,
+    amountSmallestUnit:5025,currency:"usd"};
+  assert.equal(confirmedDonationForReceipt(monthly,ledger),true);
+  assert.equal(confirmedDonationForReceipt(monthly,null),false);
+  assert.equal(confirmedDonationForReceipt(monthly,{...ledger,amountSmallestUnit:5024}),false);
+});
+test("guest secret reuse of NextAuth or previous key is rejected",()=>{
+ const current=process.env.DONATION_GUEST_ACCESS_SECRET!;
+ const auth=process.env.NEXTAUTH_SECRET;
+ try {
+   process.env.NEXTAUTH_SECRET=current;
+   assert.equal(createGuestDonationAccess(base,now),null);
+   process.env.NEXTAUTH_SECRET="synthetic-other-nextauth-secret-000000000000000";
+   process.env.DONATION_GUEST_ACCESS_SECRET="synthetic-old-key-guest-000000000000000";
+   const legacy=createGuestDonationAccess(base,now)!;
+   process.env.DONATION_GUEST_ACCESS_SECRET=current;
+   process.env.NEXTAUTH_SECRET="synthetic-old-key-guest-000000000000000";
+   process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET=process.env.NEXTAUTH_SECRET;
+   process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL=String(Math.floor(now/1000)+3600);
+   assert.equal(verifyGuestDonationAccess(legacy,base,now),false);
+ } finally {
+   process.env.DONATION_GUEST_ACCESS_SECRET=current;
+   if(auth===undefined)Reflect.deleteProperty(process.env,"NEXTAUTH_SECRET");else process.env.NEXTAUTH_SECRET=auth;
+   delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET;
+   delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL;
+ }
+});
+test("guest capability has mandatory independent secret and bounded previous-key rotation",()=>{
+  const current=process.env.DONATION_GUEST_ACCESS_SECRET!;
+  const prior="synthetic-previous-guest-only-key-0123456789";
+  try {
+    process.env.DONATION_GUEST_ACCESS_SECRET=prior;
+    const legacy=createGuestDonationAccess(base,now)!;
+    delete process.env.DONATION_GUEST_ACCESS_SECRET;
+    process.env.NEXTAUTH_SECRET="synthetic-nextauth-secret-must-not-sign-012345";
+    assert.equal(createGuestDonationAccess(base,now),null);
+    process.env.DONATION_GUEST_ACCESS_SECRET=current;
+    assert.equal(verifyGuestDonationAccess(legacy,base,now),false);
+    process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET=prior;
+    process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL=String(Math.floor(now/1000)+3600);
+    assert.equal(verifyGuestDonationAccess(legacy,base,now),true);
+    assert.equal(verifyGuestDonationAccess(legacy,base,now+3601*1000),false);
+  } finally {
+    process.env.DONATION_GUEST_ACCESS_SECRET=current;
+    delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET;
+    delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL;
+  }
+});
+
+test("recurring signed customer ownership and failed invoice amount are strict",()=>{
+ const sub={id:"507f191e810c19729de860e9",donorId:base.donorId,payforToken:"sub_test_abc",
+  stripeCustomerId:"cus_original_123",amount:50.25,teamSupport:0,coverFees:false,currency:"USD"};
+ const invoice={customer:"cus_original_123",id:"in_test_123",currency:"usd",amount_due:5025};
+ assert.equal(stripeRecurringCustomerMatches(sub,invoice,"sub_test_abc"),true);
+ assert.equal(stripeRecurringCustomerMatches(sub,{...invoice,customer:"cus_other_456"},"sub_test_abc"),false);
+ assert.equal(stripeRecurringCustomerMatches({...sub,stripeCustomerId:null},invoice,"sub_test_abc"),false);
+ assert.equal(stripeRecurringCustomerMatches(sub,invoice,"sub_wrong"),false);
+ assert.equal(stripeFailedRecurringInvoiceMatches(sub,invoice),true);
+ assert.equal(stripeFailedRecurringInvoiceMatches(sub,{...invoice,amount_due:5024}),false);
+ assert.equal(stripeFailedRecurringInvoiceMatches(sub,{...invoice,currency:"eur"}),false);
+});

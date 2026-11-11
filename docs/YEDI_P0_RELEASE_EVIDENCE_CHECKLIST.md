@@ -1,0 +1,63 @@
+# YediCihan P0 — release evidence gates (READ ONLY / NO-GO)
+
+This PR remains **Draft, Request Changes, NO-GO**. These are instructions for authorized security/finance operators. They do not authorize a deployment, Stripe Live charge, production DB mutation, or secret disclosure. No donor record, card number, full bank reference or private key belongs in GitHub issues or PR logs.
+
+## 1. Source and isolated CI evidence
+- Record exact GitHub commit SHA of security PR #24, branch merged-integration candidate (#9/#19/#21/#24), and green latest-commit HTTP/unit/TypeScript/Next build runs.
+- Real Next.js HTTP/isolated MongoDB acceptance covers Guest (authorized/unauthorized), DONOR owner/nonowner, STAFF, ADMIN, signed synthetic Stripe event ordering, amounts/currencies/ownership/reference mismatch, concurrency, official receipt proof, and retry fail-closed.
+- Synthetic HMAC signatures only prove our handler rejects forged callbacks and applies business rules; they **do not** prove Stripe Test Mode or bank settlement.
+- Never infer a live provider contract from generated unit-test events.
+
+## 2. Stripe Test Mode evidence — authorized payment engineering only
+- Capture **sanitized Test Mode** Stripe Event objects directly from a controlled, registered test endpoint (Stripe dashboard/CLI with test credentials only). Verify `livemode === false`, Stripe API version, signature with endpoint's test webhook signing secret, and provider event ID/delivery ID. Do not print the raw secret.
+- Independently retrieve Test Mode PaymentIntent and, for recurring billing, the Test Mode Invoice and Subscription. Match stored local donation owner, providerOrderId, exact integer minor-unit amount received, currency, final provider state, and invoice/subscription linkage. Keep a private, redacted evidence reference with timestamps and artifact checksums. The public PR may cite only the sanitized test outcome.
+- Test failed-attempt-then-succeeded, succeeded-then-failed, concurrent webhook replay, amount/currency/reference/owner mismatches, and settled payout vs merely approved/intended payment. Confirm financial totals exactly once, even across Mongo transaction write conflicts.
+- **No real card or charge.** Stripe CLI synthetic trigger alone does not demonstrate the real application's original amount/owner bindings.
+
+## 3. Bank settlement and historical receipts
+- PayFor/QNB remains HOLD until a QNB merchant-hosted inquiry or bank-certified transaction result binds the exact order, amount, currency, settlement status and donor authorization server-side. **Do not create a public-facing final receipt based on PAID alone.**
+- For historical Stripe/Albaraka/PayFor donations lacking authenticated settlement markers, the revised official receipt route responds 409; preserve existing donation rows. Finance must decide the approved read-only reconciliation procedure; do not backfill guessed proof.
+- For Stripe subscriptions, receipt requires an invoice ledger entry with exact donor/subscription/currency/amount and a verified paidAt marker. Audit recurring first-invoice and renewal behavior separately.
+
+## 4. Mongo indexes, uniqueness and rollback
+- In an isolated DB after `prisma db push`, run `node scripts/yedi-security-readonly-evidence.mjs` with `CI_MONGO_ISOLATED=1`.
+- On authorized VPS, this command is **read-only** and requires `YEDI_AUTHORIZED_READ_ONLY_INDEX_AUDIT=YES_I_HAVE_APPROVAL`. Confirm the exact database environment privately before invoking it. The tool prints only unique-index readiness and guest-key readiness, never connection strings.
+- Required: unique index on `StripeInvoiceSettlement.invoiceId`; retain existing unique keys across migration. A new index should be applied only under a reviewed database change plan, after a backup and duplicate assessment. No script here creates indexes.
+- Pre-release backup evidence: snapshot timestamp, restore test on a separate isolated system, verified release artifact checksum, and signed rollback owner. Never roll back a recorded financial settlement by changing old status blindly.
+
+## 5. Guest-session rotation
+- `DONATION_GUEST_ACCESS_SECRET` is mandatory and distinct from `NEXTAUTH_SECRET`; at least 32 bytes of independent entropy.
+- On key rotation only, `DONATION_GUEST_ACCESS_PREVIOUS_SECRET` may verify old independently-keyed cookies for at most 24 hours, with `DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL` (Unix seconds). Remove old key after the cutoff.
+- Older cookies previously signed via `NEXTAUTH_SECRET` cannot safely be silently trusted by the new key domain. Test an authenticated donor self-service recovery path or explicitly document guest re-verification before migration. Current code fails closed, potentially requiring support for affected guests.
+- Do not commit or print actual key values or cookie tokens.
+
+## 6. VPS process identity and rollback
+- Run `bash scripts/yedi-vps-deployment-readonly-audit.sh` from the approved release checkout and set `YEDI_PM2_NAME` only to the confirmed YediCihan process. It checks PID and `/proc/PID/cwd`, then reports the repository and Git SHA of **that process path**, without PM2 environment dumps.
+- Git HEAD alone is **not** proof of running binary revision. Compare with the process's immutable build artifact and release manifest (hash, timestamp, entrypoint). This cannot be established from GitHub CI.
+- The rollback plan must identify last-known-good immutable artifact, database schema compatibility, release-symlink switch/PM2 restart procedure **for later approved execution only**, and post-rollback financial reconciliation.
+
+## 7. Signoffs and external blockers
+- Finance owner: bank and settlement evidence, legacy receipts, 14-currency routing, risk of recurring double billing.
+- Security owner: guest authorization/recovery, key rotation, webhook replay proof, index readiness.
+- Site operator: deployed VPS PID/cwd/hash, backups, rollback rehearsal, monitoring and access.
+- No one should merge PR #24, enable unsupported PayFor, change main, or publish to VPS before all signoffs.
+
+**Evidence status:** CI synthetic tests = measurable; real Stripe Test Mode signed fixture, actual merchant/bank settlement, VPS revision, production key migration, backup restoration and approvals = **NOT VERIFIED**.
+
+
+## Latest isolated acceptance additions (11 November 2026)
+
+- Additional signed HTTP `invoice.payment_failed` / `invoice.payment_succeeded` scenarios now cover failed-first, paid-first, and an initial unsettled subscription donation, followed by replay. In each synthetic case one invoice ledger, one PAID donation and exactly one project increment are expected. The separately tested unique-index race rejects parallel ledger inserts. **A simultaneous pair of full recurring webhook POSTs remains a distinct scenario; bank-side arrival order and provider retries need additional test evidence.**
+- Dedicated guest token creation now explicitly rejects `DONATION_GUEST_ACCESS_SECRET === NEXTAUTH_SECRET`; previous rotation key must differ from the current key and from NextAuth. Unit acceptance checks both cases and bounded cutoff. Old NextAuth-derived cookies still fail closed and need owner-authenticated recovery, not silent acceptance.
+- The signed invoice handler currently uses `invoice.created` to set `paidAt`. This is the invoice creation timestamp, **not independent evidence of bank settlement time**; the approved bank/Stripe Test Mode reconciliation must compare `invoice.status_transitions.paid_at` and final provider evidence. Do not treat this field alone as certified settlement timing.
+- The official PDF is presently disallowed for other-bank historical records without separately authenticated proof. This is intentional and must remain a release gate; never fabricate settlement markers to unlock receipts.
+- Real bank data, production index readiness, the running VPS process, recoverable backups and finance/security approvals are *not attested* by CI.
+
+## Stripe Customer binding P0 follow-up (11 November 2026)
+- New Stripe subscriptions persist both local payforToken (Stripe subscription ID) and independent stripeCustomerId captured at creation. This is a schema change, not a production migration.
+- Success, failure and cancellation events fail closed unless the signed event's customer exactly matches the stored stripeCustomerId and exactly one local subscription matches the Stripe subscription ID. Success also validates paid status, amount and currency; failure checks amount_due and currency.
+- Existing first-invoice donation selection requires the same subscription ID, donor ID, and STRIPE provider before adopting a pending row. Invoice settlement ledger uniqueness remains required to prevent double credit.
+- Historical local subscription rows with no stripeCustomerId are intentionally held without settlements; finance must run read-only Stripe Test Mode or authorized bank reconciliation before approving a migration/backfill, and must never fabricate ownership from payforToken alone.
+- Synthetic tests cover correct amount + wrong Customer, historical missing Customer, two local rows sharing a subscription token, five concurrent signed callbacks, and replay. These tests alone DO NOT demonstrate a real bank payment.
+- Verify on staging using Stripe Test Mode: same customer across subscription and invoice; status_transitions.paid_at differs from invoice.created; no partial/duplicate credit; independently inspect and compare sanitized customer/subscription metadata; do not paste full private customer IDs or keys in PR comments.
+- Required release check: strict TypeScript and Next build on exact latest PR head (now part of CI), isolated Mongo index audit, backup restore proof, PM2 PID/cwd + built binary SHA and signed finance/security approval. Draft / NO-GO.

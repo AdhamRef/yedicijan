@@ -1,3 +1,4 @@
+import { proofFromCheckoutSession, proofFromPaymentIntent, settleVerifiedStripeDonation, stripeRecurringInvoiceMatches, stripeRecurringCustomerMatches, stripeFailedRecurringInvoiceMatches } from "@/lib/donations/stripe-settlement";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import Stripe from "stripe";
@@ -58,60 +59,19 @@ export async function POST(req: NextRequest) {
 
         const isMonthly = session.mode === "subscription";
 
-        if (session.payment_status === "paid" || isMonthly) {
-          await prisma.$transaction(async (tx) => {
-            const donation = await tx.donation.findUnique({
-              where: { id: donationId },
-              include: { items: true, categoryItems: true },
-            });
-            // Idempotency: the row is created with status=PAID by /api/stripe/intent
-            // before Stripe confirms payment, so we key off paidAt (only set here).
-            if (!donation || donation.paidAt != null) return;
-
-            // Mark donation as paid
-            await tx.donation.update({
-              where: { id: donationId },
-              data: {
-                status: "PAID",
-                paidAt: new Date(),
-                provider: "STRIPE",
-                providerOrderId: session.id,
-                providerAuthCode: session.payment_intent as string ?? null,
-                providerTxnResult: "Success",
-                providerRaw: session as any,
-              },
-            });
-
-            // Apply campaign/category amount increments
-            for (const item of donation.items) {
-              await tx.campaign.update({
-                where: { id: item.campaignId },
-                data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-              });
-            }
-            for (const item of donation.categoryItems) {
-              await tx.category.update({
-                where: { id: item.categoryId },
-                data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-              });
-            }
-
-            // If monthly subscription, store Stripe subscription ID
-            if (isMonthly && subscriptionDbId && session.subscription) {
-              await tx.subscription.update({
-                where: { id: subscriptionDbId },
-                data: {
-                  // Reuse payforToken field to store Stripe subscription ID
-                  payforToken: session.subscription as string,
-                },
-              });
-            }
-          });
-          void dispatchDonationPaid(donationId);
-          if (isMonthly && subscriptionDbId) {
-            void dispatchEvent("SUBSCRIPTION_CREATED", { donationId });
+        if (!isMonthly) {
+          const proof = proofFromCheckoutSession(session);
+          if (!proof) {
+            console.warn("[Stripe webhook] Checkout held for verified bank reconciliation");
+            break;
           }
+          const result = await settleVerifiedStripeDonation(proof);
+          if (result === "paid") void dispatchDonationPaid(donationId);
+          break;
         }
+        // Monthly first-invoice settlement must use the independently verified
+        // invoice.payment_succeeded path. Never mark a donation paid just
+        // because a subscription Checkout session was completed.
         break;
       }
 
@@ -121,11 +81,26 @@ export async function POST(req: NextRequest) {
         if (!stripeSubscriptionId) break;
 
         // Find our DB subscription by Stripe subscription ID (stored in payforToken)
-        const dbSubscription = await prisma.subscription.findFirst({
+        const linkedSubscriptions = await prisma.subscription.findMany({
           where: { payforToken: stripeSubscriptionId },
+          take: 2,
           include: { items: true, categoryItems: true },
         });
-        if (!dbSubscription) break;
+        // payforToken is not unique in the historical schema. Never allocate
+        // a verified invoice to an arbitrary donor when two rows share it.
+        if (linkedSubscriptions.length !== 1) {
+          console.warn("[Stripe webhook] Recurring invoice held: subscription binding missing or ambiguous");
+          break;
+        }
+        const dbSubscription = linkedSubscriptions[0];
+        if (!stripeRecurringCustomerMatches(dbSubscription, invoice, stripeSubscriptionId)) {
+          console.warn("[Stripe webhook] Recurring invoice held: customer ownership not verified");
+          break;
+        }
+        if (!stripeRecurringInvoiceMatches(dbSubscription, invoice, stripeSubscriptionId)) {
+          console.warn("[Stripe webhook] Recurring invoice held: unverified order/amount/currency");
+          break;
+        }
 
         // Idempotency: skip if we've already settled this invoice. The original
         // "checkout started" donation for the first invoice also carries this
@@ -142,8 +117,17 @@ export async function POST(req: NextRequest) {
         });
         if (existingForInvoice) break;
 
-        // Compute paidAt from invoice timestamp
-        const paidAt = new Date((invoice as any).created * 1000);
+        // Invoice creation is NOT payment time. Require an authenticated paid
+        // transition from the signed Stripe invoice before recording settlement.
+        // A missing transition is held for Test Mode/provider reconciliation,
+        // never silently backdated to invoice creation.
+        const paidTimestamp = invoice.status_transitions?.paid_at;
+        if (typeof paidTimestamp !== "number" || !Number.isSafeInteger(paidTimestamp) ||
+            paidTimestamp <= 0 || paidTimestamp > Math.floor(Date.now() / 1000) + 300) {
+          console.warn("[Stripe webhook] Paid invoice held: missing/invalid payment timestamp");
+          break;
+        }
+        const paidAt = new Date(paidTimestamp * 1000);
 
         // Stripe's own first-vs-renewal marker. "subscription_create" is the signup
         // charge; "subscription_cycle" is an automatic renewal. Anything else
@@ -180,6 +164,17 @@ export async function POST(req: NextRequest) {
           undefined;
 
         await prisma.$transaction(async (tx) => {
+          // Unique signed invoice id is committed atomically with money/totals.
+          // Two concurrent replays cannot both create this record.
+          await tx.stripeInvoiceSettlement.create({
+            data: {
+              invoiceId: invoice.id,
+              subscriptionId: dbSubscription.id,
+              donorId: dbSubscription.donorId,
+              amountSmallestUnit: invoice.amount_paid,
+              currency: invoice.currency.toLowerCase(),
+            },
+          });
           // Find the original "checkout started" donation for this subscription
           // (status=PAID is the optimistic sentinel; paidAt=null means it never
           // settled). For the FIRST invoice we update that row instead of
@@ -202,7 +197,7 @@ export async function POST(req: NextRequest) {
             (await tx.donation.findFirst({
               where: {
                 AND: [
-                  { subscriptionId: dbSubscription.id, providerOrderId: invoice.id },
+                  { subscriptionId: dbSubscription.id, donorId: dbSubscription.donorId, provider: "STRIPE", providerOrderId: invoice.id },
                   donationFieldEmpty("paidAt"),
                 ],
               },
@@ -211,7 +206,7 @@ export async function POST(req: NextRequest) {
               ? await tx.donation.findFirst({
                   where: {
                     AND: [
-                      { subscriptionId: dbSubscription.id, status: "PAID" },
+                      { subscriptionId: dbSubscription.id, donorId: dbSubscription.donorId, provider: "STRIPE", status: "PAID" },
                       donationFieldEmpty("paidAt"),
                     ],
                   },
@@ -338,10 +333,20 @@ export async function POST(req: NextRequest) {
         const stripeSubscriptionId = getStripeSubscriptionIdFromInvoice(invoice);
         if (!stripeSubscriptionId) break;
 
-        const dbSubscription = await prisma.subscription.findFirst({
+        const candidates = await prisma.subscription.findMany({
           where: { payforToken: stripeSubscriptionId },
+          take: 2,
         });
-        if (!dbSubscription) break;
+        if (candidates.length !== 1) {
+          console.warn("[Stripe webhook] Failure invoice ignored: ambiguous subscription binding");
+          break;
+        }
+        const dbSubscription = candidates[0];
+        if (!stripeRecurringCustomerMatches(dbSubscription, invoice, stripeSubscriptionId) ||
+            !stripeFailedRecurringInvoiceMatches(dbSubscription, invoice)) {
+          console.warn("[Stripe webhook] Failed invoice held: customer, amount or currency mismatch");
+          break;
+        }
 
         // Idempotency: skip if already recorded
         const existingFailed = await prisma.donation.findFirst({
@@ -404,122 +409,47 @@ export async function POST(req: NextRequest) {
         const donationId = intent.metadata?.donationId;
         if (!donationId) break;
 
-        await prisma.$transaction(async (tx) => {
-          const donation = await tx.donation.findUnique({
-            where: { id: donationId },
-            include: { items: true, categoryItems: true },
-          });
-          // Idempotency: the row is created with status=PAID by /api/stripe/intent
-          // before Stripe confirms payment, so we key off paidAt (only set here).
-          if (!donation || donation.paidAt != null) return;
-
-          await tx.donation.update({
-            where: { id: donationId },
-            data: {
-              status: "PAID",
-              paidAt: new Date(),
-              provider: "STRIPE",
-              providerOrderId: intent.id,
-              providerAuthCode: intent.id,
-              providerTxnResult: "Success",
-              providerRaw: intent as never,
-            },
-          });
-
-          for (const item of donation.items) {
-            await tx.campaign.update({
-              where: { id: item.campaignId },
-              data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-            });
-          }
-          for (const item of donation.categoryItems) {
-            await tx.category.update({
-              where: { id: item.categoryId },
-              data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-            });
-          }
-        });
-        void dispatchDonationPaid(donationId);
+        const proof = proofFromPaymentIntent(intent);
+        if (!proof) {
+          console.warn("[Stripe webhook] Intent held for verified bank reconciliation");
+          break;
+        }
+        const result = await settleVerifiedStripeDonation(proof);
+        if (result === "paid") void dispatchDonationPaid(donationId);
         break;
       }
 
-      case "payment_intent.payment_failed": {
-        // Direct PaymentIntent (Stripe Elements) declined or otherwise failed.
-        // Mark the corresponding donation as FAILED so the row reflects reality
-        // (donations are created with status=PAID preemptively in /api/stripe/intent).
-        // We deliberately key off paidAt — a parallel "succeeded" event must always win.
-        const intent = event.data.object as Stripe.PaymentIntent;
-        if ((intent as any).invoice) break; // subscription invoice — handled elsewhere
-
-        const donationId = intent.metadata?.donationId;
-        if (!donationId) break;
-
-        const donation = await prisma.donation.findUnique({
-          where: { id: donationId },
-          select: { paidAt: true, status: true },
-        });
-        if (!donation || donation.paidAt || donation.status === "FAILED") break;
-
-        const lastError =
-          (intent.last_payment_error?.message as string | undefined) ??
-          "payment_intent.payment_failed";
-
-        await prisma.donation.update({
-          where: { id: donationId },
-          data: {
-            status: "FAILED",
-            provider: "STRIPE",
-            providerOrderId: intent.id,
-            providerTxnResult: "Failed",
-            providerErrorMessage: lastError,
-            providerRaw: intent as never,
-          },
-        });
-        void dispatchEvent("DONATION_FAILED", { donationId });
-        // Browser may have closed before /api/donations/:id/fail PATCH fired —
-        // seed DonateFailed from here so the lookalike audience never misses a
-        // failed Stripe Elements attempt.
-        void sendDonationFailedConversions(donationId);
-        break;
-      }
-
+      case "payment_intent.payment_failed":
       case "checkout.session.expired":
       case "checkout.session.async_payment_failed": {
-        // Hosted Stripe Checkout failed or expired without a successful payment.
-        const session = event.data.object as Stripe.Checkout.Session;
-        const donationId = session.metadata?.donationId;
-        if (!donationId) break;
-
-        const donation = await prisma.donation.findUnique({
-          where: { id: donationId },
-          select: { paidAt: true, status: true },
-        });
-        if (!donation || donation.paidAt || donation.status === "FAILED") break;
-
-        await prisma.donation.update({
-          where: { id: donationId },
-          data: {
-            status: "FAILED",
-            provider: "STRIPE",
-            providerOrderId: session.id,
-            providerTxnResult: "Failed",
-            providerErrorMessage: event.type,
-            providerRaw: session as never,
-          },
-        });
-        void dispatchEvent("DONATION_FAILED", { donationId });
-        // Hosted Stripe Checkout expired/failed before payment — seed Meta
-        // DonateFailed so the abandoned-checkout cohort feeds lookalikes.
-        void sendDonationFailedConversions(donationId);
+        // A failed *attempt* is not definitive payment failure; the SAME
+        // PaymentIntent may succeed with another payment method later.
+        // Nor can an expired/async Checkout event override a settled row.
+        // Keep these donations for bank reconciliation; no FAILED state,
+        // provider reference overwrite, failure notifications or conversions.
+        // Webhook signature verification occurred above this switch.
         break;
       }
 
       case "customer.subscription.deleted": {
         // Stripe subscription cancelled
         const stripeSub = event.data.object as Stripe.Subscription;
-        const dbSubscription = await prisma.subscription.findFirst({
+        const matches = await prisma.subscription.findMany({
           where: { payforToken: stripeSub.id },
+          take: 2,
         });
+        if (matches.length !== 1) {
+          console.warn("[Stripe webhook] Subscription cancellation held: ambiguous provider ownership");
+          break;
+        }
+        const dbSubscription = matches[0];
+        const cancellingCustomerId = typeof stripeSub.customer === "string"
+          ? stripeSub.customer : stripeSub.customer?.id;
+        if (!dbSubscription.stripeCustomerId ||
+            dbSubscription.stripeCustomerId !== cancellingCustomerId) {
+          console.warn("[Stripe webhook] Subscription cancellation held: Customer mismatch");
+          break;
+        }
         if (dbSubscription) {
           await prisma.subscription.update({
             where: { id: dbSubscription.id },

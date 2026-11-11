@@ -1,3 +1,4 @@
+import { attachGuestDonationAccess, canIssueGuestDonationAccess } from "@/lib/donations/guest-access";
 import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -119,6 +120,10 @@ export async function POST(request: NextRequest) {
         { error: "Items, currency, and payment method are required" },
         { status: 400 }
       );
+    }
+
+    if (!session?.user?.id && !canIssueGuestDonationAccess()) {
+      return NextResponse.json({ error: "Guest checkout is temporarily unavailable" }, { status: 503 });
     }
 
     // Resolve donor
@@ -341,11 +346,15 @@ export async function POST(request: NextRequest) {
         stream: auditStreamForRole(actorRole),
       });
 
-      return NextResponse.json({
+      return attachGuestDonationAccess(NextResponse.json({
         success: true,
         subscription: result.subscription,
-        donation: result.donation,
-      });
+        donation: session?.user?.id ? result.donation : {
+          id: result.donation.id, amount: result.donation.amount,
+          totalAmount: result.donation.totalAmount, currency: result.donation.currency,
+          status: result.donation.status,
+        },
+      }), result.donation, session?.user?.id);
     }
 
     const donation = await prisma.$transaction(async (tx) => {
@@ -411,10 +420,14 @@ export async function POST(request: NextRequest) {
       stream: auditStreamForRole(actorRole),
     });
 
-    return NextResponse.json({
+    return attachGuestDonationAccess(NextResponse.json({
       success: true,
-      donation,
-    });
+      donation: session?.user?.id ? donation : {
+        id: donation.id, amount: donation.amount,
+        totalAmount: donation.totalAmount, currency: donation.currency,
+        status: donation.status,
+      },
+    }), donation, session?.user?.id);
   } catch (error) {
     console.error("Error creating donation:", error);
     return NextResponse.json(
