@@ -3,7 +3,6 @@ import { Suspense } from "react";
 import { Poppins, Tajawal } from "next/font/google";
 import ManagedMarketingTags from "@/components/ManagedMarketingTags";
 import EngagementInstrumentation from "@/components/EngagementInstrumentation";
-import { Analytics } from "@vercel/analytics/next";
 import "./[locale]/globals.css";
 
 const poppins = Poppins({
@@ -299,7 +298,6 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <EngagementInstrumentation />
         </Suspense>
-        <Analytics />
       </body>
     </html>
   );
