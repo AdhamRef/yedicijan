@@ -35,7 +35,7 @@ export function saveTrackingConsent(value: Exclude<TrackingConsent, null>): void
       }
       for (const entry of document.cookie.split(";")) {
         const name = entry.trim().split("=")[0];
-        if (/^(_fbp|_fbc|_ga(?:_.*)?|_gid|_gcl_.*|_ttp|_tt_enable_cookie|ala_attr_(fbp|fbc|fbclid|gclid|ttclid|ga_client_id|_ga))$/.test(name)) {
+        if (/^(_fbp|_fbc|_ga(?:_.*)?|_gid|_gcl_.*|_ttp|_tt_enable_cookie|ala_attr_[A-Za-z0-9_]+)$/.test(name)) {
           document.cookie = encodeURIComponent(name) + "=; Max-Age=0; Path=/; SameSite=Lax" + secure;
         }
       }
