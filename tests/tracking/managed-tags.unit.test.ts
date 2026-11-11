@@ -62,3 +62,19 @@ test("single consent authority denies missing/denied and sensitive routes", asyn
     else Reflect.deleteProperty(globalThis,"window");
   }
 });
+
+test("privacy regression: no donor identity in public tracking response or browser vendor matching",async()=>{
+ const {readFileSync}=await import("node:fs");
+ const source=readFileSync("app/api/donations/[id]/tracking/route.ts","utf8");
+ const pixel=readFileSync("components/TrackingPixels.tsx","utf8");
+ const final=readFileSync("components/SuccessFinalConversionTracker.tsx","utf8");
+ assert.doesNotMatch(source,/browserAdvancedMatching|buildMetaUserData|donor:\s*\{/);
+ assert.doesNotMatch(pixel,/ttq\.identify\s*\(|Object\.assign\(ga4,\s*event\.custom\)/);
+ assert.match(final,/canRunOptionalTracking\(window\.location\.pathname\)/);
+ const consent=await import("../../lib/tracking/consent");
+ for(const path of ["/en/cart","/en/donate","/en/donations/receipt-id",
+   "/ar/receipt/abc","/tr/checkout","/de/payment","/fr/account","/pt/success/abc"]){
+   assert.equal(consent.trackingSensitivePath(path),true,path);
+ }
+ assert.equal(consent.trackingSensitivePath("/tr/privacy"),false);
+});
