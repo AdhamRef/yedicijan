@@ -273,7 +273,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://i.ibb.co" />
         <link rel="preload" href="/bg.webp" as="image" type="image/webp" />
 
-        <script src="https://t.contentsquare.net/uxa/e81365186c19c.js" async />
+        {/* Contentsquare disabled until consent/route-scoped loading is audited. Never load session recording unconditionally. */}
       </head>
       <body
         className={`${poppins.variable} ${tajawal.variable} font-arabic antialiased`}
