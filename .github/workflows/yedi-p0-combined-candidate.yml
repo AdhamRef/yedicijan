@@ -19,10 +19,17 @@ jobs:
       STRIPE_SECRET_KEY: sk_test_synthetic_disabled_no_real_payment_000000000000000000000
       STRIPE_WEBHOOK_SECRET: whsec_synthetic_donor_p0_isolated_no_real_event_20261110
     steps:
-      - name: Checkout candidate exact SHA
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+      - name: Checkout candidate SHA without broken legacy gitlink
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init -q .
+          git remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --force --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
