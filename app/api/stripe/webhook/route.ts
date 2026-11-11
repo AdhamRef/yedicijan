@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
             (await tx.donation.findFirst({
               where: {
                 AND: [
-                  { subscriptionId: dbSubscription.id, providerOrderId: invoice.id },
+                  { subscriptionId: dbSubscription.id, donorId: dbSubscription.donorId, provider: "STRIPE", providerOrderId: invoice.id },
                   donationFieldEmpty("paidAt"),
                 ],
               },
@@ -206,7 +206,7 @@ export async function POST(req: NextRequest) {
               ? await tx.donation.findFirst({
                   where: {
                     AND: [
-                      { subscriptionId: dbSubscription.id, status: "PAID" },
+                      { subscriptionId: dbSubscription.id, donorId: dbSubscription.donorId, provider: "STRIPE", status: "PAID" },
                       donationFieldEmpty("paidAt"),
                     ],
                   },
