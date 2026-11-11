@@ -27,7 +27,7 @@ declare global {
  * Payment/conversion events use their separate, canonical dispatchers.
  */
 const SAFE_ENGAGEMENT_FIELDS = new Set([
-  "path", "target_host", "target_tag", "is_paid_traffic",
+  "target_host", "target_tag", "is_paid_traffic",
   "ms_since_navigation_start", "hidden_for_ms", "samples", "x", "y",
 ]);
 const SAFE_ENGAGEMENT_EVENTS = new Set([
@@ -56,7 +56,7 @@ function safeEngagementData(data?: AnyRecord): AnyRecord {
 
 /** Tag the current Clarity session with key=value (filterable, smart segments). */
 export function clarityTag(key: string, value: string | string[]): void {
-  if (typeof window === "undefined" || !["is_paid_traffic", "page", "referrer_host"].includes(key)) return;
+  if (typeof window === "undefined" || key !== "is_paid_traffic") return;
   if (typeof value !== "string" || value.length > 150 || !/^[a-zA-Z0-9._/-]+$/.test(value)) return;
   try {
     window.clarity?.("set", key, value);
@@ -85,11 +85,7 @@ export function clarityIdentify(
   if (typeof window === "undefined") return;
   // Deliberately disabled: identity must never reach session-recording vendors.
   void userId; void sessionId; void pageId; void friendlyName;
-  try {
-    return;
-  } catch {
-    /* noop */
-  }
+  return;
 }
 
 /**
