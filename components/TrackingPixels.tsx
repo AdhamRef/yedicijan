@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef, createContext, useContext, useCallback, useState } from "react";
 import { track as vercelTrack } from "@vercel/analytics";
+import { usePathname } from "next/navigation";
+import { canRunOptionalTracking, TRACKING_CONSENT_EVENT } from "@/lib/tracking/consent";
 import {
   generateEventId,
   metaDonationEventId,
@@ -275,76 +277,48 @@ function buildGa4Items(
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export default function TrackingPixels({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname() || "/";
   const configRef = useRef<TrackingConfig | null>(null);
   const [config, setConfig] = useState<TrackingConfig | null>(null);
   // Mutable user data — updated by DonationDialog when user fills in details
   const userDataRef = useRef<Partial<CanonicalUser>>({});
 
-  // ── Load pixel config ───────────────────────────────────────────────────────
-  // Defer the config fetch + script injection until either the user interacts with the
-  // page or 6 s have elapsed. Ad/marketing pixels (FB ~226KiB, TikTok, X) used to
-  // compete with the LCP image for bandwidth and ate ~700 ms of TBT during the first
-  // second; the interaction-or-long-idle gate moves all of that off the critical path
-  // (Lighthouse never interacts so it never sees them) while still firing well before
-  // any real user can convert.
-  //
-  // EXCEPTION: /success/[id] is a conversion page — we need fbq ready immediately so
-  // `trackDonate` can fire the Meta "Donate" event without waiting for scroll or 6 s
-  // idle. Donors often arrive there post-redirect and may close the tab quickly.
+  // Optional browser pixels are never loaded by timer, synthetic interaction or
+  // an unconsented success redirect. Payment verification remains server-owned.
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    let fired = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-    const load = () => {
-      if (fired) return;
-      fired = true;
-      cleanup();
-
-      fetch("/api/tracking/config")
-        .then((r) => r.json())
-        .then((data) => {
+    let cancelled = false;
+    const loadApproved = () => {
+      if (!canRunOptionalTracking(window.location.pathname)) {
+        configRef.current = null;
+        setConfig(null);
+        return;
+      }
+      fetch("/api/tracking/config", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (cancelled || !data || !canRunOptionalTracking(window.location.pathname)) return;
           const c: TrackingConfig = {
             facebookPixelId: data.facebookPixelId || null,
             gaMeasurementId: data.gaMeasurementId || null,
-            tiktokPixelId:   data.tiktokPixelId   || null,
-            xPixelId:        data.xPixelId        || null,
+            tiktokPixelId: data.tiktokPixelId || null,
+            xPixelId: data.xPixelId || null,
           };
           configRef.current = c;
           setConfig(c);
-        })
-        .catch(() => setConfig(null));
+        }).catch(() => {});
     };
-
-    const cleanup = () => {
-      if (timeoutId !== null) clearTimeout(timeoutId);
-      window.removeEventListener("scroll", load);
-      window.removeEventListener("pointerdown", load);
-      window.removeEventListener("keydown", load);
-      window.removeEventListener("touchstart", load);
+    loadApproved();
+    window.addEventListener(TRACKING_CONSENT_EVENT, loadApproved);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(TRACKING_CONSENT_EVENT, loadApproved);
     };
-
-    // Fire-now path for conversion pages. The match is locale-agnostic — any
-    // pathname segment "/success/<id>" qualifies.
-    const isConversionPage = /\/success\/[^/]+/.test(window.location.pathname);
-    if (isConversionPage) {
-      load();
-      return cleanup;
-    }
-
-    timeoutId = setTimeout(load, 6000);
-    window.addEventListener("scroll", load, { passive: true, once: true });
-    window.addEventListener("pointerdown", load, { once: true });
-    window.addEventListener("keydown", load, { once: true });
-    window.addEventListener("touchstart", load, { passive: true, once: true });
-
-    return cleanup;
-  }, []);
+  }, [pathname]);
 
   // ── Inject pixel scripts once config is ready ────────────────────────────────
   useEffect(() => {
-    if (!config) return;
+    if (!config || !canRunOptionalTracking(window.location.pathname)) return;
 
     // Facebook Pixel (Meta)
     if (config.facebookPixelId) {
@@ -495,6 +469,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
   const sendCanonical = useCallback(
     (partial: Omit<CanonicalEvent, "event_time"> & { event_time?: number }) => {
       if (typeof window !== "undefined") {
+        if (!canRunOptionalTracking(window.location.pathname)) return;
         const path = window.location.pathname;
         if (/\/(success|donation-failed)(\/|$)/.test(path)) {
           if (process.env.NODE_ENV !== "production") {
@@ -651,7 +626,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
   const setUserData = useCallback((user: Partial<CanonicalUser>) => {
     userDataRef.current = { ...userDataRef.current, ...user };
     // Also identify in TikTok Pixel
-    if (configRef.current?.tiktokPixelId && window.ttq?.identify) {
+    if (canRunOptionalTracking(window.location.pathname) && configRef.current?.tiktokPixelId && window.ttq?.identify) {
       const u = userDataRef.current;
       window.ttq.identify({
         external_id: u.external_id,
