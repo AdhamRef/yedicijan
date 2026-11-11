@@ -332,6 +332,26 @@ test("signed subscription invoices: failure-success orders and replay credit a c
   }
 });
 
+
+test("signed recurring invoice cannot choose between duplicate Stripe subscription references",async()=>{
+  const token="sub_duplicate_"+nonce;
+  const invoiceId="in_duplicate_"+nonce;
+  const subs=[];
+  for(const donorId of [owner.id,outsider.id]){
+    const row=await prisma.subscription.create({data:{
+      donorId,payforToken:token,amount:50.25,currency:"USD",
+      paymentMethod:"CARD",status:"ACTIVE",teamSupport:0,coverFees:false,
+    }});
+    subs.push(row);subscriptionIds.push(row.id);
+  }
+  const before=await prisma.stripeInvoiceSettlement.count({where:{invoiceId}});
+  assert.equal(before,0);
+  const result=await sendSyntheticRecurringInvoiceEvent("invoice.payment_succeeded",subs[0],invoiceId);
+  assert.equal(result.status,200,result.text);
+  assert.equal(await prisma.stripeInvoiceSettlement.count({where:{invoiceId}}),0);
+  assert.equal(await prisma.donation.count({where:{providerOrderId:invoiceId}}),0);
+});
+
 test("HTTP donation comments are private to owner or revenue team",async()=>{
   const path="/api/donations/"+guestDonation.id+"/comments";
   const outsiderCookie=await cookie(outsider);
