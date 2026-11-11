@@ -48,7 +48,7 @@ function getRawCookie(name: string): string | undefined {
 }
 
 function getOrCreateSessionId(): string | undefined {
-  if (typeof window === "undefined") return undefined;
+  if (typeof window === "undefined" || readTrackingConsent() !== "granted") return undefined;
   try {
     let id = sessionStorage.getItem(SESSION_KEY);
     if (!id) {
@@ -113,7 +113,7 @@ function persistMetaClickIds(params: URLSearchParams) {
 
 /** Capture URL params + click IDs into cookies (call once on app load / route change). */
 export function captureAttributionFromUrl(): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || readTrackingConsent() !== "granted" || trackingSensitivePath(window.location.pathname)) return;
   const storedClickIds = captureStoredClickIds();
   const params = new URLSearchParams(window.location.search);
   const keys: DonationAttributionKey[] = [...DONATION_ATTRIBUTION_KEYS];
@@ -140,7 +140,7 @@ export function captureAttributionFromUrl(): void {
 
   if (readTrackingConsent() === "granted" && !trackingSensitivePath(window.location.pathname)) persistMetaClickIds(params);
 
-  const ga = getRawCookie("_ga");
+  const ga = readTrackingConsent() === "granted" ? getRawCookie("_ga") : undefined;
   if (ga) {
     setIfClean("_ga", ga, false);
     const m = ga.match(/^GA\d\.\d\.(.+)$/);
@@ -190,11 +190,9 @@ export function getDonationAttributionPayload(): Record<string, string> {
   } else {
     delete out.fbp;
     delete out.fbc;
-    delete out.fbclid;
-    delete out.ttclid;
-    delete out.gclid;
+    for (const key of ["fbclid", "ttclid", "gclid", "snap_click_id", "scid", "_ga", "ga_client_id", "session_id"]) delete out[key];
   }
-  if (!out.ga_client_id) {
+  if (readTrackingConsent() === "granted" && !out.ga_client_id) {
     const ga = getRawCookie("_ga");
     if (ga) {
       out._ga = out._ga || ga;
