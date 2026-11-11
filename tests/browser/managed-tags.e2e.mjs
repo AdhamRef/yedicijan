@@ -216,10 +216,11 @@ test("Chromium remote Clarity/GTM ID changes and disable unload old containers",
    route.fulfill({status:200,contentType:"application/javascript",body:""}));
  await page.goto(site+"/en/privacy",{waitUntil:"domcontentloaded"});
  await page.waitForFunction(()=>window.__yediGtmContainer==="GTM-ZYXW6789",null,{timeout:15000});
- const second={...first,gtmContainerId:"GTM-ABCD1234"};
+ const second={...first,clarityProjectId:"a614k028k3",gtmContainerId:"GTM-ABCD1234"};
  assert.equal((await request("/api/admin/tracking/integrations","PUT",admin,second)).status,200);
  await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
  await page.waitForFunction(()=>window.__yediGtmContainer==="GTM-ABCD1234",null,{timeout:15000});
+ await page.waitForFunction(()=>window.__yediClarityProject==="a614k028k3",null,{timeout:15000});
  assert.equal(await page.locator("script[data-yedi-managed-tag='gtm']").count(),1);
  const disabled={...second,clarityEnabled:false,gtmEnabled:false};
  assert.equal((await request("/api/admin/tracking/integrations","PUT",admin,disabled)).status,200);
