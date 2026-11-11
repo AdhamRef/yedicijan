@@ -116,8 +116,9 @@ export default function ManagedMarketingTags() {
 
   function choose(value: Exclude<Consent, null>) {
     saveTrackingConsent(value);
-    const loaded = Boolean((window as TagWindow).__yediClarityProject ||
-      (window as TagWindow).__yediGtmContainer);
+    const current = window as TagWindow & { fbq?: unknown; gtag?: unknown; ttq?: unknown; twq?: unknown };
+    const loaded = Boolean(current.__yediClarityProject || current.__yediGtmContainer ||
+      current.fbq || current.gtag || current.ttq || current.twq);
     if (value === "denied" && loaded) {
       (window as TagWindow).clarity?.("consentv2", { ad_Storage: "denied", analytics_Storage: "denied" });
       window.location.reload(); // only reliable way to unload an already-injected GTM runtime
