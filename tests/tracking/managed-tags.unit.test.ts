@@ -63,6 +63,35 @@ test("single consent authority denies missing/denied and sensitive routes", asyn
   }
 });
 
+
+test("privacy: query parameters never expose donor IDs or credentials to marketing SDKs", async () => {
+  const consent = await import("../../lib/tracking/consent");
+  for (const query of [
+    "?email=donor%40fixture.invalid", "?payment_token=secret",
+    "?donationId=fixture", "?receipt=fixture", "?code=oauth",
+    "?client_secret=pi_fixture", "?id=123", "?utm_source=google&email=donor",
+  ]) {
+    assert.equal(consent.trackingSensitiveQuery(query), true, query);
+  }
+  for (const query of [
+    "", "?utm_source=google&utm_campaign=winter", "?gclid=EAIaIQobChMIabcdef1234",
+  ]) assert.equal(consent.trackingSensitiveQuery(query), false, query);
+  const oldDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  try {
+    Object.defineProperty(globalThis, "document", { value: { cookie: "yedi_analytics_consent=granted" }, configurable: true });
+    Object.defineProperty(globalThis, "window", { value: { location: { search: "?email=donor%40fixture.invalid" } }, configurable: true });
+    assert.equal(consent.canRunOptionalTracking("/en/about"), false);
+    assert.equal(consent.canRunOptionalTracking("/en/about?access_token=fixture"), false);
+    assert.equal(consent.canRunOptionalTracking("/en/about?utm_source=google"), true);
+  } finally {
+    if (oldDocument) Object.defineProperty(globalThis, "document", oldDocument);
+    else Reflect.deleteProperty(globalThis, "document");
+    if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});
+
 test("privacy regression: no donor identity in public tracking response or browser vendor matching",async()=>{
  const {readFileSync}=await import("node:fs");
  const source=readFileSync("app/api/donations/[id]/tracking/route.ts","utf8");
