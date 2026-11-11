@@ -43,3 +43,12 @@ This PR remains **Draft, Request Changes, NO-GO**. These are instructions for au
 - No one should merge PR #24, enable unsupported PayFor, change main, or publish to VPS before all signoffs.
 
 **Evidence status:** CI synthetic tests = measurable; real Stripe Test Mode signed fixture, actual merchant/bank settlement, VPS revision, production key migration, backup restoration and approvals = **NOT VERIFIED**.
+
+
+## Latest isolated acceptance additions (11 November 2026)
+
+- Additional signed HTTP `invoice.payment_failed` / `invoice.payment_succeeded` scenarios now cover failed-first, paid-first, and an initial unsettled subscription donation, followed by replay. In each synthetic case one invoice ledger, one PAID donation and exactly one project increment are expected. The separately tested unique-index race rejects parallel ledger inserts. **A simultaneous pair of full recurring webhook POSTs remains a distinct scenario; bank-side arrival order and provider retries need additional test evidence.**
+- Dedicated guest token creation now explicitly rejects `DONATION_GUEST_ACCESS_SECRET === NEXTAUTH_SECRET`; previous rotation key must differ from the current key and from NextAuth. Unit acceptance checks both cases and bounded cutoff. Old NextAuth-derived cookies still fail closed and need owner-authenticated recovery, not silent acceptance.
+- The signed invoice handler currently uses `invoice.created` to set `paidAt`. This is the invoice creation timestamp, **not independent evidence of bank settlement time**; the approved bank/Stripe Test Mode reconciliation must compare `invoice.status_transitions.paid_at` and final provider evidence. Do not treat this field alone as certified settlement timing.
+- The official PDF is presently disallowed for other-bank historical records without separately authenticated proof. This is intentional and must remain a release gate; never fabricate settlement markers to unlock receipts.
+- Real bank data, production index readiness, the running VPS process, recoverable backups and finance/security approvals are *not attested* by CI.
