@@ -79,7 +79,8 @@ jobs:
           fi
       - name: Full TypeScript check (required release evidence)
         run: npx --no-install tsc --noEmit
-      - name: Next.js production build (synthetic CI only)
+      - name: Next.js production build (synthetic CI only; separate from strict TypeScript result)
+        if: success() || failure()
         run: npm run build
       - name: Remove disposable database
         if: always()
