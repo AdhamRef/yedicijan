@@ -92,6 +92,27 @@ test("official receipts are held for unsettled, failed, unverified and mismatche
   assert.equal(confirmedDonationForReceipt(monthly,null),false);
   assert.equal(confirmedDonationForReceipt(monthly,{...ledger,amountSmallestUnit:5024}),false);
 });
+test("guest secret reuse of NextAuth or previous key is rejected",()=>{
+ const current=process.env.DONATION_GUEST_ACCESS_SECRET!;
+ const auth=process.env.NEXTAUTH_SECRET;
+ try {
+   process.env.NEXTAUTH_SECRET=current;
+   assert.equal(createGuestDonationAccess(base,now),null);
+   process.env.NEXTAUTH_SECRET="synthetic-other-nextauth-secret-000000000000000";
+   process.env.DONATION_GUEST_ACCESS_SECRET="synthetic-old-key-guest-000000000000000";
+   const legacy=createGuestDonationAccess(base,now)!;
+   process.env.DONATION_GUEST_ACCESS_SECRET=current;
+   process.env.NEXTAUTH_SECRET="synthetic-old-key-guest-000000000000000";
+   process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET=process.env.NEXTAUTH_SECRET;
+   process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL=String(Math.floor(now/1000)+3600);
+   assert.equal(verifyGuestDonationAccess(legacy,base,now),false);
+ } finally {
+   process.env.DONATION_GUEST_ACCESS_SECRET=current;
+   if(auth===undefined)delete process.env.NEXTAUTH_SECRET;else process.env.NEXTAUTH_SECRET=auth;
+   delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_SECRET;
+   delete process.env.DONATION_GUEST_ACCESS_PREVIOUS_VALID_UNTIL;
+ }
+});
 test("guest capability has mandatory independent secret and bounded previous-key rotation",()=>{
   const current=process.env.DONATION_GUEST_ACCESS_SECRET!;
   const prior="synthetic-previous-guest-only-key-0123456789";
