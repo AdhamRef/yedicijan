@@ -29,12 +29,13 @@ export function saveTrackingConsent(value: Exclude<TrackingConsent, null>): void
     // also be addressed through provider-level revocation and retention policy.
     try {
       if (typeof sessionStorage !== "undefined") {
-        sessionStorage.removeItem("_ttclid");
-        sessionStorage.removeItem("_gclid");
+        for (const key of ["_ttclid", "_gclid", "_fbclid", "_snap_click_id", "_scid", "ala_fbclid", "ala_tracking_session_id"]) {
+          sessionStorage.removeItem(key);
+        }
       }
       for (const entry of document.cookie.split(";")) {
         const name = entry.trim().split("=")[0];
-        if (/^(_fbp|_fbc|_ga(?:_.*)?|_gid|_gcl_.*|_ttp|_tt_enable_cookie)$/.test(name)) {
+        if (/^(_fbp|_fbc|_ga(?:_.*)?|_gid|_gcl_.*|_ttp|_tt_enable_cookie|ala_attr_(fbp|fbc|fbclid|gclid|ttclid|ga_client_id|_ga))$/.test(name)) {
           document.cookie = encodeURIComponent(name) + "=; Max-Age=0; Path=/; SameSite=Lax" + secure;
         }
       }
