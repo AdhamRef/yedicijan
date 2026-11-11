@@ -198,3 +198,22 @@ export function stripeRecurringCustomerMatches(
     customer === sub.stripeCustomerId
   );
 }
+
+/** Failed invoices are audit events, never credit; still reject cross-account,
+ * cross-currency and wrong-amount attribution before writing a FAILED row.
+ */
+export function stripeFailedRecurringInvoiceMatches(
+  sub: StoredSubscriptionForStripe,
+  invoice: { id: string; currency: string; amount_due: number },
+): boolean {
+  const total = sub.amount + sub.teamSupport;
+  const expected = total + (sub.coverFees ? total * 0.03 : 0);
+  const amount = Math.round(expected * 100);
+  return Boolean(
+    sub.donorId && invoice.id.startsWith("in_") &&
+    Number.isFinite(expected) && expected > 0 &&
+    Number.isSafeInteger(amount) && amount > 0 &&
+    invoice.amount_due === amount &&
+    invoice.currency.toLowerCase() === sub.currency.toLowerCase()
+  );
+}
