@@ -164,10 +164,13 @@ test("Chromium denies legacy pixels and optional tags without consent, then clea
   await page.getByRole("button",{name:"Allow"}).click();
   await page.waitForFunction(()=>Boolean(window.__yediGtmContainer),null,{timeout:12000});
   await page.getByRole("button",{name:"Tracking privacy"}).click();
+  await page.evaluate(()=>{sessionStorage.setItem("_gclid","EAIaIQobChMIabcdef1234");sessionStorage.setItem("_ttclid","tok_abcDEF.12345")});
   await page.getByRole("button",{name:"Decline"}).click();
   await page.waitForLoadState("domcontentloaded");
   await page.waitForTimeout(500);
   assert.equal(await page.evaluate(()=>document.cookie.includes("yedi_analytics_consent=denied")),true);
+  assert.equal(await page.evaluate(()=>sessionStorage.getItem("_gclid")),null);
+  assert.equal(await page.evaluate(()=>sessionStorage.getItem("_ttclid")),null);
   assert.equal(await page.evaluate(()=>Boolean(window.__yediGtmContainer)),false,"hard reload must unload tag container");
   await context.close();
 });
