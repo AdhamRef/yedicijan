@@ -15,8 +15,26 @@ export function trackingSensitivePath(path: string): boolean {
   return /(?:^|\/)(?:dashboard|auth|account|login|register|profile|cart|checkout|payment|donate|donations|receipt|donation-failed|donation-pending|success)(?:\/|$)/i.test(path);
 }
 
+/** Only explicitly approved acquisition parameters may enter a recorder URL.
+ * An unknown key can itself hold a receipt, donor or login credential. */
+export function trackingSensitiveQuery(search: string): boolean {
+  if (!search) return false;
+  try {
+    const query = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+    const allowed = /^(?:utm_(?:source|medium|campaign|content|term|id)|fbclid|gclid|dclid|gbraid|wbraid|ttclid|twclid|msclkid|scclid|sccid|li_fat_id|rdt_cid)$/i;
+    for (const [key, value] of query) {
+      if (!allowed.test(key) || !value || value.length > 256 ||
+          /@|https?:\/\/|(?:^|[^a-z])(?:pi_|cs_|sk_|pk_)/i.test(value)) return true;
+    }
+    return false;
+  } catch { return true; }
+}
+
 export function canRunOptionalTracking(path: string): boolean {
-  return readTrackingConsent() === "granted" && !trackingSensitivePath(path);
+  const query = path.includes("?") ? path.slice(path.indexOf("?")) :
+    typeof window !== "undefined" ? window.location.search || "" : "";
+  return readTrackingConsent() === "granted" &&
+    !trackingSensitivePath(path.split("?")[0]) && !trackingSensitiveQuery(query);
 }
 
 export function saveTrackingConsent(value: Exclude<TrackingConsent, null>): void {
