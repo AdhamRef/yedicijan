@@ -288,6 +288,7 @@ async function sendSyntheticRecurringInvoiceEvent(type,sub,invoiceId,reason="sub
       id:invoiceId,object:"invoice",created:Math.floor(Date.now()/1000),
       parent:{subscription_details:{subscription:sub.payforToken}},
       billing_reason:reason,status:paid?"paid":"open",paid,
+      status_transitions:{paid_at:paid?Math.floor(Date.now()/1000):null},
       currency:"usd",amount_paid:paid?5025:0,amount_due:5025
     }},
   });
