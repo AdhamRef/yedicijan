@@ -38,7 +38,7 @@ test("legacy tags remain visible until first explicit save; explicit disable win
 });
 
 test("single consent authority denies missing/denied and sensitive routes", async () => {
-  const consent = await import("../../lib/tracking/consent.ts");
+  const consent = await import("../../lib/tracking/consent");
   const oldDocument = Object.getOwnPropertyDescriptor(globalThis,"document");
   const oldWindow = Object.getOwnPropertyDescriptor(globalThis,"window");
   try {
