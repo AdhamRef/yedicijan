@@ -117,14 +117,6 @@ function countryLine(code: string | null): string {
   return `${flag} ${htmlEscape(name)}`.trim();
 }
 
-function targetLine(d: FormattableDonation): string {
-  const campaigns = d.items.map((i) => i.campaign.title).filter(Boolean);
-  if (campaigns.length > 0) return htmlEscape(campaigns.join("، "));
-  const cats = d.categoryItems.map((i) => i.category.name).filter(Boolean);
-  if (cats.length > 0) return `فئة: ${htmlEscape(cats.join("، "))}`;
-  return "—";
-}
-
 function adCampaignLine(d: FormattableDonation): string | null {
   const attr = d.attribution ?? {};
   const u = typeof attr.utm_campaign === "string" ? attr.utm_campaign : "";
@@ -165,7 +157,7 @@ export function formatDonationNotification(
   // ⭐ = first-time donor. Inline on the donor line rather than a second message.
   lines.push(`👤 <b>المتبرع:</b> ${options.isNewDonor ? "⭐ " : ""}${donorLine(d.donor)}`);
   lines.push(`🌍 <b>الدولة:</b> ${countryLine(d.donorCountryCode)}`);
-  lines.push(`🎯 <b>الوجهة:</b> ${targetLine(d)}`);
+  // The donated campaign is deliberately left out of the automatic notification.
   lines.push(
     `🏦 <b>البوابة:</b> ${htmlEscape(providerLabel(d))}${
       d.subscriptionId ? " · 🔁 شهري" : ""
