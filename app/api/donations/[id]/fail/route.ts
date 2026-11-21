@@ -6,9 +6,8 @@ import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversio
 /**
  * Mark a donation as FAILED.
  *
- * Called from the browser when a payment provider returns an inline error
- * (e.g. Stripe Elements `confirmPayment` rejects the card) so the row can't be
- * left dangling at status=PAID. Idempotent — re-marking an already-FAILED
+ * Called from the browser when a payment provider returns an inline error so
+ * the row can't be left dangling at status=PAID. Idempotent — re-marking an already-FAILED
  * donation is a no-op, and we never overwrite a donation that has already
  * been confirmed paid (paidAt is set).
  */

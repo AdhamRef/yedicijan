@@ -1,6 +1,5 @@
 "use client";
 
-import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "react-hot-toast";
@@ -11,7 +10,6 @@ import {
   CreditCard,
   Landmark,
   Loader2,
-  Repeat,
   Settings,
 } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
@@ -60,7 +58,7 @@ export default function PaymentGatewaysPage() {
       toast.success(
         next
           ? "تم تفعيل PayFor — التبرعات بالعملات غير الليرة التركية تمر عبره"
-          : "تم إيقاف PayFor — كل التبرعات الفردية ستمر عبر Albaraka"
+          : "تم إيقاف PayFor — كل التبرعات ستمر عبر Albaraka"
       );
     } catch (e) {
       setPayforEnabled(prev);
@@ -77,31 +75,24 @@ export default function PaymentGatewaysPage() {
   /** The live routing table, derived from the one switch that still exists. */
   const routes = [
     {
-      when: "تبرع لمرة واحدة بالليرة التركية (TRY)",
+      when: "تبرع بالليرة التركية (TRY)",
       gateway: "Albaraka Türk",
       note: "3D Secure",
     },
     {
-      when: "تبرع لمرة واحدة بأي عملة أخرى",
+      when: "تبرع بأي عملة أخرى",
       gateway: payforEnabled ? "PayFor — زراعت كاتيليم" : "Albaraka Türk",
       note: payforEnabled
         ? "3D Secure — يُحوَّل المبلغ إلى الليرة التركية"
         : "3D Secure — لأن PayFor موقوف",
     },
-    MONTHLY_DONATIONS_ENABLED
-      ? { when: "تبرع شهري (اشتراك)", gateway: "Stripe", note: "التحصيل المتكرر" }
-      : {
-          when: "تبرع شهري (اشتراك)",
-          gateway: "موقوف",
-          note: "الاشتراكات الحالية فقط تبقى على Stripe",
-        },
   ];
 
   return (
     <div className="space-y-6" dir="rtl">
       <PageHeader
         title="بوابات الدفع"
-        description="توجيه التبرعات ثابت حسب العملة ونوع التبرع. الإعداد الوحيد المتاح هو تفعيل أو إيقاف PayFor."
+        description="توجيه التبرعات ثابت حسب العملة. الإعداد الوحيد المتاح هو تفعيل أو إيقاف PayFor."
         icon={Settings}
       />
 
@@ -150,7 +141,7 @@ export default function PaymentGatewaysPage() {
                       PayFor — زراعت كاتيليم
                     </h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      يتولّى التبرعات الفردية بكل العملات غير الليرة التركية عبر
+                      يتولّى التبرعات بكل العملات غير الليرة التركية عبر
                       3D Secure، ويحصّلها بالليرة بعد التحويل. عند الإيقاف تنتقل
                       هذه التبرعات إلى Albaraka.
                     </p>
@@ -179,7 +170,7 @@ export default function PaymentGatewaysPage() {
                     Albaraka Türk
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    البوابة الأساسية للتبرعات الفردية بالليرة التركية، وتتولّى
+                    البوابة الأساسية للتبرعات بالليرة التركية، وتتولّى
                     كل العملات عند إيقاف PayFor.
                     مُهيّأة عبر متغيرات البيئة ولا تحتاج إعدادًا هنا.
                     {albarakaUseOOS &&
@@ -195,26 +186,6 @@ export default function PaymentGatewaysPage() {
                       </span>
                     </p>
                   )}
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-5 sm:p-6">
-              <div className="flex items-start gap-3">
-                <div className="rounded-full bg-indigo-50 p-2 text-indigo-700">
-                  <Repeat className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900">
-                    {MONTHLY_DONATIONS_ENABLED
-                      ? "Stripe — التبرعات الشهرية فقط"
-                      : "Stripe — الاشتراكات الحالية فقط"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {MONTHLY_DONATIONS_ENABLED
-                      ? "لم يعد Stripe يستقبل أي تبرع لمرة واحدة. يبقى مسؤولًا عن الاشتراكات الشهرية وحدها، لأن بوابتَي 3D Secure لا توفّران وسيلة للتحصيل المتكرر في الدورة التالية."
-                      : "التبرع الشهري موقوف ولا تُقبل اشتراكات جديدة. يبقى Stripe لتحصيل الاشتراكات القائمة فقط حتى إلغائها."}
-                  </p>
                 </div>
               </div>
             </Card>

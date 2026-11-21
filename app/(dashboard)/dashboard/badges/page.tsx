@@ -30,7 +30,6 @@ import { LOCALE_OPTIONS } from "@/lib/locales";
 const CRITERIA_TYPES: { value: BadgeCriteriaType; label: string }[] = [
   { value: "TOTAL_LAST_N_MONTHS", label: "مجموع التبرع في آخر فترة" },
   { value: "ANY_SPAN_N_MONTHS", label: "أي فترة متتالية" },
-  { value: "MONTHLY_ACTIVE_RANGE", label: "اشتراك شهري نشط" },
   { value: "TOTAL_LIFETIME", label: "إجمالي التبرعات" },
   { value: "DONATION_COUNT_MIN", label: "عدد مرات التبرع" },
 ];
@@ -40,8 +39,6 @@ const CRITERIA_EXPLANATIONS: Record<BadgeCriteriaType, string> = {
     "يُمنح الشارة لمن بلغ مجموع تبرعاته في آخر عدد من الأشهر (من اليوم للوراء) مبلغاً تحددّه أنت.",
   ANY_SPAN_N_MONTHS:
     "يُمنح الشارة لمن وُجدت في سجله فترة متتالية من أشهر (أي وقت) بلغ فيها مجموع تبرعاته مبلغاً تحددّه.",
-  MONTHLY_ACTIVE_RANGE:
-    "يُمنح الشارة لمن لديه اشتراك شهري مستمر حالياً وقيمة اشتراكه الشهري بين مبلغين تحددّهما (من وإلى).",
   TOTAL_LIFETIME:
     "يُمنح الشارة لمن بلغ إجمالي كل ما تبرع به منذ تسجيله مبلغاً تحددّه.",
   DONATION_COUNT_MIN:
@@ -66,7 +63,6 @@ interface BadgeForm {
   criteria: {
     type: BadgeCriteriaType;
     amountMinUSD?: number;
-    amountMaxUSD?: number;
     months?: number;
     count?: number;
   };
@@ -84,8 +80,6 @@ function criteriaSummary(c: BadgeForm["criteria"]): string {
       return `آخر ${c.months ?? 0} شهر من اليوم، مبلغ ${c.amountMinUSD ?? 0} دولار أو أكثر`;
     case "ANY_SPAN_N_MONTHS":
       return `أي ${c.months ?? 0} شهر متتالية، مبلغ ${c.amountMinUSD ?? 0} دولار أو أكثر`;
-    case "MONTHLY_ACTIVE_RANGE":
-      return `اشتراك شهري نشط بين ${c.amountMinUSD ?? 0} و ${c.amountMaxUSD ?? "—"} دولار`;
     case "TOTAL_LIFETIME":
       return `إجمالي التبرعات مدى الحياة ${c.amountMinUSD ?? 0} دولار أو أكثر`;
     case "DONATION_COUNT_MIN":
@@ -149,9 +143,12 @@ export default function BadgesPage() {
         name: b.name ?? "",
         color: b.color ?? "#3b82f6",
         criteria: {
-          type: (b.criteria?.type as BadgeCriteriaType) ?? "TOTAL_LIFETIME",
+          // A stored type that is no longer offered (e.g. the removed monthly-subscription
+          // criterion) opens as the default so the form always shows a valid choice.
+          type: CRITERIA_TYPES.some((t) => t.value === b.criteria?.type)
+            ? (b.criteria.type as BadgeCriteriaType)
+            : "TOTAL_LIFETIME",
           amountMinUSD: b.criteria?.amountMinUSD,
-          amountMaxUSD: b.criteria?.amountMaxUSD,
           months: b.criteria?.months,
           count: b.criteria?.count,
         },
@@ -176,7 +173,6 @@ export default function BadgesPage() {
         criteria: {
           type: form.criteria.type,
           amountMinUSD: form.criteria.amountMinUSD,
-          amountMaxUSD: form.criteria.amountMaxUSD,
           months: form.criteria.months,
           count: form.criteria.count,
         },
@@ -383,46 +379,6 @@ export default function BadgesPage() {
                       }))
                     }
                     placeholder="2"
-                  />
-                </div>
-              </>
-            )}
-            {form.criteria.type === "MONTHLY_ACTIVE_RANGE" && (
-              <>
-                <div className="space-y-2">
-                  <Label>الحد الأدنى للمبلغ (USD)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.criteria.amountMinUSD ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        criteria: {
-                          ...f.criteria,
-                          amountMinUSD: e.target.value ? Number(e.target.value) : undefined,
-                        },
-                      }))
-                    }
-                    placeholder="500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>الحد الأقصى للمبلغ (USD)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={form.criteria.amountMaxUSD ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        criteria: {
-                          ...f.criteria,
-                          amountMaxUSD: e.target.value ? Number(e.target.value) : undefined,
-                        },
-                      }))
-                    }
-                    placeholder="800"
                   />
                 </div>
               </>

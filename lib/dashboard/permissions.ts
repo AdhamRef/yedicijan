@@ -3,9 +3,9 @@ import type { Session } from "next-auth";
 type UserLike = { role?: string | null; dashboardPermissions?: string[] | null };
 
 export const DASHBOARD_PERMISSION_KEYS = [
-  "revenue", "monthly", "referrals", "bankTransfers", "donors", "team", "logs",
+  "revenue", "referrals", "bankTransfers", "donors", "team", "logs",
   "badges", "messages", "templates", "campaigns", "categories", "blog", "slides",
-  // "operations" was removed with the التشغيل section. Any value still stored on a user row is
+  // "operations" (the التشغيل section) and "monthly" (monthly donations) were removed. Any value still stored on a user row is
   // simply inert — it maps to no page and grants nothing.
   "ticker", "pixels", "ads", "platformConnections", "archive",
   "generalSettings", "platformConnectionsTest", "platformConnectionsManage",
@@ -84,7 +84,6 @@ const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
   { prefix: "/dashboard/conversion-events", key: "pixels" },
   { prefix: "/dashboard/ads", key: "ads" },
   { prefix: "/dashboard/archive", key: "archive" },
-  { prefix: "/dashboard/monthly", key: "monthly" },
   { prefix: "/dashboard/link-generator", key: "referrals" },
   { prefix: "/dashboard/referrals", key: "referrals" },
   { prefix: "/dashboard/bank-transfers", key: "bankTransfers" },

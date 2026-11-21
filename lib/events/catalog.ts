@@ -51,24 +51,6 @@ export const EVENT_CATALOG: EventDefinition[] = [
     hasDonation: false,
   },
   {
-    event: "SUBSCRIPTION_CREATED",
-    label: "اشتراك شهري جديد",
-    description: "يُرسل عند إنشاء اشتراك تبرّع متكرّر.",
-    hasDonation: false,
-  },
-  {
-    event: "SUBSCRIPTION_PAYMENT",
-    label: "تجديد اشتراك ناجح",
-    description: "يُرسل عند نجاح خصم اشتراك متكرّر — يحوي بيانات التبرّعة المتولّدة.",
-    hasDonation: true,
-  },
-  {
-    event: "SUBSCRIPTION_CANCELLED",
-    label: "إلغاء اشتراك",
-    description: "يُرسل عند إلغاء اشتراك متكرّر.",
-    hasDonation: false,
-  },
-  {
     event: "DONATION_LAPSED",
     label: "تذكير بالتبرّع مجددًا",
     description:

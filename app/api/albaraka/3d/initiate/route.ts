@@ -128,7 +128,6 @@ export async function POST(req: NextRequest) {
     const resolved = resolveGateway({
       payforEnabled,
       currency: donation.currency,
-      donationType: donation.subscriptionId ? "MONTHLY" : "ONE_TIME",
     });
     if (resolved !== "ALBARAKA") {
       return NextResponse.json(

@@ -41,7 +41,6 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
     group: "الرئيسية",
     items: [
       { key: "revenue", title: "اللوحة الرئيسية", href: "/dashboard", icon: "layoutDashboard", keywords: ["home", "overview", "الرئيسية"] },
-      { key: "monthly", title: "التبرعات الشهرية", href: "/dashboard/monthly", icon: "repeat", keywords: ["monthly", "subscriptions", "اشتراكات"] },
       { key: "bankTransfers", title: "التحويلات البنكية", href: "/dashboard/bank-transfers", icon: "landmark", keywords: ["bank", "transfers", "حوالات"] },
       { key: "donors", title: "المتبرعون", href: "/dashboard/users/donors", icon: "users", keywords: ["donors", "users", "متبرعين"] },
     ],
@@ -112,7 +111,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
     group: "الإدارة",
     items: [
       { key: "team", title: "الفريق", href: "/dashboard/users/team", icon: "userCog", keywords: ["team", "staff", "permissions", "صلاحيات"] },
-      { key: "generalSettings", title: "الإعدادات", href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways", "stripe"] },
+      { key: "generalSettings", title: "الإعدادات", href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways"] },
       { key: "logs", title: "سجلات النظام", href: "/dashboard/logs", icon: "scrollText", keywords: ["logs", "audit", "system"] },
     ],
   },
@@ -143,7 +142,6 @@ export const DASHBOARD_PERMISSION_ROWS: {
   title: string;
 }[] = [
   { key: "revenue", group: "الرئيسية", title: "اللوحة الرئيسية" },
-  { key: "monthly", group: "الرئيسية", title: "التبرعات الشهرية" },
   { key: "bankTransfers", group: "الرئيسية", title: "التحويلات البنكية" },
   { key: "donors", group: "الرئيسية", title: "المتبرعون" },
   { key: "campaigns", group: "الحملات والمحتوى", title: "المشاريع" },

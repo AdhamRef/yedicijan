@@ -50,7 +50,6 @@ export async function GET(
         attribution: true,
         conversionEventsSentAt: true,
         conversionFailedEventsSentAt: true,
-        subscriptionId: true,
         items: { select: { campaign: { select: { id: true, title: true } } } },
       },
     });
@@ -69,7 +68,6 @@ export async function GET(
         status: d.status,
         amountUSD: d.amountUSD ?? d.totalAmount ?? d.amount ?? 0,
         currency: d.currency,
-        type: d.subscriptionId ? ("MONTHLY" as const) : ("ONE_TIME" as const),
         campaign: d.items[0]?.campaign?.title ?? null,
         platform: source.platform,
         platformLabel: PLATFORM_LABEL_AR[source.platform],

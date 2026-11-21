@@ -12,7 +12,6 @@ import {
   Heart,
   FolderTree,
   Wallet,
-  Repeat,
   Calendar,
   Receipt,
   Target,
@@ -97,10 +96,6 @@ interface ChartDataPoint {
   date: string;
   amountUSD: number;
   count: number;
-  amountOneTime: number;
-  countOneTime: number;
-  amountMonthly: number;
-  countMonthly: number;
   amountFailed: number;
   countFailed: number;
   teamSupport: number;
@@ -135,11 +130,6 @@ interface DonationRow {
   currency: string;
   teamSupport: number;
   fees: number;
-  type: string;
-  /** true when this row is an automatic renewal rather than the signup charge */
-  isRecurringCharge?: boolean;
-  /** 1-based position within its subscription (1 = signup charge) */
-  subscriptionCycle?: number | null;
   status: string;
   paidAt?: string | null;
   provider?: string | null;
@@ -168,23 +158,10 @@ interface DashboardStats {
   paidRevenueAllTimeUnfiltered?: number;
   /** All-time companions to the above — safe to show beside a figure labelled "كل الوقت". */
   paidCountAllTimeUnfiltered?: number;
-  activeMonthlyCountUnfiltered?: number;
-  monthlyRecurringRevenueUnfiltered?: number;
   paidCount?: number;
   failedCount?: number;
   failedTotalAmount?: number;
-  oneTimeCount: number;
-  monthlyCount: number;
-  oneTimeAllCount?: number;
-  monthlyAllCount?: number;
-  activeMonthlyCount: number;
-  monthlyStoppedCount?: number;
-  activeMonthlyAmountUSD?: number;
-  monthlyStoppedAmountUSD?: number;
-  monthlyRecurringRevenue: number;
   thisMonthRevenue: number;
-  oneTimeTotalAmount?: number;
-  monthlyTotalAmount?: number;
   campaignDonationsTotal: number;
   categoryDonationsTotal: number;
   campaignDonationsCount?: number;
@@ -196,7 +173,6 @@ interface DashboardStats {
     amount: number;
     currency: string;
     donorName: string;
-    type: string;
     status?: string;
     provider?: string | null;
     campaignTitle: string | null;
@@ -208,7 +184,7 @@ interface DashboardStats {
 type ChartViewType = "bar" | "line" | "area";
 type ChartPeriod = "day" | "yesterday" | "week" | "month" | "year" | "all" | "custom";
 type ChartMetric = "amount" | "teamSupport" | "fees";
-type StatCardSet = "revenue" | "overview" | "breakdown";
+type StatCardSet = "revenue" | "overview";
 
 const PERIOD_LABELS: Record<ChartPeriod, string> = {
   day: "اليوم",
@@ -220,7 +196,7 @@ const PERIOD_LABELS: Record<ChartPeriod, string> = {
   custom: "مخصص",
 };
 
-// Was a local block of raw hex duplicated verbatim in monthly/page.tsx and built on a generic
+// Was a local block of raw hex duplicated verbatim in another page and built on a generic
 // blue rather than the brand colour. Aliased so every existing CHART_COLORS.* reference in
 // this file keeps working while the values now come from one shared, brand-anchored palette.
 const CHART_COLORS = {
@@ -319,8 +295,6 @@ export default function DashboardPage() {
       chartData.map((d) => ({
         ...d,
         amountUSD: convertUsdToDisplay(d.amountUSD),
-        amountOneTime: convertUsdToDisplay(d.amountOneTime),
-        amountMonthly: convertUsdToDisplay(d.amountMonthly),
         amountFailed: convertUsdToDisplay(d.amountFailed),
         teamSupport: convertUsdToDisplay(d.teamSupport),
         fees: convertUsdToDisplay(d.fees),
@@ -340,7 +314,6 @@ export default function DashboardPage() {
   const [donationsStatusFilter, setDonationsStatusFilter] = useState<"all" | "PAID" | "FAILED">("all");
   /** Applied donor search (name or email) for the أحدث التبرعات table — server-side, not a page filter. */
   const [donationsSearch, setDonationsSearch] = useState("");
-  const [donationsTypeFilter, setDonationsTypeFilter] = useState<"all" | "ONE_TIME" | "MONTHLY">("all");
   const [donationLocaleFilter, setDonationLocaleFilter] = useState<
     "all" | "ar" | "en" | "fr" | "tr" | "id" | "pt" | "es" | "de" | "__unset"
   >("all");
@@ -562,7 +535,6 @@ export default function DashboardPage() {
         if (start) params.set("start", start);
         if (end) params.set("end", end);
         if (donationsStatusFilter !== "all") params.set("status", donationsStatusFilter);
-        if (donationsTypeFilter !== "all") params.set("donationType", donationsTypeFilter);
         if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
         if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
         if (donationsSearch) params.set("search", donationsSearch);
@@ -593,7 +565,6 @@ export default function DashboardPage() {
       donationsSortBy,
       donationsSortOrder,
       donationsStatusFilter,
-      donationsTypeFilter,
       donationLocaleFilter,
       donationCountryFilter,
       donationsSearch,
@@ -605,7 +576,7 @@ export default function DashboardPage() {
     if (loading) return;
     setDonationsPage(1);
     fetchDonations(1, false);
-  }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationsTypeFilter, donationLocaleFilter, donationCountryFilter, donationsSearch, fetchDonations]);
+  }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationLocaleFilter, donationCountryFilter, donationsSearch, fetchDonations]);
 
   const loadMoreDonations = () => {
     const next = donationsPage + 1;
@@ -663,7 +634,6 @@ export default function DashboardPage() {
       categoryId: selectedCategory,
       campaignId: selectedCampaign,
       status: donationsStatusFilter,
-      type: donationsTypeFilter,
       locale: donationLocaleFilter === "all" ? "all" : String(donationLocaleFilter),
       country: donationCountryFilter,
       sortBy: donationsSortBy,
@@ -676,7 +646,6 @@ export default function DashboardPage() {
     selectedCategory,
     selectedCampaign,
     donationsStatusFilter,
-    donationsTypeFilter,
     donationLocaleFilter,
     donationCountryFilter,
     donationsSortBy,
@@ -713,8 +682,6 @@ export default function DashboardPage() {
     return <LoadingSkeleton />;
   }
 
-  const oneTimeTotal = stats?.oneTimeTotalAmount ?? 0;
-  const monthlyTotal = stats?.monthlyTotalAmount ?? 0;
   const revenueSplitData = [
     {
       name: "مشاريع",
@@ -727,21 +694,6 @@ export default function DashboardPage() {
       value: stats?.categoryDonationsTotal ?? 0,
       count: stats?.categoryDonationsCount ?? 0,
       color: "#64748b",
-    },
-  ].filter((d) => d.value > 0 || d.count > 0);
-
-  const typeSplitData = [
-    {
-      name: "مرة واحدة",
-      value: oneTimeTotal,
-      count: stats?.oneTimeCount ?? 0,
-      color: "#3b82f6",
-    },
-    {
-      name: "شهرية",
-      value: monthlyTotal,
-      count: stats?.monthlyCount ?? 0,
-      color: "#1d4ed8",
     },
   ].filter((d) => d.value > 0 || d.count > 0);
 
@@ -801,23 +753,17 @@ export default function DashboardPage() {
             )}
             note="لا تتأثر هذه القيمة ولا البطاقات المجاورة بالفترة أو التصفية المختارة أدناه."
             stats={[
-              // No hints here: the badge already says كل الوقت, and "اشتراك نشط" would have
-              // repeated the stat sitting right next to it. In a single-row band every extra
-              // word is height the charts below lose.
-              {
-                label: "التبرعات الشهرية المتكررة",
-                icon: Repeat,
-                value: formatInSelectedCurrency(stats?.monthlyRecurringRevenueUnfiltered ?? 0),
-              },
+              // No hints here: the badge already says كل الوقت. In a single-row band every
+              // extra word is height the charts below lose.
               {
                 label: "عدد التبرعات الناجحة",
                 icon: HandCoins,
                 value: (stats?.paidCountAllTimeUnfiltered ?? 0).toLocaleString("en-US"),
               },
               {
-                label: "اشتراكات نشطة",
-                icon: Landmark,
-                value: (stats?.activeMonthlyCountUnfiltered ?? 0).toLocaleString("en-US"),
+                label: "المشاريع",
+                icon: Heart,
+                value: (stats?.totalCampaigns ?? 0).toLocaleString("en-US"),
               },
               {
                 label: "إجمالي المستخدمين",
@@ -860,12 +806,6 @@ export default function DashboardPage() {
                 >
                   نظرة عامة
                 </TabsTrigger>
-                <TabsTrigger
-                  value="breakdown"
-                  className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
-                >
-                  تفصيل التبرعات
-                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -899,15 +839,6 @@ export default function DashboardPage() {
                   accent="emerald"
                   format="money"
                   subtitle="جميع التبرعات الناجحة بشكل عام دون فلتر"
-                />
-                <StatsMetricCard
-                  compact
-                  title="إيرادات شهرية متكررة (MRR)"
-                  value={stats?.monthlyRecurringRevenue ?? 0}
-                  icon={Repeat}
-                  accent="emerald"
-                  format="money"
-                  subtitle="اشتراكات نشطة — مبالغ مخططة"
                 />
                 <StatsMetricCard
                   compact
@@ -977,52 +908,6 @@ export default function DashboardPage() {
                 />
               </>
             )}
-            {statCardSet === "breakdown" && (
-              <>
-                <StatsMetricCard
-                  compact
-                  title="مرة واحدة (عدد)"
-                  value={stats?.oneTimeAllCount ?? 0}
-                  icon={Receipt}
-                  accent="slate"
-                  subtitle={`ناجح: ${stats?.oneTimeCount ?? 0}`}
-                />
-                <StatsMetricCard
-                  compact
-                  title="شهرية (عدد)"
-                  value={stats?.monthlyAllCount ?? 0}
-                  icon={Repeat}
-                  accent="slate"
-                  subtitle={`ناجح: ${stats?.monthlyCount ?? 0}`}
-                />
-                <StatsMetricCard
-                  compact
-                  title="التبرعات الشهرية الناشطة"
-                  value={stats?.activeMonthlyAmountUSD ?? 0}
-                  icon={Repeat}
-                  accent="teal"
-                  format="money"
-                  subtitle={`عدد: ${stats?.activeMonthlyCount ?? 0}`}
-                />
-                <StatsMetricCard
-                  compact
-                  title="التبرعات الشهرية المتوقفة"
-                  value={stats?.monthlyStoppedAmountUSD ?? 0}
-                  icon={Repeat}
-                  accent="indigo"
-                  format="money"
-                  subtitle={`عدد: ${stats?.monthlyStoppedCount ?? 0}`}
-                />
-                <StatsMetricCard
-                  compact
-                  title="تبرعات مقبولة"
-                  value={stats?.paidCount ?? 0}
-                  icon={Receipt}
-                  accent="teal"
-                  subtitle={`${formatMoney(stats?.totalAmount ?? 0, undefined, stats?.totalAmount)}`}
-                />
-              </>
-            )}
           </div>
         </section>
         )}
@@ -1082,15 +967,14 @@ export default function DashboardPage() {
                                 })
                               }
                               formatter={(value: number, name: string) => {
-                                if (name === "amountOneTime") return [formatInSelectedCurrency(Number(value), true), "مبلغ مرة واحدة"];
-                                if (name === "amountMonthly") return [formatInSelectedCurrency(Number(value), true), "مبلغ شهري"];
+                                if (name === "amountUSD") return [formatInSelectedCurrency(Number(value), true), "مبلغ ناجح"];
                                 if (name === "amountFailed") return [formatInSelectedCurrency(Number(value), true), "مبلغ فاشل"];
                                 return [formatInSelectedCurrency(Number(value), true), name];
                               }}
                               content={({ active, payload, label }) => {
                                 if (!active || !payload?.length) return null;
                                 const point = displayChartData.find((d) => d.date === label);
-                                const isAmount = (key: string) => key === "amountOneTime" || key === "amountMonthly" || key === "amountFailed" || key === "مبلغ مرة واحدة" || key === "مبلغ شهري" || key === "مبلغ فاشل";
+                                const isAmount = (key: string) => key === "amountUSD" || key === "amountFailed" || key === "مبلغ ناجح" || key === "مبلغ فاشل";
                                 return (
                                   <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
                                     <p className="text-sm font-medium text-slate-700 mb-1.5">
@@ -1121,18 +1005,11 @@ export default function DashboardPage() {
                             />
                             <Legend />
                             <Bar
-                              dataKey="amountOneTime"
+                              dataKey="amountUSD"
                               fill="#3b82f6"
                               radius={[4, 4, 0, 0]}
                               maxBarSize={32}
-                              name="مبلغ مرة واحدة"
-                            />
-                            <Bar
-                              dataKey="amountMonthly"
-                              fill="#1d4ed8"
-                              radius={[4, 4, 0, 0]}
-                              maxBarSize={32}
-                              name="مبلغ شهري"
+                              name="مبلغ ناجح"
                             />
                             {showFailed && (
                               <Bar
@@ -1416,12 +1293,6 @@ export default function DashboardPage() {
                         مشاريع vs فئات
                       </TabsTrigger>
                       <TabsTrigger
-                        value="one-time-monthly"
-                        className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
-                      >
-                        مرة واحدة vs شهرية
-                      </TabsTrigger>
-                      <TabsTrigger
                         value="paid-failed"
                         className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
                       >
@@ -1445,43 +1316,6 @@ export default function DashboardPage() {
                                 label={false}
                               >
                                 {revenueSplitData.map((entry) => (
-                                  <Cell key={entry.name} fill={entry.color} />
-                                ))}
-                              </Pie>
-                              <Tooltip
-                                formatter={(value: number, _name: string, props: { payload?: { count?: number } }) => {
-                                  const count = props?.payload?.count ?? 0;
-                                  return [
-                                    `${formatMoney(Number(value), undefined, undefined, true)} — عدد: ${count}`,
-                                    "المبلغ / العدد",
-                                  ];
-                                }}
-                              />
-                              <Legend content={DashboardPieLegendByValue as never} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <p className="text-slate-500">لا توجد بيانات</p>
-                        )}
-                      </div>
-                    </TabsContent>
-                    <TabsContent value="one-time-monthly" className="mt-0" dir="rtl">
-                      <div className="h-[340px] w-full flex items-center justify-center">
-                        {typeSplitData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={typeSplitData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={70}
-                                outerRadius={110}
-                                paddingAngle={2}
-                                dataKey="value"
-                                nameKey="name"
-                                label={false}
-                              >
-                                {typeSplitData.map((entry) => (
                                   <Cell key={entry.name} fill={entry.color} />
                                 ))}
                               </Pie>
@@ -1885,23 +1719,6 @@ export default function DashboardPage() {
     </Select>
   </div>
 
-  {/* Donation Type Filter (ONE_TIME / MONTHLY) */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      نوع التبرع
-    </label>
-    <Select value={donationsTypeFilter} onValueChange={(v) => setDonationsTypeFilter(v as typeof donationsTypeFilter)}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="النوع" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">كل الأنواع</SelectItem>
-        <SelectItem value="ONE_TIME" className="text-xs">لمرة واحدة</SelectItem>
-        <SelectItem value="MONTHLY" className="text-xs">شهري</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
-
 </div>
 
 </CardContent>
@@ -1974,9 +1791,6 @@ export default function DashboardPage() {
                         دعم الفريق
                       </th>
                       <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                        النوع
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                         الإحالة
                       </th>
                       <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
@@ -1993,19 +1807,19 @@ export default function DashboardPage() {
                   <tbody>
                     {donationsLoading && donations.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center">
+                        <td colSpan={10} className="py-12 text-center">
                           <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-400" />
                         </td>
                       </tr>
                     ) : !donationsFetchedOnce ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-500">
+                        <td colSpan={10} className="py-12 text-center text-slate-500">
                           جاري التحميل...
                         </td>
                       </tr>
                     ) : donations.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-slate-500">
+                        <td colSpan={10} className="py-12 text-center text-slate-500">
                           لا توجد تبرعات تطابق التصفية
                         </td>
                       </tr>
@@ -2054,14 +1868,14 @@ export default function DashboardPage() {
                               <span
                                 className={cn(
                                   "inline-block px-1.5 py-px rounded-full text-[11px] font-medium w-max",
-                                  d.status === "PAID" && (d.paidAt || d.type === "MONTHLY")
+                                  d.status === "PAID" && d.paidAt
                                     ? "bg-green-100 text-green-700"
                                     : "bg-amber-100 text-amber-700"
                                 )}
-                                title={d.status === "PAID" && !d.paidAt && d.type !== "MONTHLY" ? "تم بدء الدفع ولم يؤكده مزود الدفع بعد — لا يُحتسب في الإيرادات" : undefined}
+                                title={d.status === "PAID" && !d.paidAt ? "تم بدء الدفع ولم يؤكده مزود الدفع بعد — لا يُحتسب في الإيرادات" : undefined}
                               >
                                 {d.status === "PAID"
-                                  ? (d.paidAt || d.type === "MONTHLY")
+                                  ? d.paidAt
                                     ? "ناجح"
                                     : "قيد التأكيد"
                                   : "معلق"}
@@ -2069,27 +1883,20 @@ export default function DashboardPage() {
                             )}
                           </td>
                           <td className="py-2.5 px-3">
-                            {d.provider === "STRIPE" || d.provider === "PAYFOR" ? (
+                            {d.provider === "PAYFOR" ? (
                               <button
                                 type="button"
                                 onClick={() => openDonationDetails("payment", d)}
                                 className="inline-flex items-center rounded hover:opacity-80 hover:scale-[1.03] active:scale-95 transition-all"
                                 title="عرض تفاصيل بوابة الدفع"
                               >
-                                {d.provider === "STRIPE" ? (
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-[#635bff]/10 text-[#635bff]">
-                                    Stripe
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/></svg>
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center">
-                                    <img
-                                      src="/ziraat.jpg"
-                                      alt="PayFor"
-                                      className="h-8 w-auto max-w-[72px] object-contain rounded"
-                                    />
-                                  </span>
-                                )}
+                                <span className="inline-flex items-center">
+                                  <img
+                                    src="/ziraat.jpg"
+                                    alt="PayFor"
+                                    className="h-8 w-auto max-w-[72px] object-contain rounded"
+                                  />
+                                </span>
                               </button>
                             ) : d.provider === "BANK_TRANSFER" ? (
                               <span
@@ -2099,6 +1906,9 @@ export default function DashboardPage() {
                                 <Landmark className="w-3 h-3" />
                                 تحويل بنكي
                               </span>
+                            ) : d.provider ? (
+                              // Any other stored gateway (incl. historical rows) — shown as recorded.
+                              <span className="text-slate-500 text-xs">{d.provider}</span>
                             ) : (
                               <span className="text-slate-400 text-xs">—</span>
                             )}
@@ -2111,29 +1921,6 @@ export default function DashboardPage() {
                             ) : (
                               <span className="text-slate-500">—</span>
                             )}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span
-                              className={cn(
-                                "inline-block w-max px-1.5 py-px rounded-full text-[11px]",
-                                d.type === "MONTHLY"
-                                  ? "bg-brand/10 text-brand"
-                                  : "bg-gray-100 text-gray-600"
-                              )}
-                              title={
-                                d.type === "MONTHLY"
-                                  ? d.isRecurringCharge
-                                    ? "خصم تلقائي متكرر — تم دون أي إجراء من المتبرع"
-                                    : "أول دفعة عند إنشاء الاشتراك"
-                                  : undefined
-                              }
-                            >
-                              {d.type === "MONTHLY"
-                                ? d.isRecurringCharge
-                                  ? `تجديد تلقائي${d.subscriptionCycle ? ` #${d.subscriptionCycle}` : ""}`
-                                  : "شهري — أول دفعة"
-                                : "مرة واحدة"}
-                            </span>
                           </td>
                           <td className="py-2.5 px-3 align-middle">
                             {d.referral ? (
@@ -2291,7 +2078,6 @@ export default function DashboardPage() {
           category: true,
           campaign: true,
           status: true,
-          type: true,
           locale: true,
           country: true,
           sort: true,

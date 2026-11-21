@@ -178,7 +178,6 @@ async function mirrorMetaCanonical(
     fbc: u.fbc ?? event.session?.fbc ?? null,
     client_ip: clientIp ?? u.ip ?? null,
     user_agent: u.user_agent ?? null,
-    subscription_id: u.subscription_id ?? null,
   };
 
   const custom_data: MetaCustomData = {};

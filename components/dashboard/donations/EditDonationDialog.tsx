@@ -32,10 +32,6 @@ interface DonationDetail {
   currency: string;
   status: "PAID" | "FAILED";
   paidAt: string | null;
-  // null on one-time donations; set for monthly subscription rows. Monthly
-  // donations are treated as ناجح in the UI even with paidAt=null, so the
-  // edit dialog skips the قيد التأكيد option for them.
-  subscriptionId?: string | null;
   donor?: { name: string | null; email: string | null } | null;
   items: { campaignId: string; amount: number; campaign: { title: string } }[];
   categoryItems: { categoryId: string; amount: number; category: { name: string } }[];
@@ -91,14 +87,10 @@ export function EditDonationDialog({ donationId, onClose, onSaved }: Props) {
 
         const d = donRes.data as DonationDetail;
         setDonation(d);
-        // Monthly donations are surfaced as ناجح everywhere — default the
-        // edit dialog to "PAID" so saving stamps paidAt and contributes the
-        // amount to campaign currentAmount (no قيد التأكيد middle option).
-        const isMonthly = d.subscriptionId != null;
         setStatusChoice(
           d.status === "FAILED"
             ? "FAILED"
-            : d.paidAt === null && !isMonthly
+            : d.paidAt === null
               ? "PAID_PENDING"
               : "PAID"
         );
@@ -188,11 +180,10 @@ export function EditDonationDialog({ donationId, onClose, onSaved }: Props) {
 
   const dirty = useMemo(() => {
     if (!donation) return false;
-    const isMonthly = donation.subscriptionId != null;
     const originalChoice: "PAID" | "PAID_PENDING" | "FAILED" =
       donation.status === "FAILED"
         ? "FAILED"
-        : donation.paidAt === null && !isMonthly
+        : donation.paidAt === null
           ? "PAID_PENDING"
           : "PAID";
     if (originalChoice !== statusChoice) return true;
@@ -285,13 +276,8 @@ export function EditDonationDialog({ donationId, onClose, onSaved }: Props) {
   };
 
   const donor = donation?.donor?.name?.trim() || donation?.donor?.email || "—";
-  const isMonthly = !!donation && donation.subscriptionId != null;
   const wasContributing = !!donation && donation.status === "PAID" && donation.paidAt !== null;
-  // Pending toggle only applies to one-time donations. Monthly donations are
-  // treated as ناجح in dashboards regardless of paidAt, so the dialog hides
-  // the قيد التأكيد middle option for them.
-  const wasPending =
-    !!donation && donation.status === "PAID" && donation.paidAt === null && !isMonthly;
+  const wasPending = !!donation && donation.status === "PAID" && donation.paidAt === null;
   const statusWillRemoveContribution = wasContributing && statusChoice === "FAILED";
   const statusWillAddContribution =
     !!donation &&

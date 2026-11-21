@@ -9,7 +9,7 @@ import { useLocale } from 'next-intl';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { HandHeartIcon, Receipt, Calendar, Heart, ArrowLeft, Repeat, Info, Download, Loader2, FileText, ShieldCheck, Sparkles, UserPlus } from 'lucide-react';
+import { HandHeartIcon, Receipt, Calendar, Heart, ArrowLeft, Download, Loader2, FileText, ShieldCheck, Sparkles, UserPlus } from 'lucide-react';
 import { useConfettiStore } from '@/hooks/use-confetti-store';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -40,7 +40,7 @@ type DonateTrackingPayload = {
   status: 'paid';
   success: true;
   paymentInfoAvailable: true;
-  donationType: 'ONE_TIME' | 'MONTHLY';
+  donationType: 'ONE_TIME';
   paymentMethod: string;
 };
 
@@ -68,7 +68,6 @@ const DonationSuccessPage = () => {
   const donateFireAttemptedRef = useRef(false);
   const dateLocale = dateLocales[locale] ?? enUS;
   const isRtl = locale === 'ar';
-  const isMonthly = donation?.type === 'MONTHLY';
 
   // Show the signup CTA only to unauthenticated visitors looking at their own
   // fresh donation — once they're signed in there's nothing more to claim.
@@ -102,7 +101,7 @@ const DonationSuccessPage = () => {
   // ─── Meta Donate fire (paired with server CAPI) ───────────────────────────
   // The conversion source of truth is /api/donations/:id/tracking, not the
   // success page donation object. The donation row can be visible here before
-  // paidAt is stamped by Stripe/PayFor callbacks, so we poll briefly until the
+  // paidAt is stamped by the bank callbacks, so we poll briefly until the
   // canonical tracking endpoint returns ok=true. This prevents the old bug where
   // a first ok=false (paidAt unset) marked the attempt as done and Donate never
   // fired even though the payment became confirmed a moment later.
@@ -225,7 +224,7 @@ const DonationSuccessPage = () => {
               status: payload.status,
               success: payload.success,
               payment_info_available: payload.paymentInfoAvailable,
-              donation_type: payload.donationType === 'MONTHLY' ? 'monthly' : 'one_time',
+              donation_type: 'one_time',
               payment_method: payload.paymentMethod,
             });
           }
@@ -321,10 +320,6 @@ const DonationSuccessPage = () => {
       </main>
     );
   }
-
-  const nextBillingFormatted = donation.nextBillingDate
-    ? format(new Date(donation.nextBillingDate), 'dd MMMM yyyy', { locale: dateLocale })
-    : null;
 
   return (
     <main
@@ -471,49 +466,6 @@ const DonationSuccessPage = () => {
             <ShieldCheck className="w-4 h-4 shrink-0" />
             <span>{t('linkSuccess')}</span>
           </motion.div>
-        )}
-
-        {/* Monthly donation highlight */}
-        {isMonthly && donation.nextBillingDate && (
-          <motion.section
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15, duration: 0.35 }}
-            className="mb-8"
-          >
-            <Card className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50/50 shadow-sm overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-emerald-500 text-white">
-                    <Repeat className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
-                      {t('monthlyDonation')}
-                    </p>
-                    <p className="text-slate-800 font-semibold">{t('monthlyDonationBadge')}</p>
-                  </div>
-                </div>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {nextBillingFormatted && (
-                    <div className="flex items-center gap-3 rounded-lg bg-white/80 p-3">
-                      <Calendar className="w-5 h-5 text-emerald-600 shrink-0" />
-                      <div>
-                        <p className="text-xs text-slate-500">{t('nextBillingLabel')}</p>
-                        <p className="font-semibold text-slate-900">
-                          {nextBillingFormatted}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-4 flex gap-2 rounded-lg bg-slate-100/80 p-3 text-sm text-slate-600">
-                  <Info className="w-4 h-4 shrink-0 mt-0.5 text-slate-500" />
-                  <p>{t('cancelMonthlyHint')}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.section>
         )}
 
         {/* Details + Where donated */}

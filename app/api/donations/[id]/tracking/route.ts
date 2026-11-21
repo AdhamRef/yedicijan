@@ -59,7 +59,7 @@ interface TrackingResponseOk {
   status: "paid";
   success: true;
   paymentInfoAvailable: true;
-  donationType: "ONE_TIME" | "MONTHLY";
+  donationType: "ONE_TIME";
   paymentMethod: string;
   browserAdvancedMatching?: Record<string, string>;
 }
@@ -166,8 +166,6 @@ export async function GET(
     contentIds.push("donation");
   }
 
-  const isMonthly = !!row.subscriptionId;
-
   const payload: TrackingResponseOk = {
     ok: true,
     eventName: "Donate",
@@ -179,13 +177,13 @@ export async function GET(
     contentType: "donation",
     contentIds,
     contentName: primaryName ?? "Donation",
-    contentCategory: isMonthly ? "monthly" : "donation",
+    contentCategory: "donation",
     contents,
     numItems: contents.reduce((s, c) => s + c.quantity, 0),
     status: "paid",
     success: true,
     paymentInfoAvailable: true,
-    donationType: isMonthly ? "MONTHLY" : "ONE_TIME",
+    donationType: "ONE_TIME",
     paymentMethod: (row.paymentMethod ?? "CARD").toLowerCase(),
     browserAdvancedMatching: buildBrowserAdvancedMatching(row),
   };

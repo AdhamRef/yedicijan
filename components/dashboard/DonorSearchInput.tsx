@@ -17,8 +17,7 @@ type Props = {
 };
 
 /**
- * Donor search box for the paginated dashboard tables (donations, monthly
- * payments, subscriptions).
+ * Donor search box for the paginated dashboard donation tables.
  *
  * Commits rather than debounces: every one of these lists is server-paginated,
  * so each keystroke would be a round-trip that also has to reset paging. The

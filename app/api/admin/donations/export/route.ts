@@ -12,7 +12,6 @@
  *   categoryId, campaignId, userId, referralId
  *   status           PAID | FAILED | all
  *   locale, country
- *   subscriptionOnly true|false
  *   sortBy           date | amount
  *   sortOrder        asc | desc
  *   limit            max rows (default 20000, cap 50000)
@@ -54,8 +53,6 @@ export async function GET(request: NextRequest) {
     const status = sp.get("status");
     const locale = sp.get("locale")?.trim() ?? null;
     const country = sp.get("country")?.trim() ?? null;
-    const subscriptionOnly = sp.get("subscriptionOnly") === "true" || sp.get("subscriptionOnly") === "1";
-    const donationType = sp.get("donationType");
     const limit = Math.min(parseInt(sp.get("limit") || "20000", 10) || 20000, 50000);
 
     const dateFilter: { gte?: Date; lte?: Date } = {};
@@ -73,8 +70,6 @@ export async function GET(request: NextRequest) {
       ...(campaignId && campaignId !== "all" && { items: { some: { campaignId } } }),
       ...(userId && userId !== "all" && { donorId: userId }),
       ...(referralId && referralId !== "all" && { referralId }),
-      ...(subscriptionOnly && { subscriptionId: { not: null } }),
-      ...(donationType === "MONTHLY" && { subscriptionId: { not: null } }),
       ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
       ...(status && ["PAID", "FAILED"].includes(status) && { status: status as "PAID" | "FAILED" }),
     };
@@ -99,9 +94,6 @@ export async function GET(request: NextRequest) {
           ? { OR: [{ donorCountryCode: null }, { donorCountryCode: "" }] }
           : { donorCountryCode: country.toUpperCase() }
       );
-    }
-    if (donationType === "ONE_TIME") {
-      filters.push({ OR: [{ subscriptionId: null }, { subscriptionId: { isSet: false } }] });
     }
     const where: Prisma.DonationWhereInput = filters.length > 1 ? { AND: filters } : baseWhere;
 
@@ -130,7 +122,6 @@ export async function GET(request: NextRequest) {
       return {
         id: d.id,
         status: d.status,
-        type: d.subscriptionId ? "MONTHLY" : "ONE_TIME",
         createdAt: d.createdAt,
         paidAt: d.paidAt ?? null,
         donor: {
@@ -156,7 +147,6 @@ export async function GET(request: NextRequest) {
         provider: d.provider ?? null,
         providerOrderId: d.providerOrderId ?? null,
         providerErrorMessage: d.providerErrorMessage ?? null,
-        subscriptionId: d.subscriptionId ?? null,
         comment: d.comment ?? null,
         attribution: (d.attribution as Record<string, unknown> | null) ?? null,
       };
@@ -172,7 +162,6 @@ export async function GET(request: NextRequest) {
       status,
       locale,
       country,
-      subscriptionOnly,
       sortBy,
       sortOrder,
       total: rows.length,
@@ -217,7 +206,6 @@ function collectFilterDescriptors(args: {
   status: string | null;
   locale: string | null;
   country: string | null;
-  subscriptionOnly: boolean;
   sortBy: string;
   sortOrder: string;
   total: number;
@@ -235,7 +223,6 @@ function collectFilterDescriptors(args: {
   if (args.status && args.status !== "all") out.push({ label: "الحالة", value: args.status });
   if (args.locale && args.locale !== "all") out.push({ label: "اللغة", value: args.locale });
   if (args.country && args.country !== "all") out.push({ label: "الدولة", value: args.country });
-  if (args.subscriptionOnly) out.push({ label: "الاشتراكات فقط", value: "نعم" });
   out.push({ label: "الفرز", value: `${args.sortBy === "amount" ? "بالقيمة" : "بالتاريخ"} • ${args.sortOrder === "asc" ? "تصاعدي" : "تنازلي"}` });
   out.push({ label: "عدد العمليات", value: String(args.total) });
   return out;

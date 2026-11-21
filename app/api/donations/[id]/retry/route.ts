@@ -25,11 +25,9 @@ import {
  *   - preserves teamSupport / coverFees / fees / totalAmount
  *   - lives in the optimistic "PAID + paidAt: null" sentinel state — exactly
  *     the same as a brand-new POST /api/donations creates
- *   - is NEVER attached to the source donation's subscription (monthly
- *     retries go through the regular checkout dialog)
  *
  * Returns the new donation id; the caller picks the next-step URL based on
- * the original payment method (Stripe checkout vs PayFor 3DS).
+ * the original payment method.
  *
  * Auth: signed-in donor must own the donation. Guests can retry if they
  * can present the donation id (same "unguessable id = access token" model
@@ -64,21 +62,6 @@ export async function POST(
     if (source.paidAt) {
       return NextResponse.json(
         { error: "This donation has already been settled.", alreadyPaid: true },
-        { status: 400 }
-      );
-    }
-
-    // Monthly subscriptions can't be cleanly cloned here — the subscription
-    // itself was either created at the same time or never made, and Stripe
-    // owns its lifecycle. Kick those donors back to the donation dialog
-    // where the subscription path is properly wired.
-    if (source.subscriptionId) {
-      return NextResponse.json(
-        {
-          error:
-            "Monthly subscription retries must go through the donation dialog on the campaign page.",
-          subscriptionRetry: true,
-        },
         { status: 400 }
       );
     }

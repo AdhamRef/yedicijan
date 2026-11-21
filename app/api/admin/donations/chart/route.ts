@@ -52,11 +52,8 @@ export async function GET(request: NextRequest) {
     // donation paid at 00:30 Istanbul May 20 lands in May 20's bar even if its
     // checkout row was inserted at 23:55 May 19. Window is the Istanbul day
     // boundary expressed in UTC.
-    // Unsettled subscription rows (status=PAID, no `paidAt`) are NOT counted. They used to
-    // be admitted here and bucketed by `createdAt`, which is why this chart reported $17.19
-    // on 2026-08-02 while /dashboard/monthly reported $1.05 for the same day — the extra
-    // $16.14 was an abandoned checkout that never reached Stripe. Both pages now recognise
-    // revenue on settlement only, so their monthly series agree.
+    // Unsettled rows (status=PAID, no `paidAt`) are NOT counted: revenue is recognised on
+    // settlement only.
     const dateWindowOr = [
       { status: 'PAID', paidAt: { gte: startDate, lte: endDate } },
       { status: 'FAILED', createdAt: { gte: startDate, lte: endDate } },
@@ -90,7 +87,6 @@ export async function GET(request: NextRequest) {
       where: baseWhere,
       select: {
         createdAt: true,
-        subscriptionId: true,
         teamSupport: true,
         fees: true,
         amountUSD: true,
@@ -107,10 +103,8 @@ export async function GET(request: NextRequest) {
     });
 
     type Bucket = {
-      amountOneTime: number;
-      countOneTime: number;
-      amountMonthly: number;
-      countMonthly: number;
+      amountPaid: number;
+      countPaid: number;
       amountFailed: number;
       countFailed: number;
       teamSupport: number;
@@ -120,9 +114,7 @@ export async function GET(request: NextRequest) {
 
     for (const d of donations) {
       // status=PAID is set at creation, before the gateway confirms, so settlement
-      // (`paidAt`) is what makes a row revenue — for subscription rows too. Subscription
-      // rows used to be exempt from this; see the dateWindowOr comment above for why
-      // that exemption was wrong and what it cost.
+      // (`paidAt`) is what makes a row revenue.
       const isPaid = d.status === 'PAID' && d.paidAt != null;
       const isFailed = d.status === 'FAILED';
       if (!isPaid && !isFailed) continue;
@@ -130,10 +122,8 @@ export async function GET(request: NextRequest) {
       const bucketDate = isPaid ? ((d.paidAt as Date | null) ?? d.createdAt) : d.createdAt;
       const dateStr = formatIstanbulDateKey(bucketDate);
       const bucket = byDate.get(dateStr) ?? {
-        amountOneTime: 0,
-        countOneTime: 0,
-        amountMonthly: 0,
-        countMonthly: 0,
+        amountPaid: 0,
+        countPaid: 0,
         amountFailed: 0,
         countFailed: 0,
         teamSupport: 0,
@@ -147,13 +137,8 @@ export async function GET(request: NextRequest) {
       const amount = donationRowUsdApprox(d);
 
       if (isPaid) {
-        if (d.subscriptionId == null) {
-          bucket.amountOneTime += amount;
-          bucket.countOneTime += 1;
-        } else {
-          bucket.amountMonthly += amount;
-          bucket.countMonthly += 1;
-        }
+        bucket.amountPaid += amount;
+        bucket.countPaid += 1;
         // teamSupport/fees are stored in the local currency too. Prorate them against the
         // row's USD value exactly as /api/admin/stats does, instead of adding raw lira to a
         // dollar total.
@@ -174,10 +159,6 @@ export async function GET(request: NextRequest) {
       date: string;
       amountUSD: number;
       count: number;
-      amountOneTime: number;
-      countOneTime: number;
-      amountMonthly: number;
-      countMonthly: number;
       amountFailed: number;
       countFailed: number;
       teamSupport: number;
@@ -186,23 +167,15 @@ export async function GET(request: NextRequest) {
 
     for (const dateStr of eachIstanbulDateKey(startDateKey, endDateKey)) {
       const b = byDate.get(dateStr);
-      const amountOneTime = b ? Number(Number(b.amountOneTime).toFixed(2)) : 0;
-      const amountMonthly = b ? Number(Number(b.amountMonthly).toFixed(2)) : 0;
       const amountFailed = b ? Number(Number(b.amountFailed).toFixed(2)) : 0;
-      const countOneTime = b?.countOneTime ?? 0;
-      const countMonthly = b?.countMonthly ?? 0;
       const countFailed = b?.countFailed ?? 0;
       const teamSupport = b ? Number(Number(b.teamSupport).toFixed(2)) : 0;
       const fees = b ? Number(Number(b.fees).toFixed(2)) : 0;
 
       filledChartData.push({
         date: dateStr,
-        amountUSD: Number((amountOneTime + amountMonthly).toFixed(2)),
-        count: countOneTime + countMonthly,
-        amountOneTime,
-        countOneTime,
-        amountMonthly,
-        countMonthly,
+        amountUSD: b ? Number(Number(b.amountPaid).toFixed(2)) : 0,
+        count: b?.countPaid ?? 0,
         amountFailed,
         countFailed,
         teamSupport,

@@ -33,7 +33,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
@@ -73,11 +72,8 @@ export interface ExportReportDialogProps {
     category?: boolean;
     campaign?: boolean;
     status?: boolean;
-    type?: boolean;          // ONE_TIME / MONTHLY / all
-    subStatus?: boolean;     // ACTIVE / PAUSED / CANCELLED (monthly page)
     locale?: boolean;
     country?: boolean;
-    subscriptionOnly?: boolean;
     sort?: boolean;
     limit?: boolean;
   };
@@ -91,11 +87,8 @@ export interface ExportFormState {
   categoryId: string;
   campaignId: string;
   status: "all" | "PAID" | "FAILED";
-  type: "all" | "ONE_TIME" | "MONTHLY";
-  subStatus: "all" | "ACTIVE" | "PAUSED" | "CANCELLED";
   locale: string;
   country: string;
-  subscriptionOnly: boolean;
   sortBy: "date" | "amount";
   sortOrder: "asc" | "desc";
   limit: number;
@@ -109,11 +102,8 @@ export const EXPORT_DEFAULTS: ExportFormState = {
   categoryId: "all",
   campaignId: "all",
   status: "all",
-  type: "all",
-  subStatus: "all",
   locale: "all",
   country: "all",
-  subscriptionOnly: false,
   sortBy: "date",
   sortOrder: "desc",
   limit: 20000,
@@ -146,13 +136,8 @@ function buildQuery(endpoint: string, state: ExportFormState, fields: ExportRepo
   if (fields.category && state.categoryId !== "all") params.set("categoryId", state.categoryId);
   if (fields.campaign && state.campaignId !== "all") params.set("campaignId", state.campaignId);
   if (fields.status && state.status !== "all") params.set("status", state.status);
-  if (fields.type && state.type !== "all") {
-    params.set("donationType", state.type);
-  }
-  if (fields.subStatus && state.subStatus !== "all") params.set("subStatus", state.subStatus);
   if (fields.locale && state.locale !== "all") params.set("locale", state.locale);
   if (fields.country && state.country !== "all") params.set("country", state.country);
-  if (fields.subscriptionOnly && state.subscriptionOnly) params.set("subscriptionOnly", "true");
   if (fields.sort) {
     params.set("sortBy", state.sortBy);
     params.set("sortOrder", state.sortOrder);
@@ -373,43 +358,6 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
             </div>
           )}
 
-          {/* Donation type */}
-          {enabledFields.type && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">نوع التبرع</Label>
-              <Select
-                value={state.type}
-                onValueChange={(v) => setField("type", v as ExportFormState["type"])}
-              >
-                <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="ONE_TIME">لمرة واحدة</SelectItem>
-                  <SelectItem value="MONTHLY">شهري</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {/* Subscription status */}
-          {enabledFields.subStatus && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">حالة الاشتراك</Label>
-              <Select
-                value={state.subStatus}
-                onValueChange={(v) => setField("subStatus", v as ExportFormState["subStatus"])}
-              >
-                <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="ACTIVE">نشط</SelectItem>
-                  <SelectItem value="PAUSED">متوقف</SelectItem>
-                  <SelectItem value="CANCELLED">ملغي</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
           {/* Locale */}
           {enabledFields.locale && options.locales && options.locales.length > 0 && (
             <div className="space-y-1.5">
@@ -499,20 +447,6 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
             </div>
           )}
         </div>
-
-        {/* subscriptionOnly switch */}
-        {enabledFields.subscriptionOnly && (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 mt-2">
-            <div className="text-right">
-              <div className="text-sm font-medium text-slate-700">الاشتراكات الشهرية فقط</div>
-              <div className="text-xs text-slate-500">عرض التبرعات المرتبطة بدفعات شهرية</div>
-            </div>
-            <Switch
-              checked={state.subscriptionOnly}
-              onCheckedChange={(v) => setField("subscriptionOnly", !!v)}
-            />
-          </div>
-        )}
 
         {/* Summary banner */}
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 leading-relaxed mt-2">

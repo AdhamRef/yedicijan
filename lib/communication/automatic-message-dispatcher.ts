@@ -8,7 +8,7 @@ import type { CommunicationPurposeId } from "./communication-runtime-types";
 /**
  * Automatic (trigger-fired) message dispatcher for the Communication Center.
  *
- * Every automatic donation/subscription message now flows through the FINAL provider architecture:
+ * Every automatic donation message now flows through the FINAL provider architecture:
  *   - EMAIL    → Elastic Email (via ProviderRouter). Never SendGrid, never Brevo.
  *   - WHATSAPP → Meta WhatsApp Cloud API using an APPROVED template. Never Twilio. If the stored
  *                WhatsappTemplate has no Meta-approved template mapping, the send is SKIPPED with
@@ -37,7 +37,7 @@ type CommonInput = {
   variables: Record<string, unknown>;
   donationId?: string | null;
   /**
-   * Archive purpose for the delivery record. Defaults to TRANSACTIONAL (donation/subscription
+   * Archive purpose for the delivery record. Defaults to TRANSACTIONAL (donation
    * receipts). Re-engagement events such as DONATION_LAPSED pass MARKETING so consent reporting
    * and provider routing classify them correctly.
    */

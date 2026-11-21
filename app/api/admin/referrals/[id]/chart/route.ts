@@ -69,7 +69,6 @@ export async function GET(
       select: {
         createdAt: true,
         paidAt: true,
-        subscriptionId: true,
         teamSupport: true,
         fees: true,
         amountUSD: true,
@@ -83,10 +82,8 @@ export async function GET(
     });
 
     type Bucket = {
-      amountOneTime: number;
-      countOneTime: number;
-      amountMonthly: number;
-      countMonthly: number;
+      amountPaid: number;
+      countPaid: number;
       teamSupport: number;
       fees: number;
     };
@@ -96,23 +93,16 @@ export async function GET(
       // PAID_DONATION_FILTER guarantees paidAt is not null here.
       const dateStr = formatIstanbulDateKey((d.paidAt ?? d.createdAt) as Date);
       const bucket = byDate.get(dateStr) ?? {
-        amountOneTime: 0,
-        countOneTime: 0,
-        amountMonthly: 0,
-        countMonthly: 0,
+        amountPaid: 0,
+        countPaid: 0,
         teamSupport: 0,
         fees: 0,
       };
       // USD-labelled series must be summed in USD — see the same fix in
       // app/api/admin/donations/chart/route.ts.
       const amount = donationRowUsdApprox(d);
-      if (d.subscriptionId == null) {
-        bucket.amountOneTime += amount;
-        bucket.countOneTime += 1;
-      } else {
-        bucket.amountMonthly += amount;
-        bucket.countMonthly += 1;
-      }
+      bucket.amountPaid += amount;
+      bucket.countPaid += 1;
       const localTotal = Number(d.totalAmount) || 0;
       if (localTotal > 0) {
         bucket.teamSupport += amount * ((Number(d.teamSupport) || 0) / localTotal);
@@ -125,29 +115,17 @@ export async function GET(
       date: string;
       amountUSD: number;
       count: number;
-      amountOneTime: number;
-      countOneTime: number;
-      amountMonthly: number;
-      countMonthly: number;
       teamSupport: number;
       fees: number;
     }[] = [];
     for (const dateStr of eachIstanbulDateKey(startDateKey, endDateKey)) {
       const b = byDate.get(dateStr);
-      const amountOneTime = b ? Number(Number(b.amountOneTime).toFixed(2)) : 0;
-      const amountMonthly = b ? Number(Number(b.amountMonthly).toFixed(2)) : 0;
-      const countOneTime = b?.countOneTime ?? 0;
-      const countMonthly = b?.countMonthly ?? 0;
       const teamSupport = b ? Number(Number(b.teamSupport).toFixed(2)) : 0;
       const fees = b ? Number(Number(b.fees).toFixed(2)) : 0;
       filledChartData.push({
         date: dateStr,
-        amountUSD: Number((amountOneTime + amountMonthly).toFixed(2)),
-        count: countOneTime + countMonthly,
-        amountOneTime,
-        countOneTime,
-        amountMonthly,
-        countMonthly,
+        amountUSD: b ? Number(Number(b.amountPaid).toFixed(2)) : 0,
+        count: b?.countPaid ?? 0,
         teamSupport,
         fees,
       });

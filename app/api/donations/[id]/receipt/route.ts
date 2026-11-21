@@ -36,14 +36,9 @@ const RECEIPT_LABELS = {
     donatedTo: 'Your donation supports',
     type: 'Type',
     oneTime: 'One-time',
-    monthly: 'Monthly',
     paymentMethod: 'Payment Method',
     card: 'Card',
     paypal: 'PayPal',
-    status: 'Status',
-    active: 'Active',
-    paused: 'Paused',
-    cancelled: 'Cancelled',
     campaign: 'Campaign',
     category: 'Category',
     amount: 'Amount',
@@ -51,7 +46,6 @@ const RECEIPT_LABELS = {
     teamSupport: 'Team Support',
     fees: 'Transaction Fees',
     total: 'Total',
-    nextBilling: 'Next billing date',
     thankYou: 'Thank you for your generous donation.',
     thankYouFrom: 'With gratitude,\nYedicihan Relief and Solidarity Association',
     thankYouMessage: 'Your kindness brings hope and relief to those in need. Together we are making a lasting difference in the lives of children and families. This receipt confirms your support we are deeply grateful.',
@@ -73,14 +67,9 @@ const RECEIPT_LABELS = {
     donatedTo: 'تبرعكم يدعم',
     type: 'النوع',
     oneTime: 'مرة واحدة',
-    monthly: 'شهري',
     paymentMethod: 'طريقة الدفع',
     card: 'بطاقة',
     paypal: 'باي بال',
-    status: 'الحالة',
-    active: 'نشط',
-    paused: 'متوقف مؤقتاً',
-    cancelled: 'ملغي',
     campaign: 'المشروع',
     category: 'الفئة',
     amount: 'المبلغ',
@@ -88,7 +77,6 @@ const RECEIPT_LABELS = {
     teamSupport: 'دعم الفريق',
     fees: 'الرسوم',
     total: 'الإجمالي',
-    nextBilling: 'تاريخ الخصم القادم',
     thankYou: 'شكراً لتبرعكم السخي.',
     thankYouFrom: 'بامتنان،\nجمعية يدي جيهان للإغاثة والتضامن',
     thankYouMessage: 'لطفكم يبعث الأمل والإغاثة لمن هم في حاجة. معاً نصنع فرقاً دائمياً في حياة الأطفال والأسر. هذا الإيصال يؤكد دعمكم نحن ممتنون جداً.',
@@ -110,14 +98,9 @@ const RECEIPT_LABELS = {
     donatedTo: 'Votre don soutient',
     type: 'Type',
     oneTime: 'Ponctuel',
-    monthly: 'Mensuel',
     paymentMethod: 'Mode de paiement',
     card: 'Carte',
     paypal: 'PayPal',
-    status: 'Statut',
-    active: 'Actif',
-    paused: 'En pause',
-    cancelled: 'Annulé',
     campaign: 'Campagne',
     category: 'Catégorie',
     amount: 'Montant',
@@ -125,7 +108,6 @@ const RECEIPT_LABELS = {
     teamSupport: 'Soutien équipe',
     fees: 'Frais',
     total: 'Total',
-    nextBilling: 'Prochaine date de prélèvement',
     thankYou: 'Merci pour votre généreux don.',
     thankYouFrom: 'Avec gratitude,\nYedicihan – Association de secours et de solidarité',
     thankYouMessage: 'Votre générosité apporte espoir et réconfort à ceux qui en ont besoin. Ensemble nous faisons une différence durable dans la vie des enfants et des familles. Ce reçu confirme votre soutien—nous vous en sommes profondément reconnaissants.',
@@ -195,7 +177,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     const session = await getServerSession(authOptions);
 
-    const donationRow = await prisma.donation.findUnique({
+    const donation = await prisma.donation.findUnique({
       where: { id },
       omit: { cardDetails: true },
       include: {
@@ -209,13 +191,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             countryCode: true,
             city: true,
             region: true,
-          },
-        },
-        subscription: {
-          select: {
-            status: true,
-            nextBillingDate: true,
-            lastBillingDate: true,
           },
         },
         items: {
@@ -242,7 +217,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
     });
 
-    if (!donationRow) {
+    if (!donation) {
       return NextResponse.json({ error: 'Donation not found' }, { status: 404 });
     }
 
@@ -252,19 +227,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (session) {
       const canViewReceipt =
         userHasDashboardPermission(session.user, 'revenue') ||
-        session.user.id === donationRow.donorId;
+        session.user.id === donation.donorId;
       if (!canViewReceipt) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
-
-    const sub = donationRow.subscription;
-    const donation = {
-      ...donationRow,
-      type: donationRow.subscriptionId ? ('MONTHLY' as const) : ('ONE_TIME' as const),
-      status: sub?.status ?? null,
-      nextBillingDate: sub?.nextBillingDate ?? null,
-    };
 
     const L = getLabels(locale);
     const dateLocale = getDateLocale(locale);
@@ -357,7 +324,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
     y += 10;
 
-    // ----- Donation type & payment & status -----
+    // ----- Donation type     // ----- Donation type & payment & status ----- payment -----
     doc.setFillColor(248, 250, 252);
     doc.rect(margin, y - 4, contentW, 10, 'F');
     doc.setFont('helvetica', 'bold');
@@ -366,15 +333,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     y += 14;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    const typeLabel = donation.type === 'MONTHLY' ? L.monthly : L.oneTime;
     const paymentLabel = donation.paymentMethod === 'PAYPAL' ? L.paypal : L.card;
-    addText(`${L.type}: ${typeLabel}  |  ${L.paymentMethod}: ${paymentLabel}`, margin, y);
+    addText(`${L.type}: ${L.oneTime}  |  ${L.paymentMethod}: ${paymentLabel}`, margin, y);
     y += 7;
-    if (donation.type === 'MONTHLY') {
-      const statusLabel = donation.status === 'ACTIVE' ? L.active : donation.status === 'PAUSED' ? L.paused : L.cancelled;
-      addText(`${L.status}: ${statusLabel}`, margin, y);
-      y += 7;
-    }
     y += 10;
 
     // Helpers for campaign/category titles (used in Donated to + line items table)
@@ -480,16 +441,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     addText(`${L.total}:`, col1, y);
     addText(currencyFormat(donation.totalAmount, donation.currency), col2, y, { align: 'right' });
     y += 12;
-
-    if (donation.type === 'MONTHLY' && donation.status === 'ACTIVE') {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      if (donation.nextBillingDate) {
-        addText(`${L.nextBilling}: ${format(new Date(donation.nextBillingDate), 'PPP', { locale: dateLocale })}`, margin, y);
-        y += 7;
-      }
-      y += 6;
-    }
 
     // ----- Thank you (charming message from Yedicihan) -----
     y += 10;

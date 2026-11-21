@@ -64,7 +64,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   "platform-connections": "ربط المنصات",
   "marketing-intelligence": "ذكاء التسويق",
   "bank-transfers": "التحويلات البنكية",
-  monthly: "التبرعات الشهرية",
   general: "عام",
   "payment-gateways": "بوابات الدفع",
 };

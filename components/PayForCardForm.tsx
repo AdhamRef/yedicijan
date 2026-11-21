@@ -8,7 +8,6 @@
  * request MAC, so they're posted to our /api/albaraka/3d/initiate route to be signed
  * — unless ALBARAKA_USE_OOS=1, in which case this form isn't rendered at all and the
  * bank's own hosted page collects the card.
- * This component has NO connection to Stripe whatsoever.
  */
 
 import Cards from "react-credit-cards-2";
@@ -80,7 +79,7 @@ export function PayForCardForm({
             onChange={(e) =>
               setCardDetails({
                 ...cardDetails,
-                // Strip digits — prevents Stripe's "name contains card number" error on fallback
+                // Strip digits — a cardholder name never contains them
                 cardholderName: e.target.value.replace(/\d/g, "").toUpperCase(),
               })
             }

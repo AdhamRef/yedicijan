@@ -66,7 +66,7 @@ async function getOrCreateUnknownDonor(): Promise<{ id: string; name: string | n
  *
  * The row is created as fully settled (status=PAID + paidAt=now) and each
  * campaign / category line item's `currentAmount` is incremented atomically —
- * matching what the Stripe webhook does for a confirmed recurring charge. No
+ * matching what the gateway callbacks do for a confirmed payment. No
  * gateway flow involved; this is just bookkeeping for money that already moved.
  */
 export async function POST(request: NextRequest) {

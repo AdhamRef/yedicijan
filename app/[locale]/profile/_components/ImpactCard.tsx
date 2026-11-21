@@ -1,13 +1,11 @@
 "use client";
 
-import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
 import { Card } from "@/components/ui/card";
 import {
   Award,
   Calendar,
   Flame,
   HandHeart,
-  Repeat,
   Target,
   TrendingUp,
 } from "lucide-react";
@@ -17,8 +15,6 @@ import { useCurrency } from "@/context/CurrencyContext";
 export interface ImpactCardProps {
   totalDonationsCount?: number;
   totalDonatedAmountUSD?: number;
-  currentMonthlyMrrUSD?: number;
-  activeSubscriptionsCount?: number;
   supportedCampaignsCount?: number;
   streakMonths?: number;
   badgesCount?: number;
@@ -54,10 +50,6 @@ export default function ImpactCard(props: ImpactCardProps) {
     props.totalDonatedAmountUSD ?? 0,
     convertToCurrency
   );
-  const mrr = formatAmountInDisplayCurrency(
-    props.currentMonthlyMrrUSD ?? 0,
-    convertToCurrency
-  );
 
   const lastDonationLabel = props.lastDonationAt
     ? new Date(props.lastDonationAt).toLocaleDateString(
@@ -82,19 +74,6 @@ export default function ImpactCard(props: ImpactCardProps) {
       value: total,
       hint: t("acrossDonations", { count: props.totalDonationsCount ?? 0 }),
     },
-    // Donors with a live subscription still see it while monthly is switched off.
-    ...(MONTHLY_DONATIONS_ENABLED || (props.activeSubscriptionsCount ?? 0) > 0
-      ? [
-          {
-            Icon: Repeat,
-            accent: "text-[#D8AA55]",
-            bg: "from-[#A5243D]/10 to-[#A5243D]/5 border-[#D8AA55]/20",
-            label: t("monthlyMrr"),
-            value: mrr,
-            hint: t("acrossSubs", { count: props.activeSubscriptionsCount ?? 0 }),
-          },
-        ]
-      : []),
     {
       Icon: Target,
       accent: "text-emerald-600",
@@ -121,7 +100,7 @@ export default function ImpactCard(props: ImpactCardProps) {
 
   return (
     <div className="space-y-4">
-      <div className={`grid grid-cols-2 gap-3 sm:gap-4 ${cards.length > 2 ? "lg:grid-cols-4" : ""}`}>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {cards.map(({ Icon, accent, bg, label, value, hint }) => (
           <Card
             key={label}

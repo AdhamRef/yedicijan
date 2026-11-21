@@ -78,7 +78,6 @@ export async function POST(req: NextRequest) {
     const resolved = resolveGateway({
       payforEnabled: settings?.payforEnabled ?? true,
       currency: donation.currency,
-      donationType: donation.subscriptionId ? "MONTHLY" : "ONE_TIME",
     });
     if (resolved !== "PAYFOR") {
       return NextResponse.json(

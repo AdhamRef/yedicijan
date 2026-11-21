@@ -53,7 +53,6 @@ interface DonationDetails {
   providerProcReturnCode?: string | null;
   providerErrorMessage?: string | null;
   providerTxnResult?: string | null;
-  subscriptionId?: string | null;
   items?: Array<{
     id: string;
     amount: number;
@@ -156,20 +155,9 @@ export default function DonationFailedPage() {
     ? `${CURRENCY_SYMBOLS[donation.currency] ?? donation.currency + " "}${donation.totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
     : null;
 
-  const isMonthly = Boolean(donation?.subscriptionId);
-
   const handleRetry = async () => {
     if (!donation || retrying) return;
     setRetrying(true);
-
-    // Monthly subscriptions can't be cloned — send the donor back to the
-    // campaign page where the regular dialog handles the subscribe flow.
-    if (isMonthly) {
-      const firstCampaignId = donation.items?.[0]?.campaign ? null : null;
-      // Fallback to /campaigns since we don't have the campaign id stored
-      router.push("/campaigns");
-      return;
-    }
 
     try {
       const res = await axios.post(`/api/donations/${donation.id}/retry`);
@@ -330,18 +318,13 @@ export default function DonationFailedPage() {
                   </p>
                   <p className="text-2xl font-extrabold text-gray-900 mt-0.5">
                     {formattedAmount}
-                    {isMonthly && (
-                      <span className="text-sm font-medium text-gray-500 ms-1.5">
-                        {t("retry.perMonth")}
-                      </span>
-                    )}
                   </p>
                 </div>
                 <Badge
                   variant="outline"
                   className="border-[#A5243D]/30 text-[#A5243D] bg-[#A5243D]/5"
                 >
-                  {isMonthly ? t("retry.monthly") : t("retry.oneTime")}
+                  {t("retry.oneTime")}
                 </Badge>
               </div>
               {donation.items && donation.items.length > 0 && (
@@ -375,7 +358,7 @@ export default function DonationFailedPage() {
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              {isMonthly ? t("retry.ctaMonthly") : t("retry.cta")}
+              {t("retry.cta")}
               <Arrow className="w-4 h-4" />
             </Button>
             <p className="text-xs text-gray-500 mt-2.5">{t("retry.securedBy")}</p>

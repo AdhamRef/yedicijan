@@ -44,13 +44,6 @@ export async function GET(
       include: {
         donations: {
           include: {
-            subscription: {
-              select: {
-                id: true,
-                status: true,
-                nextBillingDate: true,
-              },
-            },
             items: {
               include: {
                 campaign: {
@@ -75,39 +68,21 @@ export async function GET(
       );
     }
 
-    const oneTimeDonations = user.donations.filter((d) => d.subscriptionId == null);
-    const monthlyDonations = user.donations.filter((d) => d.subscriptionId != null);
+    const donationsForUser = user.donations.map((d) => ({
+      ...d,
+      type: 'ONE_TIME' as const,
+      /** Donation charge status (PAID / FAILED) — unchanged for revenue totals */
+      paymentStatus: d.status,
+    }));
 
-    const withType = (d: typeof user.donations[0], type: 'ONE_TIME' | 'MONTHLY') => {
-      const sub = d.subscription;
-      return {
-        ...d,
-        type,
-        /** Donation charge status (PAID / FAILED) — unchanged for revenue totals */
-        paymentStatus: d.status,
-        status: type === 'MONTHLY' ? (sub?.status ?? null) : d.status,
-        nextBillingDate: type === 'MONTHLY' ? (sub?.nextBillingDate ?? null) : null,
-      };
-    };
-
-    const donationsForUser = [
-      ...oneTimeDonations.map((d) => withType(d, 'ONE_TIME')),
-      ...monthlyDonations.map((d) => withType(d, 'MONTHLY')),
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-    const [totalsRows, allBadges, activeSubs] = await Promise.all([
+    const [totalsRows, allBadges] = await Promise.all([
       prisma.donation.groupBy({
         by: ['donorId'],
         where: {
           donorId: id,
           status: 'PAID',
-          // One-time donations need a settled paidAt to count; subscription
-          // donations count on status=PAID alone since recurring charges fire
-          // without a donor click (no abandonment moment to guard against).
-          OR: [
-            { paidAt: { not: null } },
-            { subscriptionId: { not: null } },
-          ],
+          // Only settled donations (paidAt set) count.
+          paidAt: { not: null },
         },
         _sum: { totalAmount: true, amountUSD: true },
         _max: { createdAt: true },
@@ -117,29 +92,15 @@ export async function GET(
         select: { id: true, criteria: true },
         orderBy: { order: 'asc' },
       }),
-      prisma.subscription.findMany({
-        where: { donorId: id, status: 'ACTIVE' },
-        select: { id: true, amountUSD: true, amount: true, currency: true },
-      }),
     ]);
     const t = totalsRows[0];
     const badgeIdsByUser =
       allBadges.length > 0 ? await getBadgeIdsByUser([id], allBadges) : new Map<string, string[]>();
 
-    // Currently-active monthly recurring revenue from this donor (USD).
-    // Falls back to local-currency amount only when amountUSD wasn't captured
-    // at subscription create time.
-    const currentMonthlyMrrUSD = activeSubs.reduce(
-      (sum, s) => sum + (s.amountUSD ?? s.amount ?? 0),
-      0
-    );
-
-    // Distinct supported campaigns. Subscription donations count even without
-    // paidAt — they're treated as ناجح across dashboards/UI.
+    // Distinct supported campaigns (settled donations only).
     const supportedCampaignIds = new Set<string>();
     for (const donation of user.donations) {
-      if (donation.status !== 'PAID') continue;
-      if (donation.paidAt == null && donation.subscriptionId == null) continue;
+      if (donation.status !== 'PAID' || donation.paidAt == null) continue;
       for (const item of donation.items) supportedCampaignIds.add(item.campaignId);
     }
 
@@ -148,8 +109,7 @@ export async function GET(
     // long-tail donor doesn't blow up the loop.
     const paidMonthKeys = new Set(
       user.donations
-        // Settlement-only, matching PAID_DONATION_FILTER: an unsettled subscription row
-        // must not mark a month as "donated in" on the donor's streak.
+        // Settlement-only, matching PAID_DONATION_FILTER.
         .filter((d) => d.status === 'PAID' && d.paidAt != null)
         .map((d) => {
           const dt = d.paidAt ?? d.createdAt;
@@ -175,8 +135,6 @@ export async function GET(
       totalDonatedAmountUSD: t?._sum.amountUSD ?? 0,
       lastDonationAt: t?._max.createdAt ?? null,
       badgeIds: badgeIdsByUser.get(id) ?? [],
-      currentMonthlyMrrUSD,
-      activeSubscriptionsCount: activeSubs.length,
       supportedCampaignsCount: supportedCampaignIds.size,
       streakMonths,
     };
@@ -192,11 +150,7 @@ export async function GET(
       ...profileCard,
     };
 
-    return NextResponse.json({
-      user: safeUser,
-      oneTimeDonations: oneTimeDonations.map((d) => withType(d, 'ONE_TIME')),
-      monthlyDonations: monthlyDonations.map((d) => withType(d, 'MONTHLY')),
-    });
+    return NextResponse.json({ user: safeUser });
   } catch (error) {
     console.error('Error fetching user:', error);
     return NextResponse.json(

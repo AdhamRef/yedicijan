@@ -3,14 +3,12 @@ import { prisma } from "@/lib/prisma";
 export type BadgeCriteriaType =
   | "TOTAL_LAST_N_MONTHS"
   | "ANY_SPAN_N_MONTHS"
-  | "MONTHLY_ACTIVE_RANGE"
   | "TOTAL_LIFETIME"
   | "DONATION_COUNT_MIN";
 
 export interface BadgeCriteria {
   type: BadgeCriteriaType;
   amountMinUSD?: number;
-  amountMaxUSD?: number;
   months?: number;
   count?: number;
 }
@@ -92,24 +90,6 @@ export async function getUserIdsMatchingBadge(criteria: unknown): Promise<string
       return matching;
     }
 
-    case "MONTHLY_ACTIVE_RANGE": {
-      const min = c.amountMinUSD ?? 0;
-      const max = c.amountMaxUSD ?? Number.MAX_SAFE_INTEGER;
-      const subs = await prisma.subscription.findMany({
-        where: { status: "ACTIVE" },
-        select: { donorId: true, amountUSD: true },
-      });
-      const byDonor = new Map<string, number>();
-      for (const s of subs) {
-        const sum = (byDonor.get(s.donorId) ?? 0) + (s.amountUSD ?? 0);
-        byDonor.set(s.donorId, sum);
-      }
-      const effectiveMin = min > 0 ? min : 0.01;
-      return [...byDonor.entries()]
-        .filter(([, amount]) => amount >= effectiveMin && amount <= max)
-        .map(([donorId]) => donorId);
-    }
-
     case "TOTAL_LIFETIME": {
       const amountMin = c.amountMinUSD ?? 0;
       const effectiveMin = amountMin > 0 ? amountMin : 0.01;
@@ -134,6 +114,8 @@ export async function getUserIdsMatchingBadge(criteria: unknown): Promise<string
         .map((g) => g.donorId as string);
     }
 
+    // Unknown types — including MONTHLY_ACTIVE_RANGE, which may still be stored on old
+    // badge rows after monthly donations were removed — never match.
     default:
       return [];
   }

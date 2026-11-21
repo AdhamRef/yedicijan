@@ -27,7 +27,6 @@ export type ExportFormat = "xlsx" | "csv";
 export interface DonationExportRow {
   id: string;
   status: string;
-  type: "ONE_TIME" | "MONTHLY";
   createdAt: Date;
   paidAt: Date | null;
   donor: {
@@ -53,32 +52,8 @@ export interface DonationExportRow {
   provider: string | null;
   providerOrderId: string | null;
   providerErrorMessage: string | null;
-  subscriptionId: string | null;
   comment: string | null;
   attribution: Record<string, unknown> | null;
-}
-
-export interface SubscriptionExportRow {
-  id: string;
-  status: "ACTIVE" | "PAUSED" | "CANCELLED";
-  donor: { id: string | null; name: string | null; email: string | null; phone: string | null; countryCode: string | null };
-  amount: number;
-  amountUSD: number | null;
-  currency: string;
-  teamSupport: number;
-  paymentMethod: string | null;
-  createdAt: Date;
-  lastBillingDate: Date | null;
-  nextBillingDate: Date | null;
-  campaigns: { id: string; title: string }[];
-  categories: { id: string; name: string }[];
-  referral: { id: string; code: string | null; name: string | null } | null;
-  /** Count of confirmed PAID charges that have already happened on this subscription. */
-  totalChargesCount: number;
-  /** Sum of amount across confirmed PAID charges (in subscription currency). */
-  totalChargesAmount: number;
-  /** Sum of amountUSD across confirmed PAID charges. */
-  totalChargesAmountUSD: number;
 }
 
 export interface ExportFilterDescriptor {
@@ -89,15 +64,13 @@ export interface ExportFilterDescriptor {
 
 export interface DonationExportInput {
   format: ExportFormat;
-  /** Workbook / report title (e.g. "تقرير التبرعات", "تقرير الاشتراكات الشهرية"). */
+  /** Workbook / report title (e.g. "تقرير التبرعات", "تقرير الإحالة"). */
   title: string;
   /** Optional sub-title (e.g. referral name, date range). */
   subtitle?: string;
   /** Captured filter values shown in the Filters Applied panel. */
   filters: ExportFilterDescriptor[];
   donations: DonationExportRow[];
-  /** When set, an extra "Subscriptions" sheet is included (monthly export). */
-  subscriptions?: SubscriptionExportRow[];
 }
 
 export interface ExportResult {
@@ -129,7 +102,6 @@ interface ColSpec<T> {
 const DONATION_COLUMNS: ColSpec<DonationExportRow>[] = [
   { key: "id", header: "رقم العملية", width: 26, value: (r) => r.id },
   { key: "status", header: "الحالة", width: 10, align: "center", value: (r) => r.status },
-  { key: "type", header: "النوع", width: 12, align: "center", value: (r) => (r.type === "MONTHLY" ? "شهري" : "لمرة واحدة") },
   { key: "createdAt", header: "تاريخ الإنشاء", width: 19, numFmt: "yyyy-mm-dd hh:mm", value: (r) => r.createdAt },
   { key: "paidAt", header: "تاريخ الدفع", width: 19, numFmt: "yyyy-mm-dd hh:mm", value: (r) => r.paidAt },
   { key: "donorName", header: "اسم المتبرع", width: 24, value: (r) => r.donor.name ?? "" },
@@ -152,32 +124,7 @@ const DONATION_COLUMNS: ColSpec<DonationExportRow>[] = [
   { key: "provider", header: "بوابة الدفع", width: 14, align: "center", value: (r) => r.provider ?? "" },
   { key: "providerOrderId", header: "مرجع البوابة", width: 24, value: (r) => r.providerOrderId ?? "" },
   { key: "providerErrorMessage", header: "سبب الفشل", width: 30, value: (r) => r.providerErrorMessage ?? "" },
-  { key: "subscriptionId", header: "رقم الاشتراك", width: 26, value: (r) => r.subscriptionId ?? "" },
   { key: "comment", header: "ملاحظة", width: 28, value: (r) => r.comment ?? "" },
-];
-
-const SUBSCRIPTION_COLUMNS: ColSpec<SubscriptionExportRow>[] = [
-  { key: "id", header: "رقم الاشتراك", width: 26, value: (r) => r.id },
-  { key: "status", header: "الحالة", width: 12, align: "center", value: (r) => r.status === "ACTIVE" ? "نشط" : r.status === "PAUSED" ? "متوقف" : "ملغي" },
-  { key: "donorName", header: "اسم المتبرع", width: 24, value: (r) => r.donor.name ?? "" },
-  { key: "donorEmail", header: "بريد المتبرع", width: 28, value: (r) => r.donor.email ?? "" },
-  { key: "donorPhone", header: "هاتف المتبرع", width: 18, value: (r) => r.donor.phone ?? "" },
-  { key: "country", header: "الدولة", width: 10, align: "center", value: (r) => (r.donor.countryCode ?? "").toString().toUpperCase() },
-  { key: "currency", header: "العملة", width: 10, align: "center", value: (r) => r.currency },
-  { key: "amount", header: "قيمة الدورة", width: 14, align: "right", numFmt: "#,##0.00", value: (r) => r.amount },
-  { key: "teamSupport", header: "دعم الفريق", width: 14, align: "right", numFmt: "#,##0.00", value: (r) => r.teamSupport },
-  { key: "amountUSD", header: "بالدولار (USD)", width: 14, align: "right", numFmt: "#,##0.00", value: (r) => r.amountUSD },
-  { key: "totalChargesCount", header: "عدد الدفعات الناجحة", width: 18, align: "center", numFmt: "#,##0", value: (r) => r.totalChargesCount },
-  { key: "totalChargesAmount", header: "إجمالي الدفعات (محلي)", width: 18, align: "right", numFmt: "#,##0.00", value: (r) => r.totalChargesAmount },
-  { key: "totalChargesAmountUSD", header: "إجمالي الدفعات (USD)", width: 18, align: "right", numFmt: "#,##0.00", value: (r) => r.totalChargesAmountUSD },
-  { key: "paymentMethod", header: "وسيلة الدفع", width: 14, align: "center", value: (r) => r.paymentMethod ?? "" },
-  { key: "createdAt", header: "تاريخ الإنشاء", width: 19, numFmt: "yyyy-mm-dd hh:mm", value: (r) => r.createdAt },
-  { key: "lastBillingDate", header: "آخر دفعة", width: 19, numFmt: "yyyy-mm-dd hh:mm", value: (r) => r.lastBillingDate },
-  { key: "nextBillingDate", header: "الدفعة القادمة", width: 19, numFmt: "yyyy-mm-dd hh:mm", value: (r) => r.nextBillingDate },
-  { key: "campaigns", header: "الحملات", width: 36, value: (r) => r.campaigns.map((c) => c.title).join("؛ ") },
-  { key: "categories", header: "الأقسام", width: 28, value: (r) => r.categories.map((c) => c.name).join("؛ ") },
-  { key: "referralCode", header: "رمز الإحالة", width: 14, align: "center", value: (r) => r.referral?.code ?? "" },
-  { key: "referralName", header: "اسم الإحالة", width: 24, value: (r) => r.referral?.name ?? "" },
 ];
 
 // ─── Aggregation ──────────────────────────────────────────────────────────────
@@ -205,8 +152,6 @@ interface Aggregates {
   totalCount: number;
   paidCount: number;
   failedCount: number;
-  oneTimeCount: number;
-  monthlyCount: number;
   totalAmountUSD: number;       // base donations only (paid), in USD
   totalTeamSupportUSD: number;  // team support (paid), in USD
   totalFeesUSD: number;
@@ -231,7 +176,7 @@ function ratio(localAmount: number, localTotal: number, amountUSD: number | null
 
 function aggregate(rows: DonationExportRow[]): Aggregates {
   // Must match PAID_DONATION_FILTER (lib/dashboard/donation-usd-revenue.ts), which the
-  // on-screen cards use: settled donations only, one-time and subscription alike. Bare
+  // on-screen cards use: settled donations only. Bare
   // `status === "PAID"` also counted abandoned checkouts that never settled, so the exported
   // workbook reported more successful donations — and more money — than the dashboard it was
   // exported from. Mirrors PAID_DONATION_FILTER; keep the two in step.
@@ -253,8 +198,6 @@ function aggregate(rows: DonationExportRow[]): Aggregates {
   let totalFeesUSD = 0;
   let totalChargedUSD = 0;
   let failedAmountUSD = 0;
-  let oneTimeCount = 0;
-  let monthlyCount = 0;
 
   // Status bucket (all rows, not just paid — admin still wants visibility on failed/etc.)
   for (const r of rows) {
@@ -275,9 +218,6 @@ function aggregate(rows: DonationExportRow[]): Aggregates {
   }
 
   for (const r of paid) {
-    if (r.type === "MONTHLY") monthlyCount += 1;
-    else oneTimeCount += 1;
-
     if (r.donor.id) donorSet.add(r.donor.id);
 
     const localCharged = r.totalAmount || r.amount + r.teamSupport + r.fees;
@@ -428,8 +368,6 @@ function aggregate(rows: DonationExportRow[]): Aggregates {
     totalCount: rows.length,
     paidCount: paid.length,
     failedCount: rows.filter((r) => r.status === "FAILED").length,
-    oneTimeCount,
-    monthlyCount,
     totalAmountUSD,
     totalTeamSupportUSD,
     totalFeesUSD,
@@ -569,8 +507,6 @@ function addCoverSheet(
     ["إجمالي عدد العمليات", agg.totalCount],
     ["العمليات الناجحة", agg.paidCount],
     ["العمليات الفاشلة", agg.failedCount],
-    ["لمرة واحدة", agg.oneTimeCount],
-    ["شهري", agg.monthlyCount],
     ["متبرعين فريدين", agg.uniqueDonors],
     ["إجمالي التبرعات (USD)", fmtMoney(agg.totalAmountUSD), "$"],
     ["إجمالي دعم الفريق (USD)", fmtMoney(agg.totalTeamSupportUSD), "$"],
@@ -832,64 +768,6 @@ function addDonationsSheet(wb: ExcelJS.Workbook, rows: DonationExportRow[]) {
   }
 }
 
-function addSubscriptionsSheet(wb: ExcelJS.Workbook, rows: SubscriptionExportRow[]) {
-  const sheet = wb.addWorksheet("الاشتراكات", {
-    views: [{ rightToLeft: true, state: "frozen", ySplit: 1 }],
-  });
-
-  const headerRow = sheet.getRow(1);
-  SUBSCRIPTION_COLUMNS.forEach((col, idx) => {
-    sheet.getColumn(idx + 1).width = col.width;
-    headerRow.getCell(idx + 1).value = col.header;
-  });
-  styleHeaderRow(headerRow);
-
-  for (let i = 0; i < rows.length; i++) {
-    const dataRow = sheet.getRow(i + 2);
-    SUBSCRIPTION_COLUMNS.forEach((col, idx) => {
-      const cell = dataRow.getCell(idx + 1);
-      const v = col.value(rows[i]);
-      cell.value = v == null ? "" : (v as ExcelJS.CellValue);
-      if (col.numFmt) cell.numFmt = col.numFmt;
-      if (col.align) cell.alignment = { horizontal: col.align, vertical: "middle" };
-      if (rows[i].status === "CANCELLED") {
-        cell.font = { color: { argb: "FF9CA3AF" }, italic: true };
-      } else if (rows[i].status === "PAUSED") {
-        cell.font = { color: { argb: "FFB45309" } };
-      }
-    });
-  }
-
-  if (rows.length > 0) {
-    applyZebra(sheet, 2, rows.length + 1);
-
-    const totalsRow = sheet.getRow(rows.length + 2);
-    totalsRow.getCell(1).value = "الإجمالي";
-    SUBSCRIPTION_COLUMNS.forEach((col, idx) => {
-      const colLetter = excelCol(idx + 1);
-      if (
-        col.key === "amount" ||
-        col.key === "teamSupport" ||
-        col.key === "amountUSD" ||
-        col.key === "totalChargesCount" ||
-        col.key === "totalChargesAmount" ||
-        col.key === "totalChargesAmountUSD"
-      ) {
-        totalsRow.getCell(idx + 1).value = {
-          formula: `SUM(${colLetter}2:${colLetter}${rows.length + 1})`,
-        };
-        totalsRow.getCell(idx + 1).numFmt = col.key === "totalChargesCount" ? "#,##0" : "#,##0.00";
-      }
-    });
-    styleTotalRow(totalsRow);
-
-    sheet.autoFilter = {
-      from: { row: 1, column: 1 },
-      to: { row: rows.length + 1, column: SUBSCRIPTION_COLUMNS.length },
-    };
-  }
-}
-
 function excelCol(n: number): string {
   let out = "";
   while (n > 0) {
@@ -909,9 +787,6 @@ async function buildXlsx(input: DonationExportInput): Promise<Buffer> {
   const agg = aggregate(input.donations);
   addCoverSheet(wb, input, agg);
   addDonationsSheet(wb, input.donations);
-  if (input.subscriptions) {
-    addSubscriptionsSheet(wb, input.subscriptions);
-  }
 
   const buf = (await wb.xlsx.writeBuffer()) as ArrayBuffer;
   return Buffer.from(buf);
@@ -946,16 +821,6 @@ function buildCsv(input: DonationExportInput): Buffer {
   }
   lines.push("");
 
-  // Subscriptions (optional)
-  if (input.subscriptions && input.subscriptions.length > 0) {
-    lines.push(`# الاشتراكات (${input.subscriptions.length})`);
-    lines.push(SUBSCRIPTION_COLUMNS.map((c) => csvEscape(c.header)).join(","));
-    for (const r of input.subscriptions) {
-      lines.push(SUBSCRIPTION_COLUMNS.map((c) => csvEscape(c.value(r))).join(","));
-    }
-    lines.push("");
-  }
-
   // Summary
   const agg = aggregate(input.donations);
   lines.push("# ===== الملخص =====");
@@ -963,8 +828,6 @@ function buildCsv(input: DonationExportInput): Buffer {
     ["إجمالي عدد العمليات", agg.totalCount],
     ["العمليات الناجحة", agg.paidCount],
     ["العمليات الفاشلة", agg.failedCount],
-    ["لمرة واحدة", agg.oneTimeCount],
-    ["شهري", agg.monthlyCount],
     ["متبرعين فريدين", agg.uniqueDonors],
     ["إجمالي التبرعات (USD)", fmtMoney(agg.totalAmountUSD)],
     ["إجمالي دعم الفريق (USD)", fmtMoney(agg.totalTeamSupportUSD)],
@@ -1048,7 +911,6 @@ function buildCsv(input: DonationExportInput): Buffer {
 function asciiSlugFor(title: string): string {
   const map: Record<string, string> = {
     "تقرير التبرعات": "donations-report",
-    "تقرير الاشتراكات الشهرية": "monthly-subscriptions-report",
     "تقرير الإحالة": "referral-report",
   };
   if (map[title]) return map[title];

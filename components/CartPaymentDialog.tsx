@@ -141,25 +141,17 @@ const CartPaymentDialog = ({
   // Manual card inputs for the bank 3D rails (PayFor / Albaraka)
   const [cardDetails, setCardDetails]     = useState<PayForCardState>({ cardNumber: "", expiryDate: "", cvv: "", cardholderName: "" });
   const [cardFocus, setCardFocus]         = useState("");
-  // The cart is always a one-time donation, so it never touches Stripe: lira goes
-  // to Albaraka, everything else to PayFor while the admin leaves it on. Both are
-  // 3D Secure rails that take over the page, so there are no Stripe Elements here.
-  const gateway = resolveGateway({
-    payforEnabled,
-    currency: getCurrency(),
-    donationType: "ONE_TIME",
-  });
+  // Lira goes to Albaraka, everything else to PayFor while the admin leaves it on.
+  // Both are 3D Secure rails that take over the page.
+  const gateway = resolveGateway({ payforEnabled, currency: getCurrency() });
   const use3D = gateway === "PAYFOR";
   const useAlbaraka = gateway === "ALBARAKA";
-  /** Both rails post an HTML form to the bank. Always true for the cart. */
-  const useBank3D = use3D || useAlbaraka;
   /** Card inputs we render ourselves — Albaraka's hosted page replaces them. */
   const useOwnCardForm = use3D || (useAlbaraka && !albarakaUseOOS);
   // Guard so the failure redirect fires once even if the poll ticks again.
   const hasFailedRef = useRef(false);
   const [loading, setLoading]             = useState(false);
   const [redirecting, setRedirecting]     = useState(false);
-  const [payforSwitching, setPayforSwitching] = useState(false);
   const [mounted, setMounted]             = useState(false);
   const [phoneValue, setPhoneValue]       = useState("");
   const ipCountry = useIpCountry();
@@ -489,7 +481,7 @@ const CartPaymentDialog = ({
       // Both rails work the same way: ask the server for a signed hidden-input set,
       // POST it to the bank as an HTML form, then poll the donation until the bank's
       // callback settles it. Only the endpoint and how the card reaches the bank differ.
-      if (paymentMethod === "CARD" && useBank3D) {
+      if (paymentMethod === "CARD") {
         const res = await axios.post("/api/cart/payment", basePayload);
         if (!res.data?.success) { onClose(); return; }
         const donationId = res.data.donation.id as string;
@@ -1048,8 +1040,8 @@ const CartPaymentDialog = ({
                   {redirecting ? (
                     <div className="flex flex-col items-center justify-center py-8 gap-4 sm:py-10 sm:gap-5 text-center">
                       <div className="relative">
-                        <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center transition-colors ${payforSwitching ? "bg-[#635bff]/10" : "bg-burgundy/8"}`}>
-                          <CardIcon className={`h-7 w-7 sm:h-9 sm:w-9 transition-colors ${payforSwitching ? "text-[#635bff]" : "text-burgundy"}`} />
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-burgundy/8">
+                          <CardIcon className="h-7 w-7 sm:h-9 sm:w-9 text-burgundy" />
                         </div>
                         <span className="absolute -bottom-1 -right-1 w-6 h-6 bg-white border-2 border-burgundy/20 rounded-full flex items-center justify-center">
                           <ExternalLink className="h-3 w-3 text-burgundy" />
@@ -1057,15 +1049,15 @@ const CartPaymentDialog = ({
                       </div>
                       <div>
                         <p className="text-[15px] sm:text-base font-semibold text-gray-900">
-                          {payforSwitching ? t("paymentSwitching") : t("successRedirecting")}
+                          {t("successRedirecting")}
                         </p>
                         <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto">
-                          {payforSwitching ? t("paymentSwitchingDesc") : t("successRedirectingDesc")}
+                          {t("successRedirectingDesc")}
                         </p>
                       </div>
-                      <div className={`flex items-center gap-2 text-xs px-4 py-2 rounded-full transition-colors ${payforSwitching ? "text-[#635bff] bg-[#635bff]/8" : "text-burgundy bg-burgundy/6"}`}>
+                      <div className="flex items-center gap-2 text-xs px-4 py-2 rounded-full text-burgundy bg-burgundy/6">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        <span>{payforSwitching ? t("paymentSwitching") : t("successRedirectingDesc")}</span>
+                        <span>{t("successRedirectingDesc")}</span>
                       </div>
                     </div>
                   ) : (

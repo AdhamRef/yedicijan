@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   title: string;
   /**
-   * ReactNode rather than string: the revenue and monthly pages render a subtitle that
+   * ReactNode rather than string: the revenue page renders a subtitle that
    * switches to a highlighted donor name when `?userId=` is present, so it has to carry
    * markup, not just text.
    */
@@ -24,7 +24,7 @@ type Props = {
  * The single page header for the dashboard.
  *
  * Before this existed each page hand-rolled its own: `/campaigns` used
- * `text-xl sm:text-2xl`, `/monthly` used `text-xl sm:text-2xl md:text-3xl`, and the
+ * `text-xl sm:text-2xl`, the old monthly page used `text-xl sm:text-2xl md:text-3xl`, and the
  * marketing section used a full-bleed blue gradient card — so no two sections agreed on
  * what a page title looked like. Deliberately flat rather than a coloured slab: the shell
  * is neutral now, so the header should not compete with the content.

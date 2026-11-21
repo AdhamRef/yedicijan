@@ -2,12 +2,12 @@
  * Friendly explanations for failed donations.
  *
  * We see two error shapes:
- *  - **PayFor** (Turkish bank gateway): a numeric `ProcReturnCode` (e.g. "05",
+ *  - **Bank codes** (PayFor / Albaraka): a numeric `ProcReturnCode` (e.g. "05",
  *    "51", "12") plus the raw bank `ErrorMessage`. The codes follow ISO 8583
  *    response codes that Turkish banks commonly emit.
- *  - **Stripe**: usually a free-form `providerErrorMessage` like
- *    "Your card was declined" or "Your card has expired". Sometimes a
- *    `decline_code` string we mirror into providerErrorMessage.
+ *  - **Free text**: a `providerErrorMessage` like
+ *    "Your card was declined" or "Your card has expired" (including older
+ *    rows from the retired card processor).
  *
  * `resolvePaymentError` collapses both into a single `ResolvedPaymentError`
  * keyed by a stable `key` (e.g. `"insufficientFunds"`). The page then renders
@@ -113,7 +113,7 @@ const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
 
 /** Substring patterns matched (case-insensitive) against any free-text error message. */
 const TEXT_PATTERNS: Array<{ pattern: RegExp; key: PaymentErrorKey }> = [
-  // Stripe decline codes (and the prose Stripe shows for each)
+  // Common decline codes and their prose forms
   { pattern: /insufficient[_\s]*funds|insufficient[_\s]*balance|رصيد\s*غير\s*كاف/i, key: "insufficientFunds" },
   { pattern: /expired[_\s]*card|card[_\s]*expired|carte\s+expirée|بطاقة\s*منتهية/i, key: "expiredCard" },
   { pattern: /incorrect[_\s]*cvc|invalid[_\s]*cvc|cvc[_\s]*check[_\s]*failed|cvv\s*incorrect|رمز\s*التحقق/i, key: "invalidCvc" },

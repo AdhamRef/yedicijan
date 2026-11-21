@@ -24,13 +24,12 @@ import {
  *
  * Safety rules, in order:
  *   1. The trigger must exist and be `enabled` — the dashboard checkbox is the on/off switch.
- *   2. Donors with an active recurring subscription are never reminded (they are already giving).
- *   3. Marketing consent is enforced with the same `donorChannelEligibility` rules campaigns use
+ *   2. Marketing consent is enforced with the same `donorChannelEligibility` rules campaigns use
  *      (doNotContact / emailOptIn / emailNotifications / whatsappOptIn).
- *   4. A donor is reminded at most once per `cooldownDays`, and never twice for the same lapse —
+ *   3. A donor is reminded at most once per `cooldownDays`, and never twice for the same lapse —
  *      idempotency is read from CommunicationDelivery (the archive source of truth), so a re-run of
  *      the cron on the same day cannot double-send.
- *   5. Each run is bounded by `maxPerRun` so a first run over a large donor base cannot time out or
+ *   4. Each run is bounded by `maxPerRun` so a first run over a large donor base cannot time out or
  *      blast the whole list at once; the remainder is picked up by the next run.
  */
 
@@ -139,11 +138,6 @@ export async function runDonationLapsedReminders(
   summary.donorsScanned = lastByDonor.size;
   if (!lastByDonor.size) return summary;
 
-  // Donors with a live recurring subscription are already giving — never nag them.
-  const activeSubscribers = new Set(
-    (await prisma.subscription.findMany({ where: { status: "ACTIVE" }, select: { donorId: true } }).catch(() => [])).map((s) => s.donorId)
-  );
-
   const config = await resolveTriggerSendConfig();
   let budget = maxPerRun;
 
@@ -160,7 +154,7 @@ export async function runDonationLapsedReminders(
     // Most-recently-lapsed first: donors who just crossed the threshold convert best, and this keeps
     // the bounded run from getting permanently stuck on the oldest tail of the list.
     const candidateIds = [...lastByDonor.entries()]
-      .filter(([donorId, last]) => last.at <= lapseCutoff && !activeSubscribers.has(donorId))
+      .filter(([, last]) => last.at <= lapseCutoff)
       .sort((a, b) => b[1].at.getTime() - a[1].at.getTime())
       .map(([donorId]) => donorId);
     row.candidates = candidateIds.length;

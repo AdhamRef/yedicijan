@@ -35,12 +35,7 @@ async function loadStatsSnapshot(periodLabel: string, range: { start: Date | nul
   // status=PAID + paidAt null = checkout started but gateway never confirmed (abandoned/in-flight).
   const PENDING_PAID = { status: "PAID", paidAt: null } as const;
 
-  // One-time donations are stored with subscriptionId completely absent (Prisma's
-  // MongoDB connector doesn't always match {subscriptionId: null} against rows
-  // where the field was never written). To avoid that footgun, only filter the
-  // side that definitely matches — `subscriptionId: { not: null }` for monthly —
-  // and derive one-time by subtraction.
-  const [paidCount, paidSum, failedCount, pendingCount, monthlyCount, topItems] =
+  const [paidCount, paidSum, failedCount, pendingCount, topItems] =
     await Promise.all([
       prisma.donation.count({ where: { ...dateFilter, ...PAID } }),
       prisma.donation.aggregate({
@@ -49,7 +44,6 @@ async function loadStatsSnapshot(periodLabel: string, range: { start: Date | nul
       }),
       prisma.donation.count({ where: { ...dateFilter, ...FAILED } }),
       prisma.donation.count({ where: { ...dateFilter, ...PENDING_PAID } }),
-      prisma.donation.count({ where: { ...dateFilter, ...PAID, subscriptionId: { not: null } } }),
       prisma.donationItem.groupBy({
         by: ["campaignId"],
         where: { donation: { ...dateFilter, ...PAID } },
@@ -59,8 +53,6 @@ async function loadStatsSnapshot(periodLabel: string, range: { start: Date | nul
         take: 5,
       }),
     ]);
-
-  const oneTimeCount = Math.max(0, paidCount - monthlyCount);
 
   let topCampaigns: StatsSnapshot["topCampaigns"] = [];
   if (topItems.length > 0) {
@@ -82,8 +74,6 @@ async function loadStatsSnapshot(periodLabel: string, range: { start: Date | nul
     paidTotalUSD: paidSum._sum.amountUSD ?? 0,
     failedCount,
     pendingCount,
-    oneTimeCount,
-    monthlyCount,
     topCampaigns,
   };
 }

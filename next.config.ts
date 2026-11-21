@@ -61,6 +61,8 @@ const marketingRedirects = [
   // impossible to create a campaign.
   ["/dashboard/communication/campaigns/:id((?!new$)[^/]+)", "/dashboard/communication/campaigns"],
   ["/dashboard/messages", "/dashboard/inbox"],
+  // Monthly (recurring) donations are gone; every donation is one-time now.
+  ["/dashboard/monthly", "/dashboard/donations"],
   ["/dashboard/marketing", "/dashboard/marketing/attribution"],
   ["/dashboard/marketing/performance", "/dashboard/marketing/attribution"],
   ["/dashboard/marketing/recommendations", "/dashboard/marketing/attribution"],
@@ -102,12 +104,6 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@usewaypoint/email-builder"],
   compiler: { removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false },
-  async rewrites() {
-    return [
-      { source: "/api/admin/subscriptions/chart", destination: "/api/admin/subscriptions/overview/chart" },
-      { source: "/api/admin/subscriptions/stats", destination: "/api/admin/subscriptions/overview/stats" },
-    ];
-  },
   async redirects() {
     return [
       ...marketingRedirects.map(([source, destination]) => ({ source, destination, permanent: false })),

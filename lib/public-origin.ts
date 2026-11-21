@@ -1,6 +1,6 @@
 /**
  * The site's public origin, for building absolute URLs that leave the server —
- * payment-gateway return URLs, Stripe success/cancel URLs, webhook endpoints,
+ * payment-gateway return URLs, callback endpoints,
  * redirects we hand to a browser.
  *
  * Deriving these from the incoming request is unsafe behind a reverse proxy.

@@ -287,13 +287,11 @@ function PaymentView({ donation }: { donation: DonationDetailsTarget }) {
   const method = donation.paymentMethod ?? null;
 
   const providerLabel =
-    provider === "STRIPE"
-      ? "Stripe"
-      : provider === "PAYFOR"
-        ? "PayFor (Ziraat)"
-        : provider === "ALBARAKA"
-          ? "Albaraka Türk"
-          : provider ?? "—";
+    provider === "PAYFOR"
+      ? "PayFor (Ziraat)"
+      : provider === "ALBARAKA"
+        ? "Albaraka Türk"
+        : provider ?? "—";
 
   const methodLabel =
     method === "CARD" ? "بطاقة ائتمانية" : method === "PAYPAL" ? "PayPal" : method ?? "—";

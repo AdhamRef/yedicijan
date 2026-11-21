@@ -31,16 +31,6 @@ export const foundationTransactionalFlows: TransactionalFlow[] = [
     ],
   },
   {
-    id: "flow_monthly_failed",
-    eventKey: "monthly_donation.failed",
-    title: "فشل خصم التبرع الشهري",
-    status: "DRAFT",
-    steps: [
-      { id: "monthly_failed_email", channel: "EMAIL", providerKey: "ELASTIC_EMAIL", templateId: "monthly_failed_email", delayMinutes: 15, requiresConsent: false },
-      { id: "monthly_failed_whatsapp", channel: "WHATSAPP", providerKey: "META_WHATSAPP", templateId: "monthly_failed_whatsapp", delayMinutes: 120, requiresConsent: true },
-    ],
-  },
-  {
     id: "flow_large_donation_thanks",
     eventKey: "donation.large",
     title: "شكر خاص للتبرعات الكبيرة",

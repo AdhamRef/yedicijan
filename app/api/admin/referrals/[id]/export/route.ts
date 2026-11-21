@@ -6,7 +6,7 @@
  *
  * Filters mirror the referral analytics page:
  *   format, start, end, categoryId, campaignId, status, locale, country,
- *   subscriptionOnly, sortBy, sortOrder.
+ *   sortBy, sortOrder.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,7 +19,6 @@ import {
   buildDonationExport,
   buildContentDisposition,
   type DonationExportRow,
-  type SubscriptionExportRow,
   type ExportFilterDescriptor,
   type ExportFormat,
 } from "@/lib/dashboard/donation-export";
@@ -56,8 +55,6 @@ export async function GET(
     const status = sp.get("status");
     const locale = sp.get("locale")?.trim() ?? null;
     const country = sp.get("country")?.trim() ?? null;
-    const subscriptionOnly = sp.get("subscriptionOnly") === "true" || sp.get("subscriptionOnly") === "1";
-    const donationType = sp.get("donationType");
     const limit = Math.min(parseInt(sp.get("limit") || "20000", 10) || 20000, 50000);
 
     const dateFilter: { gte?: Date; lte?: Date } = {};
@@ -74,8 +71,6 @@ export async function GET(
     const baseWhere: Prisma.DonationWhereInput = {
       referralId,
       ...(campaignId && campaignId !== "all" && { items: { some: { campaignId } } }),
-      ...(subscriptionOnly && { subscriptionId: { not: null } }),
-      ...(donationType === "MONTHLY" && { subscriptionId: { not: null } }),
       ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
       ...(status && ["PAID", "FAILED"].includes(status) && { status: status as "PAID" | "FAILED" }),
     };
@@ -99,9 +94,6 @@ export async function GET(
           : { donorCountryCode: country.toUpperCase() }
       );
     }
-    if (donationType === "ONE_TIME") {
-      donationFilters.push({ OR: [{ subscriptionId: null }, { subscriptionId: { isSet: false } }] });
-    }
     const where: Prisma.DonationWhereInput = donationFilters.length > 1 ? { AND: donationFilters } : baseWhere;
     const orderBy: Prisma.DonationOrderByWithRelationInput =
       sortBy === "amount" ? { amountUSD: sortOrder } : { createdAt: sortOrder };
@@ -118,37 +110,6 @@ export async function GET(
       take: limit,
     });
 
-    // Pull subscriptions attributed to this referral for the secondary sheet
-    const subRows = await prisma.subscription.findMany({
-      where: { referralId },
-      include: {
-        donor: { select: { id: true, name: true, email: true, countryCode: true } },
-        items: { select: { campaign: { select: { id: true, title: true } } } },
-        categoryItems: { select: { category: { select: { id: true, name: true } } } },
-        referral: { select: { id: true, code: true, name: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10000,
-    });
-    const subIds = subRows.map((s) => s.id);
-    const charges = subIds.length
-      ? await prisma.donation.groupBy({
-          by: ["subscriptionId"],
-          where: { subscriptionId: { in: subIds }, status: "PAID" },
-          _count: { _all: true },
-          _sum: { amount: true, amountUSD: true },
-        })
-      : [];
-    const chargeMap = new Map<string, { count: number; amount: number; amountUSD: number }>();
-    for (const c of charges) {
-      if (!c.subscriptionId) continue;
-      chargeMap.set(c.subscriptionId, {
-        count: c._count._all,
-        amount: Number(c._sum.amount ?? 0),
-        amountUSD: Number(c._sum.amountUSD ?? 0),
-      });
-    }
-
     const exportDonations: DonationExportRow[] = rows.map((d) => {
       const teamSupport = Number(d.teamSupport ?? 0);
       const fees = Number(d.coverFees ? d.fees ?? 0 : 0);
@@ -157,7 +118,6 @@ export async function GET(
       return {
         id: d.id,
         status: d.status,
-        type: d.subscriptionId ? "MONTHLY" : "ONE_TIME",
         createdAt: d.createdAt,
         paidAt: d.paidAt ?? null,
         donor: {
@@ -183,38 +143,8 @@ export async function GET(
         provider: d.provider ?? null,
         providerOrderId: d.providerOrderId ?? null,
         providerErrorMessage: d.providerErrorMessage ?? null,
-        subscriptionId: d.subscriptionId ?? null,
         comment: d.comment ?? null,
         attribution: (d.attribution as Record<string, unknown> | null) ?? null,
-      };
-    });
-
-    const exportSubscriptions: SubscriptionExportRow[] = subRows.map((s) => {
-      const c = chargeMap.get(s.id);
-      return {
-        id: s.id,
-        status: s.status,
-        donor: {
-          id: s.donor?.id ?? null,
-          name: s.donor?.name ?? null,
-          email: s.donor?.email ?? null,
-          phone: null,
-          countryCode: s.donor?.countryCode ?? null,
-        },
-        amount: Number(s.amount ?? 0),
-        amountUSD: s.amountUSD ?? null,
-        currency: s.currency,
-        teamSupport: Number(s.teamSupport ?? 0),
-        paymentMethod: s.paymentMethod ?? null,
-        createdAt: s.createdAt,
-        lastBillingDate: s.lastBillingDate ?? null,
-        nextBillingDate: s.nextBillingDate ?? null,
-        campaigns: s.items.map((i) => ({ id: i.campaign.id, title: i.campaign.title })),
-        categories: s.categoryItems.map((cat) => ({ id: cat.category.id, name: cat.category.name })),
-        referral: s.referral ? { id: s.referral.id, code: s.referral.code, name: s.referral.name } : null,
-        totalChargesCount: c?.count ?? 0,
-        totalChargesAmount: c?.amount ?? 0,
-        totalChargesAmountUSD: c?.amountUSD ?? 0,
       };
     });
 
@@ -230,9 +160,7 @@ export async function GET(
     if (status && status !== "all") filters.push({ label: "الحالة", value: status });
     if (locale && locale !== "all") filters.push({ label: "اللغة", value: locale });
     if (country && country !== "all") filters.push({ label: "الدولة", value: country });
-    if (subscriptionOnly) filters.push({ label: "الاشتراكات فقط", value: "نعم" });
     filters.push({ label: "عدد التبرعات", value: String(rows.length) });
-    filters.push({ label: "عدد الاشتراكات", value: String(subRows.length) });
 
     const subtitle = referral.name
       ? `الإحالة: ${referral.code} — ${referral.name}`
@@ -244,7 +172,6 @@ export async function GET(
       subtitle,
       filters,
       donations: exportDonations,
-      subscriptions: exportSubscriptions.length > 0 ? exportSubscriptions : undefined,
     });
 
     return new NextResponse(out.body as unknown as BodyInit, {

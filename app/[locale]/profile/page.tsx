@@ -11,25 +11,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MONTHLY_DONATIONS_ENABLED } from "@/lib/payment-gateway";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -51,11 +33,8 @@ import {
   LogOut,
   Mail,
   MapPin,
-  PauseCircle,
   Phone,
-  PlayCircle,
   Receipt,
-  Repeat,
   Settings,
   Shield,
   User,
@@ -81,10 +60,7 @@ interface DonationForProfile {
   paymentMethod?: string | null;
   paidAt?: string | null;
   status: string | null;
-  subscriptionId?: string | null;
-  nextBillingDate?: string | null;
   createdAt: string;
-  subscriptionStartedAt?: string;
   teamSupport?: number;
   fees?: number;
   coverFees?: boolean;
@@ -120,8 +96,6 @@ interface UserProfile {
   // Impact stats from GET /api/users/[id]
   totalDonationsCount?: number;
   totalDonatedAmountUSD?: number;
-  currentMonthlyMrrUSD?: number;
-  activeSubscriptionsCount?: number;
   supportedCampaignsCount?: number;
   streakMonths?: number;
   badgeIds?: string[];
@@ -178,13 +152,7 @@ const ProfilePage = () => {
 
   const [selectedPeriod, setSelectedPeriod] = useState("all");
   const [paymentFilter, setPaymentFilter] = useState<"all" | "PAID" | "FAILED">("all");
-  const [isLoading, setIsLoading] = useState(false);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
-  const [isPauseDialogOpen, setIsPauseDialogOpen] = useState(false);
-  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
-  const [selectedDonation, setSelectedDonation] = useState<DonationForProfile | null>(null);
-  const [subscriptionSettingsDonation, setSubscriptionSettingsDonation] =
-    useState<DonationForProfile | null>(null);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState<"email" | "sms" | null>(null);
 
@@ -267,75 +235,7 @@ const ProfilePage = () => {
     }
   };
 
-  // ─────────────────────────── donations / subscriptions ───────────────────
-
-  const handleToggleSubscription = (donation: DonationForProfile) => {
-    setSelectedDonation(donation);
-    setIsPauseDialogOpen(true);
-  };
-
-  const handleConfirmToggle = async () => {
-    if (!selectedDonation) return;
-    setIsLoading(true);
-    try {
-      const newStatus = selectedDonation.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
-      const response = await axios.put(`/api/donations/${selectedDonation.id}`, {
-        status: newStatus,
-      });
-      const updated = response.data as DonationForProfile;
-      setUser((prev) => {
-        if (!prev || !prev.donations) return prev;
-        return {
-          ...prev,
-          donations: prev.donations.map((d) =>
-            d.id === selectedDonation.id ? { ...d, ...updated } : d
-          ),
-        };
-      });
-      if (subscriptionSettingsDonation?.id === selectedDonation.id) {
-        setSubscriptionSettingsDonation((prev) => (prev ? { ...prev, ...updated } : null));
-      }
-      toast.success(
-        newStatus === "ACTIVE"
-          ? t("toast.subscriptionActivated")
-          : t("toast.subscriptionPaused")
-      );
-    } catch {
-      toast.error(t("toast.subscriptionUpdateError"));
-    } finally {
-      setIsLoading(false);
-      setIsPauseDialogOpen(false);
-      setSelectedDonation(null);
-    }
-  };
-
-  const handleCancelSubscription = async () => {
-    if (!subscriptionSettingsDonation) return;
-    setIsLoading(true);
-    try {
-      const response = await axios.put(
-        `/api/donations/${subscriptionSettingsDonation.id}`,
-        { status: "CANCELLED" }
-      );
-      const updated = response.data as DonationForProfile;
-      setUser((prev) => {
-        if (!prev || !prev.donations) return prev;
-        return {
-          ...prev,
-          donations: prev.donations.map((d) =>
-            d.id === subscriptionSettingsDonation.id ? { ...d, ...updated } : d
-          ),
-        };
-      });
-      setSubscriptionSettingsDonation(null);
-      setIsCancelDialogOpen(false);
-      toast.success(t("toast.subscriptionCancelled"));
-    } catch {
-      toast.error(t("toast.subscriptionUpdateError"));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // ─────────────────────────────── donations ───────────────────────────────
 
   const handleDownload = async (donationId: string) => {
     try {
@@ -432,8 +332,6 @@ const ProfilePage = () => {
       <ImpactCard
         totalDonationsCount={u.totalDonationsCount}
         totalDonatedAmountUSD={u.totalDonatedAmountUSD}
-        currentMonthlyMrrUSD={u.currentMonthlyMrrUSD}
-        activeSubscriptionsCount={u.activeSubscriptionsCount}
         supportedCampaignsCount={u.supportedCampaignsCount}
         streakMonths={u.streakMonths}
         badgesCount={u.badgeIds?.length ?? 0}
@@ -611,35 +509,6 @@ const ProfilePage = () => {
       return donationPaymentChargeStatus(d) === paymentFilter;
     });
 
-    const subscriptionRows: DonationForProfile[] = (() => {
-      const monthly = (u.donations ?? []).filter(
-        (d) => d.type === "MONTHLY" && d.subscriptionId
-      );
-      const bySub = new Map<string, DonationForProfile[]>();
-      for (const d of monthly) {
-        const sid = String(d.subscriptionId);
-        const arr = bySub.get(sid) ?? [];
-        arr.push(d);
-        bySub.set(sid, arr);
-      }
-      return Array.from(bySub.values())
-        .map((list) => {
-          const desc = [...list].sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          const asc = [...list].sort(
-            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
-          const rep = desc[0];
-          return { ...rep, subscriptionStartedAt: asc[0]?.createdAt ?? rep.createdAt };
-        })
-        .sort(
-          (a, b) =>
-            new Date(b.subscriptionStartedAt ?? b.createdAt).getTime() -
-            new Date(a.subscriptionStartedAt ?? a.createdAt).getTime()
-        );
-    })();
-
     const totalHistoryUSD =
       successfulInPeriod.reduce(
         (sum: number, d) => sum + (d.amountUSD ?? d.totalAmount),
@@ -661,21 +530,11 @@ const ProfilePage = () => {
           })
         : "0";
 
-    const monthlyCount =
-      u.donations?.filter((d) => d.type === "MONTHLY" && d.status === "ACTIVE").length || 0;
-    // Donors who already subscribed keep these controls so they can still manage or cancel.
-    const showMonthly = MONTHLY_DONATIONS_ENABLED || subscriptionRows.length > 0;
     const campaignCount = new Set(
       (u.donations ?? [])
         .filter(isSuccessfulCharge)
         .flatMap((d) => d.items?.map((i) => i.campaignId) ?? [])
     ).size;
-
-    const statusLabel = (d: DonationForProfile) => {
-      if (d.status === "ACTIVE") return t("subscriptions.active");
-      if (d.status === "PAUSED") return t("subscriptions.paused");
-      return t("subscriptions.cancelled");
-    };
 
     const formatCampaignCell = (d: DonationForProfile) => {
       const items = d.items ?? [];
@@ -692,14 +551,6 @@ const ProfilePage = () => {
         .join(" · ");
     };
 
-    const subscriptionCampaignsLine = (d: DonationForProfile) =>
-      d.items?.map((item) => item.campaign?.title).filter(Boolean).join(" · ") || "—";
-
-    const formatBillingDate = (iso?: string | null) =>
-      iso
-        ? new Date(iso).toLocaleDateString(locale === "ar" ? "ar-EG" : undefined)
-        : t("subscriptions.noDate");
-
     const emptyTable = (message: string) => (
       <div className="flex flex-col items-center justify-center py-12 text-gray-500">
         <Receipt className="w-12 h-12 mb-3 text-[#A5243D] opacity-60" />
@@ -710,7 +561,7 @@ const ProfilePage = () => {
     return (
       <div className="space-y-6">
         {/* mini stat row */}
-        <div className={`grid grid-cols-1 gap-4 ${showMonthly ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Card className="p-5 bg-gradient-to-br from-[#A5243D]/8 to-white border-[#A5243D]/20">
             <p className="text-xs font-semibold text-[#A5243D] uppercase tracking-wider">
               {t("donations.totalInPeriodTitle")}
@@ -723,15 +574,6 @@ const ProfilePage = () => {
               {t("donations.successfulPaymentsInPeriod", { count: successfulInPeriod.length })}
             </p>
           </Card>
-          {showMonthly && (
-            <Card className="p-5 bg-gradient-to-br from-[#A5243D]/8 to-white border-[#D8AA55]/20">
-              <p className="text-xs font-semibold text-[#D8AA55] uppercase tracking-wider">
-                {t("donations.monthlyDonations")}
-              </p>
-              <p className="text-2xl font-bold text-gray-900 mt-2">{monthlyCount}</p>
-              <p className="text-xs text-gray-600 mt-1">{t("donations.activeSubscription")}</p>
-            </Card>
-          )}
           <Card className="p-5 bg-gradient-to-br from-emerald-50 to-white border-emerald-200">
             <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">
               {t("donations.supportedCampaigns")}
@@ -928,185 +770,7 @@ const ProfilePage = () => {
             )}
           </Card>
         </section>
-
-        {/* subscriptions */}
-        {showMonthly && (
-        <section>
-          <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Repeat className="w-5 h-5 text-[#A5243D]" />
-            {t("subscriptions.settingsTableTitle")}
-          </h3>
-          <Card className="overflow-hidden">
-            {subscriptionRows.length === 0 ? (
-              emptyTable(t("subscriptions.emptySubscriptionsList"))
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {subscriptionRows.map((donation) => (
-                  <div
-                    key={donation.subscriptionId ?? donation.id}
-                    className="p-4 sm:p-5 hover:bg-gray-50/60 transition-colors"
-                  >
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-xl font-bold text-gray-900">
-                            {formatDonationAmount(donation.totalAmount, donation.currency)}
-                          </p>
-                          <span className="text-sm text-gray-500">{t("subscriptions.perMonth")}</span>
-                          <Badge
-                            variant="outline"
-                            className={
-                              donation.status === "ACTIVE"
-                                ? "border-green-300 bg-green-50 text-green-700"
-                                : donation.status === "PAUSED"
-                                ? "border-amber-300 bg-amber-50 text-amber-700"
-                                : "border-gray-300 text-gray-600"
-                            }
-                          >
-                            {statusLabel(donation)}
-                          </Badge>
-                        </div>
-                        <div className="mt-1.5 text-sm text-gray-600 flex flex-wrap items-center gap-x-4 gap-y-1">
-                          <span>
-                            {t("subscriptions.sinceDate")}:{" "}
-                            <span className="text-gray-800">
-                              {new Date(
-                                donation.subscriptionStartedAt ?? donation.createdAt
-                              ).toLocaleDateString(locale === "ar" ? "ar-EG" : undefined)}
-                            </span>
-                          </span>
-                          <span>
-                            {t("donations.nextBillingDate")}:{" "}
-                            <span className="text-gray-800">
-                              {formatBillingDate(donation.nextBillingDate)}
-                            </span>
-                          </span>
-                        </div>
-                        {subscriptionCampaignsLine(donation) !== "—" && (
-                          <p className="mt-2 text-sm text-gray-600 line-clamp-2">
-                            {subscriptionCampaignsLine(donation)}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-2 lg:justify-end shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDownload(donation.id)}
-                          disabled={
-                            isDownloading === donation.id || !donationReceiptAllowed(donation)
-                          }
-                          className="gap-1 border-[#A5243D]/40 text-[#A5243D] hover:bg-[#A5243D]/10"
-                        >
-                          {isDownloading === donation.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Receipt className="w-4 h-4" />
-                          )}
-                          {t("receipts.downloadPdfShort")}
-                        </Button>
-                        {donation.status !== "CANCELLED" && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="bg-[#A5243D] hover:bg-[#7D1830]"
-                            onClick={() => setSubscriptionSettingsDonation(donation)}
-                          >
-                            <Settings className="w-4 h-4 mr-1.5" />
-                            {t("subscriptions.manage")}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </section>
-        )}
       </div>
-    );
-  };
-
-  // Subscription settings dialog (kept as inline render)
-  const renderSubscriptionDialog = () => {
-    const sub = subscriptionSettingsDonation;
-    if (!sub) return null;
-    const isActive = sub.status === "ACTIVE";
-    return (
-      <Dialog
-        open={!!sub}
-        onOpenChange={(open) => !open && setSubscriptionSettingsDonation(null)}
-      >
-        <DialogContent className="max-w-md" dir={isRtl ? "rtl" : "ltr"}>
-          <DialogHeader>
-            <DialogTitle>{t("subscriptions.subscriptionSettings")}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 pt-2">
-            <div className="p-4 bg-[#A5243D]/5 border border-[#A5243D]/10 rounded-xl">
-              <p className="text-lg font-semibold text-gray-900">
-                {formatDonationAmount(sub.totalAmount, sub.currency)}{" "}
-                {t("subscriptions.perMonth")}
-              </p>
-              {sub.items?.map((item) => (
-                <p key={item.id} className="text-sm text-gray-600 mt-1">
-                  • {item.campaign?.title}
-                </p>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {sub.status !== "CANCELLED" && (
-                <Button
-                  variant={isActive ? "outline" : "default"}
-                  className="flex-1"
-                  onClick={() => handleToggleSubscription(sub)}
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : isActive ? (
-                    <>
-                      <PauseCircle className="w-4 h-4 mr-2" />
-                      {t("subscriptions.pause")}
-                    </>
-                  ) : (
-                    <>
-                      <PlayCircle className="w-4 h-4 mr-2" />
-                      {t("subscriptions.resume")}
-                    </>
-                  )}
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                className="gap-2 border-[#A5243D]/40 text-[#A5243D] hover:bg-[#A5243D]/10"
-                onClick={() => handleDownload(sub.id)}
-                disabled={isDownloading === sub.id || !donationReceiptAllowed(sub)}
-              >
-                {isDownloading === sub.id ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Receipt className="w-4 h-4" />
-                )}
-                {t("receipts.downloadPdfShort")}
-              </Button>
-            </div>
-            {sub.status !== "CANCELLED" && (
-              <>
-                <Separator />
-                <Button
-                  variant="ghost"
-                  className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
-                  onClick={() => setIsCancelDialogOpen(true)}
-                >
-                  {t("subscriptions.cancelSubscription")}
-                </Button>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     );
   };
 
@@ -1281,62 +945,6 @@ const ProfilePage = () => {
         currentCountryCode={user.countryCode}
         onSelect={handleCountrySelect}
       />
-
-      {/* Pause / resume dialog */}
-      <AlertDialog open={isPauseDialogOpen} onOpenChange={setIsPauseDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {selectedDonation?.status === "ACTIVE"
-                ? t("subscriptions.pauseSubscription")
-                : t("subscriptions.resume")}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {selectedDonation?.status === "ACTIVE"
-                ? t("pauseDialog.descriptionPause")
-                : t("pauseDialog.descriptionResume")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("deleteDialog.cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmToggle} disabled={isLoading}>
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : selectedDonation?.status === "ACTIVE" ? (
-                t("subscriptions.pause")
-              ) : (
-                t("subscriptions.resume")
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Cancel dialog */}
-      <AlertDialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("subscriptions.cancelSubscription")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("cancelDialog.description")}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("deleteDialog.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCancelSubscription}
-              disabled={isLoading}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                t("subscriptions.cancel")
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {renderSubscriptionDialog()}
     </>
   );
 };

@@ -1,16 +1,15 @@
 /**
  * Turns a payment failure into ARABIC for the Telegram admin channel.
  *
- * Why this exists: `providerErrorMessage` is whatever the gateway returned, and
- * Stripe localises decline messages to the DONOR's checkout language. Sampling
- * 221 real failed rows turned up the same three declines in four languages —
- * English, French, German and Arabic — so the admin channel was reading like a
- * phrasebook. The admins read Arabic; the donor's locale is irrelevant to them.
+ * Why this exists: `providerErrorMessage` is whatever the gateway returned, often
+ * localised to the DONOR's checkout language (older rows include declines in
+ * English, French, German and Arabic). The admins read Arabic; the donor's
+ * locale is irrelevant to them.
  *
  * Two independent signals, because neither covers everything:
- *   - PayFor sends a useful CODE and the useless message "Payment failed"
- *     (verified: every one of 51/05/54/V034/MR15/MR05 carries that same text).
- *   - Stripe sends no code on most rows but a descriptive, localised MESSAGE.
+ *   - The banks send a useful CODE and often the useless message "Payment failed"
+ *     (verified on PayFor: every one of 51/05/54/V034/MR15/MR05 carries that same text).
+ *   - Some rows carry no code but a descriptive, localised MESSAGE.
  * So: try the code first, then pattern-match the message across languages.
  *
  * Deliberately conservative. Codes whose meaning isn't publicly documented
@@ -46,29 +45,6 @@ const ARABIC: Record<Reason, string> = {
   EXPIRED_CARD: "البطاقة منتهية الصلاحية",
   PROCESSING_ERROR: "خطأ أثناء المعالجة لدى البنك",
   CONNECTIVITY: "تعذّر الاتصال بمزوّد الدفع",
-};
-
-/** Stripe `decline_code` / `code` → reason. These identifiers are stable API values. */
-const STRIPE_CODES: Record<string, Reason> = {
-  insufficient_funds: "INSUFFICIENT_FUNDS",
-  card_not_supported: "CARD_NOT_SUPPORTED",
-  transaction_not_allowed: "CARD_NOT_SUPPORTED",
-  currency_not_supported: "CARD_NOT_SUPPORTED",
-  do_not_honor: "CONTACT_ISSUER",
-  call_issuer: "CONTACT_ISSUER",
-  restricted_card: "CONTACT_ISSUER",
-  card_velocity_exceeded: "TOO_MANY_ATTEMPTS",
-  authentication_required: "AUTH_FAILED",
-  payment_intent_authentication_failure: "AUTH_FAILED",
-  incorrect_number: "INCORRECT_NUMBER",
-  invalid_number: "INCORRECT_NUMBER",
-  incorrect_cvc: "INCORRECT_CVC",
-  invalid_cvc: "INCORRECT_CVC",
-  expired_card: "EXPIRED_CARD",
-  processing_error: "PROCESSING_ERROR",
-  try_again_later: "PROCESSING_ERROR",
-  generic_decline: "CARD_DECLINED",
-  card_declined: "CARD_DECLINED",
 };
 
 /**
@@ -158,7 +134,7 @@ const TEXT_PATTERNS: Array<{ reason: Reason; needles: string[] }> = [
  * Our own internal placeholders. They carry no cause, so echoing them would just
  * put English back into the channel that this module exists to keep Arabic.
  */
-const NO_INFO_MESSAGES = [/^payment failed$/i, /^monthly billing failed via stripe$/i];
+const NO_INFO_MESSAGES = [/^payment failed$/i];
 
 /**
  * Fold everything that makes the same word look different across locales:
@@ -182,25 +158,10 @@ function normalize(text: string): string {
     .trim();
 }
 
-/** Pull a Stripe error code out of the stored raw payload, wherever it landed. */
-function stripeCodeFrom(raw: unknown): string | null {
-  if (!raw || typeof raw !== "object") return null;
-  const r = raw as Record<string, unknown>;
-  const candidates = [r.last_payment_error, r.error, r.outcome, r];
-  for (const c of candidates) {
-    if (!c || typeof c !== "object") continue;
-    const o = c as Record<string, unknown>;
-    const code = o.decline_code ?? o.code ?? o.network_decline_code;
-    if (typeof code === "string" && code) return code;
-  }
-  return null;
-}
-
 export interface FailureSource {
   provider?: string | null;
   providerProcReturnCode?: string | null;
   providerErrorMessage?: string | null;
-  providerRaw?: unknown;
 }
 
 /**
@@ -210,12 +171,8 @@ export interface FailureSource {
  */
 export function describeFailureInArabic(d: FailureSource): string {
   const rawCode = d.providerProcReturnCode?.trim() || "";
-  const stripeCode = stripeCodeFrom(d.providerRaw) ?? "";
 
-  // 1. Stable codes win — they're language-independent.
-  const byStripe = stripeCode ? STRIPE_CODES[stripeCode.toLowerCase()] : undefined;
-  if (byStripe) return ARABIC[byStripe];
-
+  // 1. Stable bank codes win — they're language-independent.
   const byPayfor = rawCode ? PAYFOR_CODES[rawCode.toUpperCase()] : undefined;
   if (byPayfor) return ARABIC[byPayfor];
 
@@ -230,8 +187,7 @@ export function describeFailureInArabic(d: FailureSource): string {
 
   // 3. Unclassified. Say so honestly and hand over whatever detail exists so the
   //    admin can still act — an unmapped PayFor code is the common case here.
-  const detail = [rawCode, stripeCode].filter(Boolean).join(" · ");
-  if (detail) return `سبب غير معروف (رمز البنك: ${detail})`;
+  if (rawCode) return `سبب غير معروف (رمز البنك: ${rawCode})`;
   if (msg && !NO_INFO_MESSAGES.some((re) => re.test(msg))) return `سبب غير معروف — ${msg}`;
   return "فشلت عملية الدفع دون سبب محدد من البنك";
 }

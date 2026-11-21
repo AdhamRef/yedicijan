@@ -66,7 +66,6 @@ interface Donation {
     email: string;
     image: string;
   };
-  type: 'ONE_TIME' | 'MONTHLY';
   status: 'ACTIVE' | 'INACTIVE';
   paymentMethod: string | null;
   createdAt: string;
@@ -175,11 +174,10 @@ export default function DonationsPage() {
   );
 
   const exportToCSV = () => {
-    const headers = ['Amount', 'Currency', 'Type', 'Status', 'Payment Method', 'Created At', 'Donor Name', 'Campaigns'];
+    const headers = ['Amount', 'Currency', 'Status', 'Payment Method', 'Created At', 'Donor Name', 'Campaigns'];
     const csvData = filteredDonations.map(donation => [
       donation.totalAmount,
       donation.currency,
-      donation.type,
       donation.status,
       donation.paymentMethod,
       format(new Date(donation.createdAt), 'PPP', { locale: ar }),
@@ -269,7 +267,6 @@ export default function DonationsPage() {
               </TableHead>
               <TableHead className="text-right">المبلغ</TableHead>
               <TableHead className="text-right">العملة</TableHead>
-              <TableHead className="text-right">النوع</TableHead>
               <TableHead className="text-right">طريقة الدفع</TableHead>
               <TableHead className="text-right">التاريخ</TableHead>
               <TableHead className="text-right">المشاريع</TableHead>
@@ -318,7 +315,6 @@ export default function DonationsPage() {
                 </TableCell>
                 <TableCell>{donation.totalAmount.toLocaleString()}</TableCell>
                 <TableCell>{donation.currency}</TableCell>
-                <TableCell>{donation.type === 'ONE_TIME' ? 'مرة واحدة' : 'شهري'}</TableCell>
                 <TableCell>{donation.paymentMethod || '—'}</TableCell>
                 <TableCell>
                   {format(new Date(donation.createdAt), 'PPP', { locale: ar })}

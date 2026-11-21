@@ -98,7 +98,7 @@ export async function loadRatesFromDatabase(): Promise<{
 }
 
 /**
- * Rates for server-side conversion (donations, Stripe, etc.).
+ * Rates for server-side conversion (donations, gateway charges, etc.).
  * Reads DB; 45s memory cache. If no row, refreshes from API once (bootstrap).
  */
 export async function getUsdBaseRatesForServer(): Promise<Record<string, number>> {

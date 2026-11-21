@@ -203,7 +203,7 @@ enum Role {
 
 /* ===================== USER BADGES (GROUPS) ===================== */
 // Badges are computed from criteria; no direct User-Badge relation stored.
-// Criteria types: TOTAL_LAST_N_MONTHS, ANY_SPAN_N_MONTHS, MONTHLY_ACTIVE_RANGE, TOTAL_LIFETIME, DONATION_COUNT_MIN
+// Criteria types: TOTAL_LAST_N_MONTHS, ANY_SPAN_N_MONTHS, TOTAL_LIFETIME, DONATION_COUNT_MIN
 
 model Badge {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -483,12 +483,13 @@ model Donation {
   referralId     String?   @db.ObjectId
   referral       Referral? @relation(fields: [referralId], references: [id])
 
+  /// Historical only — set on rows from the retired monthly donations.
   subscriptionId String?       @db.ObjectId
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
-  /// Stripe invoice `billing_reason` for subscription donations — the authoritative
-  /// "is this the signup charge or an automatic renewal?" marker.
+  /// Historical: billing reason recorded for the retired monthly (subscription) donations —
+  /// the "signup charge or automatic renewal?" marker.
   /// "subscription_create" = first charge, "subscription_cycle" = automatic renewal.
-  /// Null on one-time donations and on legacy rows created before this was recorded.
+  /// Null on one-time donations. No longer written.
   billingReason  String?
 
   comment       String?
@@ -515,6 +516,7 @@ model Donation {
   comments      Comment[]
 }
 
+/// Historical only: monthly donations were retired. Kept so old rows still read; nothing writes it.
 model Subscription {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   status     SubscriptionStatus @default(ACTIVE)
@@ -527,7 +529,7 @@ model Subscription {
   paymentMethod PaymentMethod
   cardDetails  CardDetails?
 
-  // PayFor recurring support (requires bank-provided token/reference transaction model)
+  // Unused: monthly donations were retired
   payforToken     String?
   payforMaskedPan String?
   payforExpiry    String? // MMYY (if bank requires it alongside token)
@@ -555,7 +557,7 @@ model SubscriptionItem {
   amount    Float
   amountUSD Float?
   /// When set, line item was a سهوم (shares) purchase — mirrors DonationItem.shareCount.
-  /// Three creation paths (donations, stripe/intent, cart/payment) already spread this in
+  /// The old creation paths spread this in
   /// conditionally; without the field Prisma threw PrismaClientValidationError inside the
   /// transaction, rolling back the whole thing — no subscription AND no donation, just a 500.
   shareCount Int?

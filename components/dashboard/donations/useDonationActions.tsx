@@ -9,7 +9,7 @@ import { CreateDonationDialog } from "./CreateDonationDialog";
 
 /**
  * Minimum row shape needed for the right-click menu + delete confirmation.
- * All three donation tables (dashboard, referrals, monthly) project their
+ * The donation tables (dashboard, referrals) project their
  * rows to this shape — anything more is fetched fresh by the edit dialog.
  */
 export interface DonationActionRow extends DeleteDonationRow {
