@@ -9887,5 +9887,18 @@
   "عدد تبرعاته (من – إلى)": "Bağış sayısı (en az – en çok)",
   "أعضاء مسجّلون": "Kayıtlı üyeler",
   "ضيوف (بلا حساب)": "Misafirler (hesapsız)",
-  "استثناء الأرقام التي لا تستقبل واتساب (فشلت مرتين أو أكثر)": "WhatsApp almayan numaraları hariç tut (iki veya daha fazla başarısız)"
+  "استثناء الأرقام التي لا تستقبل واتساب (فشلت مرتين أو أكثر)": "WhatsApp almayan numaraları hariç tut (iki veya daha fazla başarısız)",
+  "اسم العرض (مثلاً: متبرعو تركيا عبر فيسبوك)": "Görünüm adı (ör. Facebook üzerinden Türkiye bağışçıları)",
+  "مشاركة هذا العرض مع الفريق؟ (موافق = مشترك، إلغاء = لي فقط)": "Bu görünüm ekiple paylaşılsın mı? (Tamam = paylaşılan, İptal = yalnız ben)",
+  "حذف العرض «{0}»؟": "“{0}” görünümü silinsin mi?",
+  "الفئة (بمشاريعها)": "Kategori (projeleri)",
+  "تبرّع خلال آخر {0} يوماً": "Son {0} günde bağış yaptı",
+  "العروض المحفوظة…": "Kayıtlı görünümler…",
+  "مشترك": "paylaşılan",
+  "حفظ الفلاتر": "Filtreleri kaydet",
+  "حذف العرض": "Görünümü sil",
+  "حملة لمتبرعي هذه النتيجة": "Bu bağışçılara kampanya",
+  "من لوحة التحكم": "Panelden",
+  "نُقلت": "aktarıldı",
+  "لم تُنقل (لا مقابل لها في الجمهور)": "aktarılmadı (kitlede karşılığı yok)"
 }
