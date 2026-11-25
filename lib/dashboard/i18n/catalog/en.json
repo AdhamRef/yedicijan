@@ -9957,5 +9957,8 @@
   "ألغى الاشتراك": "Unsubscribed",
   "بريد مرتجع (لا يصل)": "Bounced (not delivered)",
   "أبلغ عن رسالة كمزعجة": "Reported a message as spam",
-  "الرسائل الخدمية (الإيصالات والشهادات) تصل رغم إيقاف التسويق، إلا عند طلب عدم التواصل.": "Service messages (receipts, certificates) still arrive after a marketing stop, unless the donor asked not to be contacted."
+  "الرسائل الخدمية (الإيصالات والشهادات) تصل رغم إيقاف التسويق، إلا عند طلب عدم التواصل.": "Service messages (receipts, certificates) still arrive after a marketing stop, unless the donor asked not to be contacted.",
+  "مسح الاختيار": "Clear selection",
+  "يحمل وساماً": "Holds a badge",
+  "كل المتبرعين": "All donors"
 }
