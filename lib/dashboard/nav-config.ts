@@ -54,6 +54,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
       // Built, API-backed, and previously unreachable. Slides and ticker both control what the
       // PUBLIC site renders, so leaving them unlinked meant no one could edit live UI.
       { key: "slides", title: "الشرائح", href: "/dashboard/slides", icon: "images", keywords: ["slides", "slider", "hero"] },
+      { key: "slides", title: "معرض لقطات من الميدان", href: "/dashboard/gallery", icon: "images", keywords: ["gallery", "photos", "images", "field", "email", "معرض", "صور", "لقطات"] },
       { key: "ticker", title: "شريط التبرعات", href: "/dashboard/ticker", icon: "ticket", keywords: ["ticker", "marquee"] },
     ],
   },
