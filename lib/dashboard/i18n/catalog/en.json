@@ -9960,5 +9960,11 @@
   "الرسائل الخدمية (الإيصالات والشهادات) تصل رغم إيقاف التسويق، إلا عند طلب عدم التواصل.": "Service messages (receipts, certificates) still arrive after a marketing stop, unless the donor asked not to be contacted.",
   "مسح الاختيار": "Clear selection",
   "يحمل وساماً": "Holds a badge",
-  "كل المتبرعين": "All donors"
+  "كل المتبرعين": "All donors",
+  "مبلغ تبرع واحد بالدولار (من – إلى)": "A single donation in USD (from – to)",
+  "مجموع ما تبرع به بالدولار (من – إلى)": "Total donated in USD (from – to)",
+  "عدد تبرعاته (من – إلى)": "Number of donations (from – to)",
+  "أعضاء مسجّلون": "Registered members",
+  "ضيوف (بلا حساب)": "Guests (no account)",
+  "استثناء الأرقام التي لا تستقبل واتساب (فشلت مرتين أو أكثر)": "Exclude numbers that do not receive WhatsApp (failed twice or more)"
 }
