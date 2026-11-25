@@ -677,7 +677,7 @@ const ProfilePage = () => {
               )
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm" dir={isRtl ? "rtl" : "ltr"}>
+                <table className="w-full min-w-[620px] text-sm md:min-w-0" dir={isRtl ? "rtl" : "ltr"}>
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th
@@ -741,7 +741,7 @@ const ProfilePage = () => {
                           <tr key={donation.id} className="hover:bg-slate-50 transition-colors">
                             <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
                               {new Date(donation.createdAt).toLocaleDateString(
-                                locale === "ar" ? "ar-EG" : undefined,
+                                locale === "ar" ? "ar-EG-u-nu-latn" : undefined,
                                 { day: "numeric", month: "short", year: "numeric" }
                               )}
                             </td>
@@ -907,19 +907,20 @@ const ProfilePage = () => {
       <Toaster position="top-center" />
       <div className="min-h-screen bg-gray-50">
         {/* Mobile tabs — label-first; icon only shows alongside on sm+ where there's room. */}
-        <div className="lg:hidden sticky top-0 z-50 bg-gray-50 pt-4 pb-4 px-4 sm:px-6 shadow-sm">
+        <div className="lg:hidden sticky top-0 z-50 bg-gray-50 py-2 px-3 sm:px-6 shadow-sm">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full grid grid-cols-4 h-12 p-1 bg-[#A5243D]/10 rounded-xl">
+            {/* Phones: one scrolling row, so no label is cut off (Minber #293). */}
+            <TabsList className="flex w-full flex-nowrap justify-start gap-1 overflow-x-auto h-auto p-1 bg-[#A5243D]/10 rounded-xl [scrollbar-width:none]">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <TabsTrigger
                     key={item.id}
                     value={item.id}
-                    className="gap-1.5 text-xs sm:text-sm font-medium px-1 sm:px-3 data-[state=active]:bg-[#A5243D] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-lg"
+                    className="min-h-10 shrink-0 gap-1.5 whitespace-nowrap text-xs sm:text-sm font-medium px-3 py-2 data-[state=active]:bg-[#A5243D] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-lg"
                   >
                     <Icon className="w-4 h-4 shrink-0 hidden sm:inline-block" />
-                    <span className="truncate">{item.label}</span>
+                    <span className="whitespace-nowrap text-center leading-5">{item.label}</span>
                   </TabsTrigger>
                 );
               })}
