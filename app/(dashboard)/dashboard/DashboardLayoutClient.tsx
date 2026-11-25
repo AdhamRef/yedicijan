@@ -7,7 +7,8 @@ import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'rea
 import { localeDirection } from "@/lib/locales";
 import SessionProvider from '@/components/providers/SessionProvider';
 import { NextIntlClientProvider } from "next-intl";
-import { Toaster } from "react-hot-toast";
+import { Toaster, ToastBar, toast as hotToast } from "react-hot-toast";
+import { dt } from "@/lib/dashboard/i18n";
 import { ConfettiProvider } from "@/components/providers/confetti-provider";
 import { CurrencyProvider } from "@/context/CurrencyContext";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
@@ -259,9 +260,25 @@ export default function DashboardLayoutClient({
           </ViewUserProfileProvider>
           <ConfettiProvider />
           <Toaster position="top-center" toastOptions={{
-            style: { fontFamily: 'inherit', fontSize: '14px' },
+            style: { fontFamily: 'inherit', fontSize: '14px', whiteSpace: 'pre-line', maxWidth: 560 },
             success: { iconTheme: { primary: '#025EB8', secondary: '#fff' } },
-          }} />
+            // Problems stay until closed (owner, 2026-11-20): they used to vanish before they could be read.
+            error: { duration: Infinity },
+          }}>
+            {(t) => (
+              <ToastBar toast={t}>
+                {({ icon, message }) => (
+                  <>
+                    {icon}
+                    {message}
+                    {t.type !== 'loading' ? (
+                      <button type="button" onClick={() => hotToast.dismiss(t.id)} aria-label={dt("إغلاق")} className="ms-2 shrink-0 self-start rounded px-1.5 text-slate-500 hover:bg-slate-100">✕</button>
+                    ) : null}
+                  </>
+                )}
+              </ToastBar>
+            )}
+          </Toaster>
         </SessionProvider>
       </CurrencyProvider>
       <Analytics />
