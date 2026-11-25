@@ -10163,5 +10163,7 @@
   "الترجمة غير مكتملة": "Translation incomplete",
   "صورة الواجهة لكل لغة": "Front image per language",
   "إذا تركت صورة لغة فارغة، ستظهر صورة الواجهة الافتراضية لها.": "If a language's image is left empty, the default front image is shown for it.",
-  "إجمالي العملية (بعملة التبرع)": "Transaction total (donation currency)"
+  "إجمالي العملية (بعملة التبرع)": "Transaction total (donation currency)",
+  "أدوات المحادثة": "Conversation tools",
+  "إرفاق": "Attach"
 }
