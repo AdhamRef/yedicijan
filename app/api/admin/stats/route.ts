@@ -189,6 +189,34 @@ export async function GET(request: NextRequest) {
     );
     const thisMonthPaidWhere = donationWhereAll(thisMonthDonationWhere, PAID_DONATION_FILTER);
 
+    // Independent reads start now and run alongside the block below (same queries, same results; only overlapped).
+    const supportFeesP = (async () => {
+      const SUPPORT_FEES_PAGE = 5000;
+      const totals = { teamSupport: 0, fees: 0 };
+      let cursor: string | undefined;
+      for (;;) {
+        const page = await prisma.donation.findMany({
+          where: paidWhere,
+          select: { id: true, amountUSD: true, amount: true, currency: true, totalAmount: true, teamSupport: true, fees: true },
+          orderBy: { id: "asc" },
+          take: SUPPORT_FEES_PAGE,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        });
+        if (page.length === 0) break;
+        const part = toUSD(page);
+        totals.teamSupport += part.teamSupport;
+        totals.fees += part.fees;
+        if (page.length < SUPPORT_FEES_PAGE) break;
+        cursor = page[page.length - 1].id;
+      }
+      return totals;
+    })();
+    const globalPaidWhere = { ...PAID_DONATION_FILTER };
+    const globalPaidAggP = prisma.donation.aggregate({ _sum: { amountUSD: true }, where: globalPaidWhere });
+    const globalPaidCountP = prisma.donation.count({ where: globalPaidWhere });
+    // A rejected early read is awaited below; until then it must not surface as an unhandled rejection.
+    for (const p of [supportFeesP, globalPaidAggP, globalPaidCountP]) p.catch(() => undefined);
+
     const [
       totalCampaigns,
       totalCategories,
@@ -307,24 +335,7 @@ export async function GET(request: NextRequest) {
     // Read in fixed-size pages keyed on id instead of one `take: 100000` query: memory
     // stays flat as the ledger grows, and nothing past row 100,000 is silently dropped
     // (which "All time" would otherwise hit first).
-    const SUPPORT_FEES_PAGE = 5000;
-    const supportFeesTotals = { teamSupport: 0, fees: 0 };
-    let supportFeesCursor: string | undefined;
-    for (;;) {
-      const page = await prisma.donation.findMany({
-        where: paidWhere,
-        select: { id: true, amountUSD: true, amount: true, currency: true, totalAmount: true, teamSupport: true, fees: true },
-        orderBy: { id: "asc" },
-        take: SUPPORT_FEES_PAGE,
-        ...(supportFeesCursor ? { cursor: { id: supportFeesCursor }, skip: 1 } : {}),
-      });
-      if (page.length === 0) break;
-      const part = toUSD(page);
-      supportFeesTotals.teamSupport += part.teamSupport;
-      supportFeesTotals.fees += part.fees;
-      if (page.length < SUPPORT_FEES_PAGE) break;
-      supportFeesCursor = page[page.length - 1].id;
-    }
+    const supportFeesTotals = await supportFeesP;
     function toUSD(
       rows: {
         amountUSD: number | null;
@@ -378,9 +389,7 @@ export async function GET(request: NextRequest) {
     const failedTotalAmount = failedTotalResult._sum?.amountUSD ?? 0;
 
     /** All successful charges ever  ignores period / category / campaign query filters */
-    const globalPaidWhere = { ...PAID_DONATION_FILTER };
-    let paidRevenueAllTimeUnfiltered =
-      (await prisma.donation.aggregate({ _sum: { amountUSD: true }, where: globalPaidWhere }))._sum?.amountUSD ?? 0;
+    let paidRevenueAllTimeUnfiltered = (await globalPaidAggP)._sum?.amountUSD ?? 0;
     if (paidRevenueAllTimeUnfiltered === 0) {
       const globalPaidCount = await prisma.donation.count({ where: globalPaidWhere });
       if (globalPaidCount > 0) {
@@ -392,7 +401,7 @@ export async function GET(request: NextRequest) {
     // NOT affected by the period/category/campaign filters. The filtered `paidCount` above
     // cannot be shown next to that claim — on a filtered view it would quietly contradict
     // the figure it sits beside.
-    const paidCountAllTimeUnfiltered = await prisma.donation.count({ where: globalPaidWhere });
+    const paidCountAllTimeUnfiltered = await globalPaidCountP;
 
     return NextResponse.json({
       totalCampaigns,
