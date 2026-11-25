@@ -5,19 +5,23 @@ import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/context/CurrencyContext";
 import { DASHBOARD_DISPLAY_SYMBOLS } from "@/lib/dashboard/format-dashboard-money";
+import { dt, dtx } from "@/lib/dashboard/i18n";
 
 type Accent = "emerald" | "teal" | "amber" | "orange" | "violet" | "indigo" | "slate" | "blue" | "rose" | "sky";
-const ACCENT_CLASSES: Record<Accent, { bg: string; icon: string; badge: string; rail: string }> = {
-  emerald: { bg: "bg-emerald-50", icon: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700", rail: "bg-emerald-500" },
-  teal: { bg: "bg-teal-50", icon: "text-teal-600", badge: "bg-teal-100 text-teal-700", rail: "bg-teal-500" },
-  amber: { bg: "bg-amber-50", icon: "text-amber-600", badge: "bg-amber-100 text-amber-700", rail: "bg-amber-500" },
-  orange: { bg: "bg-orange-50", icon: "text-orange-600", badge: "bg-orange-100 text-orange-700", rail: "bg-orange-500" },
-  violet: { bg: "bg-violet-50", icon: "text-violet-600", badge: "bg-violet-100 text-violet-700", rail: "bg-violet-500" },
-  indigo: { bg: "bg-indigo-50", icon: "text-indigo-600", badge: "bg-indigo-100 text-indigo-700", rail: "bg-indigo-500" },
-  slate: { bg: "bg-slate-50", icon: "text-slate-500", badge: "bg-slate-100 text-slate-600", rail: "bg-slate-300" },
-  blue: { bg: "bg-blue-50", icon: "text-blue-600", badge: "bg-blue-100 text-blue-700", rail: "bg-brand" },
-  rose: { bg: "bg-rose-50", icon: "text-rose-600", badge: "bg-rose-100 text-rose-700", rail: "bg-rose-500" },
-  sky: { bg: "bg-sky-50", icon: "text-sky-600", badge: "bg-sky-100 text-sky-700", rail: "bg-sky-500" },
+// Flat, saturated accents: a -100 icon badge with a -600 icon and a full-strength rail. The
+// pale -50 badges and 70%-opacity rails used before made every card read as the same grey.
+// Class strings stay literal so Tailwind's scanner can see them.
+const ACCENT_CLASSES: Record<Accent, { tile: string; rail: string }> = {
+  emerald: { tile: "bg-emerald-100 text-emerald-600", rail: "bg-emerald-500" },
+  teal: { tile: "bg-teal-100 text-teal-600", rail: "bg-teal-500" },
+  amber: { tile: "bg-amber-100 text-amber-600", rail: "bg-amber-500" },
+  orange: { tile: "bg-orange-100 text-orange-600", rail: "bg-orange-500" },
+  violet: { tile: "bg-violet-100 text-violet-600", rail: "bg-violet-500" },
+  indigo: { tile: "bg-indigo-100 text-indigo-600", rail: "bg-indigo-500" },
+  slate: { tile: "bg-slate-100 text-slate-600", rail: "bg-slate-400" },
+  blue: { tile: "bg-blue-100 text-blue-600", rail: "bg-blue-600" },
+  rose: { tile: "bg-rose-100 text-rose-600", rail: "bg-rose-500" },
+  sky: { tile: "bg-sky-100 text-sky-600", rail: "bg-sky-500" },
 };
 
 function formatValue(value: number, format?: "money" | "number" | "percent"): string {
@@ -36,17 +40,19 @@ function formatSelectedCurrency(value: number, currency: string) {
 }
 function currencyBreakdown(totals?: Record<string, number>) {
   const entries = Object.entries(totals ?? {}).filter(([, value]) => typeof value === "number" && value > 0);
-  if (!entries.length) return "لا توجد حوالات معتمدة بعد";
+  if (!entries.length) return dt("لا توجد حوالات معتمدة بعد");
   return entries.map(([currency, amount]) => formatCurrency(amount, currency)).join(" • ");
 }
 
 type BankTransfersSummary = { totals?: Record<string, number>; usdTotals?: Record<string, number>; totalUsd?: number; approvedCount?: number; pendingCount?: number };
-interface StatsMetricCardProps { title: string; value: number; icon: LucideIcon; accent?: Accent; format?: "money" | "number" | "percent"; subtitle?: string; compact?: boolean; variant?: "default" | "hero"; }
+interface StatsMetricCardProps { title: string; value: number; icon: LucideIcon; accent?: Accent; format?: "money" | "number" | "percent"; subtitle?: string; compact?: boolean; variant?: "default" | "hero";
+  /** Set false on period-filtered cards: their title reads "(كل الوقت)" when that period is picked, which would otherwise duplicate the all-time bank-transfer cards. */
+  bankTransfers?: boolean; }
 
-export function StatsMetricCard({ title, value, icon: Icon, accent = "slate", format, subtitle, compact, variant = "default" }: StatsMetricCardProps) {
+export function StatsMetricCard({ title, value, icon: Icon, accent = "slate", format, subtitle, compact, variant = "default", bankTransfers }: StatsMetricCardProps) {
   const colors = ACCENT_CLASSES[accent] ?? ACCENT_CLASSES.slate;
   const isHero = variant === "hero";
-  const shouldShowBankTransfers = title.includes("إيرادات ناجحة") && title.includes("كل الوقت");
+  const shouldShowBankTransfers = bankTransfers ?? false;
   const [bankSummary, setBankSummary] = useState<BankTransfersSummary | null>(null);
   const { convertToCurrency, getSelectedCurrency } = useCurrency();
 
@@ -62,7 +68,7 @@ export function StatsMetricCard({ title, value, icon: Icon, accent = "slate", fo
   const bankUsd = bankSummary?.totalUsd ?? bankSummary?.totals?.USD ?? 0;
   const bankDisplayValue = selectedCurrency === "DEFAULT" ? bankUsd : (convertToCurrency(bankUsd)?.convertedValue ?? bankUsd);
   const displayedValue = shouldShowBankTransfers && format === "money" ? value + bankDisplayValue : value;
-  const displayedSubtitle = shouldShowBankTransfers ? `الموقع: ${formatSelectedCurrency(value, selectedCode)} • البنوك: ${formatSelectedCurrency(bankDisplayValue, selectedCode)}` : subtitle;
+  const displayedSubtitle = shouldShowBankTransfers ? dt("الموقع: {0} • البنوك: {1}", [formatSelectedCurrency(value, selectedCode), formatSelectedCurrency(bankDisplayValue, selectedCode)]) : subtitle;
 
   // Presentation rebuilt for legibility. The previous card gave the LABEL more visual weight
   // than the NUMBER (11px label vs 16px value), so a wall of 17 of these read as grey noise.
@@ -70,14 +76,13 @@ export function StatsMetricCard({ title, value, icon: Icon, accent = "slate", fo
   // that makes the accent scannable at a glance instead of a tiny tinted square.
   const shell = cn(
     "group relative overflow-hidden rounded-xl border border-slate-200 bg-white",
-    "shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200",
-    "hover:shadow-[0_4px_16px_rgba(16,24,40,0.08)] hover:border-slate-300 hover:-translate-y-px",
+    "shadow-[0_1px_2px_rgba(16,24,40,0.06)] transition-all duration-200",
     compact ? "p-3.5" : "p-4",
-    isHero && "ring-1 ring-brand/25 border-brand/30",
+    isHero && "ring-2 ring-brand/30 border-brand/40",
   );
 
   const Rail = () => (
-    <span className={cn("absolute inset-y-0 start-0 w-1 opacity-70", colors.rail)} aria-hidden />
+    <span className={cn("absolute inset-y-0 start-0 w-1", colors.rail)} aria-hidden />
   );
 
   const mainCard = (
@@ -85,12 +90,12 @@ export function StatsMetricCard({ title, value, icon: Icon, accent = "slate", fo
       <Rail />
       <div className="flex items-start justify-between gap-3 min-w-0">
         <p className={cn(
-          "min-w-0 flex-1 font-medium leading-snug text-slate-500",
+          "min-w-0 flex-1 font-semibold leading-snug text-slate-600",
           compact ? "text-[11.5px]" : "text-xs",
         )}>
-          {shouldShowBankTransfers ? "إجمالي الإيرادات: الموقع + الحسابات البنكية" : title}
+          {shouldShowBankTransfers ? dt("إجمالي الإيرادات: الموقع + الحسابات البنكية") : title}
         </p>
-        <span className={cn("shrink-0 rounded-lg p-1.5 transition-colors", colors.bg, colors.icon)}>
+        <span className={cn("shrink-0 rounded-lg p-1.5", colors.tile)}>
           <Icon className={compact ? "w-4 h-4" : "w-[18px] h-[18px]"} />
         </span>
       </div>
@@ -105,7 +110,7 @@ export function StatsMetricCard({ title, value, icon: Icon, accent = "slate", fo
       </p>
 
       {displayedSubtitle && (
-        <p className="mt-1 text-[11px] leading-tight text-slate-400 truncate" title={displayedSubtitle}>
+        <p className="mt-1 text-[11px] leading-tight text-slate-500 truncate" title={displayedSubtitle}>
           {displayedSubtitle}
         </p>
       )}
@@ -117,19 +122,49 @@ export function StatsMetricCard({ title, value, icon: Icon, accent = "slate", fo
   return (
     <>
       {mainCard}
-      <div className={shell}>
-        <span className={cn("absolute inset-y-0 start-0 w-1 opacity-70", ACCENT_CLASSES.blue.rail)} aria-hidden />
-        <div className="flex items-start justify-between gap-3 min-w-0">
-          <p className="min-w-0 flex-1 text-xs font-medium leading-snug text-slate-500">الحوالات البنكية</p>
-          <span className="shrink-0 rounded-lg bg-blue-50 p-1.5 text-blue-600"><Icon className="w-[18px] h-[18px]" /></span>
-        </div>
-        <p className="mt-2 text-2xl font-bold leading-8 tabular-nums tracking-tight text-slate-900">
-          {formatSelectedCurrency(bankDisplayValue, selectedCode)}
-        </p>
-        <p className="mt-1 truncate text-[11px] leading-tight text-slate-400">
-          الأصل: {currencyBreakdown(bankSummary?.totals)} • معتمد: {bankSummary?.approvedCount ?? 0} • مراجعة: {bankSummary?.pendingCount ?? 0}
-        </p>
-      </div>
+      <BankTransfersCardView icon={Icon} summary={bankSummary} displayValue={bankDisplayValue} currencyCode={selectedCode} />
     </>
   );
+}
+
+const CARD_SHELL = cn(
+  "group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4",
+  "shadow-[0_1px_2px_rgba(16,24,40,0.06)] transition-all duration-200",
+);
+
+function BankTransfersCardView({ icon: Icon, summary, displayValue, currencyCode }: { icon: LucideIcon; summary: BankTransfersSummary | null; displayValue: number; currencyCode: string }) {
+  return (
+    <div className={CARD_SHELL}>
+      <span className={cn("absolute inset-y-0 start-0 w-1", ACCENT_CLASSES.blue.rail)} aria-hidden />
+      <div className="flex items-start justify-between gap-3 min-w-0">
+        <p className="min-w-0 flex-1 text-xs font-semibold leading-snug text-slate-600">{dt("الحوالات البنكية")} · {dt("كل الوقت")}</p>
+        <span className={cn("shrink-0 rounded-lg p-1.5", ACCENT_CLASSES.blue.tile)}><Icon className="w-[18px] h-[18px]" /></span>
+      </div>
+      <p className="mt-2 text-2xl font-bold leading-8 tabular-nums tracking-tight text-slate-900">
+        {formatSelectedCurrency(displayValue, currencyCode)}
+      </p>
+      <p className="mt-1 truncate text-[11px] leading-tight text-slate-500">
+        {dtx("الأصل: {0} • معتمد: {1} • مراجعة: {2}", [currencyBreakdown(summary?.totals), summary?.approvedCount ?? 0, summary?.pendingCount ?? 0])}
+      </p>
+    </div>
+  );
+}
+
+/** Standalone all-time bank-transfers card, for pages that don't render the combined "الموقع + الحسابات البنكية" card. */
+export function BankTransfersCard({ icon }: { icon: LucideIcon }) {
+  const [summary, setSummary] = useState<BankTransfersSummary | null>(null);
+  const { convertToCurrency, getSelectedCurrency } = useCurrency();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/bank-transfers/summary").then((res) => (res.ok ? res.json() : null)).then((data) => { if (!cancelled) setSummary(data); }).catch(() => { if (!cancelled) setSummary(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedCurrency = getSelectedCurrency?.() ?? "DEFAULT";
+  const selectedCode = selectedCurrency === "DEFAULT" ? "USD" : selectedCurrency;
+  const usd = summary?.totalUsd ?? summary?.totals?.USD ?? 0;
+  const displayValue = selectedCurrency === "DEFAULT" ? usd : (convertToCurrency(usd)?.convertedValue ?? usd);
+
+  return <BankTransfersCardView icon={icon} summary={summary} displayValue={displayValue} currencyCode={selectedCode} />;
 }

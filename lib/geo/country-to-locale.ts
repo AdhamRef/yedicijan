@@ -6,7 +6,7 @@
 // Unknown / ambiguous countries return `null` so the caller can fall back to
 // the site's `defaultLocale`.
 
-import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/locales";
+import { SUPPORTED_LOCALES, type SupportedLocale } from "../locales";
 
 const SUPPORTED = new Set<string>(SUPPORTED_LOCALES);
 
@@ -63,7 +63,7 @@ const ENGLISH = new Set<string>([
  * `defaultLocale`).
  *
  * Order matters when a country could plausibly map to multiple supported
- * locales — we lean toward the locale most commonly used by online consumers
+ * locales  we lean toward the locale most commonly used by online consumers
  * in that market.
  */
 export function localeForCountry(

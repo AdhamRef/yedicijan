@@ -201,7 +201,7 @@ export async function GET(request: NextRequest) {
   }
   const filter: Query = clauses.length === 1 ? clauses[0] : { $and: clauses };
 
-  const result = await prisma.$runCommandRaw({
+  const result = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
     find: "ConversionEvent",
     filter,
     sort: { updatedAt: -1, createdAt: -1 },

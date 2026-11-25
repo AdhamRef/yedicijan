@@ -19,7 +19,7 @@ export interface EventDefinition {
   /** Whether donation context ({{donation.*}}) is available */
   hasDonation: boolean;
   /**
-   * Scheduled events are not fired by a webhook — a daily cron evaluates them and they expose the
+   * Scheduled events are not fired by a webhook  a daily cron evaluates them and they expose the
    * `lapseDays` / `cooldownDays` timing settings in the dashboard.
    */
   scheduled?: boolean;
@@ -47,7 +47,7 @@ export const EVENT_CATALOG: EventDefinition[] = [
   {
     event: "USER_REGISTERED",
     label: "تسجيل مستخدم جديد",
-    description: "يُرسل بعد إنشاء الحساب — لا يحتوي على بيانات تبرّع.",
+    description: "يُرسل بعد إنشاء الحساب  لا يحتوي على بيانات تبرّع.",
     hasDonation: false,
   },
   {

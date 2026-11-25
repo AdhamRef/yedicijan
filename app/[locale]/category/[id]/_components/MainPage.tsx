@@ -7,6 +7,7 @@ import { Search, HandHeart, ChevronRight, X, ArrowRight } from "lucide-react";
 import { Link } from "@/i18n/routing";
 import CampaignCard from "@/app/[locale]/_components/CampaignCard";
 import { useLocale, useTranslations } from "next-intl";
+import { useDebounce } from "use-debounce";
 
 interface Campaign {
   id: string;
@@ -43,6 +44,7 @@ const MainPage = ({ id, locale: localeProp }: { id: string; locale?: string }) =
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch] = useDebounce(searchQuery.trim(), 300);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -57,7 +59,7 @@ const MainPage = ({ id, locale: localeProp }: { id: string; locale?: string }) =
           ? axios.get(`/api/categories/${id}?locale=${effectiveLocale}&counts=true`)
           : Promise.resolve({ data: category }),
         axios.get(`/api/categories/${id}/campaigns`, {
-          params: { locale: effectiveLocale, limit: 12, cursor: cursorParam },
+          params: { locale: effectiveLocale, limit: 12, cursor: cursorParam, search: debouncedSearch || undefined },
         }),
       ]);
       if (!category) setCategory(categoryRes.data);
@@ -82,15 +84,23 @@ const MainPage = ({ id, locale: localeProp }: { id: string; locale?: string }) =
   };
 
   useEffect(() => {
+    // Search must run on the API, not only over the first 12 already-loaded rows.
+    // Reset cursor/results whenever the query changes so pagination stays correct.
+    setCursor(null);
+    setCampaigns([]);
+    setHasMore(false);
+    setLoading(true);
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, effectiveLocale]);
+  }, [id, effectiveLocale, debouncedSearch]);
 
-  const filteredCampaigns = campaigns.filter(
-    (c) =>
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase(effectiveLocale);
+  const filteredCampaigns = normalizedQuery
+    ? campaigns.filter((c) =>
+        (c.title || "").toLocaleLowerCase(effectiveLocale).includes(normalizedQuery) ||
+        (c.description || "").toLocaleLowerCase(effectiveLocale).includes(normalizedQuery)
+      )
+    : campaigns;
 
   if (loading) return <LoadingSkeleton />;
 
@@ -158,7 +168,7 @@ const MainPage = ({ id, locale: localeProp }: { id: string; locale?: string }) =
 
       {/* ── Sidebar + Grid ── */}
       <section className="max-w-7xl mx-auto px-4 lg:px-8 py-10 grid gap-8 lg:gap-10 md:grid-cols-[260px_1fr]">
-        {/* Filter sidebar — search is the only available filter for a single category */}
+        {/* Filter sidebar  search is the only available filter for a single category */}
         <aside className="h-fit md:sticky md:top-24">
           <div className="shape-card bg-white p-6 shadow-soft">
             <div className="shape-chip w-fit bg-burgundy px-6 py-3 text-sm font-extrabold text-white">

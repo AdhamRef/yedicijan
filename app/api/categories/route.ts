@@ -1,5 +1,13 @@
+import { categoryProjectCounts } from "@/lib/campaign/category-project-counts";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
+import {
+  buildCategoryPagePatch,
+  categoryChildrenWrite,
+  categoryPageTranslation,
+  pageTemplate,
+  releasePageTemplateFromOthers,
+} from "@/lib/content/category-page-write";
 import { getServerSession } from 'next-auth';
 import { authOptions } from "../auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
@@ -57,9 +65,7 @@ export async function GET(request: NextRequest) {
           take: 2,
           select: { locale: true, name: true, description: true, slug: true }
         },
-        ...(includeCounts
-          ? { _count: { select: { campaigns: activeCounts ? { where: { isActive: true } } : true } } }
-          : {})
+
       }
     });
 
@@ -81,6 +87,7 @@ export async function GET(request: NextRequest) {
     const items = hasMore ? filtered.slice(0, -1) : filtered;
     const nextCursor = hasMore ? items[items.length - 1]?.id : null;
 
+    const counts = includeCounts ? await categoryProjectCounts(prisma, items.map(row => row.id)) : null;
     const transformed = items.map(cat => {
       const t = pickTranslation(cat.translations, locale);
       return {
@@ -94,7 +101,9 @@ export async function GET(request: NextRequest) {
         icon: cat.icon,
         order: cat.order,
         isActive: cat.isActive ?? true,
-        campaignCount: cat._count?.campaigns ?? undefined,
+        campaignCount: counts?.get(cat.id)?.published,
+        archivedCampaignCount: counts?.get(cat.id)?.archived,
+        linkedCampaignCount: counts?.get(cat.id)?.total,
       };
     });
 
@@ -147,6 +156,7 @@ export async function POST(request: NextRequest) {
       name: string;
       description?: string;
       requestedSlug: string | null;
+      page: Record<string, string | null>;
     }[] = [];
     if (translations && typeof translations === 'object') {
       for (const [locale, t] of Object.entries(translations)) {
@@ -158,6 +168,7 @@ export async function POST(request: NextRequest) {
               name: tt.name,
               description: tt.description || '',
               requestedSlug: normalizeUserSlug(tt.slug),
+              page: categoryPageTranslation(tt),
             });
           }
         }
@@ -166,11 +177,16 @@ export async function POST(request: NextRequest) {
 
     // Auto-generate slug from English name (always); admin can override.
     const requestedSlug = normalizeUserSlug(data.slug);
-    const slug = await generateUniqueSlug(
+    let slug = await generateUniqueSlug(
       prisma.category as any,
       requestedSlug ?? enName,
       { fallbackPrefix: "category" }
     );
+
+    let reservedSuffix = 2;
+    while (await prisma.category.findFirst({ where: { previousSlugs: { has: slug } }, select: { id: true } })) {
+      slug = await generateUniqueSlug(prisma.category as unknown as Parameters<typeof generateUniqueSlug>[0], `${requestedSlug || enName}-${reservedSuffix++}`, { fallbackPrefix: "category" });
+    }
 
     const category = await prisma.$transaction(async (tx) => {
       const created = await tx.category.create({
@@ -181,8 +197,15 @@ export async function POST(request: NextRequest) {
           image: image || '',
           icon: icon || '',
           order: order ?? 0,
+          /* The landing page, when the form sent one. A category created
+             without it renders as its hero and its campaigns. */
+          ...buildCategoryPagePatch(data),
+          ...categoryChildrenWrite(data),
         }
       });
+
+      /* A site page carries one category at most. */
+      await releasePageTemplateFromOthers(tx, created.id, pageTemplate(data.pageTemplate));
 
       // Sequential creates so the per-locale slug uniqueness check observes prior writes.
       for (const t of translationData) {
@@ -198,6 +221,7 @@ export async function POST(request: NextRequest) {
             name: t.name,
             description: t.description || '',
             slug: localeSlug,
+            ...t.page,
           },
         });
       }

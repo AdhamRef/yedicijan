@@ -13,7 +13,7 @@
  * So: try the code first, then pattern-match the message across languages.
  *
  * Deliberately conservative. Codes whose meaning isn't publicly documented
- * (PayFor's V034 / MR15 / MR05) are NOT guessed — they fall through to the
+ * (PayFor's V034 / MR15 / MR05) are NOT guessed  they fall through to the
  * unknown branch, which prints the code verbatim so an admin can look it up.
  * Inventing a plausible Arabic reason for an unknown code would be worse than
  * saying "unknown": it would be wrong and unfalsifiable at a glance.
@@ -36,7 +36,7 @@ type Reason =
 const ARABIC: Record<Reason, string> = {
   INSUFFICIENT_FUNDS: "رصيد البطاقة غير كافٍ",
   CARD_DECLINED: "تم رفض البطاقة من البنك المُصدِر",
-  CONTACT_ISSUER: "تم رفض البطاقة — يحتاج المتبرع للتواصل مع البنك المُصدِر",
+  CONTACT_ISSUER: "تم رفض البطاقة  يحتاج المتبرع للتواصل مع البنك المُصدِر",
   CARD_NOT_SUPPORTED: "البطاقة لا تدعم هذا النوع من العمليات",
   TOO_MANY_ATTEMPTS: "تم الرفض بسبب محاولات متكررة خلال وقت قصير",
   AUTH_FAILED: "تعذّر التحقق من وسيلة الدفع (3D Secure)",
@@ -49,7 +49,7 @@ const ARABIC: Record<Reason, string> = {
 
 /**
  * PayFor / Ziraat / Albaraka ISO-8583 response codes. Only the universally standardised
- * ones are mapped — the bank's proprietary `V…` / `MR…` codes are intentionally absent.
+ * ones are mapped  the bank's proprietary `V…` / `MR…` codes are intentionally absent.
  */
 const PAYFOR_CODES: Record<string, Reason> = {
   "01": "CONTACT_ISSUER",
@@ -69,7 +69,7 @@ const PAYFOR_CODES: Record<string, Reason> = {
 };
 
 /**
- * Multilingual message fingerprints, most specific FIRST — "contact your issuer"
+ * Multilingual message fingerprints, most specific FIRST  "contact your issuer"
  * and "too many attempts" are both also "declined", so a generic decline test
  * must not run before them.
  */
@@ -121,7 +121,7 @@ const TEXT_PATTERNS: Array<{ reason: Reason; needles: string[] }> = [
     needles: ["صعوبات في الاتصال", "difficulties connecting", "issues connecting", "connexion", "verbindung"],
   },
   {
-    // Most generic — must stay last so "declined because …" hits its specific reason first.
+    // Most generic  must stay last so "declined because …" hits its specific reason first.
     reason: "CARD_DECLINED",
     needles: [
       "declined", "refus", "تم رفض", "abgelehnt", "reddedil", "geweiger",
@@ -147,7 +147,7 @@ function normalize(text: string): string {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "") // combining Latin accents
     .replace(/[ً-ْٰ]/g, "") // Arabic diacritics
-    .replace(/[ıİ]/g, "i") // Turkish dotless i — NFD does not decompose it
+    .replace(/[ıİ]/g, "i") // Turkish dotless i  NFD does not decompose it
     .replace(/[øØ]/g, "o")
     .replace(/[åÅ]/g, "a")
     .replace(/[æÆ]/g, "ae")

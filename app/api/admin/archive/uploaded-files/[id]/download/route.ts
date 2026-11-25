@@ -13,7 +13,7 @@ export async function GET(_request: Request, context: Params) {
 
   const { id } = await Promise.resolve(context.params);
   const row = await prisma.auditLog.findUnique({ where: { id }, select: { id: true, metadata: true, action: true, entityType: true } });
-  if (!isArchiveUploadedFile(row)) return new Response("Not found", { status: 404 });
+  if (!row || !isArchiveUploadedFile(row as never)) return new Response("Not found", { status: 404 });
 
   const metadata = metadataObject(row.metadata);
   if (stringField(metadata.category) === "DOCUMENTS") {

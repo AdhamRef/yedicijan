@@ -3,12 +3,13 @@
 import type { LucideIcon } from "lucide-react";
 import { CircleAlert, Eye, RefreshCw, SlashIcon, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { dt, dashIntl } from "@/lib/dashboard/i18n";
 
 /**
  * Visual language shared by the البريد / واتساب / SMS channel pages.
  *
- * Each channel has its own lifecycle vocabulary — email is opened, WhatsApp is read, SMS is
- * merely delivered — but the *shape* of the question is identical: how far along the ladder did
+ * Each channel has its own lifecycle vocabulary  email is opened, WhatsApp is read, SMS is
+ * merely delivered  but the *shape* of the question is identical: how far along the ladder did
  * this message get, and is a missing rung a "no" or an "unknown"? Keeping that judgement in one
  * place is what stops three pages from quietly answering it three different ways.
  */
@@ -18,7 +19,7 @@ export type JourneyStage = {
   label: string;
   at: string | null;
   icon: LucideIcon;
-  /** Stages known from our own records, not the provider's — never rendered as "unknown". */
+  /** Stages known from our own records, not the provider's  never rendered as "unknown". */
   local?: boolean;
 };
 
@@ -46,8 +47,8 @@ export function fmtDateTime(value: string | null): { date: string; time: string 
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   return {
-    date: d.toLocaleDateString("en-US", { dateStyle: "medium", timeZone: "Europe/Istanbul" }),
-    time: d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Europe/Istanbul" }),
+    date: d.toLocaleDateString(dashIntl("ar-EG"), { dateStyle: "medium", timeZone: "Europe/Istanbul" }),
+    time: d.toLocaleTimeString(dashIntl("ar-EG"), { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Istanbul" }),
   };
 }
 
@@ -74,13 +75,13 @@ const STAGE_TONES = [
  * The furthest point a message reached, as one badge.
  *
  * This replaced a strip of four pips. The pips showed every rung at once, which meant the reader
- * had to decode four shapes to answer the only question they actually had — what happened to this
+ * had to decode four shapes to answer the only question they actually had  what happened to this
  * message? A single "قُرئ ✓✓" says it directly, and the full ladder with timestamps is still one
  * hover (or one معاينة click) away.
  *
  * The one nuance kept from the pips: when the provider has never reported an event, the badge is
  * dashed. Rendering a confident "أُرسل" in that state would let "we aren't receiving tracking"
- * masquerade as "it was sent and nothing further happened" — opposite meanings, same pixels.
+ * masquerade as "it was sent and nothing further happened"  opposite meanings, same pixels.
  */
 export function DeliveryStatusPill({
   stages,
@@ -98,24 +99,22 @@ export function DeliveryStatusPill({
   if (failed) {
     return (
       <span
-        title={errorMessage ?? "فشل الإرسال"}
+        title={errorMessage ?? dt("فشل الإرسال")}
         className="inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700"
       >
         <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
-        فشل
-      </span>
+        {dt("فشل")}</span>
     );
   }
 
   if (skipped) {
     return (
       <span
-        title={errorMessage ?? "تم تخطّي هذه الرسالة قبل الإرسال."}
+        title={errorMessage ?? dt("تم تخطّي هذه الرسالة قبل الإرسال.")}
         className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-semibold text-slate-500"
       >
         <SlashIcon className="h-3.5 w-3.5 shrink-0" />
-        لم تُرسل
-      </span>
+        {dt("لم تُرسل")}</span>
     );
   }
 
@@ -131,7 +130,7 @@ export function DeliveryStatusPill({
 
   // Hovering gives back everything the pips used to show, without spending width on it.
   const tooltip = stages
-    .map((s) => `${s.label}: ${s.at ? fmtFull(s.at) : blind && !s.local ? "لا توجد بيانات" : "—"}`)
+    .map((s) => `${s.label}: ${s.at ? fmtFull(s.at) : blind && !s.local ? dt("لا توجد بيانات") : "—"}`)
     .join("\n");
 
   return (
@@ -145,23 +144,23 @@ export function DeliveryStatusPill({
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />
       {stage.label}
-      {blind && <span className="text-slate-400">؟</span>}
+      {blind && <span className="text-slate-400">{dt("؟")}</span>}
     </span>
   );
 }
 
 /** Short Arabic origin labels. The raw enum ("TRIGGER") leaked English into an RTL table. */
 export const ORIGIN_LABELS: Record<string, string> = {
-  TRIGGER: "تلقائي",
-  MANUAL: "يدوي",
-  CAMPAIGN: "حملة",
-  TEST: "تجربة",
-  REACTIVATION: "إعادة تفعيل",
-  SYSTEM: "النظام",
+  get TRIGGER() { return dt("تلقائي"); },
+  get MANUAL() { return dt("يدوي"); },
+  get CAMPAIGN() { return dt("حملة"); },
+  get TEST() { return dt("تجربة"); },
+  get REACTIVATION() { return dt("إعادة تفعيل"); },
+  get SYSTEM() { return dt("النظام"); },
 };
 
 /**
- * The recipient cell — a button into the donor profile card whenever we know who they are.
+ * The recipient cell  a button into the donor profile card whenever we know who they are.
  *
  * Matches سجل الرسائل: same drawer, same affordance. Rows without a `recipientUserId` render as
  * plain text rather than a dead button, so a control that looks pressable always is.
@@ -199,8 +198,8 @@ export function RecipientCell({
         e.stopPropagation();
         onOpenProfile(userId);
       }}
-      title="عرض ملف المتبرّع"
-      className="group -mx-1 block max-w-[220px] cursor-pointer rounded-md px-1 py-0.5 text-right leading-tight transition-colors hover:bg-brand/8"
+      title={dt("عرض ملف المتبرّع")}
+      className="group -mx-1 block max-w-[220px] cursor-pointer rounded-md px-1 py-0.5 text-start leading-tight transition-colors hover:bg-brand/8"
     >
       {body}
     </button>
@@ -212,7 +211,7 @@ export type FunnelStep = {
   value: number;
   pct: number;
   tone: string;
-  /** Known without provider feedback — shown even when tracking is dark. */
+  /** Known without provider feedback  shown even when tracking is dark. */
   always?: boolean;
 };
 
@@ -220,8 +219,8 @@ export type FunnelStep = {
 export function FunnelCard({
   steps,
   trackingLive,
-  title = "مسار الرسالة",
-  caption = "من إجمالي المقبول",
+  title = dt("مسار الرسالة"),
+  caption = dt("من إجمالي المقبول"),
 }: {
   steps: FunnelStep[];
   trackingLive: boolean;
@@ -280,7 +279,7 @@ export function TrackingBanner({ children }: { children: React.ReactNode }) {
  * Whether a row may be re-sent.
  *
  * Kept here rather than in each table so the button's presence and the server's decision are read
- * from the same rule — a row offering a retry the API then refuses is worse than no button at all.
+ * from the same rule  a row offering a retry the API then refuses is worse than no button at all.
  * BOUNCED is intentionally absent: re-sending to an address that bounced only accrues bounce rate.
  */
 export function isRetryable(row: { status: string; retriedAt?: string | null }): boolean {
@@ -308,15 +307,14 @@ export function RowActions({
     <div className="flex items-center justify-end gap-1">
       {row.retriedAt && (
         <span className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
-          أُعيد إرساله
-        </span>
+          {dt("أُعيد إرساله")}</span>
       )}
       {retryable && (
         <button
           type="button"
           onClick={stop(onRetry)}
-          title="إعادة الإرسال"
-          aria-label="إعادة الإرسال"
+          title={dt("إعادة الإرسال")}
+          aria-label={dt("إعادة الإرسال")}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition hover:bg-brand/8 hover:text-brand"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -328,8 +326,7 @@ export function RowActions({
         className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11px] font-semibold text-brand transition hover:bg-brand/8"
       >
         <Eye className="h-3.5 w-3.5" />
-        معاينة
-      </button>
+        {dt("معاينة")}</button>
     </div>
   );
 }

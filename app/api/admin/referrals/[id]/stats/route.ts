@@ -20,9 +20,8 @@ function getDateRange(period: string, startParam?: string | null, endParam?: str
     ({ startDate, endDate } = istanbulDateKeysToUtcRange(startParam, endParam));
   } else if (period === "all") {
     endDate = new Date();
-    startDate = new Date(endDate);
-    startDate.setFullYear(startDate.getFullYear() - 10);
-    startDate.setUTCHours(0, 0, 0, 0);
+    // "All time" means every record. It used to be "the last 10 years".
+    startDate = new Date(0);
     endDate.setUTCHours(23, 59, 59, 999);
   } else {
     endDate = endParam ? new Date(endParam + "T23:59:59.999Z") : new Date();
@@ -75,7 +74,7 @@ export async function GET(
       referralId,
       createdAt: { gte: startDate, lte: endDate },
     };
-    /** Same category/campaign filters as donationWhere, but no date — for all-time إيرادات card */
+    /** Same category/campaign filters as donationWhere, but no date  for all-time إيرادات card */
     const baseAllTimeDonationWhere: Prisma.DonationWhereInput = { referralId };
     if (campaignId && campaignId !== "all") {
       baseDonationWhere.items = { some: { campaignId } };
@@ -219,7 +218,7 @@ export async function GET(
       rows.reduce(
         (acc, r) => {
           const usd = donationRowUsdApprox(r);
-          // See app/api/admin/stats/route.ts — `|| 1` made an unproratable row contribute
+          // See app/api/admin/stats/route.ts  `|| 1` made an unproratable row contribute
           // `usd * teamSupport` instead of its share. Skip such rows entirely.
           const total = Number(r.totalAmount) || 0;
           if (total > 0) {
@@ -246,7 +245,7 @@ export async function GET(
 
     const failedTotalAmount = failedTotalResult._sum?.amountUSD ?? 0;
 
-    /** All-time successful revenue for this referral — ignores category/campaign filters */
+    /** All-time successful revenue for this referral  ignores category/campaign filters */
     const referralAllTimePaidWhere: Prisma.DonationWhereInput = { referralId, ...PAID_DONATION_FILTER };
     let paidRevenueAllTimeUnfiltered =
       (await prisma.donation.aggregate({ _sum: { amountUSD: true }, where: referralAllTimePaidWhere }))._sum

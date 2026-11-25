@@ -1,5 +1,6 @@
 /** Shape used by the dashboard «عرض الملف» profile card (users list + global dialog). */
 export interface UserProfileCardData {
+  accountStatus?: import("./donor-account").DonorAccountStatus;
   id: string;
   name: string | null;
   email: string | null;
@@ -15,10 +16,12 @@ export interface UserProfileCardData {
   phone: string | null;
   /** Free-form on the model; normalise with `normalizeGender` before display. */
   gender: string | null;
-  /** ISO "YYYY-MM-DD" string, not a DateTime — see lib/dashboard/user-demographics.ts. */
+  /** ISO "YYYY-MM-DD" string, not a DateTime  see lib/dashboard/user-demographics.ts. */
   birthdate: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Set once the person used this site themselves; null for an untouched import from the old site. */
+  verifiedAt?: string | null;
   totalDonationsCount: number;
   totalDonatedAmount: number;
   totalDonatedAmountUSD: number;

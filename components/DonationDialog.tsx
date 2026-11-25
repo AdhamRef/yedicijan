@@ -64,6 +64,8 @@ import {
 import { getDonationAttributionPayload } from "@/lib/attribution/client-payload";
 import { shouldSkipPopup } from "@/lib/in-app-browser";
 import { gatewayAnalyticsName, resolveGateway } from "@/lib/payment-gateway";
+import { withDonationToken } from "@/lib/donations/access-token-link";
+import { rememberGuestDonationAccess } from "@/lib/donations/guest-access-client";
 import { useTranslations, useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
 import { PhoneInput } from "react-international-phone";
@@ -233,9 +235,13 @@ const DonationDialog = ({
 
   // Trimmed flow for higher conversion: cover-fees folded into teamSupport,
   // sign-in step removed entirely (guests skip auth, authed users keep going).
+  // The team-support step follows the admin switch; off, it is skipped and
+  // nothing is added to the order.
+  const teamSupportStep: DonationStep[] =
+    globalSettings && !globalSettings.teamSupportEnabled ? [] : [{ title: t("teamSupport"), subtitle: t("teamSupportDesc") }];
   const DONATION_STEPS: DonationStep[] = [
     { title: t("donationAmount"), subtitle: t("donationAmountDesc") },
-    { title: t("teamSupport"), subtitle: t("teamSupportDesc") },
+    ...teamSupportStep,
     { title: t("confirmation"), subtitle: t("confirmationDesc") },
     { title: t("paymentInfo"), subtitle: t("paymentInfoDesc") },
   ];
@@ -1505,7 +1511,7 @@ const DonationDialog = ({
 
             {/* CVC-only when a saved card is selected */}
             {selectedCardId && (
-              <div className="space-y-2" dir="ltr">
+              <div className="space-y-2" dir="ltr" data-clarity-mask="True" data-hj-suppress="" data-private="">
                 <label className="block text-sm font-medium text-gray-700 text-start">
                   {t("cvc")}
                 </label>
@@ -1788,7 +1794,7 @@ const DonationDialog = ({
         try {
           const cached =
             typeof window !== "undefined"
-              ? localStorage.getItem("ipapi_cache")
+              ? localStorage.getItem("ipapi_cache_v2")
               : null;
           const cacheData = cached
             ? (JSON.parse(cached) as {
@@ -1801,7 +1807,7 @@ const DonationDialog = ({
               })
             : null;
           const isValid =
-            cacheData && cacheData.ts && Date.now() - cacheData.ts < 86400000;
+            cacheData && cacheData.ts && Date.now() - cacheData.ts < 21600000;
           if (isValid && cacheData.data) {
             geoCountryCode = cacheData.data.country_code?.toLowerCase();
             geoCity = cacheData.data.city;
@@ -1834,7 +1840,7 @@ const DonationDialog = ({
             geoRegion = geo.region;
             if (typeof window !== "undefined" && geo.country_code) {
               localStorage.setItem(
-                "ipapi_cache",
+                "ipapi_cache_v2",
                 JSON.stringify({ data: geo, ts: Date.now() }),
               );
             }
@@ -1926,6 +1932,10 @@ const DonationDialog = ({
 
       if (response.data.success) {
         const donationId = response.data.donation.id as string;
+        /* The guest's key to this donation (`?t=`): the status poll and the
+           success page are refused without it unless the donor is signed in. */
+        const donationToken = (response.data.donation.accessToken as string | null | undefined) ?? null;
+        rememberGuestDonationAccess(donationId, donationToken);
 
         if (paymentMethod === "CARD") {
           const newPan = cardDetails.cardNumber.replace(/\s/g, "");
@@ -1956,6 +1966,7 @@ const DonationDialog = ({
               : "/api/payfor/3dpay/initiate",
             {
               donationId,
+              cardLast4: newPan.length >= 4 ? newPan.slice(-4) : undefined,
               locale,
               savedCardId: selectedCardId ?? undefined,
               ...(useAlbaraka && useOwnCardForm
@@ -1972,10 +1983,18 @@ const DonationDialog = ({
                 : {}),
             },
           );
-          const { actionUrl, fields } = init.data as {
+          const { actionUrl, fields, method } = init.data as {
             actionUrl: string;
             fields: Record<string, string>;
+            method?: string;
           };
+          // The gateway already has (or finished) this attempt: follow it to the result page.
+          if (method === "GET") {
+            isRedirecting = true;
+            setRedirecting(true);
+            window.location.assign(actionUrl);
+            return;
+          }
 
           const form = document.createElement("form");
           form.method = "POST";
@@ -2053,7 +2072,7 @@ const DonationDialog = ({
           payforPollRef.current = setInterval(async () => {
             polls++;
             try {
-              const res = await fetch(`/api/donations/${donationId}`);
+              const res = await fetch(withDonationToken(`/api/donations/${donationId}`, donationToken));
               if (!res.ok) return;
               const data = await res.json();
 
@@ -2065,7 +2084,7 @@ const DonationDialog = ({
                 }
                 router.push(
                   appendCurrencyQuery(
-                    `/success/${donationId}`,
+                    withDonationToken(`/success/${donationId}`, donationToken),
                     getCurrencyCodeForLinks(),
                   ),
                 );
@@ -2097,7 +2116,7 @@ const DonationDialog = ({
                 });
                 router.push(
                   appendCurrencyQuery(
-                    `/donation-failed?donationId=${encodeURIComponent(donationId)}`,
+                    withDonationToken(`/donation-failed?donationId=${encodeURIComponent(donationId)}`, donationToken),
                     getCurrencyCodeForLinks(),
                   ),
                 );
@@ -2114,7 +2133,7 @@ const DonationDialog = ({
         setRedirecting(true);
         router.push(
           appendCurrencyQuery(
-            `/success/${donationId}`,
+            withDonationToken(`/success/${donationId}`, donationToken),
             getCurrencyCodeForLinks(),
           ),
         );
@@ -2122,7 +2141,7 @@ const DonationDialog = ({
       }
       onClose();
     } catch (error) {
-      console.error("Payment failed:", error);
+      console.error("Payment failed: request did not complete");
       tracking?.trackPaymentFailed({
         value: donationAmount,
         currency: getCurrency(),

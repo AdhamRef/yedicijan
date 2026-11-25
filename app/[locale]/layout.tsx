@@ -1,21 +1,15 @@
+import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { LOCALE_SEO, OG_LOCALE_MAP, OG_IMAGE, SITE_URL, buildHreflang } from "@/lib/seo";
+import { LOCALES, LOCALE_SEO, OG_LOCALE_MAP, OG_IMAGE, SITE_URL, buildHreflang, isVercelDeployment } from "@/lib/seo";
 import type { Locale } from "@/lib/seo";
 import { Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import CartReminder from "@/components/CartReminder";
+import FieldGallery from "@/components/minbar/shell/FieldGallery";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
 import IntlProviderClient from "./IntlProviderClient";
-import ar from "../../i18n/messages/ar.json";
-import en from "../../i18n/messages/en.json";
-import fr from "../../i18n/messages/fr.json";
-import tr from "../../i18n/messages/tr.json";
-import id from "../../i18n/messages/id.json";
-import pt from "../../i18n/messages/pt.json";
-import es from "../../i18n/messages/es.json";
-import de from "../../i18n/messages/de.json";
-import { SUPPORTED_LOCALES } from "@/lib/locales";
-import { buildNormalizedMessages } from "../../i18n/message-quality";
+import { SUPPORTED_LOCALES, localeDirection } from "@/lib/locales";
+import { messagesFor } from "@/i18n/locale-messages";
 import { Toaster } from "react-hot-toast";
 import SessionProvider from "@/components/providers/SessionProvider";
 import { ConfettiProvider } from "../../components/providers/confetti-provider";
@@ -24,16 +18,29 @@ import PreferredLangSync from "@/components/PreferredLangSync";
 import SyncHtmlDir from "@/components/SyncHtmlDir";
 import { MarketingRuntime } from "@/components/MarketingRuntime";
 import { CurrencyProvider } from "@/context/CurrencyContext";
-import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-// NOTE: this map must stay static (bundled JSON imports). When promoting a future
-// locale from `lib/locales.ts` to public, add its `import` above + an entry here.
-const rawLocaleMessages: Record<string, Record<string, unknown>> = { ar, en, fr, tr, id, pt, es, de };
-const localeMessages = buildNormalizedMessages(rawLocaleMessages, "en") as Record<string, Record<string, unknown>>;
 // Valid public locales derive from the single source of truth (enabled set).
+// The message catalog itself is built once in `i18n/locale-messages.ts`.
 const VALID_LOCALES = SUPPORTED_LOCALES;
-const DEFAULT_LOCALE = "ar";
+
+/**
+ * A first path segment that is not a locale is NOT a page in Arabic.
+ *
+ * This segment used to fall back to `ar` silently, so every stray root request 
+ * `/favicon.ico`, `/apple-touch-icon.png`, a mistyped path, a crawler probing
+ * `/wp-admin`  rendered the Arabic homepage with `locale = "favicon.ico"`
+ * threaded through it. Anything that then handed that string to `Intl` threw
+ * `RangeError: Incorrect locale information provided`, which is how a missing
+ * favicon became a 500 in production rather than a 404.
+ *
+ * A real `app/favicon.ico` now answers that particular request, but the rule is
+ * the fix: an unknown locale is a 404, and `notFound()` says so.
+ */
+function assertLocale(rawLocale: string): Locale {
+  if (!VALID_LOCALES.includes(rawLocale as (typeof VALID_LOCALES)[number])) notFound();
+  return rawLocale as Locale;
+}
 
 export async function generateMetadata({
   params,
@@ -41,7 +48,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale: rawLocale } = await params;
-  const locale = (VALID_LOCALES.includes(rawLocale as (typeof VALID_LOCALES)[number]) ? rawLocale : DEFAULT_LOCALE) as Locale;
+  const locale = assertLocale(rawLocale);
   const seo = LOCALE_SEO[locale];
   const alternates = buildHreflang("/", locale);
 
@@ -49,7 +56,6 @@ export async function generateMetadata({
     title: { default: seo.title, template: seo.titleTemplate },
     description: seo.description,
     keywords: seo.keywords,
-    icons: { icon: "/yedicijan_logo.png" },
     alternates,
     openGraph: {
       title: seo.title,
@@ -58,6 +64,7 @@ export async function generateMetadata({
       siteName: seo.siteName,
       images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: seo.siteName }],
       locale: OG_LOCALE_MAP[locale],
+      alternateLocale: LOCALES.filter((candidate) => candidate !== locale).map((candidate) => OG_LOCALE_MAP[candidate]),
       type: "website",
     },
     twitter: {
@@ -77,17 +84,18 @@ export default async function Rootlayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale: rawLocale } = await params;
-  const locale = VALID_LOCALES.includes(rawLocale as (typeof VALID_LOCALES)[number])
-    ? rawLocale
-    : DEFAULT_LOCALE;
-  const messages = localeMessages[locale] ?? localeMessages[DEFAULT_LOCALE];
-  const dir = locale === "ar" ? "rtl" : "ltr";
+  const locale = assertLocale(rawLocale);
+  // The Yedicihan public pages read their copy client-side from the full
+  // normalized catalog, so the whole locale bundle is provided here.
+  const messages = messagesFor(locale);
+  // Direction comes from the locale catalog, not a hand-written check.
+  const dir = localeDirection(locale);
 
   return (
-    <IntlProviderClient locale={locale || "ar"} messages={messages}>
+    <IntlProviderClient locale={locale} messages={messages}>
       <SyncHtmlDir locale={locale} />
       <MarketingRuntime>
-        <div dir={dir} lang={locale === "ar" ? "ar" : locale === "fr" ? "fr" : locale === "tr" ? "tr" : locale === "id" ? "id" : locale === "pt" ? "pt" : locale === "es" ? "es" : locale === "de" ? "de" : "en"}>
+        <div dir={dir} lang={locale}>
           <CurrencyProvider>
             <Suspense fallback={null}>
               <CurrencyFromUrlSync />
@@ -98,14 +106,16 @@ export default async function Rootlayout({
               <main className="pt-12 lg:pt-[88px]">
                 {children}
               </main>
+              <FieldGallery locale={locale} />
               <Footer />
               <CartReminder />
               <ConfettiProvider />
               <Toaster position="top-center" />
             </SessionProvider>
           </CurrencyProvider>
-          <Analytics />
-          <SpeedInsights />
+          {/* Analytics is mounted once, in the root layout. Both are Vercel-only:
+              on the VPS their scripts 404 and log console errors. */}
+          {isVercelDeployment() ? <SpeedInsights /> : null}
         </div>
       </MarketingRuntime>
     </IntlProviderClient>

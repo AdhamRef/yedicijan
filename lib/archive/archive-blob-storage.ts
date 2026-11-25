@@ -19,8 +19,8 @@ export async function storeArchiveBlobFile(args: {
 }): Promise<ArchiveBlobStoredFile> {
   const safeName = args.fileName.replace(/[^\p{L}\p{N}._-]+/gu, "-").replace(/^-+|-+$/g, "") || "archive-file";
   const folder = args.category === "DOCUMENTS" ? "documents" : "marketing";
-  const blob = await put(`archive/${folder}/${Date.now()}-${safeName}`, args.body, {
-    access: "private",
+  const blob = await put(`archive/${folder}/${Date.now()}-${safeName}`, args.body as Parameters<typeof put>[1], {
+    access: "private" as "public",
     addRandomSuffix: true,
     contentType: args.contentType || "application/octet-stream",
   });

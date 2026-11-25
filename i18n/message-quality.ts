@@ -1,7 +1,7 @@
 type MessageValue = string | number | boolean | null | MessageObject | MessageValue[];
 export type MessageObject = { [key: string]: MessageValue };
 
-type LocaleMessages = Record<string, MessageObject>;
+export type LocaleMessages = Record<string, MessageObject>;
 
 type CorrectionMap = Record<string, MessageValue>;
 
@@ -38,12 +38,14 @@ function pathSet(obj: MessageObject, path: string, value: MessageValue) {
   current[parts[parts.length - 1]] = cloneValue(value);
 }
 
-function mergeMissing(base: MessageValue, fallback: MessageValue): MessageValue {
+function mergeMissing(base: MessageValue, fallback: MessageValue | undefined): MessageValue {
   if (typeof base === "string") {
     if (!EMPTY_TEXT_RE.test(base)) return base;
     return typeof fallback === "string" ? fallback : base;
   }
-  if (base == null) return cloneValue(fallback);
+  /* No base value at all: fall back, or return null when there is no fallback either — which is what
+     a key present in neither locale looks like. */
+  if (base == null) return fallback === undefined ? base : cloneValue(fallback);
   if (Array.isArray(base)) {
     if (base.length > 0) return base.map((item, idx) => mergeMissing(item, Array.isArray(fallback) ? fallback[idx] : undefined));
     return Array.isArray(fallback) ? cloneValue(fallback) : base;

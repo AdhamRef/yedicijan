@@ -38,11 +38,14 @@ import { useRouter } from "@/i18n/routing";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
 import { shouldSkipPopup } from "@/lib/in-app-browser";
 import { resolveGateway } from "@/lib/payment-gateway";
+import { withDonationToken } from "@/lib/donations/access-token-link";
+import { rememberGuestDonationAccess } from "@/lib/donations/guest-access-client";
 import { useTranslations, useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useIpCountry } from "@/hooks/useIpCountry";
+import { getDonationAttributionPayload } from "@/lib/attribution/client-payload";
 
 const CART_CHECKOUT_RESUME_KEY = "alafiya:cart-checkout-resume:v1";
 const CHECKOUT_RESUME_TTL_MS = 30 * 60 * 1000;
@@ -104,17 +107,19 @@ const CartPaymentDialog = ({
     <span className={btnRow}>{t("confirmDonation")}<ChevronRight className="h-4 w-4 shrink-0" aria-hidden /></span>
   );
 
-  // Trimmed flow for higher conversion: cover-fees folded into teamSupport,
-  // sign-in step removed (guests skip auth, authed users keep going).
-  const STEPS = [
-    { title: t("teamSupport"),    subtitle: t("teamSupportDesc") },
-    { title: t("confirmation"),   subtitle: t("confirmationDesc") },
-    { title: t("paymentInfo"),    subtitle: t("paymentInfoDesc") },
-  ];
-
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(
     () => getCachedGlobalSettings()
   );
+
+  // Trimmed flow for higher conversion: cover-fees folded into teamSupport,
+  // sign-in step removed (guests skip auth, authed users keep going).
+  // The team-support step follows the admin switch; off, it is skipped and
+  // nothing is added to the order (the server enforces the same switch).
+  const STEPS = [
+    ...(globalSettings && !globalSettings.teamSupportEnabled ? [] : [{ title: t("teamSupport"), subtitle: t("teamSupportDesc") }]),
+    { title: t("confirmation"),   subtitle: t("confirmationDesc") },
+    { title: t("paymentInfo"),    subtitle: t("paymentInfoDesc") },
+  ];
   const globalTeamSupport: SuggestedTeamSupportConfig | null =
     globalSettings?.suggestedTeamSupport ?? null;
   const payforEnabled = globalSettings ? globalSettings.payforEnabled : true;
@@ -410,9 +415,9 @@ const CartPaymentDialog = ({
       let geoRegion: string | undefined;
       if (useGuestCheckout) {
         try {
-          const cached = typeof window !== "undefined" ? localStorage.getItem("ipapi_cache") : null;
+          const cached = typeof window !== "undefined" ? localStorage.getItem("ipapi_cache_v2") : null;
           const cacheData = cached ? JSON.parse(cached) as { data?: { country_code?: string; city?: string; region?: string }; ts?: number } : null;
-          const isValid = cacheData && cacheData.ts && Date.now() - cacheData.ts < 86400000;
+          const isValid = cacheData && cacheData.ts && Date.now() - cacheData.ts < 21600000;
           if (isValid && cacheData.data) {
             geoCountryCode = cacheData.data.country_code?.toLowerCase();
             geoCity = cacheData.data.city;
@@ -436,7 +441,7 @@ const CartPaymentDialog = ({
             geoCity = geo.city;
             geoRegion = geo.region;
             if (typeof window !== "undefined" && geo.country_code) {
-              localStorage.setItem("ipapi_cache", JSON.stringify({ data: geo, ts: Date.now() }));
+              localStorage.setItem("ipapi_cache_v2", JSON.stringify({ data: geo, ts: Date.now() }));
             }
           }
         } catch { /* geo is optional */ }
@@ -456,6 +461,7 @@ const CartPaymentDialog = ({
 
       const basePayload: Record<string, unknown> = {
         items,
+        attribution: getDonationAttributionPayload(),
         currency: getCurrency(),
         teamSupport: teamSupport ?? 0,
         coverFees,
@@ -485,6 +491,10 @@ const CartPaymentDialog = ({
         const res = await axios.post("/api/cart/payment", basePayload);
         if (!res.data?.success) { onClose(); return; }
         const donationId = res.data.donation.id as string;
+        /* The guest's key to this donation (`?t=`): the status poll and the
+           success page are refused without it unless the donor is signed in. */
+        const donationToken = (res.data.donation.accessToken as string | null | undefined) ?? null;
+        rememberGuestDonationAccess(donationId, donationToken);
         const newPan = cardDetails.cardNumber.replace(/\s/g, "");
 
         // Save new card fire-and-forget
@@ -504,6 +514,7 @@ const CartPaymentDialog = ({
           useAlbaraka ? "/api/albaraka/3d/initiate" : "/api/payfor/3dpay/initiate",
           {
             donationId,
+            cardLast4: newPan.length >= 4 ? newPan.slice(-4) : undefined,
             locale,
             savedCardId: selectedCardId ?? undefined,
             ...(useAlbaraka && useOwnCardForm
@@ -518,7 +529,13 @@ const CartPaymentDialog = ({
               : {}),
           }
         );
-        const { actionUrl, fields } = init.data as { actionUrl: string; fields: Record<string, string> };
+        const { actionUrl, fields, method } = init.data as { actionUrl: string; fields: Record<string, string>; method?: string };
+        // The gateway already has (or finished) this attempt: follow it to the result page.
+        if (method === "GET") {
+          isRedirecting = true; setRedirecting(true);
+          window.location.assign(actionUrl);
+          return;
+        }
 
         const form = document.createElement("form");
         form.method = "POST";
@@ -586,7 +603,7 @@ const CartPaymentDialog = ({
           if (payforPopupRef.current && !payforPopupRef.current.closed) payforPopupRef.current.close();
           router.push(
             appendCurrencyQuery(
-              `/donation-failed?donationId=${encodeURIComponent(donationId)}`,
+              withDonationToken(`/donation-failed?donationId=${encodeURIComponent(donationId)}`, donationToken),
               getCurrencyCodeForLinks()
             )
           );
@@ -600,7 +617,7 @@ const CartPaymentDialog = ({
         payforPollRef.current = setInterval(async () => {
           polls++;
           try {
-            const check = await fetch(`/api/donations/${donationId}`);
+            const check = await fetch(withDonationToken(`/api/donations/${donationId}`, donationToken));
             if (!check.ok) return;
             const data = await check.json();
 
@@ -609,7 +626,7 @@ const CartPaymentDialog = ({
               if (payforPopupRef.current && !payforPopupRef.current.closed) payforPopupRef.current.close();
               clearItems(); confetti.onOpen();
               router.push(
-                appendCurrencyQuery(`/success/${donationId}`, getCurrencyCodeForLinks())
+                appendCurrencyQuery(withDonationToken(`/success/${donationId}`, donationToken), getCurrencyCodeForLinks())
               );
               return;
             }
@@ -628,13 +645,16 @@ const CartPaymentDialog = ({
         isRedirecting = true; setRedirecting(true);
         clearItems(); confetti.onOpen();
         router.push(
-          appendCurrencyQuery(`/success/${res.data.donation.id}`, getCurrencyCodeForLinks())
+          appendCurrencyQuery(
+            withDonationToken(`/success/${res.data.donation.id}`, (res.data.donation.accessToken as string | null | undefined) ?? null),
+            getCurrencyCodeForLinks()
+          )
         );
       } else {
         onClose();
       }
     } catch (error) {
-      console.error("Cart payment failed:", error);
+      console.error("Cart payment failed: request did not complete");
       // Send to the explanatory failure page rather than relying on a transient toast.
       isRedirecting = true;
       setRedirecting(true);
@@ -898,7 +918,7 @@ const CartPaymentDialog = ({
 
         {/* CVC-only when a saved card is selected */}
         {selectedCardId && (
-          <div className="space-y-2" dir="ltr">
+          <div className="space-y-2" dir="ltr" data-clarity-mask="True" data-hj-suppress="" data-private="">
             <label className="block text-sm font-medium text-gray-700 text-start">{t("cvc")}</label>
             <input
               type="password"

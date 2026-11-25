@@ -1,7 +1,7 @@
 import axios from "axios";
 import Image from "next/image";
 import { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getServerBaseUrl } from "@/lib/server-base-url";
 import React from "react";
 import { prisma } from "@/lib/prisma";
@@ -161,10 +161,12 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
         translations: { select: { locale: true, slug: true } },
       },
     });
+    // An unknown article is a real 404, not an empty article shell (soft 404).
+    if (!post) notFound();
     if (post) {
       const canonical = pickLocaleSlug(post.slug, post.translations, locale) ?? post.id;
       if (params.postId !== canonical && (isObjectId(params.postId) || params.postId !== post.id)) {
-        redirect(`/${locale}/blog/${encodeURIComponent(canonical)}`);
+        permanentRedirect(`/${locale}/blog/${encodeURIComponent(canonical)}`);
       }
     }
   } catch (err) {
@@ -177,11 +179,11 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
   const { post, similarPosts } = res.data;
 
   // Helper to pick a localized value: prefer a top-level localized field, then translations array, then post.fieldAR/EN/FR
-  const pickLocalized = (obj, field) => {
+  const pickLocalized = (obj: any, field: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (!obj) return "";
     if (obj[field]) return obj[field];
     if (Array.isArray(obj.translations)) {
-      const tr = obj.translations.find((t) => t.locale === locale);
+      const tr = obj.translations.find((t: Record<string, string>) => t.locale === locale);
       if (tr && tr[field]) return tr[field];
     }
     const suffixed = obj[`${field}${locale.toUpperCase()}`];
@@ -345,7 +347,7 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
                 </CardHeader>
 
                 <CardContent className="p-4 pt-0 flex flex-col gap-4">
-                  {(similarPosts as { id: string; slug?: string | null; title?: string; image?: string }[]).map((sp) => (
+                  {(similarPosts as { id: string; slug?: string | null; title?: string; image?: string; translations?: { locale: string; title?: string }[]; titleAR?: string; titleEN?: string; titleFR?: string }[]).map((sp) => (
                     <Link key={sp.id} href={`/${locale}/blog/${sp.slug || sp.id}`} className="group relative rounded-xl overflow-hidden border bg-background shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
                       <div className="relative aspect-[4/2.5] overflow-hidden">
                         <Image src={sp.image || "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg"} alt={sp.title || ''} fill sizes="600px" className="object-cover transition-transform duration-500 group-hover:scale-110" />

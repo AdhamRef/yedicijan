@@ -304,7 +304,7 @@ export function ConnectionsPageClient() {
           })
         }
         editingId={drawer.editingId}
-        initialPlatform={drawer.initialPlatform}
+        initialPlatform={drawer.initialPlatform as never}
         onSaved={fetchAll}
       />
     </div>

@@ -3,11 +3,25 @@ import type { Session } from "next-auth";
 type UserLike = { role?: string | null; dashboardPermissions?: string[] | null };
 
 export const DASHBOARD_PERMISSION_KEYS = [
-  "revenue", "referrals", "bankTransfers", "donors", "team", "logs",
+  "revenue", "monthly", "referrals", "bankTransfers", "donors", "team", "logs",
   "badges", "messages", "templates", "campaigns", "categories", "blog", "slides",
   // "operations" (the التشغيل section) and "monthly" (monthly donations) were removed. Any value still stored on a user row is
   // simply inert — it maps to no page and grants nothing.
   "ticker", "pixels", "ads", "platformConnections", "archive",
+  // Site content: stories, video programmes, courses, videos, reports, booklets,
+  // urgent banners, FAQs and site settings. One key for the group, the way
+  // "blog" already covers both posts and their categories.
+  "siteContent",
+  // Bank accounts are gated separately from the rest of the content. A row here
+  // is a live payment destination  publishing a wrong IBAN sends a donor's
+  // transfer to someone else  so editing them is not the same privilege as
+  // editing a video title. Distinct from "bankTransfers", which only reads the
+  // incoming transfer list.
+  "bankAccounts",
+  // The donation concierge (مساعد العطاء): its analytics, the visitors' conversations,
+  // the AI insights and its settings. Conversations are what visitors typed, so reading
+  // them is its own grant rather than riding on `ads` like the old funnel endpoint.
+  "aiConcierge",
   "generalSettings", "platformConnectionsTest", "platformConnectionsManage",
   "platformConnectionsAdmin", "archiveUpload", "archiveDelete", "archiveAnalyze",
   "archiveDocuments", "donationsEdit", "reportsExport",
@@ -75,10 +89,14 @@ export function userCanEditDonations(user: UserLike | undefined): boolean { retu
 export function userCanExportReports(user: UserLike | undefined): boolean { return userHasDashboardPermission(user, "reportsExport"); }
 
 const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
+  { prefix: "/dashboard/google-analytics", key: "platformConnections" },
   { prefix: "/dashboard/platform-connections", key: "platformConnections" },
   { prefix: "/dashboard/marketing/attribution", key: "referrals" },
+  { prefix: "/dashboard/monthly", key: "monthly" },
+  { prefix: "/dashboard/subscription-requests", key: "monthly" },
   { prefix: "/dashboard/marketing/tracking", key: "pixels" },
   { prefix: "/dashboard/marketing/connections", key: "platformConnections" },
+  { prefix: "/dashboard/marketing/google-search", key: "platformConnections" },
   { prefix: "/dashboard/marketing", key: "ads" },
   { prefix: "/dashboard/marketing-intelligence", key: "ads" },
   { prefix: "/dashboard/conversion-events", key: "pixels" },
@@ -87,28 +105,68 @@ const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
   { prefix: "/dashboard/link-generator", key: "referrals" },
   { prefix: "/dashboard/referrals", key: "referrals" },
   { prefix: "/dashboard/bank-transfers", key: "bankTransfers" },
+  { prefix: "/dashboard/transfer-receipts", key: "bankTransfers" },
   { prefix: "/dashboard/users/donors", key: "donors" },
   { prefix: "/dashboard/users/team", key: "team" },
+  { prefix: "/dashboard/security", key: "logs" },
+  { prefix: "/dashboard/renewals", key: "generalSettings" },
+  { prefix: "/dashboard/gallery", key: "siteContent" },
   { prefix: "/dashboard/logs", key: "logs" },
+  { prefix: "/dashboard/notifications", key: "logs" },
   { prefix: "/dashboard/badges", key: "badges" },
   { prefix: "/dashboard/communication", key: "messages" },
   // Without its own rule /dashboard/inbox fell through to the "/dashboard → revenue" catch-all,
   // so the route guard demanded `revenue` while the sidebar entry and the API both check
-  // `messages` — a staffer granted the inbox was bounced straight back out of it.
+  // `messages`  a staffer granted the inbox was bounced straight back out of it.
   { prefix: "/dashboard/inbox", key: "messages" },
   { prefix: "/dashboard/templates", key: "templates" },
   { prefix: "/dashboard/campaigns", key: "campaigns" },
   { prefix: "/dashboard/categories", key: "categories" },
+  { prefix: "/dashboard/cart-settings", key: "campaigns" },
   { prefix: "/dashboard/blog", key: "blog" },
   { prefix: "/dashboard/slides", key: "slides" },
   { prefix: "/dashboard/ticker", key: "ticker" },
+  // The site-content pages. Without their own rules every one of them fell through to the
+  // "/dashboard → revenue" catch-all below, so the guard demanded `revenue` while the sidebar
+  // entry and the API both check `siteContent`  a staffer granted the content section was
+  // bounced out of each page. Same failure the /dashboard/inbox rule above exists to prevent.
+  { prefix: "/dashboard/content/campaigns", key: "campaigns" },
+  { prefix: "/dashboard/content/categories", key: "categories" },
+  { prefix: "/dashboard/content/blog", key: "blog" },
+  { prefix: "/dashboard/content/super-categories", key: "siteContent" },
+  { prefix: "/dashboard/content/urgent-banners", key: "siteContent" },
+  { prefix: "/dashboard/content/videos", key: "siteContent" },
+  { prefix: "/dashboard/content/playlists", key: "siteContent" },
+  { prefix: "/dashboard/content/courses", key: "siteContent" },
+  { prefix: "/dashboard/content/reports", key: "siteContent" },
+  { prefix: "/dashboard/content/booklets", key: "siteContent" },
+  { prefix: "/dashboard/content/faqs", key: "siteContent" },
+  { prefix: "/dashboard/editorial-planner", key: "blog" },
+  { prefix: "/dashboard/seo-pages", key: "siteContent" },
+  { prefix: "/dashboard/super-categories", key: "siteContent" },
+  { prefix: "/dashboard/stories", key: "siteContent" },
+  { prefix: "/dashboard/videos", key: "siteContent" },
+  { prefix: "/dashboard/playlists", key: "siteContent" },
+  { prefix: "/dashboard/courses", key: "siteContent" },
+  { prefix: "/dashboard/reports", key: "siteContent" },
+  { prefix: "/dashboard/booklets", key: "siteContent" },
+  { prefix: "/dashboard/faqs", key: "siteContent" },
+  // A live payment destination (IBAN/SWIFT), not content  see the `bankAccounts` key above.
+  { prefix: "/dashboard/bank-accounts", key: "bankAccounts" },
+  { prefix: "/dashboard/urgent-banners", key: "siteContent" },
+  { prefix: "/dashboard/quick-donation", key: "siteContent" },
+  { prefix: "/dashboard/homepage-layout", key: "siteContent" },
+  { prefix: "/dashboard/certificates", key: "siteContent" },
   { prefix: "/dashboard/pixels", key: "pixels" },
   { prefix: "/dashboard/donations", key: "revenue" },
   { prefix: "/dashboard/general", key: "generalSettings" },
+  { prefix: "/dashboard/ai-concierge", key: "aiConcierge" },
+  { prefix: "/dashboard/telegram", key: "platformConnectionsAdmin" },
   { prefix: "/dashboard", key: "revenue" },
 ];
 export function pathToDashboardPermission(pathname: string): DashboardPermissionKey | null {
   if (!pathname.startsWith("/dashboard")) return null;
+  if (/^\/dashboard\/users\/donors\/[^/]+\/communication(?:\/|$)/.test(pathname)) return "messages";
   for (const rule of [...PATH_RULES].sort((a, b) => b.prefix.length - a.prefix.length)) {
     if (pathname === rule.prefix || pathname.startsWith(rule.prefix + "/")) return rule.key;
   }
@@ -116,6 +174,16 @@ export function pathToDashboardPermission(pathname: string): DashboardPermission
 }
 export function userCanEnterDashboard(user: UserLike | undefined): boolean {
   return user?.role === "ADMIN" || (user?.role === "STAFF" && hasAnyDashboardRoutePermission(user));
+}
+
+/** Shared entry point; every tool and content section checks its own permission. */
+export function userCanOpenDashboardPath(user: UserLike | undefined, pathname: string): boolean {
+  if (pathname.replace(/\/$/, "") === "/dashboard/seo-pages")
+    return (["siteContent", "blog", "campaigns", "categories"] as const).some(key => userHasDashboardPermission(user, key));
+  if (["/dashboard/seo-pages", "/dashboard/editorial-planner"].includes(pathname.replace(/\/$/, "")))
+    return userHasDashboardPermission(user, "siteContent") || userHasDashboardPermission(user, "blog");
+  const key = pathToDashboardPermission(pathname);
+  return !key || userHasDashboardPermission(user, key);
 }
 export function sessionHasDashboardPermission(session: Session | null, key: DashboardPermissionKey): boolean {
   return userHasDashboardPermission(session?.user as UserLike | undefined, key);
@@ -127,7 +195,7 @@ export function sanitizeDashboardPermissions(raw: unknown): DashboardPermissionK
 export function getFirstAllowedDashboardHref(user: UserLike | undefined, orderedHrefs: string[], hrefToKey: (href: string) => DashboardPermissionKey | null): string | null {
   for (const href of orderedHrefs) {
     const key = hrefToKey(href);
-    if (key && userHasDashboardPermission(user, key)) return href;
+    if (key && userCanOpenDashboardPath(user, href)) return href;
   }
   return null;
 }

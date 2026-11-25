@@ -2,7 +2,7 @@ import { LOCALES, isKnownLocale, type AnyLocale } from "@/lib/locales";
 
 /**
  * Language coverage for a campaign: given the locales present among recipients and the
- * locales for which an approved template variant exists, decide — per locale — whether
+ * locales for which an approved template variant exists, decide  per locale  whether
  * it is covered directly, covered by an explicit fallback, or missing. Pure, no I/O.
  *
  * A campaign must not silently send the wrong language: any `MISSING` locale that has
@@ -46,14 +46,10 @@ export function computeLanguageCoverage(
     if (!isKnownLocale(code)) continue;
     const meta = LOCALES[code];
     let status: CoverageStatus = "MISSING";
-    let fallbackLocale: AnyLocale | undefined;
     if (available.has(code)) {
       status = "EXISTS";
-    } else if (available.has(meta.fallbackLocale)) {
-      status = "FALLBACK";
-      fallbackLocale = meta.fallbackLocale;
     }
-    locales.push({ locale: code, label: meta.label, status, fallbackLocale, recipientCount: count });
+    locales.push({ locale: code, label: meta.label, status, recipientCount: count });
   }
   locales.sort((a, b) => b.recipientCount - a.recipientCount);
 

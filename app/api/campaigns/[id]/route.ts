@@ -1,3 +1,4 @@
+import { contentWriteWhere, contentVersionPatch, isContentWriteConflict } from "@/lib/content-editor/legacy-write";
 // app/api/campaigns/[id]/route.ts
 // Campaign detail endpoint with GET and PUT operations
 // GET /api/campaigns/[id] - Returns one specific campaign with all details
@@ -42,6 +43,8 @@ import { normalizeCategoryIdsInput, parseCategoryPriorities } from "@/lib/campai
 import { NOT_SOFT_DELETED } from "@/lib/campaign/soft-delete-filter";
 import { setCampaignDisplayTotal } from "@/lib/campaign/current-amount";
 import { PAID_DONATION_FILTER } from "@/lib/dashboard/donation-usd-revenue";
+import { RECOMMENDED_FREQUENCY_VALUES, isRecommendedFrequencySetting } from "@/lib/minbar/recommended-frequency";
+import { parseCampaignFaqContent } from "@/lib/campaign/seo-fields";
 
 // This file used to build its own `new PrismaClient()` behind a global that is
 // only assigned when NODE_ENV !== "production". The comment claimed it was a
@@ -50,6 +53,22 @@ import { PAID_DONATION_FILTER } from "@/lib/dashboard/donation-usd-revenue";
 // is how a MongoDB deployment runs out of connections and starts erroring on
 // perfectly ordinary saves.
 
+async function retryWriteConflict<T>(operation: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const retryable =
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+      if (!retryable || attempt === attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * attempt));
+    }
+  }
+  throw lastError;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -57,26 +76,34 @@ export async function GET(
   try {
     const { id } = await params; // Campaign ID from URL
     const url = new URL(request.url);
+    const wantsFresh = url.searchParams.get("fresh") === "1";
+    if (wantsFresh) {
+      const session = await getServerSession(authOptions);
+      const denied = requireAdminOrDashboardPermission(session, "campaigns");
+      if (denied) return denied;
+    }
+
     const locale =
       request.headers.get("x-locale") ||
       url.searchParams.get("locale") ||
       "ar";
 
     // ✅ STEP 1: Fetch campaign with ONLY current locale translations
-    // Accept an ObjectId, the base slug, or a translation slug from ANY locale —
+    // Accept an ObjectId, the base slug, or a translation slug from ANY locale 
     // deliberately not just `locale`'s own. A locale with no slug of its own falls
     // back to the English one (see pickLocaleSlug), so /tr/campaign/<english-slug>
     // is a canonical URL the page renders without redirecting; matching only the
     // requested locale here 404'd exactly those pages. Locale still decides which
     // translation is returned below, it just doesn't gate which slugs resolve.
     // Soft-deleted campaigns 404 here so public detail pages and the edit form
-    // can't surface them — historical donation joins go through other queries.
+    // can't surface them  historical donation joins go through other queries.
     const campaign = await prisma.campaign.findFirst({
       where: {
         AND: [
           whereByIdOrAnyLocaleSlug(id),
+          wantsFresh ? {} : { isActive: true },
           NOT_SOFT_DELETED,
-        ],
+        ].filter((condition) => Object.keys(condition).length > 0),
       },
       select: {
         // Basic fields
@@ -84,6 +111,14 @@ export async function GET(
         slug: true,
         title: true,        // Arabic default
         description: true,  // Arabic default
+        seoTitle: true,
+        seoDescription: true,
+        seoKeyword: true,
+        ogTitle: true,
+        ogDescription: true,
+        ogImage: true,
+        seoNoIndex: true,
+        faqContent: true,
         images: true,
         videoUrl: true,
         currentAmount: true,
@@ -98,6 +133,7 @@ export async function GET(
         sharePriceUSD: true,
         suggestedShareCounts: true,
         shareLabels: true,
+        recommendedFrequency: true,
 
         // Requested locale + English fallback (base Arabic is on the model itself)
         translations: {
@@ -168,7 +204,7 @@ export async function GET(
     // Use the resolved Prisma id (since the URL param may have been a slug)
     const realId = campaign.id;
 
-    // Orphaned items (item whose parent Donation was deleted out-of-band — MongoDB
+    // Orphaned items (item whose parent Donation was deleted out-of-band  MongoDB
     // doesn't enforce FK integrity) make Prisma throw on the required `donation` relation.
     // Fetch item + donor in two steps so one orphan can't 500 the whole page.
     type DonationStat = { amount: number; donor: string | null } | null;
@@ -176,7 +212,7 @@ export async function GET(
       orderBy: Prisma.DonationItemOrderByWithRelationInput
     ): Promise<DonationStat> => {
       const item = await prisma.donationItem.findFirst({
-        where: { campaignId: realId },
+        where: { campaignId: realId, donation: PAID_DONATION_FILTER },
         orderBy,
         select: { amount: true, donationId: true },
       });
@@ -190,7 +226,7 @@ export async function GET(
 
     const [donationCount, firstDonation, lastDonation, largestDonation] =
       await Promise.all([
-        // See app/api/campaigns/main/route.ts — must join `donation` so unsettled and
+        // See app/api/campaigns/main/route.ts  must join `donation` so unsettled and
         // orphaned items don't inflate the campaign's donation count.
         prisma.donationItem.count({ where: { campaignId: realId, donation: PAID_DONATION_FILTER } }),
         pickStat({ createdAt: "asc" }),
@@ -250,6 +286,8 @@ export async function GET(
       sharePriceUSD: campaign.sharePriceUSD ?? null,
       suggestedShareCounts: parseSuggestedShareCounts(campaign.suggestedShareCounts),
       shareLabels: parseShareLabels(campaign.shareLabels),
+      // Stored value as set ("none" kept); null means the default, monthly.
+      recommendedFrequency: campaign.recommendedFrequency ?? null,
       isActive: campaign.isActive,
 
       // All categories this campaign belongs to. `category` is kept as a
@@ -301,11 +339,10 @@ export async function GET(
     // Return with cache headers.
     //
     // The 5-minute shared cache is right for the public campaign page, but it
-    // was also serving the dashboard edit form — so an admin who saved and
+    // was also serving the dashboard edit form  so an admin who saved and
     // reopened a campaign could be handed their own pre-edit copy and conclude
     // the save had silently failed. `?fresh=1` (sent by the dashboard) opts that
     // one caller out; the URL differs, so public traffic still hits the cache.
-    const wantsFresh = url.searchParams.get("fresh") === "1";
     return NextResponse.json(transformedCampaign, {
       headers: {
         "Cache-Control": wantsFresh
@@ -345,6 +382,7 @@ export async function PUT(
       where: whereByIdOrLocaleSlug(idOrSlug, "ar"),
       select: {
         id: true,
+        slug: true,
         fundraisingMode: true,
         goalType: true,
         title: true,
@@ -368,6 +406,45 @@ export async function PUT(
     // Main campaign fields (Arabic default)
     if (body.title !== undefined) updateData.title = body.title;
     if (body.description !== undefined) updateData.description = body.description;
+    const baseMetaLimits: Record<string, number> = {
+      seoTitle: 160,
+      seoDescription: 220,
+      seoKeyword: 500,
+      ogTitle: 180,
+      ogDescription: 300,
+    };
+    for (const [field, maxLength] of Object.entries(baseMetaLimits)) {
+      if (body[field] === undefined) continue;
+      if (body[field] === null || body[field] === "") {
+        updateData[field] = null;
+        continue;
+      }
+      if (typeof body[field] !== "string" || body[field].trim().length > maxLength) {
+        return NextResponse.json({ error: `${field} must be text of at most ${maxLength} characters` }, { status: 400 });
+      }
+      updateData[field] = body[field].trim() || null;
+    }
+    if (body.seoNoIndex !== undefined) {
+      if (body.seoNoIndex !== null && body.seoNoIndex !== "" && body.seoNoIndex !== "true" && body.seoNoIndex !== "false") {
+        return NextResponse.json({ error: "seoNoIndex must be true or false" }, { status: 400 });
+      }
+      updateData.seoNoIndex = body.seoNoIndex || null;
+    }
+    if (body.ogImage !== undefined) {
+      if (body.ogImage === null || body.ogImage === "") updateData.ogImage = null;
+      else if (typeof body.ogImage !== "string") return NextResponse.json({ error: "ogImage must be a URL" }, { status: 400 });
+      else {
+        const value = body.ogImage.trim();
+        let valid = value.startsWith("/") && !value.startsWith("//");
+        try { const url = new URL(value); valid ||= url.protocol === "http:" || url.protocol === "https:"; } catch {}
+        if (!valid) return NextResponse.json({ error: "ogImage must use http(s) or a site path" }, { status: 400 });
+        updateData.ogImage = value;
+      }
+    }
+    if (body.faqContent !== undefined) {
+      try { updateData.faqContent = parseCampaignFaqContent(body.faqContent); }
+      catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid FAQ" }, { status: 400 }); }
+    }
     if (body.targetAmount !== undefined) updateData.targetAmount = body.targetAmount;
     // `currentAmount` is applied AFTER the main update via setCampaignDisplayTotal, so the
     // portion not explained by settled donations is recorded as `baselineAmount` (offline /
@@ -380,9 +457,22 @@ export async function PUT(
     if (body.images !== undefined) updateData.images = body.images;
     if (body.videoUrl !== undefined) updateData.videoUrl = body.videoUrl;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
+    /* The giving dialog's recommended cadence; null/"" resets to the default
+       (monthly). */
+    if (body.recommendedFrequency !== undefined) {
+      const value = body.recommendedFrequency;
+      if (value === null || value === "") updateData.recommendedFrequency = null;
+      else if (isRecommendedFrequencySetting(value)) updateData.recommendedFrequency = value;
+      else {
+        return NextResponse.json(
+          { error: `recommendedFrequency must be one of ${RECOMMENDED_FREQUENCY_VALUES.join(", ")}` },
+          { status: 400 }
+        );
+      }
+    }
     if (body.priority !== undefined) updateData.priority = body.priority;
 
-    // categoryIds / categoryId — accept either. The new client sends an array;
+    // categoryIds / categoryId  accept either. The new client sends an array;
     // older code paths (and the dashboard quick-toggle) still send a single id.
     if (body.categoryIds !== undefined || body.categoryId !== undefined) {
       const nextCategoryIds = normalizeCategoryIdsInput(body);
@@ -410,7 +500,7 @@ export async function PUT(
 
       // Prune `categoryPriorities` entries that point at categories the
       // campaign no longer belongs to, so the per-category ordering map stays
-      // in sync with the relation. (Read as part of STEP 1 — this used to be a
+      // in sync with the relation. (Read as part of STEP 1  this used to be a
       // second findUnique for the row we had already fetched, and it shadowed
       // the outer `existingCampaign` binding while doing so.)
       const currentPriorities = parseCategoryPriorities(
@@ -558,9 +648,48 @@ export async function PUT(
       }
     }
 
+    const localizedMetaLimits: Record<string, number> = {
+      seoTitle: 160,
+      seoDescription: 220,
+      seoKeyword: 500,
+      ogTitle: 180,
+      ogDescription: 300,
+    };
+    for (const { locale, data } of translationUpdates) {
+      for (const [field, maxLength] of Object.entries(localizedMetaLimits)) {
+        if (data[field] === undefined) continue;
+        if (data[field] === null || data[field] === "") {
+          data[field] = null;
+          continue;
+        }
+        if (typeof data[field] !== "string" || data[field].trim().length > maxLength) {
+          return NextResponse.json({ error: `translations.${locale}.${field} must be text of at most ${maxLength} characters` }, { status: 400 });
+        }
+        data[field] = data[field].trim() || null;
+      }
+      if (data.seoNoIndex !== undefined && data.seoNoIndex !== null && data.seoNoIndex !== "" && data.seoNoIndex !== "true" && data.seoNoIndex !== "false") {
+        return NextResponse.json({ error: `translations.${locale}.seoNoIndex must be true or false` }, { status: 400 });
+      }
+      if (data.ogImage !== undefined && data.ogImage !== null && data.ogImage !== "") {
+        if (typeof data.ogImage !== "string") return NextResponse.json({ error: `translations.${locale}.ogImage must be a URL` }, { status: 400 });
+        const value = data.ogImage.trim();
+        let valid = value.startsWith("/") && !value.startsWith("//");
+        try {
+          const url = new URL(value);
+          valid ||= url.protocol === "http:" || url.protocol === "https:";
+        } catch {}
+        if (!valid) return NextResponse.json({ error: `translations.${locale}.ogImage must use http(s) or a site path` }, { status: 400 });
+        data.ogImage = value;
+      }
+      if (data.faqContent !== undefined) {
+        try { data.faqContent = parseCampaignFaqContent(data.faqContent); }
+        catch (error) { return NextResponse.json({ error: `translations.${locale}.faqContent: ${error instanceof Error ? error.message : "invalid FAQ"}` }, { status: 400 }); }
+      }
+    }
+
     // Read every existing translation ONCE, before the transaction opens.
     // The loop below used to issue a `findUnique` per locale inside the
-    // transaction — 7 extra sequential round trips (~3.5s here) to fetch rows a
+    // transaction  7 extra sequential round trips (~3.5s here) to fetch rows a
     // single query returns, while holding the transaction open the whole time.
     const existingTranslations = translationUpdates.length
       ? await prisma.campaignTranslation.findMany({
@@ -575,15 +704,28 @@ export async function PUT(
 
     // ✅ STEP 4: Execute update in transaction. The generous timeout stays because
     // the per-locale slug generation below genuinely has to run in order; what
-    // used to make it necessary — a findUnique per locale — has moved out.
+    // used to make it necessary  a findUnique per locale  has moved out.
     // The transaction's return value is not bound to a name: STEP 5 re-reads the
     // row with the full select the client needs.
-    await prisma.$transaction(
-      async (tx) => {
+    await retryWriteConflict(() =>
+      prisma.$transaction(
+        async (tx) => {
         await tx.campaign.update({
-          where: { id },
-          data: updateData,
+          where: contentWriteWhere({ id: id }, body),
+          data: { ...updateData, ...contentVersionPatch() },
         });
+
+        if (existingCampaign.slug && typeof updateData.slug === "string" && existingCampaign.slug !== updateData.slug) {
+          const existingAlias = await tx.campaignSlugRedirect.findUnique({
+            where: { locale_slug: { locale: "ar", slug: existingCampaign.slug } },
+            select: { campaignId: true },
+          });
+          if (!existingAlias) {
+            await tx.campaignSlugRedirect.create({
+              data: { campaignId: id, locale: "ar", slug: existingCampaign.slug },
+            });
+          }
+        }
 
         // Split an admin-entered total into settled donations + offline baseline so a later
         // donation edit can't wipe the offline part. See lib/campaign/current-amount.ts.
@@ -615,6 +757,9 @@ export async function PUT(
                 ? data.videoUrl.trim()
                 : null;
           }
+          for (const key of ["seoTitle", "seoDescription", "seoKeyword", "ogTitle", "ogDescription", "ogImage", "seoNoIndex", "faqContent"]) {
+            if (data[key] !== undefined) translationData[key] = data[key] || null;
+          }
 
           const mergedTitle =
             (typeof translationData.title === "string" && translationData.title.trim()
@@ -636,7 +781,7 @@ export async function PUT(
           // slug that already belongs to this very row is a guaranteed-miss
           // query per locale; when it is unchanged there is nothing to check.
           if (slugKeyPresent && userSlug && userSlug === existingSlug) {
-            // Leave `translationData.slug` unset — the stored value stands.
+            // Leave `translationData.slug` unset  the stored value stands.
           } else if (slugKeyPresent) {
             const baseForSlug = userSlug ?? mergedTitle;
             translationData.slug = await generateUniqueLocaleSlug(
@@ -660,16 +805,20 @@ export async function PUT(
             );
           }
 
+          const nextSlug = typeof translationData.slug === "string" ? translationData.slug : existingSlug;
+          if (existingSlug && nextSlug && existingSlug !== nextSlug) {
+            const existingAlias = await tx.campaignSlugRedirect.findUnique({
+              where: { locale_slug: { locale, slug: existingSlug } },
+              select: { campaignId: true },
+            });
+            if (!existingAlias) {
+              await tx.campaignSlugRedirect.create({
+                data: { campaignId: id, locale, slug: existingSlug },
+              });
+            }
+          }
+
           if (Object.keys(translationData).length === 0) continue;
-          // Skip only when nothing meaningful was supplied.
-          if (
-            !translationData.title &&
-            !translationData.description &&
-            !translationData.image &&
-            !translationData.videoUrl &&
-            !translationData.slug
-          )
-            continue;
           // upsert.create requires title + description (NOT NULL); fall back to empty strings so
           // an image/video/slug-only update still creates the row.
           const createData = {
@@ -694,7 +843,8 @@ export async function PUT(
           });
         }
       },
-      { maxWait: 10_000, timeout: 60_000 }
+        { maxWait: 10_000, timeout: 60_000 }
+      )
     );
 
     // ✅ STEP 5: Fetch updated campaign with all translations
@@ -705,6 +855,14 @@ export async function PUT(
         slug: true,
         title: true,
         description: true,
+        seoTitle: true,
+        seoDescription: true,
+        seoKeyword: true,
+        ogTitle: true,
+        ogDescription: true,
+        ogImage: true,
+        seoNoIndex: true,
+        faqContent: true,
         targetAmount: true,
         currentAmount: true,
         images: true,
@@ -722,6 +880,7 @@ export async function PUT(
         sharePriceUSD: true,
         suggestedShareCounts: true,
         shareLabels: true,
+        recommendedFrequency: true,
         translations: {
           select: {
             locale: true,
@@ -750,13 +909,14 @@ export async function PUT(
 
     return NextResponse.json(fullCampaign, {
       status: 200,
-      // A save must never be answered from, or land in, a shared cache — the GET
+      // A save must never be answered from, or land in, a shared cache  the GET
       // below advertises s-maxage=300, and without this an admin who saved and
       // reopened the campaign could be handed their pre-edit copy.
       headers: { "Cache-Control": "no-store" },
     });
 
   } catch (error) {
+    if (isContentWriteConflict(error)) return NextResponse.json({ error: "تغير المحتوى لدى زميل. أعد تحميل الصفحة قبل الحفظ." }, { status: 409 });
     console.error("Error updating campaign:", error);
 
     // Handle specific Prisma errors
@@ -779,7 +939,7 @@ export async function PUT(
 // DELETE - Soft-delete only. We flip isDeleted=true and isActive=false so the
 // row disappears from every listing + checkout flow (existing endpoints already
 // gate on isActive), but DonationItem / SubscriptionItem rows keep referencing
-// the same campaignId — totals, receipts, and historical reports stay valid.
+// the same campaignId  totals, receipts, and historical reports stay valid.
 // CartItem rows are removed because they're transient and would otherwise let
 // a stale cart re-surface a deleted campaign at payment time.
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -805,7 +965,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     // Both writes in one batch transaction: previously they were two separate
     // awaited round trips, so a failure on the second left the campaign flagged
     // deleted while stale carts still held it. The array form is a single
-    // batched call — atomic and half the latency of the sequential pair.
+    // batched call  atomic and half the latency of the sequential pair.
     await prisma.$transaction([
       prisma.campaign.update({
         where: { id },

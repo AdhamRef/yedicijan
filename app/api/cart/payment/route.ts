@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isValidLocale } from "@/lib/locales";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { resolveReferralId } from "@/lib/referral-server";
 import { userHasDashboardPermission } from "@/lib/dashboard/permissions";
+import { donationListSafeFields } from "@/lib/dashboard/donation-list-privacy";
 import { inferLocaleFromRequest } from "@/lib/preferred-lang";
+import { sanitizeDonationAttribution } from "@/lib/attribution/sanitize";
+import { getTrackingClientIp } from "@/lib/tracking/client-ip";
 import { writeAuditLog, auditStreamForRole } from "@/lib/audit-log";
 import {
   convertAmountInCurrencyToUsd,
@@ -17,6 +21,11 @@ import {
   normalizeDonorCountryCode,
 } from "@/lib/donations/donor-country-code";
 import { resolveGuestDonor } from "@/lib/users/resolve-guest-donor";
+import { completionData } from "@/lib/users/account-claim";
+import { mintDonationAccessToken } from "@/lib/donations/access-token";
+
+/** Card is the only way to pay: Albaraka (lira) or PayFor (every other currency). */
+const PAYMENT_METHODS = new Set(["CARD"]);
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,8 +37,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const campaignId = searchParams.get("campaignId");
     const userId = searchParams.get("userId");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const requestedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+    const requestedLimit = Number.parseInt(searchParams.get("limit") || "10", 10);
+    const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 10;
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0
+      && Number.isSafeInteger((requestedPage - 1) * limit) ? requestedPage : 1;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = {
@@ -46,6 +58,17 @@ export async function GET(request: NextRequest) {
     // Get donations with pagination
     const donations = await prisma.donation.findMany({
       where,
+      // This GET is callable by donors: do not fetch receipt access tokens,
+      // card details, raw PSP records or bank reconciliation state.
+      omit: {
+        accessToken: true, cardDetails: true, providerRaw: true,
+        originalDonorId: true, providerAuthCode: true, providerHostRefNum: true,
+        paypalOrderId: true, paypalCaptureId: true,
+        bankOperations: true, bankOperationLock: true, bankOperationsRevision: true,
+        bankLastInquiry: true, reconciliationLeaseToken: true,
+        reconciliationLeaseUntil: true, reconciliationNextAt: true,
+        reconciliationCheckedAt: true,
+      },
       include: {
         donor: {
           select: {
@@ -77,7 +100,9 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      donations,
+      donations: donations.map(row => donationListSafeFields(row, {
+        revenueAuthorized: userHasDashboardPermission(session.user, "revenue"),
+      })),
       pagination: {
         total,
         pages: Math.ceil(total / limit),
@@ -99,10 +124,13 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     const body = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
     const {
       items,
-      currency,
-      teamSupport = 0,
+      currency: requestedCurrency,
+      teamSupport: teamSupportIn = 0,
       coverFees = false,
       type = "ONE_TIME",
       paymentMethod,
@@ -112,15 +140,52 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (!items?.length || !currency || !paymentMethod) {
+    if (!Array.isArray(items) || !items.length || !requestedCurrency || !paymentMethod) {
       return NextResponse.json(
         { error: "Items, currency, and payment method are required" },
         { status: 400 }
       );
     }
+    // Every donation is one-time; monthly/recurring plans were removed on purpose.
     if (type !== "ONE_TIME") {
       return NextResponse.json({ error: "Only one-time donations are supported." }, { status: 400 });
     }
+    if (!PAYMENT_METHODS.has(String(paymentMethod))) {
+      return NextResponse.json({ error: "Unsupported payment method" }, { status: 400 });
+    }
+    const lineOk = (line: { amount?: unknown; campaignId?: unknown }) =>
+      typeof line?.amount === "number" && Number.isFinite(line.amount) && line.amount > 0 &&
+      typeof line?.campaignId === "string";
+    if (!(items as Array<{ amount?: unknown; campaignId?: unknown }>).every(lineOk)) {
+      return NextResponse.json({ error: "Every line needs a positive amount" }, { status: 400 });
+    }
+
+    /* Where the donor came from (UTM, click ids, landing page) as the browser
+       recorded it, whitelisted the same way as `POST /api/donations`. The
+       dashboard's source column and the ad conversion events read it. */
+    const clientIp = getTrackingClientIp(request.headers);
+    const userAgent = request.headers.get("user-agent")?.slice(0, 500) || undefined;
+    const donationAttribution = sanitizeDonationAttribution({
+      ...(body.attribution && typeof body.attribution === "object" && !Array.isArray(body.attribution)
+        ? (body.attribution as Record<string, unknown>)
+        : {}),
+      user_agent: userAgent,
+      client_ip: clientIp,
+      client_ip_address: undefined,
+    }) as Prisma.InputJsonValue | undefined;
+
+    /* "Support the team" belongs to the order. The amount is the browser's
+       choice but the switch is the admin's: with the step turned off nothing is
+       added whatever the request says. */
+    const teamSupportSettings = await prisma.globalSettings.findFirst({
+      orderBy: { createdAt: "asc" },
+      select: { teamSupportEnabled: true },
+    });
+    const teamSupportAllowed = teamSupportSettings?.teamSupportEnabled !== false;
+    const teamSupport =
+      teamSupportAllowed && typeof teamSupportIn === "number" && Number.isFinite(teamSupportIn) && teamSupportIn > 0
+        ? Math.round(teamSupportIn * 100) / 100
+        : 0;
 
     // Resolve donor
     let donorId: string;
@@ -129,6 +194,26 @@ export async function POST(request: NextRequest) {
     if (session?.user?.id) {
       donorId = session.user.id;
       donorName = session.user.name ?? null;
+      /* The form also carries what a signed-in donor typed. It completes their
+         own record (a phone or a surname missing) and never replaces a field
+         already filled. The account's email is theirs and is not touched. */
+      if (guest) {
+        const me = await prisma.user.findUnique({
+          where: { id: donorId },
+          select: { name: true, phone: true, countryCode: true, verifiedAt: true },
+        });
+        if (me) {
+          const typedName = [guest.firstName, guest.lastName].filter(Boolean).join(" ").trim();
+          const typedPhone = typeof guest.phone === "string" && guest.phone.replace(/\D/g, "").length >= 7 ? guest.phone : null;
+          const data = completionData(me, {
+            name: typedName || null,
+            phone: typedPhone,
+            countryCode: normalizeDonorCountryCode(guest.countryCode) ?? countryCodeFromPhone(typedPhone ?? undefined) ?? null,
+          });
+          if (Object.keys(data).length) await prisma.user.update({ where: { id: donorId }, data });
+          donorName = donorName ?? (me.name || typedName || null);
+        }
+      }
     } else if (guest) {
       const guestPhone = guest.phone || undefined;
       const guestCountry =
@@ -159,7 +244,7 @@ export async function POST(request: NextRequest) {
           countryCodeFromPhone(guest?.phone) ??
           ((await getDonorCountryCodeForSnapshot(prisma, donorId)) ?? undefined);
 
-    // Card payments are handled via PayFor 3D Secure redirect flow (we do not store PAN/CVV).
+    // Card payments are handled via the bank 3D Secure redirect flows (we do not store PAN/CVV).
 
     // Calculate totals
     const totalAmount = (items as { amount: number }[]).reduce(
@@ -169,7 +254,9 @@ export async function POST(request: NextRequest) {
     const fees = (totalAmount + teamSupport) * 0.03;
     const finalTotalAmount = totalAmount + teamSupport + (coverFees ? fees : 0);
 
-    const currencyNorm = normalizeDonationCurrencyCode(currency);
+    // Stored on the donation normalised: `DEFAULT` (no currency chosen) is USD, and a
+    // stored `DEFAULT` broke the card gateways that convert it later.
+    const currencyNorm = normalizeDonationCurrencyCode(requestedCurrency);
     let donationTotalUsd: number;
     try {
       donationTotalUsd = await convertAmountInCurrencyToUsd(finalTotalAmount, currencyNorm);
@@ -215,12 +302,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify all campaigns exist and are active
-    const campaignIds = (items as { campaignId: string }[]).map((item) => item.campaignId);
+    const campaignIds = [...new Set((items as { campaignId: string }[]).map((item) => item.campaignId))];
     const campaigns = await prisma.campaign.findMany({
       where: { id: { in: campaignIds } },
     });
 
-    if (campaigns.length !== items.length) {
+    if (campaigns.length !== campaignIds.length) {
       return NextResponse.json(
         { error: "One or more campaigns not found" },
         { status: 404 }
@@ -244,13 +331,16 @@ export async function POST(request: NextRequest) {
     const donation = await prisma.$transaction(async (tx) => {
       const d = await tx.donation.create({
         data: {
+          accessToken: mintDonationAccessToken(),
           amount: totalAmount,
           amountUSD: donationTotalUsd,
           teamSupport,
           coverFees,
-          currency,
+          currency: currencyNorm,
           fees: coverFees ? fees : 0,
           totalAmount: finalTotalAmount,
+          /* PAID with no paidAt is the "pending confirmation" state: only the
+             gateway callback stamps paidAt. Nothing counts anywhere before. */
           status: "PAID",
           locale: validLocale ?? undefined,
           donorCountryCode: donorCountrySnapshot,
@@ -258,6 +348,7 @@ export async function POST(request: NextRequest) {
           referralId: referralId ?? undefined,
           paymentMethod,
           cardDetails: null,
+          ...(donationAttribution ? { attribution: donationAttribution } : {}),
           items: {
             create: itemsResolved.map((item) => ({
               campaignId: item.campaignId,
@@ -300,10 +391,12 @@ export async function POST(request: NextRequest) {
       messageAr: `${donorName ?? "متبرع"} بدأ عملية دفع تبرعًا لمرة واحدة عبر السلة (≈ ${donationTotalUsd.toFixed(0)} USD)`,
       entityType: "Donation",
       entityId: donation.id,
-      metadata: { amountUSD: donationTotalUsd, via: "cart_payment", status: "PENDING", provider: "PAYFOR" },
+      metadata: { amountUSD: donationTotalUsd, via: "cart_payment", status: "PENDING" },
       stream: auditStreamForRole(actorRole),
     });
 
+    // The response carries the donation's guest access token (`?t=`): the checkout
+    // needs it to poll the donation and to open the success page as a guest.
     return NextResponse.json({
       success: true,
       donation,

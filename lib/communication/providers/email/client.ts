@@ -1,6 +1,10 @@
+import { normalizeCampaignContact } from "../../campaign-contact-validation";
 import type { ElasticEmailRuntimeConfig } from "../elastic-email/client";
+import type { EmailAttachmentInput } from "../elastic-email/types";
 import { sendElasticEmail, isElasticEmailConfigured } from "../elastic-email/client";
 import { ELASTIC_EMAIL_REASONS } from "../elastic-email/errors";
+import { emailSuppressionDecision } from "../../email-suppression-store";
+import { appendMarketingUnsubscribeFooter, buildEmailUnsubscribeUrl } from "../../email-unsubscribe";
 
 /**
  * Channel-level email facade. Email in the final architecture is Elastic Email; callers depend on
@@ -27,22 +31,73 @@ export type EmailSendInput = {
   senderEmail?: string | null;
   replyTo?: string | null;
   channelName?: string | null;
+  purpose?: "MARKETING" | "TRANSACTIONAL" | "UTILITY" | "AUTHENTICATION" | null;
+  locale?: string | null;
+  attachments?: EmailAttachmentInput[];
 };
+
+export type { EmailAttachmentInput };
+
+/**
+ * The institution's name as the e-mail sender, in the message's language (owner, 2026-11-19): the same
+ * wording as the header of the automatic e-mails. Other languages use the English form. A sender name set
+ * explicitly (a campaign, for instance) always wins; with no language either, the configured name is used.
+ */
+const INSTITUTION_SENDER_NAMES: Record<string, string> = {
+  ar: "جمعية يدي جيهان الدولية للتضامن",
+  tr: "Yedicihan Uluslararası Yardımlaşma Derneği",
+  en: "Yedicihan International Solidarity Association",
+  fr: "Association Internationale de Solidarité Yedicihan",
+  de: "Yedicihan Internationaler Solidaritätsverein",
+  es: "Asociación Internacional de Solidaridad Yedicihan",
+  id: "Asosiasi Solidaritas Internasional Yedicihan",
+  pt: "Associação Internacional de Solidariedade Yedicihan",
+};
+export function institutionSenderName(locale: string | null | undefined): string | null {
+  const lang = (locale ?? "").trim().toLowerCase().split(/[-_]/)[0];
+  if (!lang) return null;
+  return INSTITUTION_SENDER_NAMES[lang] ?? INSTITUTION_SENDER_NAMES.en;
+}
 
 export type EmailSendResult =
   | { ok: true; providerId: typeof EMAIL_PROVIDER_ID; providerMessageId: string | null; internalAccepted: boolean }
   | { ok: false; reason: string; detail?: string };
 
 export async function sendEmailMessage(input: EmailSendInput, runtime?: ElasticEmailRuntimeConfig): Promise<EmailSendResult> {
+  const recipient = normalizeCampaignContact("EMAIL", input.to);
+  if (!recipient) return { ok: false, reason: "INVALID_CONTACT" };
+  input = { ...input, to: recipient };
+  const purpose = input.purpose ?? "TRANSACTIONAL";
+  const suppression = await emailSuppressionDecision(input.to, purpose);
+  if (!suppression.allowed) return { ok: false, reason: "EMAIL_SUPPRESSED", detail: `${suppression.reason}:${suppression.scope}` };
+
+  const marketing = purpose === "MARKETING";
+  let html = input.html;
+  let headers: Record<string, string> | undefined;
+  if (marketing) {
+    const unsubscribeUrl = await buildEmailUnsubscribeUrl(input.to, input.locale);
+    if (unsubscribeUrl) {
+      html = appendMarketingUnsubscribeFooter(html, unsubscribeUrl, input.locale);
+      headers = {
+        "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      };
+    }
+  }
+
   const res = await sendElasticEmail({
     to: input.to,
     subject: input.subject,
-    html: input.html,
+    html,
     text: input.text,
-    senderName: input.senderName,
+    // Owner, 2026-11-20: the localized institution name is for automatic messages only, never marketing campaigns.
+    senderName: input.senderName?.trim() || (input.purpose === "MARKETING" ? null : institutionSenderName(input.locale)),
     senderEmail: input.senderEmail,
     replyTo: input.replyTo,
     channelName: input.channelName,
+    marketing,
+    headers,
+    attachments: input.attachments,
   }, runtime);
   if (!res.ok) return { ok: false, reason: res.reason, detail: res.detail };
   return { ok: true, providerId: EMAIL_PROVIDER_ID, providerMessageId: res.providerMessageId, internalAccepted: res.internalAccepted };

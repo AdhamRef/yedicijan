@@ -2,22 +2,37 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { toast } from "react-hot-toast";
+import {CampaignRevenueView} from "./CampaignRevenueView";
+const TrackedTemplateEditor=React.lazy(()=>import("../../../templates/_components/WhatsappTemplateEditorDialog").then(module=>({default:module.WhatsappTemplateEditorDialog})));
+import { readDashboardJson } from "@/lib/dashboard/read-json";
+import { readCampaignOutcomes } from "@/lib/dashboard/read-campaign-outcomes";
+import { CampaignGlobalControlsDialog } from "./CampaignGlobalControlsDialog";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/dashboard/EmptyState";
 import { FilterBar } from "@/components/dashboard/FilterBar";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Megaphone, Plus, RefreshCw } from "lucide-react";
+import { Megaphone, Plus, RefreshCw, Send, Eye, MousePointerClick, HandHeart, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CampaignsTable, sortCampaigns, type CampaignSort } from "./CampaignsTable";
 import { type CampaignRow, CHANNEL_META, STATUS_META } from "./campaign-ui";
+import { dashDir, dt, dtx } from "@/lib/dashboard/i18n";
 
 export function CampaignsListClient() {
+  const [view,setView]=React.useState<"delivery"|"revenue">("delivery"),[templateId,setTemplateId]=React.useState<string|null>(null);
   const [campaigns, setCampaigns] = React.useState<CampaignRow[]>([]);
+  const [unattributed, setUnattributed] = React.useState({ donationCount: 0, revenue: 0, unpricedPaidCount: 0 });
+  const [loadError, setLoadError] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
+  const [hasLoaded, setHasLoaded] = React.useState(false);
+  const [outcomesReady, setOutcomesReady] = React.useState(false);
+  const [outcomeError, setOutcomeError] = React.useState(false);
+  const [deliveryError, setDeliveryError] = React.useState(false);
+  const activeRead = React.useRef<AbortController | null>(null);
+  const [refresh, setRefresh] = React.useState(0);
+  const [deliveryLoading, setDeliveryLoading] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [channel, setChannel] = React.useState("all");
-  const [status, setStatus] = React.useState("all");
+  const [status, setStatus] = React.useState("active");
   // Newest first: the campaign someone came here to check is almost always the one just sent.
   const [sort, setSort] = React.useState<CampaignSort>({ key: "date", dir: "desc" });
 
@@ -28,29 +43,58 @@ export function CampaignsListClient() {
   }, []);
 
   const load = React.useCallback(async () => {
-    setLoading(true);
+    activeRead.current?.abort();
+    const controller = new AbortController(); activeRead.current = controller;
+    const current = () => activeRead.current === controller && !controller.signal.aborted;
+    setLoading(true); setLoadError(false); setDeliveryError(false); setDeliveryLoading(false);
+    setOutcomeError(false); setOutcomesReady(false);
     try {
-      const res = await fetch("/api/communication/campaigns", { cache: "no-store" });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json?.error || "تعذّر تحميل الحملات");
-      setCampaigns(json.campaigns ?? []);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
+      const base = await readDashboardJson<{ campaigns: CampaignRow[] }>("/api/communication/campaigns?includeArchived=true&includeOutcomes=false&includeCounters=false", controller.signal);
+      if (!current()) return;
+      if (!Array.isArray(base.campaigns)) throw new Error("INVALID_CAMPAIGN_LIST");
+      setCampaigns(base.campaigns.map(row => ({ ...row, donationCount: null, revenue: null, unpricedPaidCount: null })));
+      setHasLoaded(true); setLoading(false); setRefresh(value => value + 1);
+      if (!base.campaigns.length) return;
+      setDeliveryLoading(true);
+      try {
+        const report = await readCampaignOutcomes<{ deliveryCountersReady?: boolean; counters: Record<string, {sent:number;delivered:number;read:number;clicked:number;replied:number;failed:number}> }>("/api/communication/campaigns?includeArchived=true&countersMode=poll", controller.signal, { readyKey: "deliveryCountersReady" });
+        if (!current()) return;
+        if (!report.counters || base.campaigns.some(row => !report.counters[row.id])) throw new Error("INVALID_CAMPAIGN_COUNTERS");
+        setCampaigns(rows => rows.map(row => { const count=report.counters[row.id]; return {...row,sentCount:count.sent,deliveredCount:count.delivered,readCount:count.read,clickedCount:count.clicked,repliedCount:count.replied,failedCount:count.failed}; }));
+      } catch { if (current()) setDeliveryError(true); }
+      finally { if (current()) setDeliveryLoading(false); }
+    } catch { if (current()) setLoadError(true); }
+    finally { if (current()) setLoading(false); }
   }, []);
 
   React.useEffect(() => {
     void load();
+    return () => activeRead.current?.abort();
   }, [load]);
+
+  // Lifetime revenue can take longer than delivery records. Only request it
+  // when the operator opens its view; its failure cannot delay send controls.
+  React.useEffect(() => {
+    if (view !== "revenue" || !hasLoaded || loading || !refresh) return;
+    const controller = new AbortController();
+    setOutcomeError(false); setOutcomesReady(false);
+    void readCampaignOutcomes<{ outcomesReady?: boolean; campaigns: CampaignRow[]; unattributed: typeof unattributed }>("/api/communication/campaigns?includeArchived=true&outcomesMode=poll", controller.signal).then(report => {
+      if (controller.signal.aborted) return;
+      if (!Array.isArray(report.campaigns) || !report.unattributed) throw new Error("INVALID_CAMPAIGN_REPORT");
+      setCampaigns(rows => rows.map(row => { const outcome=report.campaigns.find(item=>item.id===row.id);return outcome?{...row,donationCount:outcome.donationCount,revenue:outcome.revenue,unpricedPaidCount:outcome.unpricedPaidCount,trackingRequiresTemplateUpdate:outcome.trackingRequiresTemplateUpdate,failedDonationCount:outcome.failedDonationCount}:row; }));
+      setUnattributed(report.unattributed); setOutcomesReady(true);
+    }).catch(() => { if (!controller.signal.aborted) setOutcomeError(true); });
+    return () => controller.abort();
+  }, [view, refresh, hasLoaded, loading]);
 
   // Filtered and sorted client-side: the service caps the list at 200 rows, so this is a small
   // in-memory set and a round trip per keystroke or column click would buy nothing.
   const filtered = sortCampaigns(
     campaigns.filter((c) => {
       if (channel !== "all" && c.channel !== channel) return false;
-      if (status !== "all" && c.status !== status) return false;
+      if (status === "active" && ["ARCHIVED", "CANCELLED"].includes(c.status)) return false;
+      if (status === "archived" && c.status !== "ARCHIVED") return false;
+      if (!["all", "active", "archived"].includes(status) && c.status !== status) return false;
       if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     }),
@@ -59,33 +103,53 @@ export function CampaignsListClient() {
 
   const byChannel = (id: string) => campaigns.filter((c) => c.channel === id).length;
 
+  const analytics = React.useMemo(() => {
+    return filtered.reduce(
+      (acc, campaign) => {
+        acc.sent += campaign.sentCount;
+        acc.engaged += Math.max(campaign.readCount, campaign.clickedCount, campaign.repliedCount);
+        acc.clicked += campaign.clickedCount;
+        acc.donations += campaign.donationCount ?? 0;
+        acc.revenue += campaign.revenue ?? 0;
+        acc.unpriced += campaign.unpricedPaidCount ?? 0;
+        return acc;
+      },
+      { sent: 0, engaged: 0, clicked: 0, donations: 0, revenue: 0, unpriced: 0 },
+    );
+  }, [filtered]);
+
+  const engagementRate = analytics.sent > 0 ? Math.round((analytics.engaged / analytics.sent) * 1000) / 10 : 0;
+  const clickRate = analytics.sent > 0 ? Math.round((analytics.clicked / analytics.sent) * 1000) / 10 : 0;
+
   return (
-    <div dir="rtl">
+    <div dir={dashDir()}>
+      {deliveryLoading ? <p role="status" className="mb-3 text-xs text-slate-500">{dt("جارٍ تحديث إحصاءات الإرسال؛ يمكنك متابعة إدارة الحملات.")}</p> : null}
+      {deliveryError ? <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{dt("تعذّر تحديث إحصاءات الإرسال؛ الأرقام المعروضة هي آخر نسخة محفوظة. اضغط تحديث لإعادة المحاولة.")}</p> : null}
       <FilterBar
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="ابحث باسم الحملة…"
+        searchPlaceholder={dt("ابحث باسم الحملة…")}
         actions={
           <>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={load} disabled={loading}>
+            <CampaignGlobalControlsDialog />
+            <Button aria-label={dt("تحديث")} variant="outline" size="sm" className="gap-1.5" onClick={load} disabled={loading}>
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-              <span className="hidden sm:inline">تحديث</span>
+              <span className="hidden sm:inline">{dt("تحديث")}</span>
             </Button>
             <Button size="sm" className="gap-1.5 bg-brand hover:bg-brand/90" asChild>
               <Link href="/dashboard/communication/campaigns/new">
                 <Plus className="h-4 w-4" />
-                حملة جديدة
-              </Link>
+                {dt("حملة جديدة")}</Link>
             </Button>
           </>
         }
       >
         <Select value={channel} onValueChange={setChannel}>
-          <SelectTrigger aria-label="تصفية بالقناة" className="h-9 min-w-0 flex-1 rounded-lg border-slate-200 bg-slate-50 px-3 text-xs sm:flex-none sm:basis-[10rem]">
+          <SelectTrigger aria-label={dt("تصفية بالقناة")} className="h-9 min-w-0 flex-1 rounded-lg border-slate-200 bg-slate-50 px-3 text-xs sm:flex-none sm:basis-[10rem]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all" className="text-xs">كل القنوات</SelectItem>
+            <SelectItem value="all" className="text-xs">{dt("كل القنوات")}</SelectItem>
             {Object.entries(CHANNEL_META).map(([id, m]) => (
               <SelectItem key={id} value={id} className="text-xs">
                 {m.label} ({byChannel(id)})
@@ -95,19 +159,57 @@ export function CampaignsListClient() {
         </Select>
 
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger aria-label="تصفية بالحالة" className="h-9 min-w-0 flex-1 rounded-lg border-slate-200 bg-slate-50 px-3 text-xs sm:flex-none sm:basis-[10rem]">
+          <SelectTrigger aria-label={dt("تصفية بالحالة")} className="h-9 min-w-0 flex-1 rounded-lg border-slate-200 bg-slate-50 px-3 text-xs sm:flex-none sm:basis-[10rem]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all" className="text-xs">كل الحالات</SelectItem>
-            {Object.entries(STATUS_META).map(([id, m]) => (
-              <SelectItem key={id} value={id} className="text-xs">{m.label}</SelectItem>
-            ))}
+            <SelectItem value="active" className="text-xs">{dt("الحملات النشطة")}</SelectItem>
+            <SelectItem value="archived" className="text-xs">
+              {dt("المؤرشفة (")}{campaigns.filter((c) => c.status === "ARCHIVED").length})
+            </SelectItem>
+            <SelectItem value="all" className="text-xs">{dt("كل الحالات")}</SelectItem>
+            {Object.entries(STATUS_META)
+              .filter(([id]) => id !== "ARCHIVED")
+              .map(([id, m]) => (
+                <SelectItem key={id} value={id} className="text-xs">{m.label}</SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </FilterBar>
 
-      {loading ? (
+      <div role="group" aria-label={dt("عرض الحملات")} className="mb-4 flex flex-wrap gap-2 rounded-xl border bg-white p-2">{([["delivery","الإرسال والمتابعة"],["revenue","الإيرادات والتتبع"]] as const).map(([key,label])=><button key={key} type="button" aria-pressed={view===key} onClick={()=>setView(key)} className={cn("min-h-11 rounded-lg px-4 py-2 text-sm font-semibold",view===key?"bg-brand text-white":"text-slate-600 hover:bg-slate-50")}>{dt(label)}</button>)}</div>
+      {templateId?<React.Suspense fallback={<p role="status" className="rounded-xl border p-4">{dt("جار تحميل محرر القالب…")}</p>}><div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm leading-7">{dt("في المحرر اختر «إعداد نسخة بتتبع إيرادات الحملات»، ثم راجع اللغات واحفظ النسخة للنشر والاعتماد لدى Meta. استخدم النسخة المعتمدة للحملات الجديدة؛ لن يعاد إرسال الحملات السابقة.")}</div><TrackedTemplateEditor id={templateId} initialKind="CAMPAIGN" open onOpenChange={open=>{if(!open){setTemplateId(null);void load();}}}/></React.Suspense>:null}
+      {loadError && <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"><p>{dt("تعذّر تحميل الحملات. البيانات السابقة قد تكون قديمة؛ أعد المحاولة.")}</p><Button variant="outline" size="sm" onClick={load}>{dt("إعادة المحاولة")}</Button></div>}
+      {view === "revenue" && hasLoaded && !outcomesReady && !outcomeError && !loadError && <p role="status" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">{dt("الحملات ظاهرة؛ جارٍ تحميل الإيرادات المؤكدة.")}</p>}
+      {view === "revenue" && outcomeError && <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><p>{dt("تعذّر تحميل إسناد الإيرادات؛ بيانات الحملات متاحة والمبالغ غير متاحة مؤقتًا.")}</p><Button variant="outline" size="sm" onClick={load}>{dt("إعادة المحاولة")}</Button></div>}
+      {view === "revenue" && outcomesReady && !loadError && filtered.some(campaign => campaign.trackingRequiresTemplateUpdate) && <p role="status" className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm leading-6 text-sky-900">{dt("توجد قوالب واتساب بروابط ثابتة مشتركة. يلزم اعتماد زر ديناميكي بمعرّف الحملة لدى Meta لفصل إيرادات كل حملة.")}</p>}
+      {view === "revenue" && outcomesReady && !loadError && unattributed.donationCount > 0 && <p role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">{dt("إيراد تواصل غير منسوب: {0} دولار من {1} تبرع مؤكد. الروابط القديمة لا تحدد حملة واحدة؛ هذا المبلغ غير مضاف إلى صفوف الحملات.", [unattributed.revenue.toLocaleString("en-US", { maximumFractionDigits: 2 }), unattributed.donationCount])}{unattributed.unpricedPaidCount > 0 && <> {dt("توجد {0} تبرعات دون تحويل مؤكد للدولار.", [unattributed.unpricedPaidCount])}</>}</p>}
+      {view === "revenue" && outcomesReady && !loadError && analytics.unpriced > 0 && <p role="status" className="mb-4 text-sm text-amber-800">{dt("توجد {0} تبرعات دون تحويل مؤكد للدولار.", [analytics.unpriced])}</p>}
+      {hasLoaded && !loadError && campaigns.length > 0 && (
+        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {[
+            { label: dt("إجمالي المُرسل"), value: analytics.sent.toLocaleString("en-US"), hint: dt("رسالة مقبولة لدى المزوّد"), icon: Send },
+            { label: dt("تفاعل/فتح"), value: `${analytics.engaged.toLocaleString("en-US")} · ${engagementRate}%`, hint: dt("قراءة/فتح/نقر/رد مثبت"), icon: Eye },
+            { label: dt("ضغطات مسجلة"), value: `${analytics.clicked.toLocaleString("en-US")} · ${clickRate}%`, hint: dt("متاح عندما يرسل المزوّد حدث Click"), icon: MousePointerClick },
+            { label: dt("تبرعات منسوبة"), value: outcomesReady ? analytics.donations.toLocaleString("en-US") : "—", hint: dt("UTM مطابق للحملة"), icon: HandHeart },
+            { label: dt("إيراد منسوب"), value: outcomesReady ? `${analytics.revenue.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "—", hint: dt("تبرعات مؤكدة الدفع من روابط الحملة"), icon: Banknote },
+          ].filter((_, index) => view === "revenue" ? index >= 2 : index < 3).map((item) => {
+            const Icon = item.icon;
+            return (
+              <div key={item.label} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-medium text-slate-500">{item.label}</span>
+                  <Icon className="h-4 w-4 text-slate-400" />
+                </div>
+                <p className="mt-2 text-lg font-bold tabular-nums text-slate-900">{item.value}</p>
+                <p className="mt-1 text-[10px] text-slate-400">{item.hint}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {loading && !hasLoaded ? (
         // Shaped like the table it replaces, so the layout does not jump when rows arrive.
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="h-10 border-b border-slate-100 bg-slate-50/90" />
@@ -120,22 +222,21 @@ export function CampaignsListClient() {
             </div>
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : loadError && !hasLoaded ? null : filtered.length === 0 ? (
         <EmptyState
           icon={Megaphone}
-          title={campaigns.length === 0 ? "لا توجد حملات تسويقية بعد" : "لا توجد حملة مطابقة"}
+          title={campaigns.length === 0 ? dt("لا توجد حملات تسويقية بعد") : dt("لا توجد حملة مطابقة")}
           description={
             campaigns.length === 0
-              ? "الحملة ترسل قالبًا واحدًا لمجموعة متبرعين تختارها — كلٌّ بلغته المفضّلة. ابدأ باختيار القناة."
-              : "جرّب توسيع التصفية أو مسحها."
+              ? dt("الحملة ترسل قالبًا واحدًا لمجموعة متبرعين تختارها  كلٌّ بلغته المفضّلة. ابدأ باختيار القناة.")
+              : dt("جرّب توسيع التصفية أو مسحها.")
           }
           action={
             campaigns.length === 0 ? (
               <Button className="gap-1.5 bg-brand hover:bg-brand/90" asChild>
                 <Link href="/dashboard/communication/campaigns/new">
                   <Plus className="h-4 w-4" />
-                  إنشاء أول حملة
-                </Link>
+                  {dt("إنشاء أول حملة")}</Link>
               </Button>
             ) : (
               <Button
@@ -144,23 +245,21 @@ export function CampaignsListClient() {
                 onClick={() => {
                   setSearch("");
                   setChannel("all");
-                  setStatus("all");
+                  setStatus("active");
                 }}
               >
-                مسح التصفية
-              </Button>
+                {dt("مسح التصفية")}</Button>
             )
           }
         />
       ) : (
         <>
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            {filtered.length} حملة
-            {filtered.length !== campaigns.length && (
-              <span className="font-normal normal-case tracking-normal text-slate-400"> من {campaigns.length}</span>
+            {dtx("{0} حملة", [filtered.length])}{filtered.length !== campaigns.length && (
+              <span className="font-normal normal-case tracking-normal text-slate-400"> {dtx(" من {0}", [campaigns.length])}</span>
             )}
           </p>
-          <CampaignsTable campaigns={filtered} sort={sort} onSort={toggleSort} onChanged={load} />
+          {view==="revenue"?<CampaignRevenueView campaigns={filtered} ready={outcomesReady&&!outcomeError} onTemplate={setTemplateId}/>:<CampaignsTable campaigns={filtered} sort={sort} onSort={toggleSort} onChanged={load} />}
         </>
       )}
     </div>

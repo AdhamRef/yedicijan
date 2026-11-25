@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { auditActorFromDashboardSession, writeAuditLog } from "@/lib/audit-log";
 import { resolveDonorIds } from "@/lib/users/donor-filter";
 import { loadContextsForUserIds } from "@/lib/templates/variables";
+import { SAMPLE_TEMPLATE_CONTEXT } from "@/lib/templates/sample-context";
 import { renderEmailHtml, renderEmailSubject } from "@/lib/templates/render";
 import { pickLocale, resolveEmailVariant } from "@/lib/templates/locale-resolver";
 import { logSentMessage } from "@/lib/messaging/log-sent";
@@ -56,7 +57,9 @@ export async function POST(request: NextRequest) {
   const failed: { to: string; error: string }[] = [];
 
   for (const id of userIds) {
-    const ctx = contexts.get(id);
+    const loaded = contexts.get(id);
+    /* A test send of an update template shows the sample update rather than blanks. */
+    const ctx = loaded ? { ...loaded, update: loaded.update ?? SAMPLE_TEMPLATE_CONTEXT.update } : loaded;
     if (!ctx || !ctx.user.email) {
       skipped += 1;
       if (ctx) {
@@ -68,8 +71,13 @@ export async function POST(request: NextRequest) {
     }
     const locale = pickLocale({ override: parsed.data.locale, recipientLang: ctx.user.preferredLang });
     const variant = resolveEmailVariant(template, locale);
+    if (variant.resolvedLocale !== locale) {
+      skipped += 1;
+      await logSentMessage({ channel: "EMAIL", origin: "MANUAL", status: "SKIPPED", templateId: template.id, templateName: template.name, locale, recipientUserId: ctx.user.id, recipientEmail: ctx.user.email, recipientName: ctx.user.name || null, renderedSubject: "", renderedBody: "", variables: ctx as unknown as Prisma.InputJsonValue, errorMessage: "EXACT_TEMPLATE_LANGUAGE_REQUIRED", actorId: actor.actorId ?? null, actorName: actor.actorName ?? null });
+      continue;
+    }
     const subject = renderEmailSubject(variant.subject, ctx);
-    const html = await renderEmailHtml(variant.document as TReaderDocument, ctx);
+    const html = await renderEmailHtml(variant.document as TReaderDocument, ctx, variant.resolvedLocale);
     const result = await sendArchivedEmail({ to: ctx.user.email, subject, html, recipientUserId: ctx.user.id, recipientName: ctx.user.name || null, locale, origin: "MANUAL", purpose: "MARKETING", templateId: template.id, templateName: template.name, createdBy: actor.actorId ?? null }, runtimeConfig);
     const status = result.ok ? "SENT" : result.reason.endsWith("_NOT_CONFIGURED") || result.reason === "PROVIDER_DISABLED" ? "SKIPPED" : "FAILED";
     if (result.ok) sent += 1;
@@ -78,6 +86,6 @@ export async function POST(request: NextRequest) {
     await logSentMessage({ channel: "EMAIL", origin: "MANUAL", status, templateId: template.id, templateName: template.name, locale, recipientUserId: ctx.user.id, recipientEmail: ctx.user.email, recipientName: ctx.user.name || null, renderedSubject: subject, renderedBody: html, variables: ctx as unknown as Prisma.InputJsonValue, errorMessage: result.ok ? null : result.reason, providerMessageId: result.ok ? result.providerMessageId : null, actorId: actor.actorId ?? null, actorName: actor.actorName ?? null });
   }
 
-  await writeAuditLog({ ...actor, action: "EMAIL_TEMPLATE_SEND", messageAr: `أرسل قالب بريد «${template.name}» — نجح ${sent} / تخطّي ${skipped} / فشل ${failed.length}`, entityType: "EmailTemplate", entityId: template.id, metadata: { target: target.kind, total: userIds.length, sent, skipped, failed: failed.length, localeOverride: parsed.data.locale ?? null }, stream: "TEAM" });
+  await writeAuditLog({ ...actor, action: "EMAIL_TEMPLATE_SEND", messageAr: `أرسل قالب بريد «${template.name}»  نجح ${sent} / تخطّي ${skipped} / فشل ${failed.length}`, entityType: "EmailTemplate", entityId: template.id, metadata: { target: target.kind, total: userIds.length, sent, skipped, failed: failed.length, localeOverride: parsed.data.locale ?? null }, stream: "TEAM" });
   return NextResponse.json({ total: userIds.length, sent, skipped, failed });
 }

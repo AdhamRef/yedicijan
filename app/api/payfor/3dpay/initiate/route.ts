@@ -1,8 +1,10 @@
+import { donationFieldEmpty, donationWhereAll } from "@/lib/donations/mongo-null";
+import { withDonationToken } from "@/lib/donations/access-token-link";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { publicOrigin } from "@/lib/public-origin";
 import crypto from "crypto";
 import {
   formatPayForPurchAmount,
@@ -14,6 +16,8 @@ import {
   getUsdBaseRatesForServer,
 } from "@/lib/exchange/rates-service";
 import { decryptCard } from "@/lib/card-crypto";
+import { paymentPublicOrigin } from "@/lib/payment-public-origin";
+import { isValidLocale } from "@/lib/locales";
 import { resolveGateway } from "@/lib/payment-gateway";
 
 /** Convert any amount to TRY using USD-base rates from the database (same as donations). */
@@ -23,6 +27,7 @@ async function toTRY(amount: number, fromCurrency: string): Promise<number> {
 }
 
 type InitiateBody = {
+  cardLast4?: string;
   donationId: string;
   locale?: string;
   /** Optional saved-card id. When provided, the server fills Pan/Expiry/CardHolderName
@@ -38,18 +43,11 @@ export async function POST(req: NextRequest) {
     // Master kill-switch: if the admin disabled PayFor in GlobalSettings, every
     // one-time donation goes through Albaraka instead. Refuse to initiate a 3D
     // Secure session regardless of what the client requested. The dialogs
-    // already gate the UI on the same flag — this is the server-side belt.
+    // already gate the UI on the same flag  this is the server-side belt.
     const settings = await prisma.globalSettings.findFirst({
       orderBy: { createdAt: "asc" },
       select: { payforEnabled: true },
     });
-    if (settings && settings.payforEnabled === false) {
-      return NextResponse.json(
-        { error: "PayFor gateway is disabled. This donation routes to Albaraka." },
-        { status: 403 }
-      );
-    }
-
     const body = (await req.json()) as Partial<InitiateBody>;
     const donationId = String(body.donationId || "").trim();
     if (!donationId) {
@@ -63,10 +61,24 @@ export async function POST(req: NextRequest) {
     if (!donation) {
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
     }
-    // Authenticated users: verify ownership. Guests have no session — trust the donationId.
+    // Authenticated users: verify ownership. Guests have no session  trust the donationId.
     if (session?.user?.id && donation.donorId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    // An attempt already started on another gateway (or a historical plan row) is not PayFor's to charge.
+    if (donation.subscriptionId || (donation.provider && donation.provider !== "PAYFOR")) return NextResponse.json({ error: "This payment attempt belongs to another gateway", code: "PAYMENT_GATEWAY_LOCKED" }, { status: 409 });
+    const returnToResult = () => {
+      const locale = isValidLocale(donation.locale ?? "") ? donation.locale! : "en";
+      return NextResponse.json({ actionUrl: `${paymentPublicOrigin(req.url)}${withDonationToken(`/${locale}/success/${donation.id}`, donation.accessToken)}`, method: "GET", fields: {} });
+    };
+    if (donation.paidAt || ["Processing", "Capturing3D", "PendingConfirmation"].includes(donation.providerTxnResult ?? "")) return returnToResult();
+    if (settings && settings.payforEnabled === false) {
+      return NextResponse.json(
+        { error: "PayFor gateway is disabled. This donation routes to Albaraka." },
+        { status: 403 }
+      );
+    }
+
     if (donation.status === "FAILED") {
       return NextResponse.json(
         { error: `Donation has already failed (status=${donation.status})` },
@@ -101,8 +113,9 @@ export async function POST(req: NextRequest) {
 
     // Use APP_URL env var so OkUrl/FailUrl match the bank's registered MerchantHomeUrl.
     // Without this, localhost:3000 is sent and the bank's 3D auth server rejects it.
-    const origin = publicOrigin(req);
-    const locale = (body.locale ?? donation.locale ?? "en").toString().toLowerCase();
+    const origin = paymentPublicOrigin(req.url);
+    const requestedLocale = (body.locale ?? donation.locale ?? "en").toString().toLowerCase();
+    const locale = isValidLocale(requestedLocale) ? requestedLocale : "en";
 
     const orderId = donation.id; // within 50 chars (ObjectId)
     const txnType = "Auth";
@@ -122,9 +135,10 @@ export async function POST(req: NextRequest) {
       donation.id
     )}&locale=${encodeURIComponent(locale)}`;
 
-    // Hash = hex(SHA1(MbrId + OrderId + PurchAmount + OkUrl + FailUrl + TxnType + InstallmentCount + Rnd + MerchantPass))
+    // Hash = base64(SHA1(MbrId + OrderId + PurchAmount + OkUrl + FailUrl + TxnType + InstallmentCount + Rnd + MerchantPass))
     // Docs formula confirmed; MerchantID and UserCode are NOT part of the hash for this bank.
-    const hashInput = [mbrId, orderId, purchAmount, okUrl, failUrl, txnType, installmentCount, rnd, merchantPass].join("");
+    // The concatenation lives only inside payForHash  it ends with MerchantPass and
+    // must not exist as a local that something could later log.
     const hash = payForHash({
       mbrId,
       orderId,
@@ -137,6 +151,10 @@ export async function POST(req: NextRequest) {
       merchantPass,
     });
 
+    /* `hashInput` ends with MerchantPass, so logging it would print the 3D password
+       in full on every attempt  and defeat the masking two lines above. The hash
+       itself is safe to log and is what the bank asks for when diagnosing a
+       rejection; the inputs to it are all logged individually here anyway. */
     console.log("[PayFor INITIATE] Hash debug:", {
       mbrId,
       orderId,
@@ -146,24 +164,10 @@ export async function POST(req: NextRequest) {
       txnType,
       installmentCount,
       rnd,
-      merchantPass: merchantPass.slice(0, 3) + "***", // partial for security
-      hashInput,
       hash,
       currency,
     });
 
-    await prisma.donation.update({
-      where: { id: donation.id },
-      data: {
-        locale,
-        provider: "PAYFOR",
-        providerOrderId: orderId,
-        providerTxnType: txnType,
-        // What we asked the bank to charge. The ok callback compares the bank's
-        // PurchAmount against it, so a swapped amount can't settle the donation.
-        providerRaw: { payforRequest: { orderId, purchAmount, currency } },
-      },
-    });
 
     const formFields: Record<string, string> = {
       MbrId: mbrId,
@@ -191,6 +195,7 @@ export async function POST(req: NextRequest) {
     // Saved-card path: decrypt the stored PAN and pass it to the bank.
     // PayFor returns MR07 "Request CardBrand Error" if the PAN is masked
     // (asterisks), which is what happened before we wired this flow up.
+    let savedCardLast4: string | null = null;
     const savedCardId = body.savedCardId?.trim();
     if (savedCardId) {
       if (!session?.user?.id) {
@@ -217,6 +222,7 @@ export async function POST(req: NextRequest) {
       let pan: string;
       try {
         pan = decryptCard(savedCard.cardNumber).replace(/\D/g, "");
+        savedCardLast4 = pan.slice(-4);
       } catch {
         return NextResponse.json(
           { error: "Failed to decrypt saved card" },
@@ -230,9 +236,59 @@ export async function POST(req: NextRequest) {
       formFields.CardHolderName = savedCard.cardholderName ?? "";
     }
 
+    const claimed = await prisma.donation.updateMany({
+      where: donationWhereAll({ id: donation.id, status: { not: "FAILED" } }, donationFieldEmpty("paidAt"), { OR: [ { providerTxnResult: { isSet: false } }, { providerTxnResult: null }, { providerTxnResult: { notIn: ["Processing", "Capturing3D", "Rejecting3D", "PendingConfirmation"] } } ] }),
+      data: {
+        locale,
+        provider: "PAYFOR",
+        providerTxnResult: "Processing",
+        providerOrderId: orderId,
+        providerTxnType: txnType,
+        /* Snapshot of what we actually asked the bank to charge, so the callback
+           can detect an amount swap. The FX conversion above is not re-run there:
+           rates move, and re-deriving the expected amount would make a legitimate
+           payment look tampered with. Mirrors the Albaraka rail. */
+        providerRaw: {
+          ...(typeof donation.providerRaw === "object" && donation.providerRaw
+            ? (donation.providerRaw as Record<string, unknown>)
+            : {}),
+          ...(/^\d{4}$/.test(String(savedCardLast4 ?? body.cardLast4 ?? "")) ? { cardSummary: { last4: savedCardLast4 ?? body.cardLast4 } } : {}),
+          payforRequest: {
+            merchantId, mbrId,
+            orderId,
+            purchAmount,
+            originalAmount: donation.totalAmount, originalCurrency: donation.currency,
+            conversionRate: tryAmount / donation.totalAmount,
+            currency,
+            txnType,
+            createdAt: new Date().toISOString(),
+          },
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    if (claimed.count !== 1) return returnToResult();
+
+    /* On the saved-card path `formFields` carries a decrypted PAN, so the whole
+       object can never be spread into a log. Only the non-card fields are named
+       explicitly  a future field is then absent from the log rather than silently
+       exposed by it. */
     console.log("[PayFor INITIATE] Sending fields to bank:", {
-      ...formFields,
-      UserPass: "***",
+      MbrId: formFields.MbrId,
+      MerchantID: formFields.MerchantID,
+      UserCode: formFields.UserCode,
+      SecureType: formFields.SecureType,
+      TxnType: formFields.TxnType,
+      InstallmentCount: formFields.InstallmentCount,
+      Currency: formFields.Currency,
+      OkUrl: formFields.OkUrl,
+      FailUrl: formFields.FailUrl,
+      OrderId: formFields.OrderId,
+      PurchAmount: formFields.PurchAmount,
+      Lang: formFields.Lang,
+      Rnd: formFields.Rnd,
+      Hash: formFields.Hash,
+      cardSource: formFields.Pan ? "saved" : "browser",
     });
 
     return NextResponse.json({

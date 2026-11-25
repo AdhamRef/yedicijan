@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,8 @@ import {
   AlertTriangle,
   Copy,
   ExternalLink,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { cn } from "@/lib/utils";
@@ -36,8 +39,16 @@ import {
   STATUS_LABEL_AR,
   type DonationSourceStatus,
 } from "@/lib/attribution/detect-source";
+import { safeAcquisitionLandingPage, safeAttributionUrl, isPaymentReturnPage } from "@/lib/attribution/sanitize";
+import { dashDir, dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
+import { GATEWAY_LOGOS, GATEWAY_NAMES } from "./DonationGatewayBadge";
+import type { PayPalInspection, PayPalInspectionOutcome } from "@/lib/donations/gateway-diagnostics";
+import { DonationFinancialStatus } from "./DonationFinancialStatus";
+import type { DonationFinancialSummary } from "@/lib/dashboard/donation-financial-summary";
+import { DONATION_FINANCIAL_UPDATED } from "@/hooks/useLiveDonationRefresh";
+import { DonationBankOperations } from "./DonationBankOperations";
 
-type Mode = "attribution" | "payment" | "error";
+type Mode = "attribution" | "payment" | "error" | "overview";
 
 export interface DonationDetailsTarget {
   id: string;
@@ -49,6 +60,16 @@ export interface DonationDetailsTarget {
   conversionEventsSentAt?: string | null;
   conversionFailedEventsSentAt?: string | null;
   status?: string | null;
+  donor?: { name: string | null; email: string };
+  amount?: number;
+  totalAmount?: number;
+  teamSupport?: number;
+  currency?: string;
+  locale?: string | null;
+  donorCountryCode?: string | null;
+  securityMode?: string | null;
+  campaigns?: Array<{ title: string }>;
+  categories?: Array<{ name: string }>;
 }
 
 interface Props {
@@ -86,31 +107,34 @@ interface FieldDef {
 /** Order + presentation for known attribution fields. Anything in `attribution`
  *  that isn't here (and isn't an ID) still falls through to a generic row. */
 const ATTRIBUTION_FIELDS: FieldDef[] = [
-  { key: "utm_campaign", label: "الحملة الإعلانية", Icon: Megaphone, hint: "اسم الحملة في إدارة الإعلانات" },
-  { key: "utm_source", label: "المصدر", Icon: Globe, hint: "Facebook / Google / TikTok …" },
-  { key: "utm_medium", label: "الوسيلة", Icon: Target, hint: "cpc / social / email …" },
-  { key: "utm_content", label: "محتوى الإعلان", Icon: Filter },
-  { key: "utm_term", label: "الكلمة المفتاحية", Icon: Filter },
-  { key: "objective", label: "الهدف", Icon: Compass },
-  { key: "funnel", label: "مرحلة القمع", Icon: Filter },
-  { key: "placement", label: "موضع الإعلان", Icon: MonitorSmartphone },
-  { key: "audience_type", label: "نوع الجمهور", Icon: Users },
-  { key: "target_country", label: "دولة الاستهداف", Icon: Map },
-  { key: "target_region", label: "منطقة الاستهداف", Icon: Map },
-  { key: "language", label: "اللغة", Icon: Languages },
-  { key: "device", label: "الجهاز", Icon: Laptop },
-  { key: "platform", label: "المنصة", Icon: MonitorSmartphone },
-  { key: "landing_page", label: "صفحة الهبوط", Icon: Link2, span: 2, ltr: true },
-  { key: "referrer", label: "المُحيل", Icon: CornerDownLeft, span: 2, ltr: true },
-  { key: "user_agent", label: "متصفح الزائر", Icon: Laptop, span: 2, ltr: true },
-  { key: "client_ip", label: "عنوان IP", Icon: Network, ltr: true },
+  { key: "utm_campaign", get label() { return dt("الحملة الإعلانية"); }, Icon: Megaphone, get hint() { return dt("اسم الحملة في إدارة الإعلانات"); } },
+  { key: "utm_source", get label() { return dt("المصدر"); }, Icon: Globe, hint: "Facebook / Google / TikTok …" },
+  { key: "utm_medium", get label() { return dt("الوسيلة"); }, Icon: Target, hint: "cpc / social / email …" },
+  { key: "utm_content", get label() { return dt("محتوى الإعلان"); }, Icon: Filter },
+  { key: "utm_term", get label() { return dt("الكلمة المفتاحية"); }, Icon: Filter },
+  { key: "objective", get label() { return dt("الهدف"); }, Icon: Compass },
+  { key: "funnel", get label() { return dt("مرحلة القمع"); }, Icon: Filter },
+  { key: "placement", get label() { return dt("موضع الإعلان"); }, Icon: MonitorSmartphone },
+  { key: "audience_type", get label() { return dt("نوع الجمهور"); }, Icon: Users },
+  { key: "target_country", get label() { return dt("دولة الاستهداف"); }, Icon: Map },
+  { key: "target_region", get label() { return dt("منطقة الاستهداف"); }, Icon: Map },
+  { key: "language", get label() { return dt("اللغة"); }, Icon: Languages },
+  { key: "device", get label() { return dt("الجهاز"); }, Icon: Laptop },
+  { key: "platform", get label() { return dt("المنصة"); }, Icon: MonitorSmartphone },
+  { key: "landing_page", get label() { return dt("صفحة الهبوط الإعلانية"); }, Icon: Link2, span: 2, ltr: true },
+  { key: "first_landing_page", get label() { return dt("صفحة الدخول الأولى"); }, Icon: Link2, span: 2, ltr: true },
+  { key: "conversion_page", get label() { return dt("صفحة إتمام التبرع"); }, Icon: Link2, span: 2, ltr: true },
+  { key: "referrer", get label() { return dt("المُحيل"); }, Icon: CornerDownLeft, span: 2, ltr: true },
+  { key: "first_referrer", get label() { return dt("المُحيل الأول"); }, Icon: CornerDownLeft, span: 2, ltr: true },
+  { key: "user_agent", get label() { return dt("متصفح الزائر"); }, Icon: Laptop, span: 2, ltr: true },
+  { key: "client_ip", get label() { return dt("عنوان IP"); }, Icon: Network, ltr: true },
 ];
 
 function copy(value: string) {
   if (typeof navigator === "undefined" || !navigator.clipboard) return;
   navigator.clipboard.writeText(value).then(
-    () => toast.success("تم النسخ"),
-    () => toast.error("تعذّر النسخ")
+    () => toast.success(dt("تم النسخ")),
+    () => toast.error(dt("تعذّر النسخ"))
   );
 }
 
@@ -142,8 +166,8 @@ function FieldCard({
           type="button"
           onClick={() => copy(value)}
           className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-brand p-0.5 rounded"
-          title="نسخ"
-          aria-label={`نسخ ${def.label}`}
+          title={dt("نسخ")}
+          aria-label={dt("نسخ {0}", [def.label])}
         >
           <Copy className="w-3.5 h-3.5" />
         </button>
@@ -185,6 +209,7 @@ const STATUS_BANNER_CLASS: Record<DonationSourceStatus, string> = {
   "utm-only": "bg-amber-50 border-amber-200 text-amber-900",
   "tracking-error": "bg-rose-50 border-rose-200 text-rose-900",
   organic: "bg-slate-50 border-slate-200 text-slate-700",
+  unknown: "bg-slate-50 border-slate-200 text-slate-700",
 };
 
 const STATUS_DOT_BANNER: Record<DonationSourceStatus, string> = {
@@ -192,24 +217,74 @@ const STATUS_DOT_BANNER: Record<DonationSourceStatus, string> = {
   "utm-only": "bg-amber-400",
   "tracking-error": "bg-rose-500",
   organic: "bg-slate-300",
+  unknown: "bg-slate-300",
 };
 
-function SourceSummary({ donation }: { donation: DonationDetailsTarget }) {
+function SourceSummary({
+  donation,
+  onMetaDonateSent,
+}: {
+  donation: DonationDetailsTarget;
+  onMetaDonateSent: (sentAt: string) => void;
+}) {
+  const [retryingMetaDonate, setRetryingMetaDonate] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const [localSentAt, setLocalSentAt] = useState<string | null>(donation.conversionEventsSentAt ?? null);
+
+  useEffect(() => {
+    setLocalSentAt(donation.conversionEventsSentAt ?? null);
+    setRetryError(null);
+  }, [donation.id, donation.conversionEventsSentAt]);
+
   const result = detectDonationSource({
     attribution: donation.attribution,
-    conversionEventsSentAt: donation.conversionEventsSentAt,
+    conversionEventsSentAt: localSentAt,
     conversionFailedEventsSentAt: donation.conversionFailedEventsSentAt,
     status: donation.status,
   });
+
+  const retryMetaDonate = async () => {
+    if (retryingMetaDonate || donation.status !== "PAID" || result.platform !== "meta" || localSentAt) return;
+    const confirmed = window.confirm(dt("سيُعاد إرسال حدث Donate إلى Meta فقط، باستخدام معرف الحدث الأصلي لمنع احتساب التبرع مرتين. هل تريد المتابعة؟"));
+    if (!confirmed) return;
+
+    setRetryingMetaDonate(true);
+    setRetryError(null);
+    try {
+      const response = await fetch(`/api/admin/ads/donation-detail/${encodeURIComponent(donation.id)}/retry-meta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const payload = await response.json().catch(() => ({})) as {
+        ok?: boolean;
+        error?: string;
+        eventId?: string | null;
+      };
+      if (!response.ok || payload.ok !== true) {
+        throw new Error(payload.error || dt("تعذّرت إعادة الإرسال إلى Meta."));
+      }
+      const sentAt = new Date().toISOString();
+      setLocalSentAt(sentAt);
+      onMetaDonateSent(sentAt);
+      toast.success(dt("تم إرسال حدث Donate إلى Meta بنجاح"));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : dt("حدث خطأ غير متوقع.");
+      setRetryError(message);
+      toast.error(dt("تعذّرت إعادة الإرسال إلى Meta."));
+    } finally {
+      setRetryingMetaDonate(false);
+    }
+  };
+
   return (
     <div className={cn("rounded-xl border px-3.5 py-3 mb-3", STATUS_BANNER_CLASS[result.status])}>
       <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2">
           <span className={cn("inline-block w-2 h-2 rounded-full", STATUS_DOT_BANNER[result.status])} aria-hidden />
-          <span className="text-sm font-semibold">{PLATFORM_LABEL_AR[result.platform]}</span>
-          <span className="text-[11px] opacity-70">— {STATUS_LABEL_AR[result.status]}</span>
+          <span className="text-sm font-semibold">{result.sourceLabel || PLATFORM_LABEL_AR[result.platform]}</span>
+          <span className="text-[11px] opacity-70">— {result.sourceKind === "referral" && !result.sourceDetails.some(x => x.key === "utm_medium" && /^(cpc|paid|paid_social)$/i.test(x.value)) ? dt("إحالة مرصودة، ليست إعلانًا موثقًا") : STATUS_LABEL_AR[result.status]}</span>
         </div>
-        <div className="text-[11px] font-medium opacity-80">الثقة {result.confidence}%</div>
+        <div className="text-[11px] font-medium opacity-80">{dtx("اكتمال بيانات الإسناد الإعلاني {0}% (ليست احتمالية أن الزيارة إعلان)", [result.confidence])}</div>
       </div>
       {result.reasons.length > 0 && (
         <ul className="text-[11px] leading-relaxed space-y-0.5 opacity-90">
@@ -218,52 +293,92 @@ function SourceSummary({ donation }: { donation: DonationDetailsTarget }) {
           ))}
         </ul>
       )}
+      {donation.status === "PAID" && result.platform === "meta" && !localSentAt ? (
+        <div className="mt-3 border-t border-current/10 pt-3">
+          <button
+            type="button"
+            onClick={retryMetaDonate}
+            disabled={retryingMetaDonate}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#1877F2] px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[#1464cc] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {retryingMetaDonate ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {retryingMetaDonate ? dt("جارٍ إعادة الإرسال إلى Meta…") : dt("إعادة إرسال Donate إلى Meta (CAPI)")}
+          </button>
+          <p className="mt-1.5 text-[10px] leading-relaxed opacity-75">
+            {dt("متاح للتبرعات الناجحة فقط. سيُعاد استخدام معرف الحدث الأصلي، ولن يُعاد إرسال شراء GA4.")}
+          </p>
+          {retryError ? <p role="alert" className="mt-2 text-xs font-medium text-red-700">{retryError}</p> : null}
+        </div>
+      ) : donation.status === "PAID" && result.platform === "meta" && localSentAt ? (
+        <p className="mt-3 border-t border-current/10 pt-3 text-xs font-semibold">
+          {dt("تم تسجيل إرسال Donate إلى Meta لهذا التبرع.")}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-function AttributionView({ donation }: { donation: DonationDetailsTarget }) {
-  const attr = (donation.attribution ?? {}) as Record<string, unknown>;
-
+function AttributionView({
+  donation,
+  onMetaDonateSent,
+}: {
+  donation: DonationDetailsTarget;
+  onMetaDonateSent: (sentAt: string) => void;
+}) {
   const visibleEntries = useMemo(() => {
+    const attr = (donation.attribution ?? {}) as Record<string, unknown>;
     const entries: Array<{ def: FieldDef; value: string }> = [];
     const seen = new Set<string>();
 
+    const acquisitionPage = safeAcquisitionLandingPage(attr);
+    // A historical /success?t=... is NOT a landing page, and the access
+    // token must not be rendered as a clickable link or copied to clipboard.
+    const urlKeys = new Set(["landing_page", "first_landing_page", "conversion_page", "referrer", "first_referrer", "ga_landing_page", "ga_referrer"]);
     // Known fields first, in defined order
     for (const def of ATTRIBUTION_FIELDS) {
       const raw = attr[def.key];
       if (raw == null || raw === "") continue;
-      const value = String(raw);
+      const value = def.key === "landing_page"
+        ? acquisitionPage
+        : urlKeys.has(def.key) ? safeAttributionUrl(String(raw)) : String(raw);
+      if (!value) continue;
       entries.push({ def, value });
       seen.add(def.key);
     }
+    if (!seen.has("conversion_page") && isPaymentReturnPage(attr.landing_page)) {
+      const safe = safeAttributionUrl(attr.landing_page);
+      if (safe) {
+        const def = ATTRIBUTION_FIELDS.find((row) => row.key === "conversion_page");
+        if (def) { entries.push({ def, value: safe }); seen.add(def.key); }
+      }
+    }
 
-    // Anything unknown (and not an ID) — surface with a generic icon so admins
+    // Anything unknown (and not an ID)  surface with a generic icon so admins
     // can still see new attribution fields without redeploying this dialog.
     for (const [k, v] of Object.entries(attr)) {
       if (seen.has(k) || HIDDEN_ATTRIBUTION_KEYS.has(k)) continue;
       if (v == null || v === "") continue;
+      const display = urlKeys.has(k) ? safeAttributionUrl(String(v)) : String(v);
+      if (!display) continue;
       entries.push({
-        def: { key: k, label: prettifyKey(k), Icon: Filter, span: String(v).length > 60 ? 2 : 1, ltr: /[A-Za-z0-9_/.:?=&-]/.test(String(v)) && !/[؀-ۿ]/.test(String(v)) },
-        value: String(v),
+        def: { key: k, label: prettifyKey(k), Icon: Filter, span: display.length > 60 ? 2 : 1, ltr: /[A-Za-z0-9_/.:?=&-]/.test(display) && !/[؀-ۿ]/.test(display) },
+        value: display,
       });
     }
 
     return entries;
-  }, [attr]);
+  }, [donation.attribution]);
 
   if (visibleEntries.length === 0) {
     return (
       <div>
-        <SourceSummary donation={donation} />
+        <SourceSummary donation={donation} onMetaDonateSent={onMetaDonateSent} />
         <div className="py-10 text-center">
           <Megaphone className="w-10 h-10 text-slate-300 mx-auto mb-2" />
           <p className="text-sm text-slate-500">
-            لا توجد بيانات إسناد إعلاني لهذا التبرع
-          </p>
+            {dt("لا توجد بيانات إسناد إعلاني لهذا التبرع")}</p>
           <p className="text-[11px] text-slate-400 mt-1">
-            ربما وصل المتبرع مباشرةً دون إعلان متتبَّع
-          </p>
+            {dt("ربما وصل المتبرع مباشرةً دون إعلان متتبَّع")}</p>
         </div>
       </div>
     );
@@ -271,7 +386,7 @@ function AttributionView({ donation }: { donation: DonationDetailsTarget }) {
 
   return (
     <div>
-      <SourceSummary donation={donation} />
+      <SourceSummary donation={donation} onMetaDonateSent={onMetaDonateSent} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {visibleEntries.map(({ def, value }) => (
           <FieldCard key={def.key} def={def} value={value} />
@@ -281,49 +396,318 @@ function AttributionView({ donation }: { donation: DonationDetailsTarget }) {
   );
 }
 
+type GatewayDetails = {
+  financialSummary?: DonationFinancialSummary | null;
+  id: string;
+  provider: string | null;
+  paymentMethod: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+  totalAmount: number;
+  amountUSD: number | null;
+  paidAmount: number | null;
+  paidCurrency: string | null;
+  requestedGatewayAmount?: number | null;
+  requestedGatewayCurrency?: string | null;
+  paypalInspection?: PayPalInspection | null;
+  createdAt: string;
+  paidAt: string | null;
+  billingReason: string | null;
+  refs: {
+    providerOrderId: string | null;
+    providerAuthCode: string | null;
+    providerHostRefNum: string | null;
+    paypalOrderId: string | null;
+    paypalCaptureId: string | null;
+    cardLast4?: string | null;
+    maskedPan: string | null;
+  };
+  txn: { type: string | null; result: string | null; returnCode: string | null; errorMessage: string | null };
+  raw: Array<{ path: string; value: string }>;
+  rawTruncated: boolean;
+};
+
+type RefRow = { label: string; value: string; hint?: string; href?: string };
+
+function PayPalInspectionNotice({ inspection }: { inspection: PayPalInspection }) {
+  const messages: Record<PayPalInspectionOutcome, string> = {
+    awaiting_buyer_action: dt("بانتظار استكمال المتبرع لخطوات PayPal؛ لا يوجد تحصيل مؤكد."),
+    approved_without_capture: dt("وافق المتبرع لدى PayPal ولم يظهر تحصيل بعد. تُراجع الحالة عبر المطابقة الآلية."),
+    capture_pending: dt("التحصيل معلّق لدى PayPal. راجع سبب الانتظار وحساب التاجر."),
+    completed_needs_reconciliation: dt("أفاد PayPal باكتمال التحصيل، ويحتاج السجل المحلي إلى مطابقة قبل اعتماد الإيراد."),
+    capture_failed: dt("أفاد PayPal بفشل التحصيل؛ تحتاج الحالة المحلية إلى مطابقة."),
+    capture_refunded: dt("أفاد PayPal باسترداد المبلغ كليًا أو جزئيًا؛ راجع السجل المالي."),
+    order_voided: dt("أفاد PayPal بإلغاء الطلب؛ تحتاج الحالة المحلية إلى مطابقة."),
+    order_not_found: dt("لم يعثر PayPal على الطلب. قد يتعلق الأمر بصلاحية الطلب أو مرجعه أو صلاحيات الوصول؛ لا تثبت هذه النتيجة حصول خصم أو فشل الدفع."),
+    provider_unavailable: dt("تعذّر قراءة حالة الطلب من PayPal الآن. بقيت الحالة المحلية كما هي."),
+    not_configured: dt("إعدادات قراءة PayPal غير مكتملة؛ تعذّر فحص الطلب."),
+    order_reference_missing: dt("لا يوجد مرجع طلب PayPal صالح للفحص."),
+    renewal_not_checked: dt("هذه دورة تبرع متكرر؛ تُراجع من مسار الاشتراكات دون إعادة محاولة التحصيل هنا."),
+    integrity_review: dt("بيانات الطلب لدى PayPal تحتاج إلى مراجعة المطابقة مع هذا التبرع."),
+    unknown: dt("أعاد PayPal حالة غير محسومة؛ تحتاج إلى مراجعة."),
+  };
+  return (
+    <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-950 space-y-2">
+      <div className="font-semibold">{dt("حالة PayPal الآن")}</div>
+      <p className="leading-relaxed">{messages[inspection.outcome]}</p>
+      <dl className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {[
+          { label: dt("حالة الطلب لدى PayPal"), value: inspection.orderStatus },
+          { label: dt("حالة التحصيل لدى PayPal"), value: inspection.captureStatus },
+          { label: dt("سبب الانتظار لدى PayPal"), value: inspection.pendingReason },
+        ].filter(row => row.value).map(row => <div key={row.label}><dt className="text-[10px] opacity-75">{row.label}</dt><dd className="font-mono break-all mt-0.5" dir="ltr">{row.value}</dd></div>)}
+      </dl>
+      <p className="text-[10px] leading-relaxed opacity-75">{dt("هذا فحص للقراءة فقط؛ فتح التفاصيل لا ينفذ خصمًا أو تسوية ولا يغيّر حالة التبرع.")}</p>
+    </div>
+  );
+}
+
+/** The references that find this donation in the gateway's own panel, named the way that gateway names them. */
+function gatewayReferences(d: GatewayDetails): RefRow[] {
+  const r = d.refs;
+  const rows: RefRow[] = [];
+  const add = (label: string, value: string | null, hint?: string, href?: string) => {
+    if (value) rows.push({ label, value, hint, href });
+  };
+
+  switch (d.provider) {
+    case "ALBARAKA":
+      add(dt("رقم الطلب (OrderId)"), r.providerOrderId, dt("الرقم الذي أرسلناه للبنك مع العملية"));
+      add(dt("رقم المرجع لدى البنك (ReferenceCode)"), r.providerHostRefNum, dt("مرجع البنك للعملية، يُطلب عند الإلغاء أو الاسترداد"));
+      add(dt("رمز الموافقة (AuthCode)"), r.providerAuthCode, dt("رمز موافقة البنك على الخصم"));
+      break;
+    case "PAYFOR":
+      add(dt("رقم الطلب (OrderId)"), r.providerOrderId, dt("الرقم الذي أرسلناه للبنك مع العملية"));
+      add(dt("رقم المرجع لدى البنك (HostRefNum)"), r.providerHostRefNum, dt("مرجع البنك للعملية، يُطلب عند الإلغاء أو الاسترداد"));
+      add(dt("رمز الموافقة (AuthCode)"), r.providerAuthCode, dt("رمز موافقة البنك على الخصم"));
+      break;
+    case "PAYPAL":
+      add(dt("معرف طلب PayPal (Order ID)"), r.paypalOrderId ?? r.providerOrderId);
+      add(
+        dt("معرف المعاملة في PayPal (Capture ID)"),
+        r.paypalCaptureId ?? r.providerHostRefNum,
+        dt("رقم المعاملة كما يظهر في حساب PayPal، ويُستخدم للبحث والاسترداد"),
+        r.paypalCaptureId ? `https://www.paypal.com/activity/payment/${encodeURIComponent(r.paypalCaptureId)}` : undefined,
+      );
+      break;
+    default:
+      add(dt("معرف الطلب لدى البوابة"), r.providerOrderId);
+      add(dt("رقم المرجع لدى البنك"), r.providerHostRefNum);
+      add(dt("رمز الموافقة (AuthCode)"), r.providerAuthCode);
+  }
+  add(dt("آخر أربعة أرقام للبطاقة"), r.cardLast4 ? `•••• ${r.cardLast4}` : null);
+  add(dt("البطاقة (مقنّعة)"), r.maskedPan, dt("آخر أرقام البطاقة كما أرجعها البنك"));
+  add(dt("رقم التبرع لدينا"), d.id, dt("يُرسل غالبًا للبوابة كرقم الطلب"));
+  return rows;
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return null;
+  return new Date(value).toLocaleString(dashIntl("ar-EG"), {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    numberingSystem: "latn",
+    timeZone: "Europe/Istanbul",
+  });
+}
+
+function money(amount: number | null, currency: string | null) {
+  if (amount == null) return null;
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${currency ?? ""}`.trim();
+}
+
+function RefCard({ row }: { row: RefRow }) {
+  return (
+    <div className="group rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition-colors hover:border-brand/40">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+          <Hash className="w-3.5 h-3.5 text-brand" />
+          <span>{row.label}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {row.href && (
+            <a href={row.href} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-brand p-0.5 rounded" title={dt("فتح في لوحة البوابة")}>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
+          <button type="button" onClick={() => copy(row.value)} className="text-slate-400 hover:text-brand p-0.5 rounded" title={dt("نسخ")} aria-label={dt("نسخ {0}", [row.label])}>
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+      <div className="font-mono text-xs font-medium text-slate-800 break-all" dir="ltr">{row.value}</div>
+      {row.hint && <p className="text-[10px] text-slate-400 mt-1 leading-tight">{row.hint}</p>}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 function PaymentView({ donation }: { donation: DonationDetailsTarget }) {
-  const provider = donation.provider ?? null;
-  const orderId = donation.providerOrderId ?? null;
-  const method = donation.paymentMethod ?? null;
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = (event: Event) => { if ((event as CustomEvent<{ donationId: string }>).detail?.donationId === donation.id) setRevision(value => value + 1); };
+    window.addEventListener(DONATION_FINANCIAL_UPDATED, refresh);
+    return () => window.removeEventListener(DONATION_FINANCIAL_UPDATED, refresh);
+  }, [donation.id]);
+  const [details, setDetails] = useState<GatewayDetails | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
 
-  const providerLabel =
-    provider === "PAYFOR"
-      ? "PayFor (Ziraat)"
-      : provider === "ALBARAKA"
-        ? "Albaraka Türk"
-        : provider ?? "—";
+  useEffect(() => {
+    let cancelled = false;
+    setDetails(null);
+    setError(null);
+    fetch(`/api/admin/donations/${donation.id}/gateway`, { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(res.status === 403 ? dt("لا تملك صلاحية عرض بيانات البوابة") : dt("تعذّر تحميل بيانات البوابة"));
+        return (await res.json()) as GatewayDetails;
+      })
+      .then((data) => { if (!cancelled) setDetails(data); })
+      .catch((e: Error) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [donation.id, revision]);
 
+  if (error) {
+    return <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3 text-center text-xs text-rose-700">{error}</div>;
+  }
+  if (!details) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        {dt("جاري تحميل بيانات البوابة...")}
+      </div>
+    );
+  }
+
+  const logo = details.provider ? GATEWAY_LOGOS[details.provider] : undefined;
+  const providerName = details.provider ? GATEWAY_NAMES[details.provider] ?? details.provider : "—";
+  const refs = gatewayReferences(details);
+  const succeeded = Boolean(details.paidAt);
+  const failed = details.txn.result === "Failed" || details.status === "FAILED";
   const methodLabel =
-    method === "CARD" ? "بطاقة ائتمانية" : method === "PAYPAL" ? "PayPal" : method ?? "—";
+    details.paymentMethod === "CARD" ? dt("بطاقة ائتمانية")
+      : details.paymentMethod === "PAYPAL" ? "PayPal"
+        : details.paymentMethod === "BANK_TRANSFER" ? dt("تحويل بنكي")
+          : details.paymentMethod ?? "—";
+  const charged = money(details.paidAmount, details.paidCurrency);
+  const gatewayRequested = money(details.requestedGatewayAmount ?? null, details.requestedGatewayCurrency ?? null);
+  const requested = money(details.totalAmount, details.currency);
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        <FieldCard
-          def={{ label: "بوابة الدفع", Icon: CreditCard, hint: "المزود الذي عالج هذا التبرع" }}
-          value={providerLabel}
-        />
-        <FieldCard
-          def={{ label: "طريقة الدفع", Icon: CreditCard }}
-          value={methodLabel}
-        />
-        {orderId && (
-          <FieldCard
-            def={{
-              label: "معرف الطلب لدى البوابة",
-              Icon: Hash,
-              span: 2,
-              ltr: true,
-              hint: "يستخدم لمطابقة التبرع مع لوحة تحكم المزود",
-            }}
-            value={orderId}
-          />
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+        {logo ? (
+          <Image src={logo.src} alt={logo.alt} width={96} height={30} className={details.provider === "ALBARAKA" || details.provider === "PAYFOR" ? "h-[30px] w-24 object-cover rounded" : "h-10 w-auto max-w-[96px] object-contain rounded"} />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100"><CreditCard className="w-5 h-5 text-slate-500" /></div>
         )}
-      </div>
-      {!provider && !orderId && (
-        <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-3 text-center text-xs text-slate-500">
-          لم يُسجَّل أي مزود دفع لهذا التبرع بعد
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-slate-900">{providerName}</div>
+          <div className="text-[11px] text-slate-500">{methodLabel}</div>
         </div>
+        <DonationFinancialStatus donation={details} />
+      </div>
+
+      {details.paypalInspection && <PayPalInspectionNotice inspection={details.paypalInspection} />}
+
+      <Section title={dt("معرفات التتبع لدى البوابة")}>
+        {refs.length ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {refs.map((row) => <RefCard key={row.label} row={row} />)}
+          </div>
+        ) : (
+          <p className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-3 text-center text-xs text-slate-500">{dt("لم تُرجع البوابة أي معرف لهذا التبرع")}</p>
+        )}
+      </Section>
+
+      <Section title={dt("نتيجة العملية")}>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          {[
+            { label: dt("النتيجة"), value: details.txn.result },
+            { label: dt("رمز الاستجابة"), value: details.txn.returnCode },
+            { label: dt("نوع العملية"), value: details.txn.type },
+            { label: dt("الحالة لدينا"), value: succeeded ? dt("تمت العملية") : failed ? dt("فشلت العملية") : dt("قيد التأكيد") },
+          ].map((f) => (
+            <div key={f.label} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div className="text-[10px] font-semibold text-slate-500">{f.label}</div>
+              <div className="font-mono text-xs text-slate-800" dir="ltr">{f.value || "—"}</div>
+            </div>
+          ))}
+        </div>
+        {details.txn.errorMessage && (
+          <div className="rounded-xl border border-rose-200 bg-rose-50/70 px-3 py-2.5 text-xs text-rose-800" dir="auto">
+            <span className="font-semibold">{dt("رسالة البوابة:")} </span>{details.txn.errorMessage}
+          </div>
+        )}
+      </Section>
+
+      <Section title={dt("المبالغ والتوقيت")}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {[
+            { label: dt("المبلغ المطلوب"), value: requested },
+            { label: dt("المبلغ المطلوب من البوابة"), value: gatewayRequested },
+            { label: dt("المبلغ المسجل عند تأكيد الدفع"), value: succeeded ? charged : null },
+            { label: dt("ما يعادله بالدولار"), value: money(details.amountUSD, "USD") },
+            { label: dt("أُنشئ في"), value: formatDateTime(details.createdAt) },
+            { label: dt("تأكد الدفع في"), value: formatDateTime(details.paidAt) },
+          ]
+            .filter((f) => f.value)
+            .map((f) => (
+              <div key={f.label} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <div className="text-[10px] font-semibold text-slate-500">{f.label}</div>
+                <div className="text-xs font-medium text-slate-800" dir="ltr">{f.value}</div>
+              </div>
+            ))}
+        </div>
+      </Section>
+
+      {details.raw.length > 0 && (
+        <Section title={dt("الاستجابة الكاملة من البوابة")}>
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-2 px-3 py-2">
+              <button type="button" onClick={() => setShowRaw((v) => !v)} className="text-xs font-semibold text-brand hover:underline">
+                {showRaw ? dt("إخفاء التفاصيل") : dtx("عرض كل الحقول ({0})", [details.raw.length])}
+              </button>
+              <button
+                type="button"
+                onClick={() => copy(details.raw.map((e) => `${e.path}: ${e.value}`).join("\n"))}
+                className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-brand"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                {dt("نسخ الكل")}
+              </button>
+            </div>
+            {showRaw && (
+              <div className="max-h-72 overflow-y-auto border-t border-slate-100" dir="ltr">
+                <table className="w-full text-[11px]">
+                  <tbody>
+                    {details.raw.map((e) => (
+                      <tr key={e.path} className="border-b border-slate-50 last:border-0 align-top">
+                        <td className="px-3 py-1 font-mono text-slate-500 whitespace-nowrap">{e.path}</td>
+                        <td className="px-3 py-1 font-mono text-slate-800 break-all">{e.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {details.rawTruncated && <p className="px-3 py-1.5 text-[10px] text-slate-400">{dt("عُرضت أول 250 قيمة فقط")}</p>}
+              </div>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-400">{dt("أرقام البطاقات ورموز الأمان والمفاتيح مخفية دائمًا.")}</p>
+        </Section>
       )}
     </div>
   );
@@ -339,14 +723,13 @@ function ErrorView({ donation }: { donation: DonationDetailsTarget }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-red-700 mb-1">
-            رسالة المزود
-          </p>
+            {dt("رسالة المزود")}</p>
           {msg ? (
             <p className="text-sm text-red-800 leading-relaxed break-words" dir="auto">
               {msg}
             </p>
           ) : (
-            <p className="text-sm text-red-700/70 italic">لم يُرجع المزود رسالة خطأ</p>
+            <p className="text-sm text-red-700/70 italic">{dt("لم يُرجع المزود رسالة خطأ")}</p>
           )}
         </div>
         {msg && (
@@ -354,47 +737,57 @@ function ErrorView({ donation }: { donation: DonationDetailsTarget }) {
             type="button"
             onClick={() => copy(msg)}
             className="shrink-0 text-red-500 hover:text-red-700 p-1 rounded"
-            title="نسخ"
+            title={dt("نسخ")}
           >
             <Copy className="w-4 h-4" />
           </button>
         )}
       </div>
       <p className="text-[11px] text-slate-500 leading-relaxed">
-        تأتي هذه الرسالة مباشرةً من بوابة الدفع، ويمكن مشاركتها مع المتبرع لمعرفة سبب الفشل
-        (مثل: رفض البنك، حد الإنفاق، رمز التحقق، عدم دعم نوع الشراء، إلخ).
-      </p>
+        {dt("تأتي هذه الرسالة مباشرةً من بوابة الدفع، ويمكن مشاركتها مع المتبرع لمعرفة سبب الفشل (مثل: رفض البنك، حد الإنفاق، رمز التحقق، عدم دعم نوع الشراء، إلخ).")}</p>
     </div>
   );
 }
 
 const TITLES: Record<Mode, { title: string; description: string }> = {
+  overview: {
+    get title() { return dt("عرض التفاصيل"); },
+    get description() { return dt("تفاصيل بوابة الدفع"); },
+  },
   attribution: {
-    title: "تفاصيل الإعلان",
-    description: "بيانات إسناد الحملة الإعلانية للمتبرع — مخفية المعرفات الفنية",
+    get title() { return dt("تفاصيل الإعلان"); },
+    get description() { return dt("بيانات إسناد الحملة الإعلانية للمتبرع  مخفية المعرفات الفنية"); },
   },
   payment: {
-    title: "تفاصيل بوابة الدفع",
-    description: "المزود وطريقة الدفع ومعرف الطلب لدى البوابة",
+    get title() { return dt("تفاصيل بوابة الدفع"); },
+    get description() { return dt("ما أرجعته بوابة الدفع لهذا التبرع: معرفات التتبع والنتيجة والمبالغ"); },
   },
   error: {
-    title: "سبب فشل التبرع",
-    description: "رسالة الخطأ التي أرجعتها بوابة الدفع",
+    get title() { return dt("سبب فشل التبرع"); },
+    get description() { return dt("رسالة الخطأ التي أرجعتها بوابة الدفع"); },
   },
 };
 
 export default function DonationDetailsDialog({ open, onOpenChange, mode, donation }: Props) {
   const meta = TITLES[mode];
+  const [manualMetaSentAt, setManualMetaSentAt] = useState<Record<string, string>>({});
+  const displayDonation = donation
+    ? {
+        ...donation,
+        conversionEventsSentAt: donation.conversionEventsSentAt ?? manualMetaSentAt[donation.id] ?? null,
+      }
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        dir="rtl"
+        dir={dashDir()}
         className="max-w-[640px] sm:max-w-[680px] p-0 overflow-hidden gap-0"
       >
         <DialogHeader
           className={cn(
-            "px-5 sm:px-6 pt-5 pb-4 border-b text-right",
+            /* pe-12 keeps the title clear of the dialog's close button in either direction. */
+            "px-5 sm:px-6 pe-12 sm:pe-12 pt-5 pb-4 border-b text-start",
             mode === "error"
               ? "bg-gradient-to-l from-red-50 to-white border-red-100"
               : mode === "payment"
@@ -402,22 +795,44 @@ export default function DonationDetailsDialog({ open, onOpenChange, mode, donati
                 : "bg-gradient-to-l from-brand/5 to-white border-slate-100"
           )}
         >
-          <DialogTitle className="text-base font-semibold text-slate-900 text-right">
+          <DialogTitle className="text-base font-semibold text-slate-900 text-start">
             {meta.title}
           </DialogTitle>
-          <DialogDescription className="text-xs text-slate-500 text-right mt-0.5">
+          <DialogDescription className="text-xs text-slate-500 text-start mt-0.5">
             {meta.description}
           </DialogDescription>
         </DialogHeader>
         <div className="px-5 sm:px-6 py-4 max-h-[70vh] overflow-y-auto bg-slate-50/30">
-          {donation == null ? (
-            <p className="text-sm text-slate-500 text-center py-8">لا توجد بيانات</p>
+          {displayDonation == null ? (
+            <p className="text-sm text-slate-500 text-center py-8">{dt("لا توجد بيانات")}</p>
+          ) : mode === "overview" ? (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {[
+                  [dt("المتبرع"), donation?.donor?.name || "—", Users],
+                  [dt("البريد الإلكتروني"), donation?.donor?.email || "—", Users],
+                  [dt("اللغة"), donation?.locale?.toUpperCase() || "—", Languages],
+                  [dt("دولة المتبرع"), donation?.donorCountryCode || "—", Globe],
+                  [dt("الإجمالي"), money(donation?.totalAmount ?? null, donation?.currency ?? null), CreditCard],
+                  [dt("دعم الفريق"), money(donation?.teamSupport ?? null, donation?.currency ?? null), Users],
+                  [dt("المشاريع"), [...(donation?.campaigns?.map(row => row.title) ?? []), ...(donation?.categories?.map(row => row.name) ?? [])].join("، ") || "—", Target],
+                  [dt("طريقة الدفع"), donation?.securityMode || donation?.paymentMethod || "—", CreditCard],
+                  [dt("الجهاز"), typeof donation?.attribution?.device === "string" ? donation.attribution.device : "—", Laptop],
+                  [dt("عنوان IP"), typeof donation?.attribution?.client_ip === "string" ? donation.attribution.client_ip : "—", Network],
+                ].map(([label, value, Icon]) => <FieldCard key={label as string} def={{ label: label as string, Icon: Icon as typeof Users }} value={value as string} />)}
+              </div>
+              <PaymentView donation={displayDonation} />
+              {["ALBARAKA", "PAYFOR"].includes(displayDonation.provider || "") && <DonationBankOperations donationId={displayDonation.id} />}
+            </div>
           ) : mode === "attribution" ? (
-            <AttributionView donation={donation} />
+            <AttributionView
+              donation={displayDonation}
+              onMetaDonateSent={(sentAt) => setManualMetaSentAt((current) => ({ ...current, [displayDonation.id]: sentAt }))}
+            />
           ) : mode === "payment" ? (
-            <PaymentView donation={donation} />
+            <div className="space-y-4"><PaymentView donation={displayDonation} />{["ALBARAKA", "PAYFOR"].includes(displayDonation.provider || "") && <DonationBankOperations donationId={displayDonation.id} />}</div>
           ) : (
-            <ErrorView donation={donation} />
+            <ErrorView donation={displayDonation} />
           )}
         </div>
       </DialogContent>

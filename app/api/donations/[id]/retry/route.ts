@@ -7,13 +7,14 @@ import {
   auditActorFromSiteSession,
   auditStreamForRole,
 } from "@/lib/audit-log";
+import { mintDonationAccessToken, donationTokenMatches } from "@/lib/donations/access-token";
 
 /**
  * POST /api/donations/[id]/retry
  *
  * Clones a failed (or stuck-unsettled) donation into a fresh row the donor
- * can complete checkout for. Cloning — rather than mutating the original
- * back to "PAID + paidAt=null" — keeps an audit trail of the failed attempt,
+ * can complete checkout for. Cloning  rather than mutating the original
+ * back to "PAID + paidAt=null"  keeps an audit trail of the failed attempt,
  * lets reporting count both the failed try and the successful retry, and
  * sidesteps the various provider integrity checks that bail on
  * already-FAILED rows.
@@ -23,7 +24,7 @@ import {
  *   - copies every campaign item + category item line (same amounts in the
  *     same currency)
  *   - preserves teamSupport / coverFees / fees / totalAmount
- *   - lives in the optimistic "PAID + paidAt: null" sentinel state — exactly
+ *   - lives in the optimistic "PAID + paidAt: null" sentinel state  exactly
  *     the same as a brand-new POST /api/donations creates
  *
  * Returns the new donation id; the caller picks the next-step URL based on
@@ -34,12 +35,12 @@ import {
  * the success page uses).
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    if (!id) {
+    if (!id || !/^[a-f0-9]{24}$/i.test(id)) {
       return NextResponse.json({ error: "Donation ID required" }, { status: 400 });
     }
     const session = await getServerSession(authOptions);
@@ -52,13 +53,21 @@ export async function POST(
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
     }
 
-    // Only the donor (or an admin) can retry. Guests with the link are ok too
-    // — the donation id is the only secret.
+    // Preserve owner/admin access. Anonymous callers must prove possession
+    // of the original credential; a donation ID is never sufficient.
     if (session && session.user.id !== source.donorId && session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Refuse to retry an already-paid donation — that would charge twice.
+    if (!session) {
+      const body = await req.json().catch(() => null) as { t?: unknown } | null;
+      const token = typeof body?.t === "string" ? body.t : new URL(req.url).searchParams.get("t");
+      if (!donationTokenMatches(source.accessToken, token)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
+    // Refuse to retry an already-paid donation  that would charge twice.
     if (source.paidAt) {
       return NextResponse.json(
         { error: "This donation has already been settled.", alreadyPaid: true },
@@ -68,6 +77,7 @@ export async function POST(
 
     const clone = await prisma.donation.create({
       data: {
+        accessToken: mintDonationAccessToken(),
         amount: source.amount,
         amountUSD: source.amountUSD ?? undefined,
         currency: source.currency,
@@ -75,7 +85,7 @@ export async function POST(
         coverFees: source.coverFees,
         fees: source.fees,
         totalAmount: source.totalAmount,
-        status: "PAID", // optimistic placeholder — webhook flips paidAt
+        status: "PAID", // optimistic placeholder  webhook flips paidAt
         locale: source.locale ?? undefined,
         attribution: source.attribution
           ? (source.attribution as object as object)
@@ -126,6 +136,9 @@ export async function POST(
       provider: source.provider ?? null,
       paymentMethod: source.paymentMethod,
       currency: source.currency,
+      /* A guest needs the clone's key to open its success page. Handed to whoever
+         may retry the source, who could open the clone's success page anyway. */
+      accessToken: clone.accessToken,
     });
   } catch (err) {
     console.error("[donation retry] failed:", err);

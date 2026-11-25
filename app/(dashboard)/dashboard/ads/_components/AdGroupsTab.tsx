@@ -62,6 +62,7 @@ const STATUS_PILL: Record<AttributionStatus, string> = {
   organic: "bg-slate-50 text-slate-600 border-slate-200",
   direct: "bg-slate-50 text-slate-600 border-slate-200",
   tracking_issue: "bg-rose-50 text-rose-700 border-rose-200",
+  unknown: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
 const STATUS_DOT: Record<AttributionStatus, string> = {
@@ -73,6 +74,7 @@ const STATUS_DOT: Record<AttributionStatus, string> = {
   organic: "bg-slate-300",
   direct: "bg-slate-400",
   tracking_issue: "bg-rose-500",
+  unknown: "bg-rose-500",
 };
 
 function fmtIstanbul(iso: string | null) {

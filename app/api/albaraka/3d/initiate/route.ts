@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
-import { publicOrigin } from "@/lib/public-origin";
+import { paymentPublicOrigin } from "@/lib/payment-public-origin";
 import {
   ALBARAKA_FORM_FIELDS,
   ALBARAKA_FORM_MAC_PARAMS,
@@ -15,15 +15,20 @@ import {
   albarakaOrderId,
   albarakaTargetCurrency,
   isAlbarakaConfigured,
+  isValidBankExpiry,
+  isValidCardNumber,
   type AlbarakaFormFields,
 } from "@/lib/albaraka";
 import { resolveGateway } from "@/lib/payment-gateway";
+import { checkCardAttempt } from "@/lib/security/card-attempts";
+import { donationFieldEmpty, donationWhereAll } from "@/lib/donations/mongo-null";
 import {
   convertAmountBetweenCurrencies,
   convertAmountInCurrencyToTry,
   getUsdBaseRatesForServer,
 } from "@/lib/exchange/rates-service";
-import { decryptCard } from "@/lib/card-crypto";
+import { normalizeCurrencyCode } from "@/lib/exchange/convert";
+import { decryptCard, detectCardType } from "@/lib/card-crypto";
 
 /**
  * POST /api/albaraka/3d/initiate
@@ -41,6 +46,8 @@ import { decryptCard } from "@/lib/card-crypto";
  *   - neither, with ALBARAKA_USE_OOS=1 — the card fields go out empty and the bank's
  *      own hosted page (Ortak Ödeme Sayfası) collects them, keeping the PAN off our
  *      servers entirely. This is the deployment we'd recommend.
+ *
+ * No money moves here: the callback captures (/Sale) only after a verified 3D result.
  */
 
 type InitiateBody = {
@@ -59,7 +66,8 @@ type InitiateBody = {
 
 /** Convert an amount into the charge currency using USD-base rates from the database (same as donations). */
 async function toCurrency(amount: number, fromCurrency: string, toCurrency: string): Promise<number> {
-  const from = fromCurrency === "TL" ? "TRY" : fromCurrency;
+  // `DEFAULT` (no currency chosen) is USD; see normalizeCurrencyCode.
+  const from = normalizeCurrencyCode(fromCurrency === "TL" ? "TRY" : fromCurrency);
   if (from === toCurrency) return amount;
   const rates = await getUsdBaseRatesForServer();
   return toCurrency === "TRY"
@@ -80,6 +88,9 @@ function toBankExpiry(raw: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  /* Set while this request holds the "Processing" claim but has not handed the
+     form back yet; an error in that window releases the donation for a retry. */
+  let unsentClaim: string | null = null;
   try {
     const session = await getServerSession(authOptions);
     const cfg = albarakaConfig();
@@ -87,7 +98,7 @@ export async function POST(req: NextRequest) {
     if (!isAlbarakaConfigured(cfg)) {
       return NextResponse.json(
         { error: "Albaraka is not configured on server" },
-        { status: 500 }
+        { status: 503 }
       );
     }
 
@@ -138,13 +149,13 @@ export async function POST(req: NextRequest) {
 
     // APP_URL keeps OkUrl/ReturnURL on the domain registered with the bank; a bare
     // localhost origin gets the 3D form rejected.
-    const origin = publicOrigin(req);
+    const origin = paymentPublicOrigin(req.url);
     const locale = (body.locale ?? donation.locale ?? "en").toString().toLowerCase();
 
     // ALBARAKA_CHARGE_CURRENCY picks what the bank is asked to charge (TRY by default —
     // the merchant account is Turkish). The donation is converted into that currency
-    // with the same DB rates the donations use.
-    const donationCurrency = String(donation.currency || "TRY").toUpperCase();
+    // with the same DB rates the donations use. The donation row keeps its own currency.
+    const donationCurrency = donation.currency ? normalizeCurrencyCode(donation.currency) : "TRY";
     const targetCurrency = albarakaTargetCurrency(donationCurrency, cfg.chargeCurrency);
     const chargeAmount = await toCurrency(donation.totalAmount, donationCurrency, targetCurrency);
     const currencyCode = albarakaCurrencyCode(targetCurrency);
@@ -163,8 +174,8 @@ export async function POST(req: NextRequest) {
     )}&locale=${encodeURIComponent(locale)}`;
 
     // ── Card fields ────────────────────────────────────────────────────────────
-    // Empty strings when the bank's hosted page collects the card. They still take
-    // part in the MAC as empty values — the separator positions must not shift.
+    // Empty strings when the bank's hosted page collects the card; they then simply
+    // contribute nothing to the MAC.
     let cardNo = "";
     let expiredDate = "";
     let cvv = "";
@@ -212,8 +223,30 @@ export async function POST(req: NextRequest) {
 
       if (!cardNo || !expiredDate || !cvv) {
         return NextResponse.json(
-          { error: "Card number, expiry and security code are required" },
+          { error: "Card number, expiry and security code are required", code: "CARD_REQUIRED" },
           { status: 400 }
+        );
+      }
+      // Caught here rather than spent as a bank decline (and a FAILED donation).
+      if (!isValidCardNumber(cardNo)) {
+        return NextResponse.json({ error: "Invalid card number", code: "INVALID_CARD_NUMBER" }, { status: 400 });
+      }
+      if (!isValidBankExpiry(expiredDate)) {
+        return NextResponse.json({ error: "Card expiry date is invalid or in the past", code: "INVALID_CARD_EXPIRY" }, { status: 400 });
+      }
+      if (!/^\d{3,4}$/.test(cvv)) {
+        return NextResponse.json({ error: "Invalid security code", code: "INVALID_CARD_CVC" }, { status: 400 });
+      }
+      cardHolderName = cardHolderName.replace(/\s+/g, " ").slice(0, 50);
+
+      /* Card-testing brakes, before the claim so a refused attempt leaves the
+         donation untouched and the donor can retry once the window passes. */
+      const attempt = await checkCardAttempt(req.headers, cardNo, "ALBARAKA");
+      if (!attempt.ok) {
+        console.warn("[Albaraka] card attempt refused", { donationId: donation.id, reason: attempt.reason });
+        return NextResponse.json(
+          { error: "Too many payment attempts. Please try again later.", code: "TOO_MANY_ATTEMPTS" },
+          { status: 429, headers: { "Retry-After": String(attempt.retryAfterSeconds) } }
         );
       }
     }
@@ -259,28 +292,56 @@ export async function POST(req: NextRequest) {
       cfg.encKey
     );
 
-    await prisma.donation.update({
-      where: { id: donation.id },
+    /* Record this attempt atomically. A fresh 3D session may replace an earlier,
+       abandoned one (its callback then fails the order-id linkage and captures
+       nothing), but never one whose callback is already capturing or rejecting —
+       the callback's own claim is what guarantees a single /Sale. `paidAt` is
+       ABSENT, not null, on a fresh row, so `donationFieldEmpty` matches both. */
+    const claim = await prisma.donation.updateMany({
+      where: donationWhereAll(
+        { id: donation.id, status: { not: "FAILED" } },
+        donationFieldEmpty("paidAt"),
+        {
+          OR: [
+            { providerTxnResult: { isSet: false } },
+            { providerTxnResult: null },
+            { providerTxnResult: { notIn: ["Capturing3D", "Rejecting3D"] } },
+          ],
+        }
+      ),
       data: {
         locale,
         provider: "ALBARAKA",
         providerOrderId: orderId,
         providerTxnType: transactionType,
+        providerTxnResult: "Processing",
         // Snapshot of what we actually asked the bank to charge. The callback
         // replays it to detect an amount/order swap and to build the /Sale call
         // without re-running the FX conversion (rates can move in between).
         providerRaw: {
+          ...(typeof donation.providerRaw === "object" && donation.providerRaw ? (donation.providerRaw as object) : {}),
+          ...(cardNo ? { cardSummary: { last4: cardNo.slice(-4), brand: detectCardType(cardNo) } } : {}),
           albarakaRequest: {
+            merchantNo: cfg.merchantNo,
+            terminalNo: cfg.terminalNo,
             orderId,
             amount,
             currencyCode,
             transactionType,
+            mode: "3D",
             useOOS: cfg.useOOS,
             createdAt: new Date().toISOString(),
           },
         } as Prisma.InputJsonValue,
       },
     });
+    if (claim.count !== 1) {
+      return NextResponse.json(
+        { error: "A payment for this donation is already in progress or finished.", code: "PAYMENT_ALREADY_PROCESSING" },
+        { status: 409 }
+      );
+    }
+    unsentClaim = donation.id;
 
     // Mac and MacParams ride alongside the form; neither is part of the MAC input.
     const formFields: Record<string, string> = {};
@@ -288,6 +349,7 @@ export async function POST(req: NextRequest) {
     formFields.Mac = mac;
     formFields.MacParams = ALBARAKA_FORM_MAC_PARAMS;
 
+    // Never log card-bearing fields.
     console.log("[Albaraka INITIATE]", {
       donationId: donation.id,
       orderId,
@@ -297,9 +359,18 @@ export async function POST(req: NextRequest) {
       merchantReturnURL,
     });
 
-    return NextResponse.json({ actionUrl: cfg.tdsUrl, fields: formFields });
+    unsentClaim = null;
+    return NextResponse.json(
+      { actionUrl: cfg.tdsUrl, fields: formFields },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     console.error("Albaraka initiate error:", error);
+    if (unsentClaim) {
+      await prisma.donation
+        .updateMany({ where: { id: unsentClaim, providerTxnResult: "Processing" }, data: { providerTxnResult: null } })
+        .catch(() => {});
+    }
     return NextResponse.json({ error: "Failed to initiate payment" }, { status: 500 });
   }
 }

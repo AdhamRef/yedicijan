@@ -122,8 +122,8 @@ export async function GET(request: NextRequest) {
     const filter = buildFilter(url);
 
     const [result, countResult] = await Promise.all([
-      prisma.$runCommandRaw({ find: COLLECTION, filter, sort: { [sortBy]: sortDir, createdAt: -1 }, skip, limit }),
-      prisma.$runCommandRaw({ count: COLLECTION, query: filter }),
+      (prisma.$runCommandRaw as (command: object) => Promise<any>)({ find: COLLECTION, filter, sort: { [sortBy]: sortDir, createdAt: -1 }, skip, limit }),
+      (prisma.$runCommandRaw as (command: object) => Promise<any>)({ count: COLLECTION, query: filter }),
     ]);
 
     const rows = isRecord(result) && isRecord(result.cursor) && Array.isArray(result.cursor.firstBatch)

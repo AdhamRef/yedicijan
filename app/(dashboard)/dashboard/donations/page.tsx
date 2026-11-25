@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useDebounce } from 'use-debounce';
 import axios from 'axios';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,32 +23,56 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Plus,
   Search,
-  Edit,
   Trash2,
   Eye,
-  ArrowUpDown,
   Download,
-  Loader2,
   MoreVertical,
   Link2,
   HandHeart,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  RefreshCw,
 } from 'lucide-react';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { PageHeaderSkeleton, FilterBarSkeleton, TableSkeleton } from '@/components/dashboard/skeletons';
 import { format } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { dashDateLocale } from '@/lib/dashboard/i18n/date-fns';
 import { Link, useRouter } from "@/i18n/routing";
 import { toast } from 'react-hot-toast';
 import DonationCountryFlag from '@/components/DonationCountryFlag';
+import { dt } from "@/lib/dashboard/i18n";
+import DonationDetailsDialog, { type DonationDetailsTarget } from '@/components/dashboard/DonationDetailsDialog';
+
+/**
+ * Sorts by one column, with absent values last in either direction.
+ *
+ * The comparator this replaced compared `a[sortField] > b[sortField]` directly. Several of these
+ * columns are nullable  a donation with no donor name, no completion date  and comparing `null`
+ * with `>` is always false, so those rows sorted into an arbitrary position that flipped depending on
+ * which side of the comparison they landed on. Sorting them to the end is both stable and what a
+ * reader expects from an empty cell.
+ */
+function compareBySortField(
+  a: Donation,
+  b: Donation,
+  field: keyof Donation,
+  direction: 'asc' | 'desc',
+): number {
+  const left = a[field];
+  const right = b[field];
+  const leftEmpty = left === null || left === undefined;
+  const rightEmpty = right === null || right === undefined;
+  if (leftEmpty && rightEmpty) return 0;
+  if (leftEmpty) return 1;
+  if (rightEmpty) return -1;
+  const order = left < right ? -1 : left > right ? 1 : 0;
+  return direction === 'asc' ? order : -order;
+}
+
+import { DonorAccountBadge } from "@/components/dashboard/DonorAccountBadge";
 
 interface Donation {
   id: string;
@@ -61,6 +86,7 @@ interface Donation {
   donorCountryCode?: string | null;
   donorId: string;
   donor: {
+    accountStatus?: import("@/lib/dashboard/donor-account").DonorAccountStatus;
     id: string;
     name: string;
     email: string;
@@ -85,6 +111,7 @@ export default function DonationsPage() {
   const [donations, setDonations] = useState<Donation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch] = useDebounce(searchQuery.trim(), 300);
   const [sortField, setSortField] = useState<keyof Donation>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -92,12 +119,14 @@ export default function DonationsPage() {
   const [itemsPerPage] = useState(10);
   const [selectedDonations, setSelectedDonations] = useState<string[]>([]);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [viewingDonation, setViewingDonation] = useState<DonationDetailsTarget | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         const response = await axios.get('/api/donations', {
-          params: { page, limit: itemsPerPage },
+          params: { page, limit: itemsPerPage, search: debouncedSearch || undefined, hideRecoveredFailures: '1' },
         });
         setDonations(response.data.donations);
         setTotalPages(response.data.pagination.pages);
@@ -110,7 +139,11 @@ export default function DonationsPage() {
     };
 
     fetchData();
-  }, [page]);
+  }, [page, itemsPerPage, debouncedSearch]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   const handleSort = (field: keyof Donation) => {
     if (field === sortField) {
@@ -121,17 +154,40 @@ export default function DonationsPage() {
     }
   };
 
+  const sortableHeader = (label: string, field: keyof Donation) => (
+    <TableHead
+      className="text-start"
+      aria-sort={sortField === field ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+    >
+      <button
+        type="button"
+        onClick={() => handleSort(field)}
+        className="inline-flex min-h-9 items-center gap-1.5 text-start hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+        aria-label={`${dt("ترتيب حسب")} ${dt(label)}`}
+      >
+        {dt(label)}
+        {sortField === field
+          ? sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" /> : <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+          : <ArrowUpDown className="h-3.5 w-3.5 opacity-50" aria-hidden="true" />}
+      </button>
+    </TableHead>
+  );
+
   const handleDelete = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this donation?')) return;
 
     setDeleteLoading(true);
     try {
       await axios.delete(`/api/donations/${id}`);
-      setDonations(donations.filter(donation => donation.id !== id));
+      setDonations((current) => current.filter((donation) => donation.id !== id));
       toast.success('Donation deleted successfully');
     } catch (error) {
-      console.error('Error deleting donation:', error);
-      toast.error('Failed to delete donation');
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        toast.error('Paid donations cannot be deleted. Edit it instead.');
+      } else {
+        console.error('Error deleting donation:', error);
+        toast.error('Failed to delete donation');
+      }
     } finally {
       setDeleteLoading(false);
     }
@@ -142,10 +198,19 @@ export default function DonationsPage() {
 
     setDeleteLoading(true);
     try {
-      await Promise.all(selectedDonations.map(id => axios.delete(`/api/donations/${id}`)));
-      setDonations(donations.filter(donation => !selectedDonations.includes(donation.id)));
+      // Paid donations are refused by the API (409), so delete one by one and
+      // keep only what the server actually removed.
+      const results = await Promise.allSettled(
+        selectedDonations.map(id => axios.delete(`/api/donations/${id}`).then(() => id))
+      );
+      const deleted = results
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled')
+        .map(r => r.value);
+      const refused = results.length - deleted.length;
+      setDonations((current) => current.filter((donation) => !deleted.includes(donation.id)));
       setSelectedDonations([]);
-      toast.success('Donations deleted successfully');
+      if (refused === 0) toast.success('Donations deleted successfully');
+      else toast.error(`${deleted.length} deleted, ${refused} kept (paid donations cannot be deleted)`);
     } catch (error) {
       console.error('Error deleting donations:', error);
       toast.error('Failed to delete donations');
@@ -154,24 +219,12 @@ export default function DonationsPage() {
     }
   };
 
-  const filteredDonations = donations
-    .filter(donation => {
-      const matchesSearch = donation.items.some(item =>
-        item.campaign.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      return matchesSearch;
-    })
-    .sort((a, b) => {
-      if (sortDirection === 'asc') {
-        return a[sortField] > b[sortField] ? 1 : -1;
-      }
-      return a[sortField] < b[sortField] ? 1 : -1;
-    });
-
-  const paginatedDonations = filteredDonations.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage
+  // API search is authoritative and runs before pagination; only sort the current page locally.
+  const filteredDonations = [...donations].sort((a, b) =>
+    compareBySortField(a, b, sortField, sortDirection)
   );
+
+  const paginatedDonations = filteredDonations;
 
   const exportToCSV = () => {
     const headers = ['Amount', 'Currency', 'Status', 'Payment Method', 'Created At', 'Donor Name', 'Campaigns'];
@@ -180,7 +233,7 @@ export default function DonationsPage() {
       donation.currency,
       donation.status,
       donation.paymentMethod,
-      format(new Date(donation.createdAt), 'PPP', { locale: ar }),
+      format(new Date(donation.createdAt), 'PPP', { locale: dashDateLocale() }),
       donation.donor.name,
       donation.items.map(item => item.campaign.title).join(', '), // Include campaign titles
     ]);
@@ -203,8 +256,8 @@ export default function DonationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="التبرعات"
-        description="إدارة تبرعات التبرع"
+        title={dt("التبرعات")}
+        description={dt("إدارة تبرعات التبرع")}
         icon={HandHeart}
         actions={
           <Button
@@ -212,8 +265,7 @@ export default function DonationsPage() {
             className="bg-brand hover:bg-brand-dark gap-2"
           >
             <Plus className="w-4 h-4" />
-            تسجيل تبرع
-          </Button>
+            {dt("تسجيل تبرع")}</Button>
         }
       />
 
@@ -222,22 +274,32 @@ export default function DonationsPage() {
         <div className="flex flex-col gap-4">
           <div className="flex gap-4">
             <div className="relative flex-1">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <Input
-                placeholder="البحث في التبرعات..."
+                placeholder={dt("البحث في التبرعات...")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-4 pr-10"
+                className="pe-4 ps-10"
               />
             </div>
-            <Button
+              {selectedDonations.length > 0 && (
+                <Button
+                  variant="destructive"
+                  className="gap-2"
+                  onClick={() => void handleBulkDelete()}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  {dt("حذف المحدد")} ({selectedDonations.length})
+                </Button>
+              )}
+              <Button
               variant="outline"
               className="gap-2"
               onClick={exportToCSV}
             >
               <Download className="w-4 h-4" />
-              تصدير CSV
-            </Button>
+              {dt("تصدير CSV")}</Button>
           </div>
         </div>
       </Card>
@@ -250,7 +312,7 @@ export default function DonationsPage() {
               <TableHead className="w-[50px]">
                 <input
                   type="checkbox"
-                  checked={selectedDonations.length === paginatedDonations.length}
+                  checked={paginatedDonations.length > 0 && paginatedDonations.every((donation) => selectedDonations.includes(donation.id))}
                   onChange={(e) => {
                     if (e.target.checked) {
                       setSelectedDonations(paginatedDonations.map(d => d.id));
@@ -261,16 +323,16 @@ export default function DonationsPage() {
                   className="w-5 h-5 rounded border border-gray-300 text-brand focus:ring-brand"
                 />
               </TableHead>
-              <TableHead className="text-right">المتبرع</TableHead>
+              <TableHead className="text-start">{dt("المتبرع")}</TableHead>
               <TableHead className="w-10 px-2 text-center">
-                <span className="sr-only">دولة المتبرع</span>
+                <span className="sr-only">{dt("دولة المتبرع")}</span>
               </TableHead>
-              <TableHead className="text-right">المبلغ</TableHead>
-              <TableHead className="text-right">العملة</TableHead>
-              <TableHead className="text-right">طريقة الدفع</TableHead>
-              <TableHead className="text-right">التاريخ</TableHead>
-              <TableHead className="text-right">المشاريع</TableHead>
-              <TableHead className="text-center">الإجراءات</TableHead>
+              {sortableHeader("المبلغ", "totalAmount")}
+              <TableHead className="text-start">{dt("العملة")}</TableHead>
+              {sortableHeader("طريقة الدفع", "paymentMethod")}
+              {sortableHeader("التاريخ", "createdAt")}
+              <TableHead className="text-start">{dt("المشاريع")}</TableHead>
+              <TableHead className="text-center">{dt("الإجراءات")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -295,16 +357,16 @@ export default function DonationsPage() {
   {donation.donor.image ? (
     <img
       src={donation.donor.image}
-      alt={donation.donor.name}
+      alt={donation.donor.name ?? ""}
       className="w-8 h-8 rounded-full"
     />
   ) : (
     <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white font-medium">
-      {donation.donor.name.charAt(0).toUpperCase()}
+      {(donation.donor.name || donation.donor.email || "?").charAt(0).toUpperCase()}
     </div>
   )}
   <div>
-    <p className="text-sm font-medium">{donation.donor.name}</p>
+    <p className="flex flex-wrap items-center gap-1 text-sm font-medium">{donation.donor.name || "—"}<DonorAccountBadge status={donation.donor.accountStatus} /></p>
     <p className="text-xs text-gray-500">{donation.donor.email}</p>
   </div>
 </div>
@@ -317,7 +379,7 @@ export default function DonationsPage() {
                 <TableCell>{donation.currency}</TableCell>
                 <TableCell>{donation.paymentMethod || '—'}</TableCell>
                 <TableCell>
-                  {format(new Date(donation.createdAt), 'PPP', { locale: ar })}
+                  {format(new Date(donation.createdAt), 'PPP', { locale: dashDateLocale() })}
                 </TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-1">
@@ -333,24 +395,23 @@ export default function DonationsPage() {
                   <div className="flex justify-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={dt("إجراءات")}>
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>إجراءات</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => router.push(`/donations/${donation.id}`)}>
-                          <Eye className="w-4 h-4 ml-2" />
-                          عرض
-                        </DropdownMenuItem>
+                        <DropdownMenuLabel>{dt("إجراءات")}</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => setViewingDonation(donation)}>
+                          <Eye className="w-4 h-4 me-2" />
+                          {dt("عرض")}</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-red-600"
+                          disabled={deleteLoading}
                           onClick={() => handleDelete(donation.id)}
                         >
-                          <Trash2 className="w-4 h-4 ml-2" />
-                          حذف
-                        </DropdownMenuItem>
+                          <Trash2 className="w-4 h-4 me-2" />
+                          {dt("حذف")}</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -363,7 +424,7 @@ export default function DonationsPage() {
         {/* Pagination */}
         <div className="flex items-center justify-between p-4">
           <div className="text-sm text-gray-600">
-            Showing {((page - 1) * itemsPerPage) + 1} to {Math.min(page * itemsPerPage, filteredDonations.length)} of {filteredDonations.length} donations
+            Showing {filteredDonations.length ? ((page - 1) * itemsPerPage) + 1 : 0} to {((page - 1) * itemsPerPage) + filteredDonations.length} · page {page} of {Math.max(totalPages, 1)}
           </div>
           <div className="flex gap-2">
             <Button
@@ -378,13 +439,19 @@ export default function DonationsPage() {
               variant="outline"
               size="sm"
               onClick={() => setPage(page + 1)}
-              disabled={page * itemsPerPage >= filteredDonations.length}
+              disabled={page >= totalPages}
             >
               Next
             </Button>
           </div>
         </div>
       </Card>
+      <DonationDetailsDialog
+        open={viewingDonation !== null}
+        onOpenChange={(open) => { if (!open) setViewingDonation(null); }}
+        mode="payment"
+        donation={viewingDonation}
+      />
     </div>
   );
 }

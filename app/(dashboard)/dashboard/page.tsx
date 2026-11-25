@@ -1,5 +1,13 @@
 "use client";
 
+import { useLiveDonationRefresh } from "@/hooks/useLiveDonationRefresh";
+import MultiPick from "@/components/dashboard/MultiPick";
+
+import { DonationFinancialStatus } from "@/components/dashboard/DonationFinancialStatus";
+import type { DonationFinancialSummary } from "@/lib/dashboard/donation-financial-summary";
+
+import { DashboardFilterPanel } from "@/components/dashboard/DashboardFilterPanel";
+import { normalizeDashboardCampaignFilterOptions, dashboardCampaignBelongsToCategory } from "@/lib/dashboard/home-campaign-filter";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useLocale } from "next-intl";
 import Link from "next/link";
@@ -7,27 +15,24 @@ import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
-  Users,
-  DollarSign,
-  Heart,
-  FolderTree,
-  Wallet,
-  Calendar,
-  Receipt,
-  Target,
-  Layers,
   BarChart3,
   PieChart as PieChartIcon,
   Search,
   ChevronDown,
   Loader2,
-  HandCoins,
-  Percent,
-  Landmark,
   LayoutDashboard,
+  RefreshCw,
+  Eye,
+  Wallet,
+  HandCoins,
+  Heart,
+  Users,
+  Calculator,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { CHART_THEME } from "@/lib/dashboard/chart-theme";
+import { HomeDonationSummary } from "@/components/dashboard/HomeDonationSummary";
 import { MetricSummaryBand } from "@/components/dashboard/MetricSummaryBand";
 import {
   DashboardFilterBar,
@@ -44,7 +49,6 @@ import {
   BarChart,
   Bar,
   Line,
-  AreaChart,
   Area,
   PieChart,
   Pie,
@@ -67,10 +71,11 @@ import {
   donationDisplayTotalLocal,
   DASHBOARD_DISPLAY_SYMBOLS,
 } from "@/lib/dashboard/format-dashboard-money";
-import { formatIstanbulCalendarMonthLong } from "@/lib/admin/current-calendar-month-utc";
-import { StatsMetricCard } from "@/components/dashboard/StatsMetricCard";
-import { getDashboardChartPeriodLabelAr } from "@/lib/dashboard/chart-period-label-ar";
 import { getPeriodDateKeys } from "@/lib/dashboard/period-date-range";
+import { dashboardDonationScopeParams, dashboardStatsScopeParams } from "@/lib/dashboard/home-donation-scope";
+import { dashboardDonationDisplayDate } from "@/lib/dashboard/donation-ledger-date";
+import { homeFiltersAreModified } from "@/lib/dashboard/home-filter-defaults";
+import { summarizeScopedDonationChart } from "@/lib/dashboard/donation-chart-filter-scope";
 import {
   istanbulTodayKey,
   istanbulAddCalendarDaysKey,
@@ -87,10 +92,13 @@ import {
 } from "@/components/dashboard/DashboardPieLegend";
 import { useViewUserProfile } from "@/context/ViewUserProfileContext";
 import DonationDetailsDialog, { type DonationDetailsTarget } from "@/components/dashboard/DonationDetailsDialog";
+import { DonationGatewayBadge } from "@/components/dashboard/DonationGatewayBadge";
+import { DONATION_PROVIDER_OPTIONS } from "@/lib/dashboard/donation-provider-filter";
 import { ExportReportDialog, EXPORT_DEFAULTS, type ExportFormState } from "@/components/dashboard/ExportReportDialog";
 import { useDonationActions } from "@/components/dashboard/donations/useDonationActions";
 import { userCanEditDonations, userCanExportReports } from "@/lib/dashboard/permissions";
 import { useSession } from "next-auth/react";
+import { dashDir, dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
 
 interface ChartDataPoint {
   date: string;
@@ -98,6 +106,7 @@ interface ChartDataPoint {
   count: number;
   amountFailed: number;
   countFailed: number;
+  countPending?: number;
   teamSupport: number;
   fees: number;
 }
@@ -110,10 +119,9 @@ interface Category {
 interface CampaignOption {
   id: string;
   title: string;
-  // Many-to-many: a campaign can belong to multiple categories. `categoryId`
-  // is the legacy single-value alias (first category) for backwards-compat.
+  // Normalized by normalizeDashboardCampaignFilterOptions.
   categoryId?: string;
-  categoryIds?: string[];
+  categoryIds: string[];
 }
 
 interface UserOption {
@@ -122,14 +130,19 @@ interface UserOption {
   email: string;
 }
 
+import { DonorAccountBadge } from "@/components/dashboard/DonorAccountBadge";
+
 interface DonationRow {
   id: string;
+  locale?: string | null;
+  securityMode?: "2D" | "3D" | null;
   totalAmount: number;
   amount: number;
   amountUSD?: number | null;
   currency: string;
   teamSupport: number;
   fees: number;
+  financialSummary?: DonationFinancialSummary | null;
   status: string;
   paidAt?: string | null;
   provider?: string | null;
@@ -140,7 +153,7 @@ interface DonationRow {
   conversionEventsSentAt?: string | null;
   conversionFailedEventsSentAt?: string | null;
   createdAt: string;
-  donor: { id: string; name: string | null; email: string };
+  donor: { id: string; name: string | null; email: string; accountStatus?: import("@/lib/dashboard/donor-account").DonorAccountStatus };
   donorCountryCode?: string | null;
   campaigns: { id: string; title: string }[];
   categories: { id: string; name: string }[];
@@ -154,9 +167,9 @@ interface DashboardStats {
   totalUsers: number;
   totalAmount: number;
   allTimeRevenue?: number;
-  /** Sum of all PAID donations (USD) — ignores period / category / campaign filters */
+  /** Sum of all PAID donations (USD)  ignores period / category / campaign filters */
   paidRevenueAllTimeUnfiltered?: number;
-  /** All-time companions to the above — safe to show beside a figure labelled "كل الوقت". */
+  /** All-time companions to the above  safe to show beside a figure labelled "كل الوقت". */
   paidCountAllTimeUnfiltered?: number;
   paidCount?: number;
   failedCount?: number;
@@ -184,16 +197,15 @@ interface DashboardStats {
 type ChartViewType = "bar" | "line" | "area";
 type ChartPeriod = "day" | "yesterday" | "week" | "month" | "year" | "all" | "custom";
 type ChartMetric = "amount" | "teamSupport" | "fees";
-type StatCardSet = "revenue" | "overview";
 
 const PERIOD_LABELS: Record<ChartPeriod, string> = {
-  day: "اليوم",
-  yesterday: "أمس",
-  week: "أسبوع",
-  month: "شهر",
-  year: "سنة",
-  all: "كل الوقت",
-  custom: "مخصص",
+  get day() { return dt("اليوم"); },
+  get yesterday() { return dt("أمس"); },
+  get week() { return dt("أسبوع"); },
+  get month() { return dt("شهر"); },
+  get year() { return dt("سنة"); },
+  get all() { return dt("كل الوقت"); },
+  get custom() { return dt("مخصص"); },
 };
 
 // Was a local block of raw hex duplicated verbatim in another page and built on a generic
@@ -215,14 +227,15 @@ function getDonationsDateRange(
   dateFrom: string,
   dateTo: string
 ): { start: string | null; end: string | null } {
-  // Calendar-aware semantics live in the shared helper — keep the in-file
+  // Calendar-aware semantics live in the shared helper  keep the in-file
   // adapter so existing callers don't have to thread the period type.
   return getPeriodDateKeys(period, dateFrom, dateTo);
 }
 
+const pickList = (v: string) => (v && v !== "all" ? v.split(",").filter(Boolean) : []);
+const pickValue = (xs: string[]) => (xs.length ? xs.join(",") : "all");
 export default function DashboardPage() {
   const locale = useLocale() as string;
-  const thisMonthRevenueTitle = `إيرادات شهر ${formatIstanbulCalendarMonthLong(new Date(), locale || "ar")}`;
   const searchParams = useSearchParams();
   const { convertToCurrency, getSelectedCurrency } = useCurrency();
 
@@ -257,21 +270,26 @@ export default function DashboardPage() {
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const statsRequestRef = useRef<AbortController | null>(null);
+  const statsTimeoutRef = useRef<number | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [usersSearchInput, setUsersSearchInput] = useState("");
   const [usersSearchCommitted, setUsersSearchCommitted] = useState("");
   const [usersSearchLoading, setUsersSearchLoading] = useState(false);
-  const [statCardSet, setStatCardSet] = useState<StatCardSet>("revenue");
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedCampaign, setSelectedCampaign] = useState<string>("all");
   const [selectedUserId, setSelectedUserId] = useState<string>("all");
 
-  // Sync user filter from URL (e.g. from users page "تحليل تبرعات")
+  // A deep-linked donor is the initial selection, not a permanent lock.
+  // Depend on the actual URL value, not the entire searchParams object, so
+  // clearing the donor is not undone by unrelated query-string changes.
+  const linkedDonorId = searchParams.get("userId");
   useEffect(() => {
-    const uid = searchParams.get("userId");
+    const uid = linkedDonorId;
     if (uid && uid !== "all") {
       setSelectedUserId(uid);
       fetch(`/api/users/${uid}`)
@@ -286,7 +304,7 @@ export default function DashboardPage() {
         })
         .catch(() => {});
     }
-  }, [searchParams]);
+  }, [linkedDonorId]);
 
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
 
@@ -303,21 +321,86 @@ export default function DashboardPage() {
   );
 
   const [chartLoading, setChartLoading] = useState(true);
+  const [chartError, setChartError] = useState(false);
+  const chartRequestId = useRef(0);
   const [chartView, setChartView] = useState<ChartViewType>("bar");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("month");
+  useEffect(() => {
+    const id = searchParams.get("donationId");
+    if (id && /^[a-f0-9]{24}$/i.test(id)) { setDonationsSearch(id); setChartPeriod("all"); }
+  }, [searchParams]);
   const [chartMetric, setChartMetric] = useState<ChartMetric>("amount");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [donationsSortBy, setDonationsSortBy] = useState<"date" | "amount">("date");
   const [donationsSortOrder, setDonationsSortOrder] = useState<"asc" | "desc">("desc");
   const [showFailed, setShowFailed] = useState(false);
-  const [donationsStatusFilter, setDonationsStatusFilter] = useState<"all" | "PAID" | "FAILED">("all");
-  /** Applied donor search (name or email) for the أحدث التبرعات table — server-side, not a page filter. */
+  const [donationsStatusFilter, setDonationsStatusFilter] = useState<"all" | "RESOLVED" | "PAID" | "PENDING" | "FAILED">("RESOLVED");
+  const [donationsTypeFilter, setDonationsTypeFilter] = useState<"all" | "ONE_TIME" | "MONTHLY">("all");
+  /** Applied donor search (name or email) for the أحدث التبرعات table  server-side, not a page filter. */
   const [donationsSearch, setDonationsSearch] = useState("");
   const [donationLocaleFilter, setDonationLocaleFilter] = useState<
     "all" | "ar" | "en" | "fr" | "tr" | "id" | "pt" | "es" | "de" | "__unset"
   >("all");
   const [donationCountryFilter, setDonationCountryFilter] = useState<string>("all");
+  const [donationProviderFilter, setDonationProviderFilter] = useState("all");
+  const [donationSourceFilter, setDonationSourceFilter] = useState("all");
+
+  // Saved filter sets and "campaign for this result" (owner, 2026-11-21).
+  type SavedView = { id: string; name: string; filters: Record<string, string>; shared: boolean; mine: boolean; ownerName: string | null };
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]), [activeViewId, setActiveViewId] = useState("");
+  const loadViews = useCallback(() => {
+    fetch("/api/admin/dashboard-views", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.views) setSavedViews(d.views as SavedView[]); }).catch(() => {});
+  }, []);
+  useEffect(() => { loadViews(); }, [loadViews]);
+  const currentFilters = (): Record<string, string> => ({ selectedCategory, selectedCampaign, donationSourceFilter, donationLocaleFilter, donationCountryFilter, donationProviderFilter, donationsStatusFilter, donationsTypeFilter, chartPeriod, dateFrom, dateTo });
+  const applyView = (v: SavedView) => {
+    const f = v.filters;
+    if (f.selectedCategory) setSelectedCategory(f.selectedCategory);
+    if (f.selectedCampaign) setSelectedCampaign(f.selectedCampaign);
+    if (f.donationSourceFilter) setDonationSourceFilter(f.donationSourceFilter);
+    if (f.donationLocaleFilter) setDonationLocaleFilter(f.donationLocaleFilter as typeof donationLocaleFilter);
+    if (f.donationCountryFilter) setDonationCountryFilter(f.donationCountryFilter);
+    if (f.donationProviderFilter) setDonationProviderFilter(f.donationProviderFilter);
+    if (f.donationsStatusFilter) setDonationsStatusFilter(f.donationsStatusFilter as typeof donationsStatusFilter);
+    if (f.donationsTypeFilter) setDonationsTypeFilter(f.donationsTypeFilter as typeof donationsTypeFilter);
+    if (f.chartPeriod) setChartPeriod(f.chartPeriod as ChartPeriod);
+    setDateFrom(f.dateFrom ?? ""); setDateTo(f.dateTo ?? "");
+  };
+  const saveView = async () => {
+    const name = window.prompt(dt("اسم العرض (مثلاً: متبرعو تركيا عبر فيسبوك)"));
+    if (!name?.trim()) return;
+    const shared = window.confirm(dt("مشاركة هذا العرض مع الفريق؟ (موافق = مشترك، إلغاء = لي فقط)"));
+    await fetch("/api/admin/dashboard-views", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), filters: currentFilters(), shared }) }).catch(() => undefined);
+    loadViews();
+  };
+  const deleteView = async () => {
+    const v = savedViews.find((x) => x.id === activeViewId);
+    if (!v || !v.mine || !window.confirm(dt("حذف العرض «{0}»؟", [v.name]))) return;
+    await fetch(`/api/admin/dashboard-views?id=${v.id}`, { method: "DELETE" }).catch(() => undefined);
+    setActiveViewId(""); loadViews();
+  };
+  /** Opens a new campaign whose smart audience carries the filters that exist on both sides; the rest is listed. */
+  const campaignForResult = () => {
+    const list = (v: string) => (v && v !== "all" ? v.split(",").filter((x) => x && x !== "__unset") : []);
+    const kept: string[] = [], dropped: string[] = [];
+    const filters: Record<string, unknown> = {};
+    const countries = list(donationCountryFilter).map((c) => c.toUpperCase()); if (countries.length) { filters.countries = countries; kept.push(dt("الدولة")); }
+    const locales = list(donationLocaleFilter); if (locales.length) { filters.locales = locales; kept.push(dt("اللغة")); }
+    const sources = list(donationSourceFilter).filter((x) => x !== "unknown"); if (sources.length) { filters.sourceChannels = sources; kept.push(dt("مصدر التبرع")); }
+    let projects = list(selectedCampaign);
+    if (!projects.length && list(selectedCategory).length) { projects = campaigns.filter((c) => list(selectedCategory).some((cid) => dashboardCampaignBelongsToCategory(c, cid))).map((c) => c.id); if (projects.length) kept.push(dt("الفئة (بمشاريعها)")); }
+    else if (projects.length) kept.push(dt("المشروع"));
+    if (projects.length) filters.projectIds = projects;
+    const days: Partial<Record<ChartPeriod, number>> = { day: 1, yesterday: 2, week: 7, month: 31, year: 366 };
+    const span = chartPeriod === "custom" && dateFrom ? Math.max(1, Math.ceil((Date.now() - new Date(dateFrom).getTime()) / 864e5)) : days[chartPeriod];
+    if (span) { filters.donatedWithinDays = span; kept.push(dt("تبرّع خلال آخر {0} يوماً", [span])); }
+    if (donationProviderFilter !== "all") dropped.push(dt("بوابة الدفع"));
+    if (donationsTypeFilter !== "all") dropped.push(dt("نوع التبرع"));
+    if (donationsStatusFilter !== "RESOLVED") dropped.push(dt("حالة التبرع"));
+    const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ filters, kept, dropped }))));
+    window.location.assign(`/dashboard/communication/campaigns/new?audience=${encodeURIComponent(payload)}`);
+  };
   const [countryOptions, setCountryOptions] = useState<{ code: string; count: number }[]>([]);
   const [countryUnsetCount, setCountryUnsetCount] = useState(0);
 
@@ -326,18 +409,19 @@ export default function DashboardPage() {
   const [donationsTotal, setDonationsTotal] = useState(0);
   const [donationsLoading, setDonationsLoading] = useState(false);
   const [donationsFetchedOnce, setDonationsFetchedOnce] = useState(false);
-  const [searchCampaign, setSearchCampaign] = useState("");
+  const donationsRequestId = useRef(0);
   const [donationDetails, setDonationDetails] = useState<{
     open: boolean;
-    mode: "attribution" | "payment" | "error";
+    mode: "attribution" | "payment" | "error" | "overview";
     donation: DonationDetailsTarget | null;
   }>({ open: false, mode: "attribution", donation: null });
-  const openDonationDetails = (mode: "attribution" | "payment" | "error", d: DonationRow) => {
+  const openDonationDetails = (mode: "attribution" | "payment" | "error" | "overview", d: DonationRow) => {
     setDonationDetails({
       open: true,
       mode,
       donation: {
         id: d.id,
+        donor: d.donor, totalAmount: d.totalAmount, teamSupport: d.teamSupport, currency: d.currency, locale: d.locale, donorCountryCode: d.donorCountryCode, securityMode: d.securityMode, campaigns: d.campaigns, categories: d.categories,
         provider: d.provider ?? null,
         providerOrderId: d.providerOrderId ?? null,
         providerErrorMessage: d.providerErrorMessage ?? null,
@@ -350,11 +434,6 @@ export default function DashboardPage() {
     });
   };
 
-  const chartFilterPeriodLabelAr = useMemo(
-    () => getDashboardChartPeriodLabelAr(chartPeriod, dateFrom, dateTo),
-    [chartPeriod, dateFrom, dateTo]
-  );
-
   // Fetch categories and campaigns
   useEffect(() => {
     const fetchFilters = async () => {
@@ -362,12 +441,15 @@ export default function DashboardPage() {
         const lc = locale || "ar";
         const [categoriesRes, campaignsRes] = await Promise.all([
           fetch(`/api/categories?locale=${lc}&counts=true&limit=200`),
-          fetch(`/api/campaigns/all?locale=${lc}&isActiveFalse=true`),
+          fetch(`/api/admin/dashboard-filter-options?locale=${encodeURIComponent(lc)}`),
         ]);
+        if (!categoriesRes.ok || !campaignsRes.ok) {
+          throw new Error("Dashboard filter options request failed");
+        }
         const categoriesJson = await categoriesRes.json();
         const campaignsJson = await campaignsRes.json();
-        setCategories(categoriesJson?.items ?? categoriesJson ?? []);
-        setCampaigns(campaignsJson?.items ?? campaignsJson ?? []);
+        setCategories(Array.isArray(categoriesJson?.items) ? categoriesJson.items : []);
+        setCampaigns(normalizeDashboardCampaignFilterOptions(campaignsJson?.items));
       } catch (error) {
         console.error("Error fetching filters:", error);
       }
@@ -409,7 +491,7 @@ export default function DashboardPage() {
         );
         const data = await res.json();
         if (!res.ok) {
-          toast.error(typeof data?.error === "string" ? data.error : "فشل البحث عن المستخدمين");
+          toast.error(typeof data?.error === "string" ? data.error : dt("فشل البحث عن المستخدمين"));
           setUsers([]);
           return;
         }
@@ -446,113 +528,151 @@ export default function DashboardPage() {
     };
   }, [usersSearchCommitted, selectedUserId]);
 
-  // Chart data (filters + period + from/to + user — user from state or URL when coming via link)
+  // Chart data (filters + period + from/to + user  user from state or URL when coming via link)
   const fetchChartData = useCallback(async () => {
-    const userIdFromUrl = searchParams.get("userId");
-    const effectiveUserId = selectedUserId !== "all" ? selectedUserId : (userIdFromUrl && userIdFromUrl !== "all" ? userIdFromUrl : "all");
+    // URL deep-link is synchronized into selectedUserId above. Never silently
+    // re-apply the URL donor after the user explicitly clears that selection.
+    const effectiveUserId = selectedUserId;
+    const requestId = ++chartRequestId.current;
     setChartLoading(true);
+    setChartError(false);
+    setChartData([]); // Never show stale amounts under the newly selected filter.
     try {
-      const params = new URLSearchParams();
-      params.set("period", chartPeriod);
-      // Compute the explicit Istanbul date range for every preset (not just
-      // custom) so the chart endpoint uses the same calendar semantics as the
-      // donations table — اليوم = today only, أمس = yesterday, شهر = first of
-      // the month → today, سنة = Jan 1 → today.
       const { start, end } = getDonationsDateRange(chartPeriod, dateFrom, dateTo);
-      if (start && end) {
-        params.set("start", start);
-        params.set("end", end);
-      }
-      if (selectedCategory !== "all") params.append("categoryId", selectedCategory);
-      if (selectedCampaign !== "all") params.append("campaignId", selectedCampaign);
-      if (effectiveUserId !== "all") params.append("userId", effectiveUserId);
-      if (showFailed) params.set("showFailed", "true");
-      if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
-      if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
+      const params = dashboardDonationScopeParams({
+        categoryId: selectedCategory, campaignId: selectedCampaign,
+        userId: effectiveUserId, start, end,
+        locale: donationLocaleFilter, country: donationCountryFilter,
+        provider: donationProviderFilter, source: donationSourceFilter, status: donationsStatusFilter,
+        donationType: "all",
+      });
+      params.set("period", chartPeriod);
       const response = await axios.get(`/api/admin/donations/chart?${params}`);
-      setChartData(Array.isArray(response.data) ? response.data : []);
+      if (requestId !== chartRequestId.current) return;
+      if (!Array.isArray(response.data)) throw new Error("Invalid chart response");
+      setChartData(response.data);
     } catch (error) {
+      if (requestId !== chartRequestId.current) return;
       console.error("Error fetching chart data:", error);
-      toast.error("فشل في تحميل بيانات التبرعات");
+      setChartError(true);
       setChartData([]);
     } finally {
-      setChartLoading(false);
+      if (requestId === chartRequestId.current) setChartLoading(false);
     }
-  }, [selectedCategory, selectedCampaign, selectedUserId, searchParams, chartPeriod, dateFrom, dateTo, showFailed, donationLocaleFilter, donationCountryFilter]);
+  }, [selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationLocaleFilter, donationCountryFilter, donationProviderFilter, donationSourceFilter, donationsStatusFilter]);
 
   useEffect(() => {
     fetchChartData();
   }, [fetchChartData]);
 
-  // Stats — affected by فترة (period + dateFrom/dateTo) and category/campaign filters
+  // Stats  affected by فترة (period + dateFrom/dateTo) and category/campaign filters
   const fetchStats = useCallback(async () => {
+    statsRequestRef.current?.abort();
+    if (statsTimeoutRef.current !== null) window.clearTimeout(statsTimeoutRef.current);
+    const controller = new AbortController();
+    statsRequestRef.current = controller;
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 20_000);
+    statsTimeoutRef.current = timeout;
     try {
-      const params = new URLSearchParams();
-      params.set("period", chartPeriod);
       const { start, end } = getDonationsDateRange(chartPeriod, dateFrom, dateTo);
-      if (start && end) {
-        params.set("start", start);
-        params.set("end", end);
-      }
-      if (selectedCategory !== "all") params.set("categoryId", selectedCategory);
-      if (selectedCampaign !== "all") params.set("campaignId", selectedCampaign);
-      if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
-      if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
-      const response = await fetch(`/api/admin/stats?${params}`);
+      const params = dashboardStatsScopeParams({
+        categoryId: selectedCategory, campaignId: selectedCampaign,
+        start, end,
+        locale: donationLocaleFilter, country: donationCountryFilter,
+        provider: donationProviderFilter,
+      }, chartPeriod);
+      const response = await fetch(`/api/admin/stats?${params}`, { signal: controller.signal });
       const data = await response.json();
+      if (statsRequestRef.current !== controller) return;
       if (!response.ok) {
-        const message = data?.details || data?.error || "فشل في تحميل إحصائيات لوحة التحكم";
+        const message = data?.details || data?.error || dt("فشل في تحميل إحصائيات لوحة التحكم");
+        setStatsError(message);
         toast.error(message);
         return;
       }
       setStats(data);
+      setStatsError(null);
     } catch (error) {
+      if (statsRequestRef.current !== controller) return;
       console.error("Error fetching stats:", error);
-      toast.error("فشل في تحميل إحصائيات لوحة التحكم");
+      const message = timedOut
+        ? dt("استغرق تحميل الإحصائيات أكثر من 20 ثانية. يمكنك إعادة المحاولة.")
+        : dt("فشل في تحميل إحصائيات لوحة التحكم");
+      setStatsError(message);
+      toast.error(message);
     } finally {
-      setLoading(false);
+      window.clearTimeout(timeout);
+      if (statsTimeoutRef.current === timeout) statsTimeoutRef.current = null;
+      if (statsRequestRef.current === controller) {
+        statsRequestRef.current = null;
+        setLoading(false);
+      }
     }
-  }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter]);
+  }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter, donationProviderFilter]);
 
   useEffect(() => {
     fetchStats();
+    return () => {
+      statsRequestRef.current?.abort();
+      statsRequestRef.current = null;
+      if (statsTimeoutRef.current !== null) {
+        window.clearTimeout(statsTimeoutRef.current);
+        statsTimeoutRef.current = null;
+      }
+    };
   }, [fetchStats]);
 
-  // Donations list — uses تصفية النتائج + chart time span (period + from/to) + sort
+  // Donations list  uses تصفية النتائج + chart time span (period + from/to) + sort
   const fetchDonations = useCallback(
-    async (page: number, append: boolean) => {
-      setDonationsLoading(true);
+    async (page: number, append: boolean, quiet = false) => {
+      const requestId = ++donationsRequestId.current;
+      if (!append && !quiet) {
+        // Do not leave rows from the previous filter visible while the new
+        // query is loading, or after it fails.
+        setDonations([]);
+        setDonationsTotal(0);
+      }
+      if (!quiet) setDonationsLoading(true);
       try {
         const { start, end } = getDonationsDateRange(chartPeriod, dateFrom, dateTo);
-        const params = new URLSearchParams();
+        const params = dashboardDonationScopeParams({
+          categoryId: selectedCategory, campaignId: selectedCampaign,
+          userId: selectedUserId, start, end,
+          locale: donationLocaleFilter, country: donationCountryFilter,
+          provider: donationProviderFilter, source: donationSourceFilter, status: donationsStatusFilter,
+          donationType: "all",
+        });
         params.set("page", String(page));
         params.set("limit", String(PAGE_SIZE));
         params.set("sortBy", donationsSortBy);
         params.set("sortOrder", donationsSortOrder);
-        if (selectedCategory !== "all") params.append("categoryId", selectedCategory);
-        if (selectedCampaign !== "all") params.append("campaignId", selectedCampaign);
-        if (selectedUserId !== "all") params.append("userId", selectedUserId);
-        if (start) params.set("start", start);
-        if (end) params.set("end", end);
-        if (donationsStatusFilter !== "all") params.set("status", donationsStatusFilter);
-        if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
-        if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
+        // Preserve the release candidate's recovered-failure visibility rule.
+        // Explicit FAILED view and donor history must retain all attempts.
+        if (donationsStatusFilter !== "FAILED") params.set("hideRecoveredFailures", "1");
+        // Chart and table must use the same financial period: settled paid
+        // donations use paidAt; unresolved attempts use createdAt.
+        if (start && end) params.set("dateBasis", "accounting");
         if (donationsSearch) params.set("search", donationsSearch);
         const res = await fetch(`/api/donations?${params}`);
         const data = await res.json();
+        if (requestId !== donationsRequestId.current) return;
         if (!res.ok) {
-          toast.error(data?.error || "فشل في تحميل التبرعات");
+          if (!quiet) toast.error(data?.error || dt("فشل في تحميل التبرعات"));
           return;
         }
         const list = Array.isArray(data.donations) ? data.donations : [];
         setDonations((prev) => (append ? [...prev, ...list] : list));
         setDonationsTotal(data.pagination?.total ?? 0);
       } catch (error) {
+        if (requestId !== donationsRequestId.current) return;
         console.error("Error fetching donations:", error);
-        toast.error("فشل في تحميل التبرعات");
+        if (!quiet) toast.error(dt("فشل في تحميل التبرعات"));
       } finally {
-        setDonationsLoading(false);
-        setDonationsFetchedOnce(true);
+        if (requestId === donationsRequestId.current) {
+          setDonationsLoading(false);
+          setDonationsFetchedOnce(true);
+        }
       }
     },
     [
@@ -567,16 +687,20 @@ export default function DashboardPage() {
       donationsStatusFilter,
       donationLocaleFilter,
       donationCountryFilter,
+      donationProviderFilter,
+      donationSourceFilter,
       donationsSearch,
     ]
   );
+
+  useLiveDonationRefresh(() => fetchDonations(1, false, true), !loading && donationsPage === 1);
 
   // Fetch donations when filters or time span or sort change
   useEffect(() => {
     if (loading) return;
     setDonationsPage(1);
     fetchDonations(1, false);
-  }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationLocaleFilter, donationCountryFilter, donationsSearch, fetchDonations]);
+  }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationLocaleFilter, donationCountryFilter, donationProviderFilter, donationSourceFilter, donationsSearch, fetchDonations]);
 
   const loadMoreDonations = () => {
     const next = donationsPage + 1;
@@ -636,6 +760,7 @@ export default function DashboardPage() {
       status: donationsStatusFilter,
       locale: donationLocaleFilter === "all" ? "all" : String(donationLocaleFilter),
       country: donationCountryFilter,
+      provider: donationProviderFilter,
       sortBy: donationsSortBy,
       sortOrder: donationsSortOrder,
     };
@@ -648,6 +773,7 @@ export default function DashboardPage() {
     donationsStatusFilter,
     donationLocaleFilter,
     donationCountryFilter,
+    donationProviderFilter,
     donationsSortBy,
     donationsSortOrder,
   ]);
@@ -666,7 +792,7 @@ export default function DashboardPage() {
   );
   const exportLocaleOptions = useMemo(
     () => [
-      { value: "ar", label: "العربية" },
+      { value: "ar", label: dt("العربية") },
       { value: "en", label: "English" },
       { value: "tr", label: "Türkçe" },
       { value: "fr", label: "Français" },
@@ -682,54 +808,84 @@ export default function DashboardPage() {
     return <LoadingSkeleton />;
   }
 
+  if (!stats) {
+    return (
+      <div className="mx-auto flex min-h-[45vh] max-w-xl flex-col items-center justify-center gap-4 px-5 text-center">
+        <div className="text-base font-semibold text-slate-800">{dt("تعذر تحميل لوحة المعلومات")}</div>
+        <p role="alert" className="text-sm text-slate-600">{statsError || dt("لم تصل استجابة الإحصائيات. تحقق من الاتصال ثم أعد المحاولة.")}</p>
+        <Button onClick={() => { setLoading(true); void fetchStats(); }} className="gap-2">
+          <RefreshCw className="h-4 w-4" />{dt("إعادة المحاولة")}
+        </Button>
+      </div>
+    );
+  }
+
+  // These figures are derived from the exact same filtered/settled series as
+  // the chart, not from global stats or the first page of donation rows.
+  const scoped = summarizeScopedDonationChart(chartData);
+  const selectedRange = getDonationsDateRange(chartPeriod, dateFrom, dateTo);
+  const periodCaption = selectedRange.start && selectedRange.end
+    ? `${selectedRange.start} — ${selectedRange.end}`
+    : PERIOD_LABELS[chartPeriod];
+  const activeScopeLabels = [
+    PERIOD_LABELS[chartPeriod],
+    selectedCategory !== "all" ? `${dt("الفئة")}: ${categories.find(c => c.id === selectedCategory)?.name ?? selectedCategory}` : null,
+    selectedCampaign !== "all" ? `${dt("المشروع")}: ${campaigns.find(c => c.id === selectedCampaign)?.title ?? selectedCampaign}` : null,
+    selectedUserId !== "all" ? `${dt("المستخدم")}: ${users.find(u => u.id === selectedUserId)?.name || users.find(u => u.id === selectedUserId)?.email || selectedUserId}` : null,
+    donationLocaleFilter !== "all" ? `${dt("لغة الموقع (التبرع)")}: ${donationLocaleFilter}` : null,
+    donationCountryFilter !== "all" ? `${dt("الدولة")}: ${donationCountryFilter === "__unset" ? dt("غير محدد") : getCountryDisplayNameFromCode(donationCountryFilter, locale)}` : null,
+    donationProviderFilter !== "all" ? `${dt("بوابة الدفع")}: ${donationProviderFilter}` : null,
+    donationsStatusFilter !== "RESOLVED" ? `${dt("حالة التبرع")}: ${donationsStatusFilter === "PAID" ? dt("ناجح") : donationsStatusFilter === "FAILED" ? dt("فاشل") : donationsStatusFilter === "PENDING" ? dt("محاولات بحاجة لتحقق") : dt("كل الحالات (مع غير المحسومة)")}` : null,
+  ].filter((value): value is string => Boolean(value));
+
   const revenueSplitData = [
     {
-      name: "مشاريع",
+      name: dt("مشاريع"),
       value: stats?.campaignDonationsTotal ?? 0,
       count: stats?.campaignDonationsCount ?? 0,
-      color: "#2563eb",
+      color: "#025EB8",
     },
     {
-      name: "فئات",
+      name: dt("فئات"),
       value: stats?.categoryDonationsTotal ?? 0,
       count: stats?.categoryDonationsCount ?? 0,
-      color: "#64748b",
+      color: "#FA5D17",
     },
   ].filter((d) => d.value > 0 || d.count > 0);
 
   const paidFailedSplitData = [
     {
-      name: "مدفوعة",
+      name: dt("مدفوعة"),
       value: stats?.totalAmount ?? 0,
       count: stats?.paidCount ?? 0,
-      color: "#22c55e",
+      color: "#10B981",
     },
     {
-      name: "فاشلة",
+      name: dt("فاشلة"),
       value: stats?.failedTotalAmount ?? 0,
       count: stats?.failedCount ?? 0,
-      color: "#ef4444",
+      color: "#F43F5E",
     },
   ].filter((d) => d.value > 0 || d.count > 0);
 
   return (
-    <div className="min-h-0" dir="rtl">
+    <div className="min-h-0" dir={dashDir()}>
       <div className="space-y-6 sm:space-y-8 p-0 sm:p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto">
         <PageHeader
-          title="تحليل الإيرادات"
+          title={dt("تحليل الإيرادات")}
           icon={LayoutDashboard}
           description={
             searchParams.get("userId") ? (
               <>
-                عرض تبرعات:{" "}
+                {dt("عرض تبرعات: ")}
                 <span className="font-medium text-slate-900 whitespace-normal break-words">
                   {users.find((u) => u.id === searchParams.get("userId"))?.name ||
                     users.find((u) => u.id === searchParams.get("userId"))?.email ||
-                    "جاري التحميل..."}
+                    dt("جاري التحميل...")}
                 </span>
               </>
             ) : (
-              "نظرة شاملة على الإيرادات، التبرعات والتحليلات"
+              dt("نظرة شاملة على الإيرادات، التبرعات والتحليلات")
             )
           }
         />
@@ -737,189 +893,63 @@ export default function DashboardPage() {
 
 
 
-        {/* Summary band. Establishes which number matters before the filtered KPI grid, but
-            stays on the neutral surface the rest of the shell uses — a coloured slab here
-            fights the content instead of framing it. */}
-        {!searchParams.get("userId") && (
+        <section aria-label={dt("نتائج الفترة المحددة")} className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-start">
+              <h2 className="text-base font-bold text-slate-900">{dt("نتائج الفترة المحددة")}</h2>
+              <p className="text-xs text-slate-500">{periodCaption} · {dt("بتوقيت إسطنبول")}</p>
+            </div>
+            <span className="text-xs text-slate-500">{dt("تتغير النتائج حسب الفلاتر أدناه")}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5" aria-label={dt("عوامل التصفية")}>
+            {activeScopeLabels.map(label => <span key={label} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600">{label}</span>)}
+          </div>
+          {chartError ? (
+            <div role="alert" className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+              {dt("تعذر تحميل نتائج الفترة المحددة. لا يمكن عرض أرقام موثوقة الآن.")}
+              <Button variant="outline" size="sm" className="ms-3" onClick={() => void fetchChartData()}>{dt("إعادة المحاولة")}</Button>
+            </div>
+          ) : (
+            <MetricSummaryBand
+              icon={Wallet}
+              eyebrow={dt("الإيرادات المحصلة للفترة")}
+              badge={PERIOD_LABELS[chartPeriod]}
+              value={chartLoading ? "…" : formatInSelectedCurrency(scoped.paidAmountUSD)}
+              note={dt("المبالغ المؤكدة فقط. الإخفاقات والمحاولات قيد التأكيد ليست إيرادًا، والعملة المعروضة هي العملة المختارة في اللوحة.")}
+              stats={[
+                { label: dt("تبرعات ناجحة"), value: chartLoading ? "…" : scoped.paidCount.toLocaleString("en-US"), icon: HandCoins },
+                { label: dt("تبرعات فاشلة"), value: chartLoading ? "…" : donationsStatusFilter === "PAID" || donationsStatusFilter === "PENDING" ? "—" : scoped.failedCount.toLocaleString("en-US"), icon: RefreshCw },
+                { label: dt("قيد التأكيد"), value: chartLoading ? "…" : donationsStatusFilter === "all" || donationsStatusFilter === "PENDING" ? scoped.pendingCount.toLocaleString("en-US") : "—", icon: Calculator },
+              ]}
+            />
+          )}
+        </section>
+
+        {selectedUserId === "all" && <>
           <MetricSummaryBand
             icon={Wallet}
-            eyebrow="إجمالي الإيرادات الناجحة"
-            badge="كل الوقت"
-            value={formatInSelectedCurrency(
-              stats?.paidRevenueAllTimeUnfiltered ??
-                stats?.allTimeRevenue ??
-                stats?.totalAmount ??
-                0,
-            )}
-            note="لا تتأثر هذه القيمة ولا البطاقات المجاورة بالفترة أو التصفية المختارة أدناه."
+            eyebrow={dt("إجمالي الإيرادات الناجحة")}
+            badge={dt("كل الوقت")}
+            value={stats?.paidRevenueAllTimeUnfiltered != null ? formatInSelectedCurrency(stats.paidRevenueAllTimeUnfiltered) : "—"}
+            note={dt("لا تتأثر هذه القيمة ولا البطاقات المجاورة بالفترة أو التصفية المختارة أدناه.")}
             stats={[
-              // No hints here: the badge already says كل الوقت. In a single-row band every
-              // extra word is height the charts below lose.
-              {
-                label: "عدد التبرعات الناجحة",
-                icon: HandCoins,
-                value: (stats?.paidCountAllTimeUnfiltered ?? 0).toLocaleString("en-US"),
-              },
-              {
-                label: "المشاريع",
-                icon: Heart,
-                value: (stats?.totalCampaigns ?? 0).toLocaleString("en-US"),
-              },
-              {
-                label: "إجمالي المستخدمين",
-                icon: Users,
-                value: (stats?.totalUsers ?? 0).toLocaleString("en-US"),
-              },
+              { label: dt("عدد التبرعات الناجحة"), icon: HandCoins, value: stats?.paidCountAllTimeUnfiltered?.toLocaleString("en-US") ?? "—" },
+              { label: dt("المشاريع"), icon: Heart, value: stats?.totalCampaigns?.toLocaleString("en-US") ?? "—" },
+              { label: dt("إجمالي المستخدمين"), icon: Users, value: stats?.totalUsers?.toLocaleString("en-US") ?? "—" },
+              { label: dt("متوسط التبرع"), icon: Calculator, value: stats?.paidRevenueAllTimeUnfiltered != null && (stats.paidCountAllTimeUnfiltered ?? 0) > 0 ? formatInSelectedCurrency(stats.paidRevenueAllTimeUnfiltered / stats.paidCountAllTimeUnfiltered!) : "—" },
             ]}
           />
-        )}
-
-
-        {/* المؤشرات — تختفي عند عرض تبرعات مستخدم معين عبر الرابط */}
-        {!searchParams.get("userId") && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] sm:p-5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand">
-                <PieChartIcon className="h-[18px] w-[18px]" />
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-[15px] font-semibold leading-tight text-slate-900">المؤشرات</h2>
-                <p className="text-xs text-slate-500">محسوبة حسب الفترة والتصفية المختارة</p>
-              </div>
-            </div>
-            <Tabs
-              value={statCardSet}
-              onValueChange={(v) => setStatCardSet(v as StatCardSet)}
-              className="w-auto"
-            >
-              <TabsList className="bg-muted p-1 rounded-lg h-9" dir="rtl">
-                <TabsTrigger
-                  value="revenue"
-                  className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
-                >
-                  الإيرادات
-                </TabsTrigger>
-                <TabsTrigger
-                  value="overview"
-                  className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
-                >
-                  نظرة عامة
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 sm:gap-4">
-            {statCardSet === "revenue" && (
-              <>
-                <StatsMetricCard
-                  compact
-                  title={thisMonthRevenueTitle}
-                  value={stats?.thisMonthRevenue ?? 0}
-                  icon={Calendar}
-                  accent="emerald"
-                  format="money"
-                  variant="hero"
-                  subtitle="دفعات ناجحة في الشهر الحالي (UTC)"
-                />
-                <StatsMetricCard
-                  compact
-                  title={`إيرادات ناجحة (${chartFilterPeriodLabelAr})`}
-                  value={stats?.totalAmount ?? 0}
-                  icon={DollarSign}
-                  accent="emerald"
-                  format="money"
-                  subtitle="مجموع التبرعات المدفوعة فقط — حسب الفترة والتصفية أعلاه"
-                />
-                <StatsMetricCard
-                  compact
-                  title="إيرادات ناجحة (كل الوقت)"
-                  value={stats?.paidRevenueAllTimeUnfiltered ?? 0}
-                  icon={DollarSign}
-                  accent="emerald"
-                  format="money"
-                  subtitle="جميع التبرعات الناجحة بشكل عام دون فلتر"
-                />
-                <StatsMetricCard
-                  compact
-                  title="دعم الفريق"
-                  value={stats?.teamSupportTotal ?? 0}
-                  icon={HandCoins}
-                  accent="amber"
-                  format="money"
-                  subtitle={`من التبرعات الناجحة (${chartFilterPeriodLabelAr})`}
-                />
-                {/* <StatsMetricCard
-                  compact
-                  title="الرسوم"
-                  value={stats?.feesTotal ?? 0}
-                  icon={Percent}
-                  accent="orange"
-                  format="money"
-                  subtitle={`من التبرعات الناجحة (${chartFilterPeriodLabelAr})`}
-                /> */}
-                <StatsMetricCard
-                  compact
-                  title="تبرعات ناجحة"
-                  value={stats?.paidCount ?? 0}
-                  icon={Receipt}
-                  accent="teal"
-                  subtitle={`إجمالي مبالغ ناجحة: ${formatMoney(stats?.totalAmount ?? 0, undefined, undefined, true)}`}
-                />
-                <StatsMetricCard
-                  compact
-                  title="تبرعات فاشلة"
-                  value={stats?.failedCount ?? 0}
-                  icon={Receipt}
-                  accent="orange"
-                  subtitle={stats?.failedTotalAmount ? formatMoney(stats.failedTotalAmount, undefined, undefined, true) : "—"}
-                />
-              </>
-            )}
-            {statCardSet === "overview" && (
-              <>
-                <StatsMetricCard
-                  compact
-                  title="المشاريع"
-                  value={stats?.totalCampaigns ?? 0}
-                  icon={Heart}
-                  accent="teal"
-                />
-                <StatsMetricCard
-                  compact
-                  title="الفئات"
-                  value={stats?.totalCategories ?? 0}
-                  icon={FolderTree}
-                  accent="indigo"
-                />
-                <StatsMetricCard
-                  compact
-                  title="المستخدمين"
-                  value={stats?.totalUsers ?? 0}
-                  icon={Users}
-                  accent="amber"
-                />
-                <StatsMetricCard
-                  compact
-                  title="عدد التبرعات"
-                  value={stats?.totalDonations ?? 0}
-                  icon={Receipt}
-                  accent="violet"
-                />
-              </>
-            )}
-          </div>
-        </section>
-        )}
+          <HomeDonationSummary onRefresh={refreshAfterDonationMutation} />
+        </>}
 
         {/* التحليلات */}
         <section className="space-y-4">
           <Card className="border-border shadow-sm">
             <CardContent className="pt-6">
-              <Tabs defaultValue="time-series" className="w-full" dir="rtl">
+              <Tabs defaultValue="time-series" className="w-full" dir={dashDir()}>
 
 
-                <TabsContent value="time-series" className="mt-0" dir="rtl">
+                <TabsContent value="time-series" className="mt-0" dir={dashDir()}>
                   <div className="h-[400px] w-full">
                     {chartLoading ? (
                       <div className="h-full flex items-center justify-center bg-slate-50 rounded-lg">
@@ -939,7 +969,7 @@ export default function DashboardPage() {
                               dataKey="date"
                               tick={{ fill: CHART_COLORS.text, fontSize: 12 }}
                               tickFormatter={(v) =>
-                                formatIstanbulDateKeyLabel(v, "en-US", {
+                                formatIstanbulDateKeyLabel(v, dashIntl("ar-EG"), {
                                   day: "numeric",
                                   month: "short",
                                 })
@@ -954,12 +984,12 @@ export default function DashboardPage() {
                             <Tooltip
                               contentStyle={{
                                 backgroundColor: "#fff",
-                                border: "1px solid #e2e8f0",
+                                border: "1px solid #E2E8F0",
                                 borderRadius: "8px",
                                 boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                               }}
                               labelFormatter={(v) =>
-                                formatIstanbulDateKeyLabel(v, "en-US", {
+                                formatIstanbulDateKeyLabel(v, dashIntl("ar-EG"), {
                                   weekday: "long",
                                   year: "numeric",
                                   month: "long",
@@ -967,8 +997,8 @@ export default function DashboardPage() {
                                 })
                               }
                               formatter={(value: number, name: string) => {
-                                if (name === "amountUSD") return [formatInSelectedCurrency(Number(value), true), "مبلغ ناجح"];
-                                if (name === "amountFailed") return [formatInSelectedCurrency(Number(value), true), "مبلغ فاشل"];
+                                if (name === "amountUSD") return [formatInSelectedCurrency(Number(value), true), dt("مبلغ ناجح")];
+                                if (name === "amountFailed") return [formatInSelectedCurrency(Number(value), true), dt("مبلغ فاشل")];
                                 return [formatInSelectedCurrency(Number(value), true), name];
                               }}
                               content={({ active, payload, label }) => {
@@ -978,7 +1008,7 @@ export default function DashboardPage() {
                                 return (
                                   <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
                                     <p className="text-sm font-medium text-slate-700 mb-1.5">
-                                      {label ? formatIstanbulDateKeyLabel(String(label), "ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : ""}
+                                      {label ? formatIstanbulDateKeyLabel(String(label), dashIntl("ar-EG"), { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : ""}
                                     </p>
                                     {payload.map((entry) => {
                                       const dataKey = (entry as { dataKey?: string }).dataKey ?? entry.name;
@@ -992,10 +1022,10 @@ export default function DashboardPage() {
                                     {point != null && (
                                       <>
                                         <p className="text-sm font-medium text-slate-700 mt-1.5 pt-1 border-t border-slate-100">
-                                          الإجمالي: {formatInSelectedCurrency(Number(point.amountUSD ?? 0), true)}
+                                          {dtx("الإجمالي: {0}", [formatInSelectedCurrency(Number(point.amountUSD ?? 0), true)])}
                                         </p>
                                         <p className="text-sm text-slate-500 mt-0.5">
-                                          عدد التبرعات: {Math.round(Number(point.count))}
+                                          {dtx("عدد التبرعات: {0}", [Math.round(Number(point.count))])}
                                         </p>
                                       </>
                                     )}
@@ -1009,15 +1039,15 @@ export default function DashboardPage() {
                               fill="#3b82f6"
                               radius={[4, 4, 0, 0]}
                               maxBarSize={32}
-                              name="مبلغ ناجح"
+                              name={dt("مبلغ ناجح")}
                             />
                             {showFailed && (
                               <Bar
                                 dataKey="amountFailed"
-                                fill="#ef4444"
+                                fill="#F43F5E"
                                 radius={[4, 4, 0, 0]}
                                 maxBarSize={32}
-                                name="مبلغ فاشل"
+                                name={dt("مبلغ فاشل")}
                               />
                             )}
                           </BarChart>
@@ -1034,7 +1064,7 @@ export default function DashboardPage() {
                               dataKey="date"
                               tick={{ fill: CHART_COLORS.text, fontSize: 12 }}
                               tickFormatter={(v) =>
-                                formatIstanbulDateKeyLabel(v, "en-US", {
+                                formatIstanbulDateKeyLabel(v, dashIntl("ar-EG"), {
                                   day: "numeric",
                                   month: "short",
                                 })
@@ -1058,12 +1088,12 @@ export default function DashboardPage() {
                             <Tooltip
                               contentStyle={{
                                 backgroundColor: "#fff",
-                                border: "1px solid #e2e8f0",
+                                border: "1px solid #E2E8F0",
                                 borderRadius: "8px",
                                 boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                               }}
                               labelFormatter={(v) =>
-                                formatIstanbulDateKeyLabel(v, "en-US", {
+                                formatIstanbulDateKeyLabel(v, dashIntl("ar-EG"), {
                                   weekday: "long",
                                   year: "numeric",
                                   month: "long",
@@ -1072,16 +1102,16 @@ export default function DashboardPage() {
                               }
                               formatter={(value: number, name: string) => {
                                 if (name === "count" || name === "عدد التبرعات") return [String(Math.round(Number(value))), "عدد التبرعات"];
-                                if (chartMetric === "teamSupport") return [formatInSelectedCurrency(Number(value), true), "دعم الفريق"];
-                                if (chartMetric === "fees") return [formatInSelectedCurrency(Number(value), true), "الرسوم"];
-                                return [String(Math.round(Number(value))), "العدد"];
+                                if (chartMetric === "teamSupport") return [formatInSelectedCurrency(Number(value), true), dt("دعم الفريق")];
+                                if (chartMetric === "fees") return [formatInSelectedCurrency(Number(value), true), dt("الرسوم")];
+                                return [String(Math.round(Number(value))), dt("العدد")];
                               }}
                             />
                             <Legend />
                             <Bar
                               yAxisId="amount"
                               dataKey={chartMetric}
-                              fill={chartMetric === "teamSupport" ? "#f59e0b" : "#ea580c"}
+                              fill={chartMetric === "teamSupport" ? "#F59E0B" : "#F97316"}
                               radius={[4, 4, 0, 0]}
                               maxBarSize={36}
                               name={chartMetric === "teamSupport" ? "دعم الفريق" : "الرسوم"}
@@ -1090,10 +1120,10 @@ export default function DashboardPage() {
                               yAxisId="count"
                               type="monotone"
                               dataKey="count"
-                              stroke="#0f766e"
+                              stroke="#10B981"
                               strokeWidth={2}
                               dot={false}
-                              name="عدد التبرعات"
+                              name={dt("عدد التبرعات")}
                             />
                           </ComposedChart>
                         </ResponsiveContainer>
@@ -1109,7 +1139,7 @@ export default function DashboardPage() {
                             dataKey="date"
                             tick={{ fill: CHART_COLORS.text, fontSize: 12 }}
                             tickFormatter={(v) =>
-                              formatIstanbulDateKeyLabel(v, "en-US", {
+                              formatIstanbulDateKeyLabel(v, dashIntl("ar-EG"), {
                                 day: "numeric",
                                 month: "short",
                               })
@@ -1132,12 +1162,12 @@ export default function DashboardPage() {
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "#fff",
-                              border: "1px solid #e2e8f0",
+                              border: "1px solid #E2E8F0",
                               borderRadius: "8px",
                               boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                             }}
                             labelFormatter={(v) =>
-                              formatIstanbulDateKeyLabel(v, "en-US", {
+                              formatIstanbulDateKeyLabel(v, dashIntl("ar-EG"), {
                                 weekday: "long",
                                 year: "numeric",
                                 month: "long",
@@ -1146,10 +1176,10 @@ export default function DashboardPage() {
                             }
                             formatter={(value: number, name: string) => {
                               if (name === "count" || name === "عدد التبرعات") return [String(Math.round(Number(value))), "عدد التبرعات"];
-                              if (chartMetric === "amount") return [formatInSelectedCurrency(Number(value), true), "المبلغ"];
-                              if (chartMetric === "teamSupport") return [formatInSelectedCurrency(Number(value), true), "دعم الفريق"];
-                              if (chartMetric === "fees") return [formatInSelectedCurrency(Number(value), true), "الرسوم"];
-                              return [String(Math.round(Number(value))), "العدد"];
+                              if (chartMetric === "amount") return [formatInSelectedCurrency(Number(value), true), dt("المبلغ")];
+                              if (chartMetric === "teamSupport") return [formatInSelectedCurrency(Number(value), true), dt("دعم الفريق")];
+                              if (chartMetric === "fees") return [formatInSelectedCurrency(Number(value), true), dt("الرسوم")];
+                              return [String(Math.round(Number(value))), dt("العدد")];
                             }}
                           />
                           <Legend />
@@ -1159,10 +1189,10 @@ export default function DashboardPage() {
                             dataKey={chartMetric === "amount" ? "amountUSD" : chartMetric}
                             stroke={
                               chartMetric === "amount"
-                                ? "#2563eb"
+                                ? "#025EB8"
                                 : chartMetric === "teamSupport"
-                                  ? "#f59e0b"
-                                  : "#ea580c"
+                                  ? "#F59E0B"
+                                  : "#F97316"
                             }
                             strokeWidth={2}
                             dot={false}
@@ -1178,10 +1208,10 @@ export default function DashboardPage() {
                             yAxisId="count"
                             type="monotone"
                             dataKey="count"
-                            stroke="#0f766e"
+                            stroke="#10B981"
                             strokeWidth={2}
                             dot={false}
-                            name="عدد التبرعات"
+                            name={dt("عدد التبرعات")}
                           />
                         </ComposedChart>
                       </ResponsiveContainer>
@@ -1196,7 +1226,7 @@ export default function DashboardPage() {
                             dataKey="date"
                             tick={{ fill: CHART_COLORS.text, fontSize: 12 }}
                             tickFormatter={(v) =>
-                              formatIstanbulDateKeyLabel(v, "en-US", {
+                              formatIstanbulDateKeyLabel(v, dashIntl("ar-EG"), {
                                 day: "numeric",
                                 month: "short",
                               })
@@ -1219,12 +1249,12 @@ export default function DashboardPage() {
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "#fff",
-                              border: "1px solid #e2e8f0",
+                              border: "1px solid #E2E8F0",
                               borderRadius: "8px",
                               boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                             }}
                             labelFormatter={(v) =>
-                              formatIstanbulDateKeyLabel(v, "en-US", {
+                              formatIstanbulDateKeyLabel(v, dashIntl("ar-EG"), {
                                 weekday: "long",
                                 year: "numeric",
                                 month: "long",
@@ -1233,10 +1263,10 @@ export default function DashboardPage() {
                             }
                             formatter={(value: number, name: string) => {
                               if (name === "count" || name === "عدد التبرعات") return [String(Math.round(Number(value))), "عدد التبرعات"];
-                              if (chartMetric === "amount") return [formatInSelectedCurrency(Number(value), true), "المبلغ"];
-                              if (chartMetric === "teamSupport") return [formatInSelectedCurrency(Number(value), true), "دعم الفريق"];
-                              if (chartMetric === "fees") return [formatInSelectedCurrency(Number(value), true), "الرسوم"];
-                              return [String(Math.round(Number(value))), "العدد"];
+                              if (chartMetric === "amount") return [formatInSelectedCurrency(Number(value), true), dt("المبلغ")];
+                              if (chartMetric === "teamSupport") return [formatInSelectedCurrency(Number(value), true), dt("دعم الفريق")];
+                              if (chartMetric === "fees") return [formatInSelectedCurrency(Number(value), true), dt("الرسوم")];
+                              return [String(Math.round(Number(value))), dt("العدد")];
                             }}
                           />
                           <Legend />
@@ -1246,17 +1276,17 @@ export default function DashboardPage() {
                             dataKey={chartMetric === "amount" ? "amountUSD" : chartMetric}
                             stroke={
                               chartMetric === "amount"
-                                ? "#2563eb"
+                                ? "#025EB8"
                                 : chartMetric === "teamSupport"
-                                  ? "#f59e0b"
-                                  : "#ea580c"
+                                  ? "#F59E0B"
+                                  : "#F97316"
                             }
                             fill={
                               chartMetric === "amount"
-                                ? "#93c5fd"
+                                ? "#60A5FA"
                                 : chartMetric === "teamSupport"
-                                  ? "#fcd34d"
-                                  : "#fdba74"
+                                  ? "#FCD34D"
+                                  : "#FDBA74"
                             }
                             fillOpacity={0.4}
                             strokeWidth={2}
@@ -1272,10 +1302,10 @@ export default function DashboardPage() {
                             yAxisId="count"
                             type="monotone"
                             dataKey="count"
-                            stroke="#0f766e"
+                            stroke="#10B981"
                             strokeWidth={2}
                             dot={false}
-                            name="عدد التبرعات"
+                            name={dt("عدد التبرعات")}
                           />
                         </ComposedChart>
                       </ResponsiveContainer>
@@ -1283,21 +1313,19 @@ export default function DashboardPage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="split" className="mt-0" dir="rtl">
-                  <Tabs defaultValue="paid-failed" className="w-full" dir="rtl">
+                <TabsContent value="split" className="mt-0" dir={dashDir()}>
+                  <Tabs defaultValue="paid-failed" className="w-full" dir={dashDir()}>
                     <TabsList className="bg-slate-100 p-1 rounded-lg mb-4 inline-flex flex-row-reverse">
                       <TabsTrigger
                         value="campaign-category"
                         className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
                       >
-                        مشاريع vs فئات
-                      </TabsTrigger>
+                        {dt("مشاريع vs فئات")}</TabsTrigger>
                       <TabsTrigger
                         value="paid-failed"
                         className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
                       >
-                        مقبول vs فاشل
-                      </TabsTrigger>
+                        {dt("مقبول vs فاشل")}</TabsTrigger>
                     </TabsList>
                     <TabsContent value="campaign-category" className="mt-0">
                       <div className="h-[340px] w-full flex items-center justify-center">
@@ -1323,8 +1351,8 @@ export default function DashboardPage() {
                                 formatter={(value: number, _name: string, props: { payload?: { count?: number } }) => {
                                   const count = props?.payload?.count ?? 0;
                                   return [
-                                    `${formatMoney(Number(value), undefined, undefined, true)} — عدد: ${count}`,
-                                    "المبلغ / العدد",
+                                    dt("{0}  عدد: {1}", [formatMoney(Number(value), undefined, undefined, true), count]),
+                                    dt("المبلغ / العدد"),
                                   ];
                                 }}
                               />
@@ -1332,11 +1360,11 @@ export default function DashboardPage() {
                             </PieChart>
                           </ResponsiveContainer>
                         ) : (
-                          <p className="text-slate-500">لا توجد بيانات</p>
+                          <p className="text-slate-500">{dt("لا توجد بيانات")}</p>
                         )}
                       </div>
                     </TabsContent>
-                    <TabsContent value="paid-failed" className="mt-0" dir="rtl">
+                    <TabsContent value="paid-failed" className="mt-0" dir={dashDir()}>
                       <div className="h-[340px] w-full flex items-center justify-center">
                         {paidFailedSplitData.length > 0 ? (
                           <ResponsiveContainer width="100%" height="100%">
@@ -1360,8 +1388,8 @@ export default function DashboardPage() {
                                 formatter={(value: number, _name: string, props: { payload?: { value?: number; count?: number } }) => {
                                   const amount = props?.payload?.value ?? 0;
                                   return [
-                                    `عدد: ${value}${amount > 0 ? ` — ${formatMoney(Number(amount), undefined, undefined, true)}` : ""}`,
-                                    "التبرعات",
+                                    dt("عدد: {0}{1}", [value, amount > 0 ? `  ${formatMoney(Number(amount), undefined, undefined, true)}` : ""]),
+                                    dt("التبرعات"),
                                   ];
                                 }}
                               />
@@ -1369,29 +1397,37 @@ export default function DashboardPage() {
                             </PieChart>
                           </ResponsiveContainer>
                         ) : (
-                          <p className="text-slate-500">لا توجد بيانات</p>
+                          <p className="text-slate-500">{dt("لا توجد بيانات")}</p>
                         )}
                       </div>
                     </TabsContent>
                   </Tabs>
                 </TabsContent>
                 <div className="flex items-center gap-4 mt-6 flex-row-reverse flex-wrap">
-                  <TabsList className="bg-slate-100 p-1 rounded-lg flex-row-reverse max-w-max">
+                  <TabsList className="bg-slate-100 p-1 rounded-lg flex-row-reverse h-auto flex-wrap max-w-full">
                     <TabsTrigger
                       value="split"
                       className="data-[state=active]:bg-card data-[state=active]:shadow-sm gap-2"
                     >
                       <PieChartIcon className="w-4 h-4" />
-                      توزيع الإيرادات
-                    </TabsTrigger>
+                      {dt("توزيع الإيرادات")}</TabsTrigger>
                     <TabsTrigger
                       value="time-series"
                       className="data-[state=active]:bg-card data-[state=active]:shadow-sm gap-2"
                     >
                       <BarChart3 className="w-4 h-4" />
-                      التبرعات عبر الزمن
-                    </TabsTrigger>
+                      {dt("التبرعات عبر الزمن")}</TabsTrigger>
                   </TabsList>
+                  <Select value={chartView} onValueChange={(v) => setChartView(v as ChartViewType)}>
+                    <SelectTrigger className="h-8 w-[120px] px-2 text-xs rounded-lg border-slate-200 bg-white" aria-label={dt("نوع الرسم")}>
+                      <SelectValue placeholder={dt("نوع الرسم")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bar" className="text-xs">{dt("أعمدة")}</SelectItem>
+                      <SelectItem value="line" className="text-xs">{dt("خط")}</SelectItem>
+                      <SelectItem value="area" className="text-xs">{dt("منطقة")}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {chartView === "bar" && chartMetric === "amount" && (
                     <button
                       type="button"
@@ -1403,8 +1439,8 @@ export default function DashboardPage() {
                           : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
                       )}
                     >
-                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: showFailed ? "#ef4444" : "#94a3b8" }} />
-                      {showFailed ? "إخفاء الفاشلة" : "إظهار الفاشلة"}
+                      <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: showFailed ? "#F43F5E" : "#94A3B8" }} />
+                      {showFailed ? dt("إخفاء الفاشلة") : dt("إظهار الفاشلة")}
                     </button>
                   )}
                 </div>
@@ -1418,7 +1454,7 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-row-reverse">
               <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2 justify-end">
                 <Search className="w-4 h-4 shrink-0" />
-                <span>تصفية النتائج</span>
+                <span>{dt("تصفية النتائج")}</span>
               </CardTitle>
               <DonationsFilterActions
                 canEditDonations={canEditDonations}
@@ -1428,7 +1464,8 @@ export default function DashboardPage() {
               />
             </div>
           </CardHeader>
-          <CardContent className="pt-0 space-y-4" dir="rtl">
+          <CardContent className="pt-0 space-y-4" dir={dashDir()}>
+            <DashboardFilterPanel>
             {/* Time span lives with the other filters rather than in a sticky bar of its own:
                 one place to change what the page is showing, instead of two controls in two
                 locations writing the same scope. */}
@@ -1460,19 +1497,19 @@ export default function DashboardPage() {
               activeFilters={[
                 selectedCategory !== "all" && {
                   id: "category",
-                  label: "الحملة",
+                  label: dt("الحملة"),
                   value: categories.find((c) => c.id === selectedCategory)?.name ?? selectedCategory,
                   onClear: () => setSelectedCategory("all"),
                 },
                 selectedCampaign !== "all" && {
                   id: "campaign",
-                  label: "المشروع",
+                  label: dt("المشروع"),
                   value: campaigns.find((c) => c.id === selectedCampaign)?.title ?? selectedCampaign,
                   onClear: () => setSelectedCampaign("all"),
                 },
                 selectedUserId !== "all" && {
                   id: "donor",
-                  label: "المتبرع",
+                  label: dt("المتبرع"),
                   value:
                     users.find((u) => u.id === selectedUserId)?.name ||
                     users.find((u) => u.id === selectedUserId)?.email ||
@@ -1481,11 +1518,29 @@ export default function DashboardPage() {
                 },
               ].filter(Boolean) as ActiveFilterChip[]}
               onClearAll={
-                selectedCategory !== "all" || selectedCampaign !== "all" || selectedUserId !== "all"
+                homeFiltersAreModified({
+                  categoryId: selectedCategory, campaignId: selectedCampaign,
+                  userId: selectedUserId, period: chartPeriod, dateFrom, dateTo,
+                  locale: donationLocaleFilter, country: donationCountryFilter,
+                  provider: donationProviderFilter, status: donationsStatusFilter,
+                  donationType: "all", donationSearch: donationsSearch,
+                })
                   ? () => {
                       setSelectedCategory("all");
                       setSelectedCampaign("all");
                       setSelectedUserId("all");
+                      setChartPeriod("month");
+                      setDateFrom("");
+                      setDateTo("");
+                      setDonationLocaleFilter("all");
+                      setDonationCountryFilter("all");
+                      setDonationProviderFilter("all");
+                      setDonationSourceFilter("all");
+                      setDonationsStatusFilter("RESOLVED");
+                      setDonationsSearch("");
+                      setUsersSearchInput("");
+                      setUsersSearchCommitted("");
+                      setDonationsPage(1);
                     }
                   : undefined
               }
@@ -1495,67 +1550,35 @@ export default function DashboardPage() {
 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
 
 
-  {/* Category */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      الفئة
-    </label>
-    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر الفئة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">جميع الفئات</SelectItem>
-        {categories.map((c) => (
-          <SelectItem key={c.id} value={c.id} className="text-xs">
-            {c.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+  {/* Saved views and campaign for this result */}
+  <div className="col-span-full flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-2 text-xs">
+    <select value={activeViewId} onChange={(e) => { setActiveViewId(e.target.value); const v = savedViews.find((x) => x.id === e.target.value); if (v) applyView(v); }} className="h-8 rounded border border-slate-200 bg-white px-2">
+      <option value="">{dt("العروض المحفوظة…")}</option>
+      {savedViews.map((v) => <option key={v.id} value={v.id}>{v.name}{v.shared ? ` · ${dt("مشترك")}` : ""}{!v.mine && v.ownerName ? ` (${v.ownerName})` : ""}</option>)}
+    </select>
+    <button type="button" onClick={() => void saveView()} className="h-8 rounded border border-slate-300 bg-white px-3 hover:bg-slate-100">💾 {dt("حفظ الفلاتر")}</button>
+    {savedViews.find((x) => x.id === activeViewId)?.mine ? <button type="button" onClick={() => void deleteView()} className="h-8 rounded px-2 text-slate-500 hover:text-red-600">{dt("حذف العرض")}</button> : null}
+    <span className="flex-1" />
+    <button type="button" onClick={campaignForResult} className="h-8 rounded bg-emerald-700 px-3 font-bold text-white">📣 {dt("حملة لمتبرعي هذه النتيجة")}</button>
   </div>
 
-  {/* Campaign */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      المشروع
-    </label>
-    <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر المشروع" />
-      </SelectTrigger>
-      <SelectContent>
-        <div className="p-2 border-b border-slate-100">
-          <Input
-            placeholder="بحث..."
-            value={searchCampaign}
-            onChange={(e) => setSearchCampaign(e.target.value)}
-            className="w-full h-8 text-xs"
-          />
-        </div>
-        <SelectItem value="all" className="text-xs">جميع المشاريع</SelectItem>
-        {campaigns
-          .filter((c) => {
-            const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : []);
-            const inCategory = selectedCategory === "all" || ids.includes(selectedCategory);
-            return inCategory && (!searchCampaign ||
-              c.title.toLowerCase().includes(searchCampaign.toLowerCase()));
-          })
-          .map((c) => (
-            <SelectItem key={c.id} value={c.id} className="text-xs">
-              {c.title}
-            </SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Category — several at once (2026-11-21) */}
+  <MultiPick label={dt("الفئة")} allLabel={dt("جميع الفئات")} selected={pickList(selectedCategory)}
+    options={categories.map((c) => ({ value: c.id, label: c.name }))}
+    onChange={(next) => {
+      setSelectedCategory(pickValue(next));
+      if (next.length) setSelectedCampaign((cur) => pickValue(pickList(cur).filter((id) => { const c = campaigns.find((item) => item.id === id); return !c || next.some((cid) => dashboardCampaignBelongsToCategory(c, cid)); })));
+    }} />
 
-  {/* User — hidden when viewing a specific user via link (?userId=...) */}
-  {!searchParams.get("userId") && (
-    <div className="space-y-1 text-right">
+  {/* Campaign — several at once; limited to the chosen categories */}
+  <MultiPick label={dt("المشروع")} allLabel={dt("جميع المشاريع")} selected={pickList(selectedCampaign)} onChange={(next) => setSelectedCampaign(pickValue(next))}
+    options={campaigns.filter((c) => { const cats = pickList(selectedCategory); return cats.length === 0 || cats.some((cid) => dashboardCampaignBelongsToCategory(c, cid)); }).map((c) => ({ value: c.id, label: c.title }))} />
+
+  {/* Show donor selector again after the URL donor filter is cleared. */}
+  {selectedUserId === "all" && (
+    <div className="space-y-1 text-start">
       <label className="text-[11px] font-semibold text-slate-600">
-        المستخدم
-      </label>
+        {dt("المستخدم")}</label>
       <Select
         value={selectedUserId}
         onValueChange={(v) => {
@@ -1568,12 +1591,12 @@ export default function DashboardPage() {
         }}
       >
         <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-          <SelectValue placeholder="اختر المستخدم" />
+          <SelectValue placeholder={dt("اختر المستخدم")} />
         </SelectTrigger>
         <SelectContent>
           <div className="p-2 border-b border-slate-100 flex gap-1.5 flex-row-reverse items-center">
             <Input
-              placeholder="بحث… ثم Enter أو زر البحث"
+              placeholder={dt("بحث… ثم Enter أو زر البحث")}
               value={usersSearchInput}
               onChange={(e) => setUsersSearchInput(e.target.value)}
               onKeyDown={(e) => {
@@ -1586,7 +1609,7 @@ export default function DashboardPage() {
             />
             <button
               type="button"
-              title="بحث"
+              title={dt("بحث")}
               disabled={usersSearchLoading}
               onClick={(e) => {
                 e.preventDefault();
@@ -1602,7 +1625,7 @@ export default function DashboardPage() {
               )}
             </button>
           </div>
-          <SelectItem value="all" className="text-xs">الكل</SelectItem>
+          <SelectItem value="all" className="text-xs">{dt("الكل")}</SelectItem>
           {users.map((u) => (
             <SelectItem key={u.id} value={u.id} className="text-xs">
               {u.name || u.email}
@@ -1614,114 +1637,57 @@ export default function DashboardPage() {
   )}
 
   {/* Chart Metric */}
-  <div className="space-y-1 text-right">
+  <div className="space-y-1 text-start">
     <label className="text-[11px] font-semibold text-slate-600">
-      القيمة
-    </label>
+      {dt("القيمة")}</label>
     <Select value={chartMetric} onValueChange={(v) => setChartMetric(v as ChartMetric)}>
       <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر القيمة" />
+        <SelectValue placeholder={dt("اختر القيمة")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="amount" className="text-xs">المبلغ</SelectItem>
-        <SelectItem value="teamSupport" className="text-xs">دعم الفريق</SelectItem>
-        <SelectItem value="fees" className="text-xs">الرسوم</SelectItem>
+        <SelectItem value="amount" className="text-xs">{dt("المبلغ")}</SelectItem>
+        <SelectItem value="teamSupport" className="text-xs">{dt("دعم الفريق")}</SelectItem>
+        <SelectItem value="fees" className="text-xs">{dt("الرسوم")}</SelectItem>
       </SelectContent>
     </Select>
   </div>
 
-  {/* Chart Type */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      نوع الرسم
-    </label>
-    <Select value={chartView} onValueChange={(v) => setChartView(v as ChartViewType)}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر النوع" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="bar" className="text-xs">أعمدة</SelectItem>
-        <SelectItem value="line" className="text-xs">خط</SelectItem>
-        <SelectItem value="area" className="text-xs">منطقة</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Donation source — several at once */}
+  <MultiPick label={dt("مصدر التبرع")} allLabel={dt("كل المصادر")} selected={pickList(donationSourceFilter)} onChange={(next) => setDonationSourceFilter(pickValue(next))}
+    options={[["facebook", "فيسبوك"], ["instagram", "إنستغرام"], ["whatsapp", "واتساب"], ["email", "البريد الإلكتروني"], ["google_ads", "إعلانات Google"], ["google_search", "بحث Google"], ["tiktok", "تيك توك"], ["direct", "مباشر"], ["other", "أخرى"], ["unknown", "غير معروف"]].map(([v, l]) => ({ value: v, label: dt(l) }))} />
 
-  {/* Site language (donation row locale) */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      لغة الموقع (التبرع)
-    </label>
-    <Select
-      value={donationLocaleFilter}
-      onValueChange={(v) => setDonationLocaleFilter(v as typeof donationLocaleFilter)}
-    >
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اللغة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">كل اللغات</SelectItem>
-        <SelectItem value="ar" className="text-xs">العربية</SelectItem>
-        <SelectItem value="en" className="text-xs">English</SelectItem>
-        <SelectItem value="fr" className="text-xs">Français</SelectItem>
-        <SelectItem value="tr" className="text-xs">Türkçe</SelectItem>
-        <SelectItem value="id" className="text-xs">Indonesia</SelectItem>
-        <SelectItem value="pt" className="text-xs">Português</SelectItem>
-        <SelectItem value="es" className="text-xs">Español</SelectItem>
-        <SelectItem value="de" className="text-xs">Deutsch</SelectItem>
-        <SelectItem value="__unset" className="text-xs">غير محدد</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Site language — several at once */}
+  <MultiPick label={dt("لغة الموقع (التبرع)")} allLabel={dt("كل اللغات")} selected={pickList(donationLocaleFilter)} onChange={(next) => setDonationLocaleFilter(pickValue(next) as typeof donationLocaleFilter)}
+    options={[["ar", dt("العربية")], ["en", "English"], ["fr", "Français"], ["tr", "Türkçe"], ["id", "Indonesia"], ["pt", "Português"], ["es", "Español"], ["de", "Deutsch"], ["__unset", dt("غير محدد")]].map(([v, l]) => ({ value: v, label: l }))} />
 
-  {/* Donor country */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      الدولة
-    </label>
-    <Select
-      value={donationCountryFilter}
-      onValueChange={(v) => setDonationCountryFilter(v)}
-    >
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="الدولة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">كل الدول</SelectItem>
-        {countryOptions.map((c) => (
-          <SelectItem key={c.code} value={c.code} className="text-xs">
-            {getCountryDisplayNameFromCode(c.code, locale || "ar")} ({c.count})
-          </SelectItem>
-        ))}
-        {countryUnsetCount > 0 && (
-          <SelectItem value="__unset" className="text-xs">
-            غير محدد ({countryUnsetCount})
-          </SelectItem>
-        )}
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Donor country — several at once */}
+  <MultiPick label={dt("الدولة")} allLabel={dt("كل الدول")} selected={pickList(donationCountryFilter)} onChange={(next) => setDonationCountryFilter(pickValue(next))}
+    options={[...countryOptions.map((c) => ({ value: c.code, label: getCountryDisplayNameFromCode(c.code, locale || "ar"), count: c.count })), ...(countryUnsetCount > 0 ? [{ value: "__unset", label: dt("غير محدد"), count: countryUnsetCount }] : [])]} />
 
-  {/* Donation Status Filter */}
-  <div className="space-y-1 text-right">
+  {/* Payment gateway — several at once */}
+  <MultiPick label={dt("بوابة الدفع")} allLabel={dt("كل البوابات")} selected={pickList(donationProviderFilter)} onChange={(next) => setDonationProviderFilter(pickValue(next))}
+    options={[...DONATION_PROVIDER_OPTIONS.map((o) => ({ value: o.value, label: o.value === "BANK_TRANSFER" ? dt("تحويل بنكي") : o.label })), { value: "__unset", label: dt("غير محدد") }]} />
+  <div className="space-y-1 text-start">
     <label className="text-[11px] font-semibold text-slate-600">
-      حالة التبرع
-    </label>
+      {dt("حالة التبرع")}</label>
     <Select value={donationsStatusFilter} onValueChange={(v) => setDonationsStatusFilter(v as typeof donationsStatusFilter)}>
       <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="الحالة" />
+        <SelectValue placeholder={dt("الحالة")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all" className="text-xs">كل الحالات</SelectItem>
-        <SelectItem value="PAID" className="text-xs">ناجح</SelectItem>
-        <SelectItem value="FAILED" className="text-xs">فاشل</SelectItem>
+        <SelectItem value="RESOLVED" className="text-xs">{dt("ناجح وفاشل فقط")}</SelectItem>
+        <SelectItem value="PAID" className="text-xs">{dt("ناجح")}</SelectItem>
+        <SelectItem value="FAILED" className="text-xs">{dt("فاشل")}</SelectItem>
+        <SelectItem value="PENDING" className="text-xs">{dt("محاولات بحاجة لتحقق")}</SelectItem>
+        <SelectItem value="all" className="text-xs">{dt("كل الحالات (مع غير المحسومة)")}</SelectItem>
       </SelectContent>
     </Select>
   </div>
 
 </div>
 
-</CardContent>
+</DashboardFilterPanel>
+          </CardContent>
 
 
 
@@ -1729,16 +1695,14 @@ export default function DashboardPage() {
 
         {/* التبرعات */}
         <section className="space-y-4">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">
-            التبرعات
-          </h2>
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-start">
+            {dt("التبرعات")}</h2>
           <Card className="border-border shadow-sm">
             <CardHeader className="border-b border-slate-100 py-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 flex-row-reverse">
-                <div className="text-right space-y-1">
+                <div className="text-start space-y-1">
                   <CardTitle className="text-base font-semibold text-slate-900">
-                    أحدث التبرعات
-                  </CardTitle>
+                    {dt("أحدث التبرعات")}</CardTitle>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center shrink-0">
                 <DonorSearchInput
@@ -1754,74 +1718,62 @@ export default function DashboardPage() {
                     setDonationsSortOrder(order);
                   }}
                 >
-                  <SelectTrigger className="w-full sm:w-[200px] h-9 border-slate-200 bg-slate-50/50" dir="rtl">
-                    <SelectValue placeholder="ترتيب" />
+                  <SelectTrigger className="w-full sm:w-[200px] h-9 border-slate-200 bg-slate-50/50" dir={dashDir()}>
+                    <SelectValue placeholder={dt("ترتيب")} />
                   </SelectTrigger>
-                  <SelectContent dir="rtl">
-                    <SelectItem value="date-desc">الأحدث أولاً</SelectItem>
-                    <SelectItem value="date-asc">الأقدم أولاً</SelectItem>
-                    <SelectItem value="amount-desc">الأعلى مبلغاً</SelectItem>
-                    <SelectItem value="amount-asc">الأقل مبلغاً</SelectItem>
+                  <SelectContent dir={dashDir()}>
+                    <SelectItem value="date-desc">{dt("الأحدث أولاً")}</SelectItem>
+                    <SelectItem value="date-asc">{dt("الأقدم أولاً")}</SelectItem>
+                    <SelectItem value="amount-desc">{dt("الأعلى مبلغاً")}</SelectItem>
+                    <SelectItem value="amount-asc">{dt("الأقل مبلغاً")}</SelectItem>
                   </SelectContent>
                 </Select>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto" dir="rtl">
-                <table className="w-full text-xs text-right leading-snug">
+              <div className="dashboard-donation-table overflow-x-auto overscroll-x-contain" dir={dashDir()}>
+                <table className="w-full text-xs text-start leading-snug">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50">
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                        المتبرع
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 min-w-[100px] max-w-[130px]">
-                        الدولة
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                        التبرع
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                        الحالة
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                        البوابة
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                        دعم الفريق
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                        الإحالة
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                        مصدر التبرع
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 max-w-[110px]">
-                        المشروع / الفئة
-                      </th>
-                      <th className="text-right py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                        التاريخ
-                      </th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        {dt("المتبرع")}</th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 min-w-[100px] max-w-[130px]">
+                        <span title={dt("دولة حساب المتبرع أو رمز هاتفه وقت التبرع؛ اسم الحملة الإعلانية لا يحدد دولته.")}>{dt("دولة المتبرع")}</span></th>
+                      <th className="px-3 py-3 text-start text-[11px] font-semibold text-slate-500">{dt("اللغة")}</th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                        {dt("التبرع")}</th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        {dt("الحالة")}</th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                        {dt("البوابة")}</th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                        {dt("دعم الفريق")}</th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                        {dt("مصدر التبرع")}</th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 max-w-[110px]">
+                        {dt("المشروع / الفئة")}</th>
+                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
+                        {dt("تاريخ التحصيل / المحاولة")}</th>
+                      <th className="px-3 py-3 text-start">{dt("عرض")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {donationsLoading && donations.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center">
+                        <td colSpan={11} className="py-12 text-center">
                           <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-400" />
                         </td>
                       </tr>
                     ) : !donationsFetchedOnce ? (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center text-slate-500">
-                          جاري التحميل...
-                        </td>
+                        <td colSpan={11} className="py-12 text-center text-slate-500">
+                          {dt("جاري التحميل...")}</td>
                       </tr>
                     ) : donations.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center text-slate-500">
-                          لا توجد تبرعات تطابق التصفية
-                        </td>
+                        <td colSpan={11} className="py-12 text-center text-slate-500">
+                          {dt("لا توجد تبرعات تطابق التصفية")}</td>
                       </tr>
                     ) : (
                       donations.map((d) => (
@@ -1834,10 +1786,11 @@ export default function DashboardPage() {
                             <button
                               type="button"
                               onClick={() => d.donor?.id && openUserProfile(d.donor.id)}
-                              className="text-right w-full max-w-[200px] rounded-md -mx-0.5 px-0.5 py-0 hover:bg-slate-100/80 transition-colors cursor-pointer border-0 bg-transparent"
+                              className="text-start w-full max-w-[200px] rounded-md -mx-0.5 px-0.5 py-0 hover:bg-slate-100/80 transition-colors cursor-pointer border-0 bg-transparent"
                             >
                               <p className="font-medium text-slate-900">
                                 {d.donor?.name || "—"}
+                                <DonorAccountBadge status={d.donor?.accountStatus} />
                               </p>
                               {d.donor?.email && (
                                 <p className="text-[10px] text-slate-500 truncate max-w-[160px]">
@@ -1849,71 +1802,19 @@ export default function DashboardPage() {
                           <td className="py-2.5 px-3 align-middle max-w-[130px]">
                             <DonationTableCountryColumn countryCode={d.donorCountryCode} />
                           </td>
-                          <td className="py-2.5 px-3 font-medium text-slate-800" dir="rtl">
+                          <td className="px-3 py-2.5 text-center font-medium" dir="ltr">{d.locale?.toUpperCase() || "—"}</td>
+                          <td className="py-2.5 px-3 font-medium text-slate-800" dir={dashDir()}>
                             <span dir="ltr">
                               {formatMoney(donationDisplayTotalLocal(d), d.currency, d.amountUSD ?? undefined)}
                             </span>
                           </td>
                           <td className="py-2.5 px-3">
-                            {d.status === "FAILED" ? (
-                              <button
-                                type="button"
-                                onClick={() => openDonationDetails("error", d)}
-                                className="inline-block px-1.5 py-px rounded-full text-[11px] font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors cursor-pointer"
-                                title="عرض رسالة الخطأ من بوابة الدفع"
-                              >
-                                فاشل
-                              </button>
-                            ) : (
-                              <span
-                                className={cn(
-                                  "inline-block px-1.5 py-px rounded-full text-[11px] font-medium w-max",
-                                  d.status === "PAID" && d.paidAt
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-amber-100 text-amber-700"
-                                )}
-                                title={d.status === "PAID" && !d.paidAt ? "تم بدء الدفع ولم يؤكده مزود الدفع بعد — لا يُحتسب في الإيرادات" : undefined}
-                              >
-                                {d.status === "PAID"
-                                  ? d.paidAt
-                                    ? "ناجح"
-                                    : "قيد التأكيد"
-                                  : "معلق"}
-                              </span>
-                            )}
+                            <DonationFinancialStatus donation={d} onFailure={() => openDonationDetails("error", d)} />
                           </td>
                           <td className="py-2.5 px-3">
-                            {d.provider === "PAYFOR" ? (
-                              <button
-                                type="button"
-                                onClick={() => openDonationDetails("payment", d)}
-                                className="inline-flex items-center rounded hover:opacity-80 hover:scale-[1.03] active:scale-95 transition-all"
-                                title="عرض تفاصيل بوابة الدفع"
-                              >
-                                <span className="inline-flex items-center">
-                                  <img
-                                    src="/ziraat.jpg"
-                                    alt="PayFor"
-                                    className="h-8 w-auto max-w-[72px] object-contain rounded"
-                                  />
-                                </span>
-                              </button>
-                            ) : d.provider === "BANK_TRANSFER" ? (
-                              <span
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-brand/10 text-brand"
-                                title="تبرع عبر تحويل بنكي — مستورد من كشف الحساب"
-                              >
-                                <Landmark className="w-3 h-3" />
-                                تحويل بنكي
-                              </span>
-                            ) : d.provider ? (
-                              // Any other stored gateway (incl. historical rows) — shown as recorded.
-                              <span className="text-slate-500 text-xs">{d.provider}</span>
-                            ) : (
-                              <span className="text-slate-400 text-xs">—</span>
-                            )}
+                            <DonationGatewayBadge donation={d} onOpen={() => openDonationDetails("payment", d)} />
                           </td>
-                          <td className="py-2.5 px-3 font-medium text-slate-800" dir="rtl">
+                          <td className="py-2.5 px-3 font-medium text-slate-800" dir={dashDir()}>
                             {(d.teamSupport ?? 0) > 0 ? (
                               <span dir="ltr">
                                 {formatMoney(d.teamSupport ?? 0, d.currency, (d.totalAmount && (d.amountUSD != null)) ? ((d.teamSupport ?? 0) / d.totalAmount) * d.amountUSD : undefined)}
@@ -1923,6 +1824,7 @@ export default function DashboardPage() {
                             )}
                           </td>
                           <td className="py-2.5 px-3 align-middle">
+                            <div className="flex flex-col items-start gap-1">
                             {d.referral ? (
                               <Link
                                 href={`/dashboard/referrals/${d.referral.id}`}
@@ -1930,16 +1832,12 @@ export default function DashboardPage() {
                               >
                                 {d.referral.code}
                               </Link>
-                            ) : (
-                              <span className="text-slate-400">—</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 align-middle">
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => openDonationDetails("attribution", d)}
-                              className="inline-flex max-w-full text-right rounded-md hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-0 p-0"
-                              title="عرض تفاصيل الإسناد الإعلاني"
+                              className="inline-flex max-w-full text-start rounded-md hover:opacity-80 transition-opacity cursor-pointer bg-transparent border-0 p-0"
+                              title={dt("عرض تفاصيل الإسناد الإعلاني")}
                             >
                               <DonationSourceBadge
                                 attribution={d.attribution}
@@ -1948,6 +1846,7 @@ export default function DashboardPage() {
                                 status={d.status}
                               />
                             </button>
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 text-slate-600 max-w-[110px]">
                             {d.campaigns?.length > 0 ? (
@@ -1978,7 +1877,7 @@ export default function DashboardPage() {
                               (() => {
                                 const first = d.categories[0];
                                 const more = d.categories.length - 1;
-                                const fullList = "فئة: " + d.categories.map((c) => c.name).join(", ");
+                                const fullList = dt("فئة: {0}", [d.categories.map((c) => c.name).join(", ")]);
                                 return (
                                   <div className="flex items-center gap-1 max-w-[110px]">
                                     <Link
@@ -1988,7 +1887,7 @@ export default function DashboardPage() {
                                       title={fullList}
                                       className="truncate text-slate-700 hover:text-brand hover:underline"
                                     >
-                                      فئة: {first.name}
+                                      {dtx("فئة: {0}", [first.name])}
                                     </Link>
                                     {more > 0 && (
                                       <span className="shrink-0 text-[10px] text-slate-400" title={fullList}>
@@ -2005,13 +1904,13 @@ export default function DashboardPage() {
                           <td className="py-2.5 px-3 text-slate-500 whitespace-nowrap">
                             <div className="flex flex-col leading-tight">
                               <span>
-                                {new Date(d.createdAt).toLocaleDateString("en-US", {
+                                {dashboardDonationDisplayDate(d).toLocaleDateString("en-US", {
                                   dateStyle: "medium",
                                   timeZone: "Europe/Istanbul",
                                 })}
                               </span>
                               <span className="text-[10px] text-slate-400" dir="ltr">
-                                {new Date(d.createdAt).toLocaleTimeString("en-US", {
+                                {dashboardDonationDisplayDate(d).toLocaleTimeString("en-US", {
                                   hour: "2-digit",
                                   minute: "2-digit",
                                   hour12: true,
@@ -2020,6 +1919,7 @@ export default function DashboardPage() {
                               </span>
                             </div>
                           </td>
+                          <td className="py-2.5 px-3"><button type="button" onClick={() => openDonationDetails("overview", d)} aria-label={dt("عرض")} title={dt("عرض التفاصيل")} className="rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"><Eye className="h-4 w-4" /></button></td>
                         </tr>
                       ))
                     )}
@@ -2039,14 +1939,12 @@ export default function DashboardPage() {
                     ) : (
                       <ChevronDown className="w-4 h-4 rotate-180" />
                     )}
-                    عرض المزيد
-                  </button>
+                    {dt("عرض المزيد")}</button>
                 </div>
               )}
               {donationsTotal > 0 && (
-                <p className="text-xs text-slate-500 px-4 py-2 border-t border-slate-100 text-right">
-                  عرض {donations.length} من {donationsTotal} تبرع
-                </p>
+                <p className="text-xs text-slate-500 px-4 py-2 border-t border-slate-100 text-start">
+                  {dtx("عرض {0} من {1} تبرع", [donations.length, donationsTotal])}</p>
               )}
             </CardContent>
           </Card>
@@ -2063,8 +1961,8 @@ export default function DashboardPage() {
         open={exportOpen}
         onOpenChange={setExportOpen}
         endpoint="/api/admin/donations/export"
-        title="تصدير تقرير التبرعات"
-        description="اضبط المعايير قبل التصدير. سيشمل التقرير قائمة كاملة بكل العمليات بالإضافة إلى ملخص شامل."
+        title={dt("تصدير تقرير التبرعات")}
+        description={dt("اضبط المعايير قبل التصدير. سيشمل التقرير قائمة كاملة بكل العمليات بالإضافة إلى ملخص شامل.")}
         defaults={exportDefaults}
         options={{
           categories: exportCategoryOptions,
@@ -2090,7 +1988,7 @@ export default function DashboardPage() {
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto" dir="rtl">
+    <div className="space-y-6 max-w-[1600px] mx-auto" dir={dashDir()}>
       <div className="h-16 rounded-lg bg-slate-200 animate-pulse" />
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
         {[1, 2, 3, 4, 5].map((i) => (

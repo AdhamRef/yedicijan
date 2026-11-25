@@ -1,8 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
-import { publicOrigin } from "@/lib/public-origin";
+import { after, NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withDonationToken } from "@/lib/donations/access-token";
+import { paymentPublicOrigin } from "@/lib/payment-public-origin";
+import { isValidLocale } from "@/lib/locales";
 // Donate (success) CAPI now fires server-side from `dispatchDonationPaid`
-// the moment the donation flips to PAID — that's the only path that
+// the moment the donation flips to PAID  that's the only path that
 // reliably catches donors whose browser never returns from 3DS (mobile
 // tab killed, ad-blocker, slow network, no Pixel ID configured). The
 // /success page still triggers /api/donations/:id/track-conversion as a
@@ -12,27 +15,32 @@ import { prisma } from "@/lib/prisma";
 // get the signal on bank rejects.
 import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversion-server";
 import { dispatchDonationPaid, dispatchEvent } from "@/lib/events/dispatch";
+import { mergePayForProviderRaw, PAYFOR_UNVERIFIED_APPROVAL, payForErrorMessage, redactPayForResponse, verifyPayForRequestEcho, verifyPayForResponseHash } from "@/lib/payfor";
 
 export async function POST(req: NextRequest) {
-  const origin = publicOrigin(req);
+  const origin = paymentPublicOrigin(req.url);
+  // The bank posts here; follow the result page with GET, never replay its POST.
+  const redirect = (url: URL) => NextResponse.redirect(url, 303);
   const { searchParams } = new URL(req.url);
   const donationId = searchParams.get("donationId") || "";
-  const locale = (searchParams.get("locale") || "en").toLowerCase();
+  const requestedLocale = (searchParams.get("locale") || "en").toLowerCase();
+  const locale = isValidLocale(requestedLocale) ? requestedLocale : "en";
 
   if (!donationId) {
-    return NextResponse.redirect(new URL(`/${locale}/donation-failed`, origin));
+    return redirect(new URL(`/${locale}/donation-failed`, origin));
   }
 
   const form = await req.formData();
   const raw = Object.fromEntries(form.entries());
 
   // Log full bank response for debugging
-  console.log("[PayFor OK] Bank response:", JSON.stringify(raw, null, 2));
+  console.log("[PayFor OK] Bank response:", JSON.stringify(redactPayForResponse(raw), null, 2));
 
   const orderId = String(raw.OrderId || raw.orderId || "");
+  const purchAmount = String(raw.PurchAmount || raw.purchAmount || "");
   const procReturnCode = String(raw.ProcReturnCode || raw.ProcReturnCode?.toString?.() || raw.procReturnCode || "");
   const txnResult = String(raw.TxnResult || raw.txnResult || "");
-  const errorMessage = String(raw.ErrMsg || raw.ErrorMessage || raw.errorMessage || "");
+  const errorMessage = payForErrorMessage(raw);
   const authCode = String(raw.AuthCode || raw.authCode || "");
   const hostRefNum = String(raw.HostRefNum || raw.hostRefNum || "");
   const threeDStatus = String(raw["3DStatus"] ?? "");
@@ -51,6 +59,47 @@ export async function POST(req: NextRequest) {
       // Idempotency: if already confirmed by a prior callback, just redirect to success
       if (donation.paidAt !== null) return { ok: true as const };
 
+      /* Nothing changes without proof the callback is genuine and about this donation: the bank's
+         signature, or our own request signature echoed back (3D-stage failures carry only that).
+         A forged POST is ignored and the donor simply sees the failure page (owner, 2026-11-18). */
+      const genuine = (orderId === donation.id || (!!donation.providerOrderId && orderId === donation.providerOrderId))
+        && (verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS) || verifyPayForRequestEcho(raw, process.env.PAYFOR_MERCHANT_PASS));
+      if (!genuine) {
+        console.error("[PayFor OK] callback not authenticated; donation left unchanged", { donationId: donation.id, procReturnCode });
+        return { ok: false as const, reason: "unverified" as const };
+      }
+
+      /* The amount must be the one we asked the bank for. `payforRequest` was
+         snapshotted at initiate; the FX conversion is deliberately not re-run
+         here, because rates move and a legitimate payment would then look
+         tampered with. Compared as numbers so "10.00" and "10.0" agree. */
+      const snapshot =
+        typeof donation.providerRaw === "object" && donation.providerRaw
+          ? ((donation.providerRaw as Record<string, unknown>).payforRequest as
+              | { purchAmount?: string }
+              | undefined)
+          : undefined;
+      const expectedAmount = Number(snapshot?.purchAmount);
+      const returnedAmount = Number(purchAmount);
+      if (
+        Number.isFinite(expectedAmount) &&
+        Number.isFinite(returnedAmount) &&
+        expectedAmount !== returnedAmount
+      ) {
+        await tx.donation.update({
+          where: { id: donation.id },
+          data: {
+            status: "FAILED",
+            provider: "PAYFOR",
+            providerProcReturnCode: procReturnCode || null,
+            providerTxnResult: txnResult || null,
+            providerErrorMessage: `Amount mismatch (expected ${expectedAmount}, got ${returnedAmount})`,
+            providerRaw: mergePayForProviderRaw(donation.providerRaw, raw) as Prisma.InputJsonValue,
+          },
+        });
+        return { ok: false as const, reason: "order_mismatch" as const };
+      }
+
       // Basic linkage check
       if (donation.providerOrderId && orderId && donation.providerOrderId !== orderId) {
         await tx.donation.update({
@@ -63,7 +112,7 @@ export async function POST(req: NextRequest) {
             providerAuthCode: authCode || null,
             providerHostRefNum: hostRefNum || null,
             providerErrorMessage: `OrderId mismatch`,
-            providerRaw: raw as any,
+            providerRaw: mergePayForProviderRaw(donation.providerRaw, raw) as Prisma.InputJsonValue,
           },
         });
         return { ok: false as const, reason: "order_mismatch" as const };
@@ -73,11 +122,9 @@ export async function POST(req: NextRequest) {
       // the bank both authenticated the cardholder in full (3DStatus 1 — 2/3/4 are
       // "half 3D" attempts) and approved the charge (ProcReturnCode 00). A bare
       // TxnResult "Success" is no longer enough on its own.
-      const snapshot = (donation.providerRaw as { payforRequest?: { purchAmount?: string } } | null)
-        ?.payforRequest;
-      const amountMatches =
-        !snapshot?.purchAmount ||
-        Number(raw.PurchAmount) === Number(snapshot.purchAmount);
+      // The amount mismatch above only fires when the bank echoed a readable amount;
+      // an approval must also carry it, so a missing PurchAmount cannot settle.
+      const amountMatches = !Number.isFinite(expectedAmount) || returnedAmount === expectedAmount;
       const isSuccess =
         procReturnCode === "00" &&
         threeDStatus === "1" &&
@@ -95,14 +142,30 @@ export async function POST(req: NextRequest) {
             providerErrorMessage:
               errorMessage ||
               (!amountMatches
-                ? `Amount mismatch (expected ${snapshot?.purchAmount}, got ${raw.PurchAmount})`
+                ? `Amount mismatch (expected ${expectedAmount}, got ${purchAmount || "none"})`
                 : threeDStatus !== "1"
                   ? `3D Secure not completed (3DStatus ${threeDStatus || "empty"})`
                   : "Payment failed"),
-            providerRaw: raw as any,
+            providerRaw: mergePayForProviderRaw(donation.providerRaw, raw) as Prisma.InputJsonValue,
           },
         });
         return { ok: false as const, reason: "failed" as const };
+      }
+
+      /* An approval only counts when the bank signed it. A response that says
+         "00" but fails the hash is not proof of payment: the donation stays
+         unconfirmed (never FAILED, so a genuine charge can still be reconciled
+         by hand) and the response is kept for that check. */
+      if (!verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS)) {
+        console.error("[PayFor OK] ResponseHash did not verify; donation left unconfirmed", { donationId: donation.id, procReturnCode });
+        await tx.donation.update({
+          where: { id: donation.id },
+          data: {
+            providerErrorMessage: PAYFOR_UNVERIFIED_APPROVAL,
+            providerRaw: mergePayForProviderRaw(donation.providerRaw, raw) as Prisma.InputJsonValue,
+          },
+        });
+        return { ok: false as const, reason: "unverified" as const };
       }
 
       await tx.donation.update({
@@ -116,7 +179,7 @@ export async function POST(req: NextRequest) {
           providerAuthCode: authCode || null,
           providerHostRefNum: hostRefNum || null,
           providerErrorMessage: null,
-          providerRaw: raw as any,
+          providerRaw: mergePayForProviderRaw(donation.providerRaw, raw) as Prisma.InputJsonValue,
         },
       });
 
@@ -134,27 +197,31 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      return { ok: true as const };
+      return { ok: true as const, accessToken: donation.accessToken };
     });
 
     if (result.ok) {
-      void dispatchDonationPaid(donationId);
-      return NextResponse.redirect(new URL(`/${locale}/success/${donationId}`, origin));
+      after(() => dispatchDonationPaid(donationId));
+      return redirect(new URL(withDonationToken(`/${locale}/success/${donationId}`, result.accessToken), origin));
     }
     if (result.reason === "failed") {
-      void dispatchEvent("DONATION_FAILED", { donationId });
-      void sendDonationFailedConversions(donationId);
+      after(async () => {
+        await Promise.allSettled([
+          dispatchEvent("DONATION_FAILED", { donationId }),
+          sendDonationFailedConversions(donationId),
+        ]);
+      });
     }
     if (result.reason === "order_mismatch") {
-      void sendDonationFailedConversions(donationId);
+      after(() => sendDonationFailedConversions(donationId));
     }
 
-    return NextResponse.redirect(
+    return redirect(
       new URL(`/${locale}/donation-failed?donationId=${encodeURIComponent(donationId)}`, origin)
     );
   } catch (e) {
     console.error("PayFor OK callback error:", e);
-    return NextResponse.redirect(
+    return redirect(
       new URL(`/${locale}/donation-failed?donationId=${encodeURIComponent(donationId)}`, origin)
     );
   }

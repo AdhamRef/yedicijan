@@ -304,7 +304,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
         />
         {children}
-        <MicrosoftClarity />
+        <Suspense fallback={null}>
+          <MicrosoftClarity />
+        </Suspense>
         <Suspense fallback={null}>
           <EngagementInstrumentation />
         </Suspense>

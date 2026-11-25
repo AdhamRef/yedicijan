@@ -56,7 +56,7 @@ function metricKey(row: JsonMap) {
 }
 
 async function ensureIndexes() {
-  await prisma.$runCommandRaw({
+  await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
     createIndexes: "MarketingPlatformDailyMetric",
     indexes: [
       { key: { date: -1, platform: 1 }, name: "date_platform" },
@@ -133,13 +133,13 @@ export async function GET(request: NextRequest) {
     if (dateTo) (filter.date as JsonMap).$lte = dateTo;
   }
 
-  const result = await prisma.$runCommandRaw({
+  const result = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
     find: "MarketingPlatformDailyMetric",
     filter,
     sort: { date: -1, updatedAt: -1 },
     limit,
   }) as JsonMap;
-  const rows = typeof result.cursor === "object" && result.cursor && Array.isArray((result.cursor as JsonMap).firstBatch) ? (result.cursor as JsonMap).firstBatch : [];
+  const rows = typeof result.cursor === "object" && result.cursor && Array.isArray((result.cursor as JsonMap).firstBatch) ? (result.cursor as JsonMap).firstBatch as any[] : [] as any[];
 
   const summary = rows.reduce((acc, row) => {
     if (typeof row === "object" && row) {
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
 
   await ensureIndexes();
   const body = await request.json().catch(() => ({}));
-  const rows = Array.isArray((body as JsonMap).rows) ? (body as JsonMap).rows : [body];
+  const rows = Array.isArray((body as JsonMap).rows) ? (body as JsonMap).rows as unknown[] : [body as unknown];
   const normalized = rows.filter((row): row is JsonMap => typeof row === "object" && row !== null && !Array.isArray(row)).map(normalizeMetric);
   if (normalized.length === 0) return NextResponse.json({ ok: false, error: "missing rows" }, { status: 400 });
 
@@ -174,6 +174,6 @@ export async function POST(request: NextRequest) {
     upsert: true,
   }));
 
-  const result = await prisma.$runCommandRaw({ update: "MarketingPlatformDailyMetric", updates }) as JsonMap;
+  const result = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({ update: "MarketingPlatformDailyMetric", updates }) as JsonMap;
   return NextResponse.json({ ok: true, count: normalized.length, result });
 }

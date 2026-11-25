@@ -1,3 +1,4 @@
+import { RANKED_CAMPAIGNS } from "@/lib/campaign/priority-filter";
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -81,7 +82,7 @@ export async function GET(
         ...amountConditions,
         activeOnly ? { isActive: true } : {},
         NOT_SOFT_DELETED,
-        hasPriority ? { NOT: { priority: null } } : {}
+        hasPriority ? RANKED_CAMPAIGNS : {}
       ].filter(Boolean)
     };
 
@@ -159,7 +160,7 @@ export async function GET(
         return pb - pa;
       }
       if (!applyPriorityFallbackSort) {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.id.localeCompare(a.id);
       }
       // Default: per-category priority asc → global priority asc → createdAt desc.
       // null/missing priorities are treated as "after" any explicit value.
@@ -173,7 +174,7 @@ export async function GET(
       if (ap != null && bp != null && ap !== bp) return ap - bp;
       if (ap != null && bp == null) return -1;
       if (ap == null && bp != null) return 1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || b.id.localeCompare(a.id);
     });
 
     // Slice the sorted list according to the requested pagination flavor.
@@ -233,7 +234,7 @@ export async function GET(
         isActive: c.isActive,
         categoryId: primary?.id ?? id,
         categoryIds: c.categoryIds ?? [],
-        // categoryPriority surfaces only the value for THIS category page —
+        // categoryPriority surfaces only the value for THIS category page 
         // a campaign in many categories may have a different rank in each.
         categoryPriority: getCategoryPriority(c.categoryPriorities, id),
         categoryPriorities: parseCategoryPriorities(c.categoryPriorities),
@@ -258,7 +259,7 @@ export async function GET(
       };
     });
 
-    // Localized category response — surface the per-locale slug for canonical URLs
+    // Localized category response  surface the per-locale slug for canonical URLs
     const tCatPicked = pickTranslation(category.translations, locale);
     const localizedCategory = {
       id: category.id,

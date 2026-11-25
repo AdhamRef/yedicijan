@@ -1,3 +1,6 @@
+import { googleAdsTargets, type GoogleAdsTarget } from "./google-ads-targets";
+import { configuredGoogleTagManager } from "./google-script-policy";
+import { resolveClarityConnection } from "./clarity-config";
 import { prisma } from "@/lib/prisma";
 
 export const TRACKING_SETTINGS_COLLECTION = "TrackingSettings";
@@ -5,6 +8,11 @@ export const TRACKING_SETTINGS_COLLECTION = "TrackingSettings";
 export type RawTrackingSettings = Record<string, unknown>;
 
 export type PublicTrackingConfig = {
+  clarityProjectId: string | null;
+  clarityEnabled: boolean;
+  googleTagManagerId: string | null;
+  googleTagManagerEnabled: boolean;
+  googleAdsTargets?: GoogleAdsTarget[];
   facebookPixelId: string | null;
   gaMeasurementId: string | null;
   googleAdsConversionId: string | null;
@@ -49,9 +57,24 @@ export async function getRawTrackingSettings(): Promise<RawTrackingSettings | nu
   return (batch[0] as RawTrackingSettings | undefined) ?? null;
 }
 
+export async function getGoogleAdsTrackingTargets(row: RawTrackingSettings | null): Promise<GoogleAdsTarget[]> {
+  const accounts = await prisma.marketingPlatformConnection.findMany({ where: { platform: "GOOGLE_ADS" }, select: { enabled: true, conversionId: true, conversionLabel: true, configChecklist: true } });
+  const legacy = googleAdsTargets({ googleAdsConversionId: trackingString(row, "googleAdsConversionId"), googleAdsConversionLabel: trackingString(row, "googleAdsConversionLabel") });
+  const managed = accounts.flatMap(account => googleAdsTargets({ googleAdsConversionId: account.conversionId, googleAdsConversionLabel: account.conversionLabel }));
+  const targets = googleAdsTargets({ googleAdsTargets: [
+    ...legacy.filter(target => !managed.some(item => item.conversionId === target.conversionId && item.conversionLabel === target.conversionLabel)),
+    ...accounts.filter(account => account.enabled && isRecord(account.configChecklist) && account.configChecklist.googleAdsTrackingEnabled === true).flatMap(account => googleAdsTargets({ googleAdsConversionId: account.conversionId, googleAdsConversionLabel: account.conversionLabel })),
+  ] });
+  return targets;
+}
 export async function getPublicTrackingConfig(): Promise<PublicTrackingConfig> {
   const row = await getRawTrackingSettings();
-  return {
+  const targets = await getGoogleAdsTrackingTargets(row).catch(() => []);
+  const containerId = configuredGoogleTagManager(row);
+  return { googleAdsTargets: targets,
+    ...resolveClarityConnection(row),
+    googleTagManagerId: containerId,
+    googleTagManagerEnabled: containerId !== null,
     facebookPixelId: trackingString(row, "facebookPixelId"),
     gaMeasurementId: trackingString(row, "gaMeasurementId"),
     googleAdsConversionId: trackingString(row, "googleAdsConversionId"),

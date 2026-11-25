@@ -8,5 +8,5 @@ export default async function BlogLayout({
   children: React.ReactNode;
 }) {
   await requireDashboardPagePermission("blog");
-  return children;
+  return <>{children}</>;
 }

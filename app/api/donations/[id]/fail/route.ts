@@ -1,7 +1,10 @@
+import { runAfterResponse } from "@/lib/events/after-response";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { dispatchEvent } from "@/lib/events/dispatch";
 import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversion-server";
+import { donationFieldEmpty, donationWhereAll } from "@/lib/donations/mongo-null";
+import { authorizeDonationAccess } from "@/lib/certificates/http";
 
 /**
  * Mark a donation as FAILED.
@@ -19,6 +22,9 @@ export async function PATCH(
   if (!id) {
     return NextResponse.json({ error: "Missing donation id" }, { status: 400 });
   }
+  // Only the donor (their guest token or their session) or staff may report their payment failed (owner, 2026-11-18).
+  const denied = await authorizeDonationAccess(id, req);
+  if (denied) return denied;
 
   let reason = "client_reported_failure";
   try {
@@ -33,14 +39,14 @@ export async function PATCH(
   try {
     const donation = await prisma.donation.findUnique({
       where: { id },
-      select: { id: true, status: true, paidAt: true },
+      select: { id: true, status: true, paidAt: true, providerTxnResult: true },
     });
 
     if (!donation) {
       return NextResponse.json({ error: "Donation not found" }, { status: 404 });
     }
 
-    // Don't downgrade a confirmed payment — a webhook may have already marked it PAID.
+    // Don't downgrade a confirmed payment  a webhook may have already marked it PAID.
     if (donation.paidAt) {
       return NextResponse.json({ ok: true, alreadyPaid: true });
     }
@@ -49,16 +55,26 @@ export async function PATCH(
       return NextResponse.json({ ok: true, alreadyFailed: true });
     }
 
-    await prisma.donation.update({
-      where: { id },
+    // A server-side charge (the Albaraka 2D sale) is in flight; its own outcome
+    // decides the status. A browser error must not record it failed while the
+    // bank may be approving it.
+    if (["Processing", "PendingConfirmation"].includes(donation.providerTxnResult ?? "")) {
+      return NextResponse.json({ ok: true, inProgress: true });
+    }
+
+    const changed = await prisma.donation.updateMany({
+      where: donationWhereAll({ id, status: { not: "FAILED" } }, donationFieldEmpty("paidAt"), {
+        OR: [{ providerTxnResult: null }, { providerTxnResult: { isSet: false } }, { providerTxnResult: { notIn: ["Processing", "PendingConfirmation"] } }],
+      }),
       data: {
         status: "FAILED",
         providerErrorMessage: reason,
         providerTxnResult: "Failed",
       },
     });
-    void dispatchEvent("DONATION_FAILED", { donationId: id });
-    // Seed Meta with the failed attempt — browser pixel fires the matching
+    if (!changed.count) return NextResponse.json({ ok: true, stateChanged: true });
+    runAfterResponse(() => dispatchEvent("DONATION_FAILED", { donationId: id }));
+    // Seed Meta with the failed attempt  browser pixel fires the matching
     // DonateFailed hit with event_id `${id}_failed` so the pair deduplicates.
     void sendDonationFailedConversions(id);
 

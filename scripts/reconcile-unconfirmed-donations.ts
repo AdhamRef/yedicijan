@@ -1,7 +1,7 @@
 /**
  * Manual runner for the same reconciliation the daily cron performs.
  *
- * Dry run by default — pass --apply to write.
+ * Dry run by default  pass --apply to write.
  *
  *   npx tsx scripts/reconcile-unconfirmed-donations.ts
  *   npx tsx scripts/reconcile-unconfirmed-donations.ts --apply
@@ -20,7 +20,7 @@ const staleAfterHours = staleArg ? Number(staleArg.split("=")[1]) : 48;
 async function main() {
   const summary = await reconcileUnconfirmedDonations({ dryRun: !APPLY, staleAfterHours });
 
-  console.log(`${summary.dryRun ? "DRY RUN" : "APPLIED"} — scanned ${summary.scanned} unconfirmed donation(s)\n`);
+  console.log(`${summary.dryRun ? "DRY RUN" : "APPLIED"}  scanned ${summary.scanned} unconfirmed donation(s)\n`);
 
   console.log(`marked FAILED (abandoned, older than ${staleAfterHours}h): ${summary.markedFailed.length}`);
   const failedUsd = summary.markedFailed.reduce((s, f) => s + f.amountUSD, 0);

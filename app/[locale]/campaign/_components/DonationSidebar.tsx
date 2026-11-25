@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import DonationDialog from "@/components/DonationDialog";
+import { publicCampaignImage } from "@/lib/minbar/project-image-fallback";
 import SharePopup from "@/components/SharePopup";
+import { LocalizedSharePrice } from "@/components/LocalizedSharePrice";
 import { Button } from "@/components/ui/button";
 import { useCurrency } from "@/context/CurrencyContext";
 import { usePathname, useRouter } from "@/i18n/routing";
@@ -99,6 +101,19 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
   const hideAmountAndDonors = isOpenGoal && !hasTargetAmount;
   const showProgress = campaign.showProgress !== false;
   const pct = Math.min(100, Math.max(0, Number(campaign.progress) || 0));
+  const isShares = String(campaign.fundraisingMode ?? "").toUpperCase() === "SHARES" && Number(campaign.sharePriceUSD) > 0;
+  /* A share campaign's price is the first thing a donor needs; the dialog
+     then asks how many. Shown whether or not the campaign has a target. */
+  const sharePriceEl = isShares ? (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3">
+      <span className="text-sm font-semibold text-gray-700">{t("sharesCampaignBadge")}</span>
+      <LocalizedSharePrice
+        sharePriceUSD={Number(campaign.sharePriceUSD)}
+        suggestedShareCounts={campaign.suggestedShareCounts ?? null}
+        className="text-base font-extrabold text-deep tabular-nums"
+      />
+    </div>
+  ) : null;
 
   // Reusable on-brand gradient progress bar
   const ProgressBar = ({ height = "h-2.5" }: { height?: string }) => (
@@ -118,13 +133,13 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
         url={shareUrl}
         title={getLocalizedProperty(campaign, "title")}
         description={getLocalizedProperty(campaign, "description")}
-        image={campaign.images[0]}
+        image={publicCampaignImage(campaign.images)}
       />
       <DonationDialog
         isOpen={isDonationOpen}
         onClose={() => setIsDonationOpen(false)}
         campaignTitle={getLocalizedProperty(campaign, "title")}
-        campaignImage={campaign.images[0]}
+        campaignImage={publicCampaignImage(campaign.images)}
         targetAmount={campaign.targetAmount}
         amountRaised={campaign.amountRaised}
         campaignId={campaign.id}
@@ -257,6 +272,7 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
                 <p className="text-base font-semibold text-deep">{t("donateNow")}</p>
               </div>
             )}
+            {sharePriceEl ? <div className="mt-4">{sharePriceEl}</div> : null}
 
             {/* Action buttons */}
             <div className="mt-6 space-y-3">

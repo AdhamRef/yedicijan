@@ -8,13 +8,16 @@ import {
 } from "@/components/ui/sheet";
 import { useRouter } from "@/i18n/routing";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
+import { formatMoney } from "@/lib/minbar/money";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ShoppingCart, Heart, Trash2 } from "lucide-react";
 import Image from "next/image";
+import { publicCampaignImage } from "@/lib/minbar/project-image-fallback";
 import Spinner from "../components/ui/spinner";
 import { useTranslations, useLocale } from "next-intl";
 import { cn } from "@/lib/utils";
+import { localeDirection } from "@/lib/locales";
 import { resolveShareUnit, type ShareLabelsConfig } from "@/lib/campaign/share-labels";
 
 interface CartItem {
@@ -50,8 +53,8 @@ const CartSheet: React.FC<CartSheetProps> = ({
   onOpenDonationDialog,
 }) => {
   const t = useTranslations('CartSheet');
-  const locale = useLocale() as 'ar' | 'en' | 'fr';
-  const isRTL = locale === 'ar';
+  const locale = useLocale();
+  const isRTL = localeDirection(locale) === 'rtl';
   const router = useRouter();
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
@@ -85,12 +88,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
   };
 
   const formatAmount = (amount: number, currency: string) =>
-    new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
-    }).format(amount);
+    formatMoney(amount, currency, locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -160,7 +158,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
                         {/* Image */}
                         <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                           <Image
-                            src={item.campaign.images[0]}
+                            src={publicCampaignImage(item.campaign.images)}
                             alt={campaignTitle}
                             fill
                             className="object-cover"
@@ -197,7 +195,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
                           </span>
                         </div>
 
-                        {/* Delete — always visible */}
+                        {/* Delete  always visible */}
                         <div className="flex-shrink-0">
                           {loadingItemId === item.id ? (
                             <div className="p-1.5">

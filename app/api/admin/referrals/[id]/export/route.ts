@@ -1,3 +1,4 @@
+import { dt, withReportLanguage } from "@/lib/dashboard/report-i18n";
 /**
  * GET /api/admin/referrals/[id]/export
  *
@@ -12,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { donationStatusWhere } from "@/lib/dashboard/donation-usd-revenue";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
@@ -23,11 +25,13 @@ import {
   type ExportFormat,
 } from "@/lib/dashboard/donation-export";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
+import { DASH_LOCALE_COOKIE, parseDashLocale } from "@/lib/dashboard/i18n";
 
-export async function GET(
+async function localizedGET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Sheet names, headers and labels in the dashboard's interface language.
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, "referrals");
@@ -72,7 +76,6 @@ export async function GET(
       referralId,
       ...(campaignId && campaignId !== "all" && { items: { some: { campaignId } } }),
       ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
-      ...(status && ["PAID", "FAILED"].includes(status) && { status: status as "PAID" | "FAILED" }),
     };
     if (categoryId && categoryId !== "all") {
       baseWhere.OR = [
@@ -82,6 +85,9 @@ export async function GET(
     }
 
     const donationFilters: Prisma.DonationWhereInput[] = [baseWhere];
+    // ناجح / قيد التأكيد / فاشل, as the tables show them.
+    const statusWhere = donationStatusWhere(status);
+    if (statusWhere) donationFilters.push(statusWhere);
     if (locale && locale !== "all") {
       donationFilters.push(
         locale === "__unset" ? { OR: [{ locale: null }, { locale: "" }] } : { locale }
@@ -136,6 +142,10 @@ export async function GET(
         fees,
         totalAmount: total,
         coverFees: !!d.coverFees,
+        projectAllocations: [
+          ...d.items.map(i => ({ id: `campaign:${i.campaign.id}`, title: i.campaign.title, amount: Number(i.amount) })),
+          ...d.categoryItems.map(i => ({ id: `category:${i.category.id}`, title: i.category.name, amount: Number(i.amount) })),
+        ],
         campaigns: d.items.map((i) => ({ id: i.campaign.id, title: i.campaign.title })),
         categories: d.categoryItems.map((c) => ({ id: c.category.id, name: c.category.name })),
         referral: d.referral ? { id: d.referral.id, code: d.referral.code, name: d.referral.name } : null,
@@ -149,26 +159,26 @@ export async function GET(
     });
 
     const filters: ExportFilterDescriptor[] = [];
-    filters.push({ label: "رمز الإحالة", value: referral.code });
-    if (referral.name) filters.push({ label: "اسم الإحالة", value: referral.name });
+    filters.push({ label: dt("رمز الإحالة"), value: referral.code });
+    if (referral.name) filters.push({ label: dt("اسم الإحالة"), value: referral.name });
     filters.push({
-      label: "الفترة",
-      value: startParam || endParam ? `${startParam ?? "—"} → ${endParam ?? "—"}` : "كل الوقت",
+      label: dt("الفترة"),
+      value: startParam || endParam ? `${startParam ?? "—"} → ${endParam ?? "—"}` : dt("كل الوقت"),
     });
-    if (categoryId && categoryId !== "all") filters.push({ label: "القسم", value: categoryId });
-    if (campaignId && campaignId !== "all") filters.push({ label: "الحملة", value: campaignId });
-    if (status && status !== "all") filters.push({ label: "الحالة", value: status });
-    if (locale && locale !== "all") filters.push({ label: "اللغة", value: locale });
-    if (country && country !== "all") filters.push({ label: "الدولة", value: country });
-    filters.push({ label: "عدد التبرعات", value: String(rows.length) });
+    if (categoryId && categoryId !== "all") filters.push({ label: dt("القسم"), value: categoryId });
+    if (campaignId && campaignId !== "all") filters.push({ label: dt("الحملة"), value: campaignId });
+    if (status && status !== "all") filters.push({ label: dt("الحالة"), value: status });
+    if (locale && locale !== "all") filters.push({ label: dt("اللغة"), value: locale });
+    if (country && country !== "all") filters.push({ label: dt("الدولة"), value: country });
+    filters.push({ label: dt("عدد التبرعات"), value: String(rows.length) });
 
     const subtitle = referral.name
-      ? `الإحالة: ${referral.code} — ${referral.name}`
-      : `الإحالة: ${referral.code}`;
+      ? dt("الإحالة: {0}  {1}", [referral.code, referral.name])
+      : dt("الإحالة: {0}", [referral.code]);
 
     const out = await buildDonationExport({
       format,
-      title: "تقرير الإحالة",
+      title: dt("تقرير الإحالة"),
       subtitle,
       filters,
       donations: exportDonations,
@@ -186,4 +196,10 @@ export async function GET(
     console.error("export referral:", e);
     return NextResponse.json({ error: "Export failed" }, { status: 500 });
   }
+}
+
+
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const language = request.nextUrl.searchParams.get("reportLanguage") ?? parseDashLocale(request.cookies.get(DASH_LOCALE_COOKIE)?.value);
+  return withReportLanguage(language, () => localizedGET(request, context));
 }

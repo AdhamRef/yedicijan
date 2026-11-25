@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { dt } from "@/lib/dashboard/i18n";
 
 export type SubNavItem = {
   label: string;
@@ -14,11 +15,10 @@ export type SubNavItem = {
 /**
  * Secondary navigation for a route cluster whose pages share one sidebar entry.
  *
- * Three competing, section-private patterns existed before this: `MarketingQuickNav` (a
- * hardcoded pill row), `MarketingWorkflowHeader` (its own 3-level breadcrumb) and the nav
- * embedded in `ArchiveConsole`. The first two turned out to render only on routes that
- * `next.config.ts` redirects away, so this replaces the one that is actually reachable and
- * gives future clusters a single shape to reuse.
+ * The dashboard used to duplicate section navigation in several private components.
+ * Marketing's old variants pointed mostly to redirects, while the archive UI that also used
+ * this primitive has since been retired. Keep one reusable implementation for live and future
+ * route clusters, including the AI concierge tabs.
  *
  * Active state uses longest-prefix matching so a detail route keeps its parent tab lit.
  */
@@ -32,7 +32,7 @@ export function SubNav({ items, className }: { items: SubNavItem[]; className?: 
 
   return (
     <nav
-      aria-label="التنقل داخل القسم"
+      aria-label={dt("التنقل داخل القسم")}
       className={cn("mb-5 -mx-1 overflow-x-auto scrollbar-none", className)}
     >
       <div className="flex min-w-max items-center gap-1 px-1">

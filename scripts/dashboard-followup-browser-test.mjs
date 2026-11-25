@@ -1,0 +1,520 @@
+import {build} from "esbuild";
+import {chromium, expect} from "@playwright/test";
+import {createServer} from "node:http";
+import {readFile, writeFile, mkdir} from "node:fs/promises";
+import {createRequire} from "node:module";
+import assert from "node:assert/strict";
+import path from "node:path";
+import postcss from "postcss";
+import tailwindcss from "tailwindcss";
+const require = createRequire(import.meta.url);
+const id = "507f1f77bcf86cd799439011";
+const dictionaries = {en: require("../lib/dashboard/i18n/catalog/en.json"), tr: require("../lib/dashboard/i18n/catalog/tr.json")};
+const ui = (locale, value) => locale === "ar" ? value : dictionaries[locale][value] || value;
+const artifacts = path.resolve(process.env.CONTENT_EDITOR_ARTIFACTS || ".artifacts/content-editor", "dashboard-followup");
+await mkdir(artifacts, {recursive:true});
+const bundle = await build({stdin: {contents: `import React,{useState} from "react"; import {createRoot} from "react-dom/client"; import {setDashLocale,dt} from "./lib/dashboard/i18n";
+import {DonorProfileEditor} from "./components/dashboard/DonorProfileEditor";
+import UsersManagement from "./app/(dashboard)/dashboard/users/_components/UsersManagement";
+import {DonorAccountBadge} from "./components/dashboard/DonorAccountBadge";
+import {DashboardTopbar} from "./app/(dashboard)/dashboard/_shell/DashboardTopbar";
+import {WhatsappInbox} from "./app/(dashboard)/dashboard/communication/inbox/_components/WhatsappInbox";
+import RevenueDashboard from "./app/(dashboard)/dashboard/page";
+import TrackingSettingsManager from "./app/(dashboard)/dashboard/platform-connections/tracking/_components/TrackingSettingsManager";
+import AiConnectionSettings from "./app/(dashboard)/dashboard/platform-connections/tracking/_components/AiConnectionSettings";
+import PaymentGateways from "./app/(dashboard)/dashboard/general/payment-gateways/page";
+import {DeliveryPreviewSheet} from "./app/(dashboard)/dashboard/communication/_shared/DeliveryPreviewSheet";
+import {CampaignsListClient} from "./app/(dashboard)/dashboard/communication/campaigns/_components/CampaignsListClient";
+import {CampaignsTable} from "./app/(dashboard)/dashboard/communication/campaigns/_components/CampaignsTable";
+import {SuggestedTeamSupportSection} from "./app/(dashboard)/dashboard/campaigns/_components/SuggestedTeamSupportSection";
+import Analytics from "./app/(dashboard)/dashboard/google-analytics/_components/GoogleAnalyticsDashboard";
+import {DayOfMonthRevenueGrid} from "./components/dashboard/DayOfMonthRevenueGrid";
+import {recurringCalendarMonth,calendarOccurrences,calendarDay,emptyCalendar} from "./lib/dashboard/recurring-calendar";
+import TrackingLinkBuilder from "./app/(dashboard)/dashboard/marketing/attribution/_components/TrackingLinkBuilder";
+import BankTransfers from "./app/(dashboard)/dashboard/bank-transfers/page";
+import Certificates from "./app/(dashboard)/dashboard/certificates/page";
+import {ContentLocalizationAuditCard} from "./app/(dashboard)/dashboard/_components/ContentLocalizationAuditCard";
+import Donations from "./app/(dashboard)/dashboard/donations/page";
+import Badges from "./app/(dashboard)/dashboard/badges/page";
+import {EditDonationDialog} from "./components/dashboard/donations/EditDonationDialog";
+import {SmartWhatsappDialog} from "./components/dashboard/SmartWhatsappDialog";
+import {DonorCommunicationHistory} from "./components/dashboard/DonorCommunicationHistory";
+import {TranslationOverview} from "./components/dashboard/content-editor/TranslationOverview";
+import {PageSeoEditor} from "./components/dashboard/content-editor/PageSeoEditor";
+import QuickDonateBar from "./components/minbar/home/QuickDonateBar";
+import {DEFAULT_QUICK_DONATION} from "./lib/minbar/quick-donation";
+const params=new URLSearchParams(location.search); const locale=params.get("lang")||((document.cookie.match(/(?:^|; )dash-locale=([^;]+)/)||[])[1])||"ar"; setDashLocale(locale);document.documentElement.lang=locale;document.documentElement.dir=locale==="ar"?"rtl":"ltr";
+function CalendarFixture(){const [month,setMonth]=useState("2026-10"); const window=recurringCalendarMonth(month); const expected=emptyCalendar(window); const collected=emptyCalendar(window); const plan={frequency:"DAILY",nextBillingDate:"2026-10-26T11:30:00Z",timezone:"Europe/Istanbul",scheduleRule:{kind:"daily",hour:14,minute:30}}; for(const date of calendarOccurrences(plan,window)||[]){const cell=expected[calendarDay(date,window)-1];cell.count++;cell.amountUSD++;}if(month==="2026-10"){collected[24].count=1;collected[24].amountUSD=1;} return <DayOfMonthRevenueGrid collected={collected} expected={expected} month={month} onMonthChange={setMonth} formatMoney={value=>"$"+value.toFixed(2)}/>}
+function DonorManagementFixture(){return <><DashboardTopbar crumbs={[{label:dt("لوحة التحكم"),href:"/dashboard"},{label:dt("المتبرعون")}]} dir={locale==="ar"?"rtl":"ltr"} onOpenSidebar={()=>{}} onOpenSearch={()=>{}} showWhatsappInbox/><UsersManagement scope="donors"/></>}
+function App(){const [open,setOpen]=useState(true);const surface=location.pathname.endsWith("/communication")?"history":location.pathname==="/dashboard/seo-pages"?"seo":params.get("surface")||"analytics";
+return <><p id="fixture-nav"/><div className={surface==="quick"?"mia-scope":"p-5"}>{surface==="donorManagement"?<DonorManagementFixture/>:surface==="donorProfile"?<><DonorAccountBadge status="MEMBER"/>{open?<DonorProfileEditor user={{id:"${id}",name:"Fixture donor",email:"fixture@example.test",phone:"+15555555555",countryCode:"TR",countryName:"Türkiye",updatedAt:"2026-10-26T00:00:00.000Z"}} canEditEmail={!params.has("staff")} onClose={()=>setOpen(false)} onSaved={()=>{document.getElementById("fixture-nav").textContent="saved"}}/>:<p>Closed</p>}</>:surface==="topbar"?<DashboardTopbar crumbs={[{label:dt("لوحة التحكم"),href:"/dashboard"},{label:dt("المتبرعون")}]} dir={locale==="ar"?"rtl":"ltr"} onOpenSidebar={()=>{}} onOpenSearch={()=>{}} showWhatsappInbox whatsappInboxCount={27} showGeneralInbox generalInboxCount={8}/>:surface==="inbox"?<WhatsappInbox/>:surface==="summary"?<RevenueDashboard/>:surface==="calendar"?<CalendarFixture/>:surface==="linksAudit"?<TrackingLinkBuilder/>:surface==="bankAudit"?<BankTransfers/>:surface==="certificateAudit"?<Certificates/>:surface==="donations"?<Donations/>:surface==="aiConnection"?<AiConnectionSettings canManage={!params.has("viewOnly")} canTest={!params.has("noTest")}/>:surface==="tracking"?<TrackingSettingsManager canManage={!params.has("viewOnly")} canTest/>:surface==="gateways"?<PaymentGateways/>:surface==="deliveryPreview"?<><button onClick={()=>setOpen(true)}>Open preview</button><button onClick={()=>document.getElementById("fixture-nav").textContent="usable"}>Header navigation</button><DeliveryPreviewSheet id={open?"fixture-delivery":null} trackingLive={true} stagesFor={()=>[]} onOpenChange={setOpen}/></>:surface==="campaignOverview"?<CampaignsListClient/>:surface==="campaigns"?<CampaignsTable campaigns={[{id:"${id}",name:"Fixture campaign with a readable name",channel:"EMAIL",status:"SENT",audienceSegmentKey:"ALL",sentCount:100,deliveredCount:90,readCount:50,clickedCount:12,repliedCount:0,donationCount:2,revenue:150,failedCount:10,createdAt:"2026-10-25T01:00:00Z",updatedAt:"2026-10-25T01:00:00Z"}]} sort={{key:"name",dir:"asc"}} onSort={()=>{}} onChanged={()=>{}}/>:surface==="amounts"?<><SuggestedTeamSupportSection label="Team support amounts" helpText="" defaultPlaceholder="" exceptionsLabel="Exceptions" exceptionsEmptyHint=""/><SuggestedTeamSupportSection label="Project amounts" helpText="" defaultPlaceholder="" exceptionsLabel="Exceptions" exceptionsEmptyHint=""/></>:surface==="donation"?(open&&<EditDonationDialog donationId="${id}" onClose={()=>setOpen(false)} onSaved={()=>{}}/>):surface==="smart"?(open&&<SmartWhatsappDialog open onOpenChange={setOpen} userId="${id}" initialMode="UTILITY"/>):surface==="history"?<DonorCommunicationHistory userId="${id}"/>:surface==="badges"?<Badges/>:surface==="overview"?<TranslationOverview kind="categories"><ContentLocalizationAuditCard section="categories"/></TranslationOverview>:surface==="seo"?<PageSeoEditor/>:surface==="quick"?<QuickDonateBar config={{...DEFAULT_QUICK_DONATION,genericDestinations:["where-needed"],genericProjectIds:params.get("unmapped")?{}:{"where-needed":"${id}"}}} projects={[{id:"${id}",slug:"fixture-project",title:"Fixture project",regionLabel:null}]}/>:<Analytics/>}</div></>};createRoot(document.getElementById("root")).render(<App/>);`,resolveDir:process.cwd(),loader:"tsx"},bundle:true,platform:"browser",format:"iife",write:false,jsx:"automatic",tsconfig:path.join(process.cwd(),"tsconfig.json"),define:{"process.env.NODE_ENV":'"test"'},plugins:[{name:"fixture-adapters",setup(builder){
+  builder.onResolve({filter:/^next\/image$/},()=>({path:"image",namespace:"fixture-image"}));
+  builder.onLoad({filter:/.*/,namespace:"fixture-image"},()=>({contents:'import React from "react";export default function Image({src,alt}){return React.createElement("img",{src:typeof src==="string"?src:src?.src,alt})}',loader:"js",resolveDir:process.cwd()}));
+  builder.onResolve({filter:/^@\/i18n\/routing$/},()=>({path:"routing",namespace:"fixture-routing"}));
+  builder.onLoad({filter:/.*/,namespace:"fixture-routing"},()=>({contents:'import React from "react";export function Link(props){return React.createElement("a",props,props.children)};export function useRouter(){return {push(path){document.getElementById("fixture-nav").textContent=path},replace(){},refresh(){}}}',loader:"js",resolveDir:process.cwd()}));
+  builder.onResolve({filter:/^next\/(link|navigation)$/},args=>({path:args.path,namespace:"fixture-next"}));
+  builder.onLoad({filter:/.*/,namespace:"fixture-next"},args=>({contents:args.path==="next/link"?'import React from "react";export default function Link(props){return React.createElement("a",props,props.children)}':'import {useMemo} from "react";export function usePathname(){return location.pathname};export function useSearchParams(){return useMemo(()=>new URLSearchParams(location.search),[])};export function useRouter(){return {push(path){document.getElementById("fixture-nav").textContent=path},replace(){},refresh(){}}}',loader:"js",resolveDir:process.cwd()}));
+  builder.onResolve({filter:/^next-auth\/react$/},()=>({path:"session",namespace:"fixture-session"}));
+  builder.onLoad({filter:/.*/,namespace:"fixture-session"},()=>({contents:'export function useSession(){return {data:{user:{id:"fixture-admin",role:"ADMIN"}},status:"authenticated"}}',loader:"js"}));
+  builder.onResolve({filter:/useMinbarMoney$/},()=>({path:"money",namespace:"fixture-money"}));
+  builder.onLoad({filter:/.*/,namespace:"fixture-money"},()=>({contents:'export function useMinbarMoney(){return {currency:"USD",symbol:"$",format(value){return "$"+value}}}',loader:"js"}));
+  builder.onResolve({filter:/^@\/context\/(CurrencyContext|ViewUserProfileContext)$/},args=>({path:args.path,namespace:"fixture-context"}));
+  builder.onLoad({filter:/.*/,namespace:"fixture-context"},args=>({contents:args.path.endsWith("CurrencyContext")?'const currency={getSelectedCurrency:()=>"USD",convertToCurrency:value=>value,convertToUSD:value=>value};export function useCurrency(){return currency}':'export function useViewUserProfile(){return {openUserProfile(){},openUserProfileCard(){}}}',loader:"js"}));
+  builder.onResolve({filter:/^next-intl$/},()=>({path:"intl",namespace:"fixture-intl"}));
+  builder.onLoad({filter:/.*/,namespace:"fixture-intl"},()=>({contents:'export function useLocale(){return "ar"};export function useTranslations(){return (key)=>key}',loader:"js"}));
+}}]});
+if(process.env.CHECK_BUNDLE_ONLY){console.log("dashboard followup browser bundle: compiled");process.exit(0)}
+const css = (await postcss([tailwindcss({...require("../tailwind.config.ts").default,content:["components/dashboard/**/*.tsx","app/(dashboard)/dashboard/google-analytics/**/*.tsx","app/(dashboard)/dashboard/bank-transfers/**/*.tsx","app/(dashboard)/dashboard/page.tsx","app/(dashboard)/dashboard/_shell/**/*.tsx","app/(dashboard)/dashboard/users/**/*.tsx","app/(dashboard)/dashboard/badges/**/*.tsx","app/(dashboard)/dashboard/communication/campaigns/**/*.tsx","app/(dashboard)/dashboard/communication/_shared/**/*.tsx","app/(dashboard)/dashboard/communication/inbox/**/*.tsx","app/(dashboard)/dashboard/general/payment-gateways/**/*.tsx","app/(dashboard)/dashboard/campaigns/_components/SuggestedTeamSupportSection.tsx","components/ui/*.tsx"]})]).process("@tailwind base;@tailwind components;@tailwind utilities;",{from:undefined})).css + await readFile("styles/minbar/minbar.css","utf8");
+const fonts = {"/fixture-ar.woff2":await readFile("public/fonts/cairo/cairo-200-1000-arabic-714d40cf.woff2"),"/fixture-latin.woff2":await readFile("public/fonts/cairo/cairo-200-1000-latin-caa2f572.woff2")};
+const theme=(await readFile("app/[locale]/globals.css","utf8")).match(/:root\s*\{[\s\S]*?\}/)?.[0]||"";
+const extraCss=theme+'@font-face{font-family:Fixture;src:url(/fixture-ar.woff2);unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF;}@font-face{font-family:Fixture;src:url(/fixture-latin.woff2);unicode-range:U+0000-00FF;}body{font-family:Fixture,system-ui,sans-serif;background:#f8fafc}.mia-scope{--deep:#022;--gold:#d39a27;--muted:#64748b;--border:#e2e8f0;min-height:100vh}';
+const report = {summary:{activeUsers:120,totalUsers:150,newUsers:80,sessions:200,screenPageViews:450,engagementRate:.7,bounceRate:.3,keyEvents:42},trend:[{date:"20261023",activeUsers:60,sessions:100,screenPageViews:220},{date:"20261024",activeUsers:80,sessions:100,screenPageViews:230}],pages:[{pagePath:"/ar",pageTitle:"",activeUsers:100,sessions:180,screenPageViews:400}],channels:[{channel:"Paid Social",activeUsers:80,sessions:100,keyEvents:20}],countries:[{country:"Türkiye",activeUsers:80,sessions:100}],devices:[{device:"mobile",activeUsers:90,sessions:130}],exceptions:[],exceptionCount:0,quality:{timezone:"Europe/Istanbul",thresholded:false,sampled:false,dataLoss:false},extended:{campaigns:{rows:[{dimensions:["facebook / paid","Fixture campaign"],metrics:[100,80,20,.7]}],rowCount:1},landingPages:{rows:[{dimensions:["/ar"],metrics:[180,100,40,.3]}],rowCount:1},events:{rows:[{dimensions:["page_view"],metrics:[450,0]}],rowCount:1},interests:{rows:[],rowCount:0,error:"HTTP_403"}},organicSearch:{status:"ready",timezone:"America/Los_Angeles",startDate:"2026-10-01",endDate:"2026-10-20",summary:{clicks:20,impressions:100,ctr:.2,position:3},rows:[{query:"donate zakat",pagePath:"/ar",clicks:20,impressions:100,ctr:.2,position:3}]}};
+let trackingSettings={googleAdsConversionId:null,googleAdsConversionLabel:null};
+let aiSettings={revision:null,source:"ENVIRONMENT",keyPresent:true,enabled:true,model:"gpt-4.1-mini",updatedAt:null,canSave:true};
+let profileConflict=false; let bankImportDone=false; let bankArchived=false; let bankApprovalHeld=false;
+const requests=[];let savedSupport=null;let failQuickResolve=false;let sends=0;let badgeName="Segment A";let gatewayScenario="paid";
+const server=createServer(async(request,response)=>{const url=new URL(request.url,"http://fixture");response.setHeader("Cache-Control","no-store");
+ const json=(body,status=200)=>{response.writeHead(status,{"content-type":"application/json"});response.end(JSON.stringify(body))};
+ if(fonts[url.pathname]){response.writeHead(200,{"content-type":"font/woff2"});response.end(fonts[url.pathname]);return}
+ if(url.pathname==="/bundle.js"){response.writeHead(200,{"content-type":"application/javascript"});response.end(bundle.outputFiles[0].contents);return}
+ if(url.pathname==="/style.css"){response.writeHead(200,{"content-type":"text/css"});response.end(css+extraCss);return}
+ let raw="";let body={};if(request.method!=="GET"){for await(const chunk of request)raw+=chunk;try{body=JSON.parse(raw)}catch{}}
+ if(url.pathname.startsWith("/api/"))requests.push({path:url.pathname,query:Object.fromEntries(url.searchParams),method:request.method,body});
+ if(url.pathname==="/api/users")return json({users:[{id,name:"Fixture donor",email:"fixture@example.test",phone:"+15555555555",role:"DONOR",accountStatus:"MEMBER",countryCode:"TR",countryName:"Türkiye",preferredLang:"en",createdAt:"2026-10-26T00:00:00.000Z",updatedAt:"2026-10-26T00:00:00.000Z",badgeIds:[],totalDonationsCount:1,totalDonatedAmountUSD:100}],registeredDonorsTotal:42,pagination:{total:1,pages:1}});
+ if(url.pathname===`/api/dashboard/donors/${id}/profile`)return profileConflict?json({error:"PROFILE_CONFLICT"},409):json({ok:true});
+ if(url.pathname==="/api/admin/subscriptions/overview/day-of-month/details")return json({rows:[{id,subscriptionId:id,status:"ACTIVE",frequency:"DAILY",amount:1,amountUSD:1,currency:"USD",createdAt:"2026-10-25T11:49:00Z",nextBillingDate:"2026-10-26T11:30:00Z",scheduledAt:url.searchParams.get("month")+"-"+url.searchParams.get("day").padStart(2,"0")+"T11:30:00Z",paidAt:"2026-10-25T11:49:00Z",donor:{id,name:"Calendar fixture",email:"calendar@example.test"},campaigns:[],categories:[],referral:null}],totals:{count:1,amountUSD:1}});
+ if(url.pathname==="/api/admin/link-generator/data")return json({locales:["ar","en","tr"],currencies:["USD"],campaigns:[],categories:[],posts:[],postCategories:[]});
+ if(url.pathname==="/api/referrals")return json([]);
+ if(url.pathname==="/api/admin/marketing-intelligence/campaign-links")return json({ok:true,upserted:true});
+ if(url.pathname==="/api/admin/bank-transfers/banks")return json({banks:[{id:"unknown",nameAr:"بنك بدون اسم",nameTr:null,nameEn:null,isActive:true,currency:"USD",displayOrder:0},{id:"named",nameAr:"Named bank",ibanLast4:"0042",nameTr:null,nameEn:null,isActive:true,currency:"USD",displayOrder:1}],supportedCurrencies:["USD","TRY","EUR"]});
+ if(url.pathname==="/api/admin/bank-transfers/transactions")return json({transactions:[{id:"a".repeat(24),bankId:"named",donorName:"Synthetic pending donor",description:"Synthetic incoming transfer",approvalPending:bankApprovalHeld,amount:25,currency:"TRY",transactionDate:"2026-10-02",transactionAt:"2026-10-02T11:12:00",balance:125,status:"PENDING_REVIEW",donorLocale:"tr"},{id:"b".repeat(24),bankId:"named",donorName:"Synthetic approved donor",description:"Historical approved transfer",amount:50,currency:"USD",transactionDate:"2026-10-01",status:"APPROVED",donationId:"c".repeat(24)}],summary:{counts:{PENDING_REVIEW:1,APPROVED:1},approvedTotals:{USD:50}},page:1,totalPages:1,total:2});
+ if(url.pathname===`/api/admin/bank-transfers/transactions/${"a".repeat(24)}`&&request.method==="PATCH"){bankApprovalHeld=true;return json({error:"تعذّر تأكيد الإجراء. راجع حالة العملية قبل تكراره.",code:"DONATION_CREATE_UNRESOLVED"},409)}
+ if(url.pathname==="/api/admin/bank-transfers/preview"){
+  const excluded=JSON.parse(raw.match(/name="excludedRows"\r\n\r\n([^\r]*)/)?.[1]||"[]");
+  const rows=[{rowNumber:4,amount:25,currency:"TRY",importState:"NEW"},{rowNumber:5,amount:30,currency:"TRY",importState:"EXISTING"},{rowNumber:6,amount:10,currency:"TRY",importState:"NOT_CREDIT",direction:"DEBIT"},{rowNumber:7,amount:null,currency:"TRY",importState:"INVALID"},{rowNumber:8,amount:10,currency:"TRY",importState:excluded.includes(9)?"NEW":"AMBIGUOUS"},{rowNumber:9,amount:10,currency:"TRY",importState:excluded.includes(9)?"EXCLUDED":"AMBIGUOUS"},{rowNumber:10,amount:50,currency:"USD",importState:"NEW"}].map(row=>({...row,importState:bankImportDone&&row.importState==="NEW"?"EXISTING":row.importState,rowKey:"Hesap:"+row.rowNumber,description:"Synthetic statement row "+row.rowNumber,transactionDate:"2026-10-02",transactionAt:"2026-10-02T11:12:00",balance:125,reference:"REF-"+row.rowNumber,direction:row.direction||"CREDIT"}));
+  return json({fileName:"synthetic.csv",fileHash:"d".repeat(64),previewToken:"fixture-preview-token",bankId:"named",bank:{name:"Named bank"},parser:"spreadsheet",parserVersion:2,bankIban:"TR000000000000000000000042",detectedCurrency:"TRY",sheetName:"Hesap",sheets:["Hesap"],headerRowNumber:3,dateRange:{from:"2026-10-01",to:"2026-10-31"},amountColumn:{source:"header:tutar",header:"Tutar (TRY)"},rowCount:rows.length,rows,counts:Object.fromEntries(["NEW","EXISTING","POSSIBLE_DUPLICATE","AMBIGUOUS","INVALID","NOT_CREDIT","EXCLUDED"].map(key=>[key,rows.filter(row=>row.importState===key).length])),incomingTotals:{TRY:75,USD:50},selectedTotals:bankImportDone?{}:{TRY:excluded.includes(9)?35:25,USD:50},blockers:[]});
+ }
+ if(url.pathname==="/api/admin/bank-transfers/import"){bankImportDone=true;return json({state:"COMPLETED",importedCount:3,duplicateCount:1,excludedCount:1,failedCount:0,unknownCount:0,possibleDuplicateCount:0,invalidCount:1})}
+ if(url.pathname==="/api/admin/bank-transfers/uploads"){if(request.method==="DELETE"){bankArchived=true;return json({ok:true,transactionsPreserved:true})}return json({uploads:[{id:"e".repeat(24),bankId:"named",fileName:"synthetic.csv",currency:"TRY",status:"COMPLETED",rowCount:7,importedCount:3,duplicateCount:1,excludedCount:1,possibleDuplicateCount:0,invalidCount:1,failedCount:0,unknownCount:0,createdAt:"2026-11-03T08:00:00Z",dateRange:{from:"2026-10-01",to:"2026-10-31"},archivedAt:bankArchived?"2026-11-03T09:00:00Z":null}]})}
+ if(url.pathname==="/api/certificates/copy")return json({overrides:{},defaults:{ar:{thanks:{title:"Fixture default"}}},updatedAt:"2026-10-25T01:00:00Z"});
+ if(url.pathname==="/api/admin/content-localization/audit")return json({ok:true,section:"categories",targetLocales:["en"],generatedAt:"2026-10-25T01:00:00Z",summary:{totalItems:1,arabicQualityIssues:0,byLocale:{en:{incompleteItems:0,missingRecords:0,emptyFields:0,identicalToArabicFields:0}}},items:[]});
+ if(url.pathname==="/api/global-settings")return json({mainGateway:"ALBARAKA",payforEnabled:true,albarakaConfigured:true,albarakaRecurringReady:true,albarakaUseOOS:false,allowAnyAmount:true});
+ if(url.pathname==="/api/admin/google-analytics/report")return json({propertyId:"123456",range:url.searchParams.get("range"),period:Object.fromEntries(url.searchParams),report,updatedAt:"2026-10-25T01:00:00Z",cached:false});
+ if(url.pathname==="/api/admin/google-analytics/analyze")return json({analysis:{summary:"Fixture evidence based analysis",opportunities:[{area:"seo",title:"Review landing page",finding:"Measured traffic",action:"Review page intent",evidenceIds:["e1"],confidence:"medium"}],limitations:["Top rows only"]},evidence:[{id:"e1",dataset:"pages",label:"/ar",metrics:{sessions:180}}],reportUpdatedAt:"2026-10-25T01:00:00Z"});
+ if(url.pathname.startsWith("/api/admin/page-seo/")){if(request.method==="POST")return json({key:url.pathname.split("/").at(-1),locale:body.locale,revision:"1",values:{metaTitle:"Research title",metaDescription:"Research description"},research:{summary:"Fixture research",sources:[{url:"https://example.org/source"}]}});return json({key:"home",revision:"1",defaults:{ar:{metaTitle:"Home",metaDescription:"Home description"}},overrides:{}})}
+ if(url.pathname==="/api/admin/ai/connection"){
+  if(request.method==="POST")return json({ok:true,result:{check:"MODEL_ACCESS",model:body.model||aiSettings.model,generationRequests:0,saved:false}});
+  if(request.method==="PUT")aiSettings={...aiSettings,revision:"11111111-1111-4111-8111-111111111111",source:"DATABASE",model:body.model,enabled:body.enabled,keyPresent:body.clearKey?false:aiSettings.keyPresent||Boolean(body.apiKey),updatedAt:"2026-10-28T08:00:00Z"};
+  return json({ok:true,settings:aiSettings});
+ }
+ if(url.pathname==="/api/admin/tracking"){if(request.method==="PUT")trackingSettings={...trackingSettings,...body};return json(trackingSettings)}
+ if(url.pathname==="/api/admin/tracking/diagnostics")return json({ok:true,diagnostics:{}});
+ if(url.pathname==="/api/admin/tracking/test")return json({ok:true,status:"ready",validationOnly:true,testEventSent:false,message:"Fixture saved settings checked"});
+ if(url.pathname==="/api/dashboard/communication/deliveries/fixture-delivery")return json({ok:true,item:{id:"fixture-delivery",channel:"WHATSAPP",status:"READ",origin:"CAMPAIGN",purpose:"MARKETING",provider:"META_WHATSAPP",templateId:"fixture-template",templateName:"Fixture template",recipientPhone:"+15555555555",recipientName:"Fixture donor",locale:"en",renderedBody:"Fixture message",createdAt:"2026-10-27T08:00:00Z",sentAt:"2026-10-27T08:00:01Z",readAt:"2026-10-27T08:00:02Z",variables:{},providerMessageId:"fixture-provider"},retry:null,retryable:false,retryBlockedReason:null});
+ if(url.pathname==="/api/communication/campaigns"&&url.searchParams.get("countersMode")==="poll")return json({ok:true,deliveryCountersReady:true,counters:{[id]:{sent:100,delivered:90,read:50,clicked:0,replied:12,failed:10}}});
+ if(url.pathname==="/api/communication/campaigns")return json({ok:true,outcomesReady:true,campaigns:[{id,name:"Fixture confirmed campaign",channel:"WHATSAPP",purpose:"MARKETING",status:"SENT",audienceSegmentKey:null,templateGroupId:null,sentCount:100,deliveredCount:90,readCount:50,clickedCount:0,repliedCount:12,donationCount:2,revenue:150.25,unpricedPaidCount:0,trackingRequiresTemplateUpdate:true,failedCount:10,createdAt:"2026-10-25T01:00:00Z",updatedAt:"2026-10-25T01:00:00Z"}],unattributed:{donationCount:3,revenue:75.5,unpricedPaidCount:1}});
+ if(url.pathname==="/api/admin/stats")return json({totalAmount:100,paidCount:4,failedCount:1,totalCampaigns:2,totalCategories:1,totalUsers:4,totalDonations:5,paidRevenueAllTimeUnfiltered:9876543.21,paidCountAllTimeUnfiltered:12345,monthlyRecurringRevenueUnfiltered:125,activeMonthlyCountUnfiltered:7,oneTimeCount:1,monthlyCount:3,activeMonthlyCount:1,monthlyRecurringRevenue:25,thisMonthRevenue:50,campaignDonationsTotal:100,categoryDonationsTotal:0,recentDonations:[]});
+ if(url.pathname==="/api/admin/donations/chart"&&url.searchParams.get("period")==="day"){const paypal=url.searchParams.get("provider")==="PAYPAL";return json([{date:"2026-10-26",amountUSD:paypal?3:7,count:1,amountOneTime:paypal?3:7,countOneTime:1,amountMonthly:0,countMonthly:0,amountFailed:0,countFailed:0}]);}
+ if(url.pathname==="/api/admin/donations/chart")return json(url.searchParams.get("provider")==="PAYPAL"?[{date:"2026-10-26",amountUSD:35,count:2,amountOneTime:5,countOneTime:1,amountMonthly:30,countMonthly:1,amountFailed:0,countFailed:0}]:[{date:"2026-10-26",amountUSD:100,count:4,amountOneTime:25,countOneTime:1,amountMonthly:75,countMonthly:3,amountFailed:25,countFailed:1}]);
+ if(url.pathname==="/api/admin/donations/countries")return json({countries:[{code:"TR",count:4}],unsetCount:0});
+ if(url.pathname==="/api/admin/dashboard-summary")return json({today:{amountUSD:120,count:2,unpriced:0},month:{amountUSD:600,count:10,unpriced:0},support:{amountUSD:50,count:4,unpriced:0},failed:{amountUSD:150,count:3,unpriced:0},averageUSD:60,todayKey:"2026-10-26",monthKey:"2026-10"});
+ if(url.pathname==="/api/admin/bank-transfers/summary")return json({totalUsd:0,totals:{},approvedCount:0,pendingCount:0});
+ if(url.pathname==="/api/categories"||url.pathname==="/api/campaigns/all")return json([]);
+ if(url.pathname==="/api/donations")return json({donations:["DAILY","FRIDAY","MONTHLY",null].map((frequency,index)=>({id:id.slice(0,-1)+index,locale:"en",provider:"ALBARAKA",securityMode:index===0?"2D":"3D",campaigns:[],categories:[],referral:null,donorCountryCode:"TR",amount:1,amountUSD:1,currency:"USD",teamSupport:0,fees:0,totalAmount:1,donor:{accountStatus:index===0?"MEMBER":index===1?"GUEST":"UNKNOWN",name:"Fixture "+(frequency||"ONCE"),email:"fixture@example.test",image:null},type:frequency?"MONTHLY":"ONE_TIME",frequency,status:"PAID",paidAt:"2026-10-25T11:49:24Z",paymentMethod:"CARD",createdAt:"2026-10-25T11:49:19Z",items:[]})),pagination:{pages:1,total:4}});
+ if(/^\/api\/admin\/donations\/[^/]+\/gateway$/.test(url.pathname)&&gatewayScenario!=="paid"){
+  const bank=gatewayScenario==="bank-failed";
+  return json({id,provider:bank?"ALBARAKA":"PAYPAL",paymentMethod:bank?"CARD":"PAYPAL",status:bank?"FAILED":"PAID",amount:100,currency:"USD",totalAmount:100,amountUSD:100,paidAmount:null,paidCurrency:null,requestedGatewayAmount:bank?14931.09:100,requestedGatewayCurrency:bank?"TRY":"USD",paidAt:null,createdAt:"2026-10-26T01:00:00Z",billingReason:null,refs:{paypalOrderId:bank?null:"FIXTUREORDER001"},txn:{type:bank?"Sale":"Capture",result:bank?"Failed":"Success",returnCode:bank?"59":null,errorMessage:bank?"Fraud Şüphesi":null},paypalInspection:bank?null:{readOnly:true,checkedAt:"2026-10-26T05:00:00Z",outcome:gatewayScenario==="paypal-action"?"awaiting_buyer_action":gatewayScenario==="paypal-404"?"order_not_found":"capture_pending",orderStatus:gatewayScenario==="paypal-action"?"PAYER_ACTION_REQUIRED":gatewayScenario==="paypal-404"?null:"COMPLETED",captureStatus:gatewayScenario==="paypal-hold"?"PENDING":null,pendingReason:gatewayScenario==="paypal-hold"?"ECHECK":null},raw:[],rawTruncated:false});
+ }
+ if(/^\/api\/admin\/donations\/[^/]+\/gateway$/.test(url.pathname))return json({id,provider:"ALBARAKA",securityMode:"2D",paymentMethod:"CARD",status:"PAID",amount:1,currency:"USD",totalAmount:1,amountUSD:1,paidAmount:49.74,paidCurrency:"TRY",createdAt:"2026-10-25T11:49:19Z",paidAt:"2026-10-25T11:49:24Z",billingReason:"subscription_create",refs:{providerOrderId:"FIXTURE",providerAuthCode:"FIXTURE",providerHostRefNum:"FIXTURE"},txn:{type:"Sale",result:"Success",returnCode:"00",errorMessage:null},raw:[],rawTruncated:false});
+ if(url.pathname===`/api/donations/${id}`){if(request.method==="PATCH"){savedSupport=body;return json({ok:true})}return json({id,amount:100,totalAmount:113,teamSupport:10,fees:3,coverFees:true,currency:"TRY",status:"PAID",paidAt:"2026-10-01T00:00:00Z",donor:{name:"Fixture donor"},items:[{campaignId:id,amount:100,campaign:{title:"Fixture project"}}],categoryItems:[],waqfItems:[]})}
+ if(url.pathname==="/api/campaigns")return json({items:[{id,title:"Fixture project",isActive:true}],hasMore:false});if(url.pathname==="/api/categories")return json({items:[]});
+ if(url.pathname==="/api/dashboard/communication/whatsapp/smart-send"){if(request.method==="POST"){sends++;return json({ok:true,result:{transport:"UTILITY_TEMPLATE_FALLBACK"}})}return json({ok:true,context:{userId:id,phone:"+905555555555",name:"Fixture donor",locale:"ar",doNotContact:false,whatsappUnsubscribed:false,consentCheckUnavailable:false,directSendEnabled:true,replyWindow:{open:false,remainingMs:0},utilityTemplates:[{id:"approved",name:"Approved receipt",category:"UTILITY"}],marketingTemplates:[],sender:null}})}
+ if(url.pathname===`/api/dashboard/donors/${id}/communication`){if(url.searchParams.has("messageId"))return json({item:{channel:"EMAIL",renderedBody:'<p>Archived email content</p><img src="https://tracker.example/pixel"><script>throw new Error("must not run")</script>'}});const items=["WHATSAPP","EMAIL","SMS"].filter(channel=>!url.searchParams.get("channel")||channel===url.searchParams.get("channel")).map((channel,index)=>({id:id.slice(0,-1)+index,source:"delivery",channel,status:"DELIVERED",templateName:channel+" receipt",createdAt:"2026-10-25T01:00:00Z",deliveredAt:"2026-10-25T01:01:00Z"}));return json({donor:{name:"Fixture donor"},items,next:null})}
+ if(url.pathname==="/api/admin/content-editor/readiness")return json({items:[{id,title:"Fixture category",locales:Object.fromEntries(["ar","tr","en","fr","de","es","id","pt","sq","it","nl","sv","no","da","ms","ja","ur","zh","hi"].map(locale=>[locale,{complete:false,contentMissing:["name"],seoMissing:[],invalid:[]}]))}],nextCursor:null,checkedAt:"2026-10-31T20:00:00Z"});
+ if(url.pathname==="/api/admin/content-editor/categories")return json({items:[{id,title:"Fixture category",statuses:{en:{complete:true,seoComplete:false,reviewed:false,missing:[]}}}],nextCursor:null});
+ if(url.pathname==="/api/admin/badges")return json({badges:[{id,name:badgeName,translatedName:"Wrong translated label",color:"#336699",criteria:{type:"TOTAL_LIFETIME",amountMinUSD:100},order:0}]});
+ if(url.pathname===`/api/admin/badges/${id}`){if(request.method==="PUT"){badgeName=body.name;assert.equal(body.translations,undefined);return json({ok:true})}return json({id,name:badgeName,color:"#336699",criteria:{type:"TOTAL_LIFETIME",amountMinUSD:100},translations:[{locale:"en",name:"Old translation"}]})}
+ if(url.pathname==="/api/quick-donation/resolve")return failQuickResolve?json({error:"UNAVAILABLE"},422):json({projectId:id});
+ if(url.pathname.startsWith("/api/"))return json({error:"Unexpected fixture request"},404);
+ response.writeHead(200,{"content-type":"text/html"});response.end('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>');
+});
+await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));const origin=`http://127.0.0.1:${server.address().port}`;let browser;const errors=[];let checks=0;
+try{browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||undefined,headless:true,args:["--no-sandbox","--disable-dev-shm-usage","--use-fake-ui-for-media-stream","--use-fake-device-for-media-stream"]});
+ for(const locale of (process.env.TEST_LOCALE ? [process.env.TEST_LOCALE] : ["ar","en","tr"])){const page=await browser.newPage({viewport:{width:1440,height:1000}});page.on("pageerror",error=>{errors.push(error.message);console.error("fixture page error:",error.message)});page.setDefaultTimeout(20000);await page.context().addCookies([{name:"dash-locale",value:locale,url:origin}]);
+ const open=async(surface,suffix="")=>page.goto(`${origin}/?surface=${surface}&lang=${locale}${suffix}`,{waitUntil:"domcontentloaded"});
+
+ if(process.env.TEST_SURFACE!=="bank"){
+ // A failed list is not an empty list; the global account count is fetched independently.
+ let failDonorList=true,failRegisteredCount=false;
+ await page.route("**/api/users?*",route=>{const url=new URL(route.request().url());const summary=url.searchParams.get("summary")==="registered";
+   if(summary&&!failRegisteredCount)return route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({registeredDonorsTotal:42})});
+   if(summary||failDonorList)return route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({error:"unavailable"})});return route.continue();});
+ await open("donorManagement");await page.getByRole("alert").filter({hasText:ui(locale,"فشل في تحميل المستخدمين")}).waitFor();await page.getByText("42",{exact:true}).waitFor();assert.equal(await page.getByText(ui(locale,"لا يوجد مستخدمين مطابقين"),{exact:true}).count(),0);assert.equal(await page.getByRole("button",{name:ui(locale,"واتساب من مركز التواصل"),exact:true}).isDisabled(),true);checks++;
+ failDonorList=false;await page.getByRole("alert").filter({hasText:ui(locale,"فشل في تحميل المستخدمين")}).getByRole("button",{name:ui(locale,"إعادة المحاولة"),exact:true}).click();await page.getByRole("button",{name:ui(locale,"الإجراءات"),exact:true}).waitFor();assert.equal(await page.getByRole("button",{name:ui(locale,"واتساب من مركز التواصل"),exact:true}).isDisabled(),false);assert.equal(await page.getByText("42",{exact:true}).count(),1);checks++;
+ failRegisteredCount=true;await open("donorManagement");await page.getByRole("alert").filter({hasText:ui(locale,"تعذر تحميل البيانات")}).waitFor();await page.getByRole("button",{name:ui(locale,"الإجراءات"),exact:true}).waitFor();assert.equal(await page.getByText(ui(locale,"لا يوجد مستخدمين مطابقين"),{exact:true}).count(),0);failRegisteredCount=false;await page.getByRole("alert").filter({hasText:ui(locale,"تعذر تحميل البيانات")}).getByRole("button",{name:ui(locale,"إعادة المحاولة"),exact:true}).click();await page.getByText("42",{exact:true}).waitFor();checks++;
+ await page.unroute("**/api/users?*");
+
+ // Exercise the real row menu as well as the editor: overlapping modal lifecycles used
+ // to leave body pointer-events disabled after the dialog closed in production.
+ for(const [width,height,label] of [[1440,1000,"desktop"],[390,844,"mobile"]]){
+   await page.setViewportSize({width,height});
+   const openManagedProfile=async(keyboard=false)=>{
+     await open("donorManagement");
+     const actions=page.getByRole("button",{name:ui(locale,"الإجراءات"),exact:true});
+     if(keyboard)await actions.press("Enter");else await actions.click();
+     const edit=page.getByRole("menuitem",{name:ui(locale,"تعديل بيانات العضو"),exact:true});
+     if(keyboard)await edit.press("Enter");else await edit.click();
+     await page.getByRole("dialog").getByRole("heading",{name:ui(locale,"تعديل بيانات العضو"),exact:true}).waitFor();
+     assert.equal(await page.getByRole("dialog").evaluate(node=>node.contains(document.activeElement)),true,"The profile must retain keyboard focus while open");
+     assert.equal(await page.evaluate(()=>getComputedStyle(document.body).pointerEvents),"none","The open profile must still block background pointer input");
+   };
+   const verifyUnlockedNavigation=async()=>{
+     await page.getByRole("dialog").waitFor({state:"detached"});
+     await page.waitForFunction(()=>getComputedStyle(document.body).pointerEvents!=="none",undefined,{timeout:3000});
+     await page.getByRole("link",{name:ui(locale,"محادثات واتساب"),exact:true}).click();
+     await page.waitForURL(`${origin}/dashboard/communication/conversations`);
+   };
+   for(const close of ["cancel","close","escape"]){
+     const writesBefore=requests.filter(row=>row.path.endsWith("/profile")&&row.method==="PUT").length;
+     await openManagedProfile(close==="escape");
+     if(close==="cancel")await page.getByRole("dialog").getByRole("button",{name:ui(locale,"إلغاء"),exact:true}).click();
+     else if(close==="close")await page.getByRole("dialog").getByRole("button",{name:"Close",exact:true}).click();
+     else await page.keyboard.press("Escape");
+     await verifyUnlockedNavigation();
+     assert.equal(requests.filter(row=>row.path.endsWith("/profile")&&row.method==="PUT").length,writesBefore,"Dismissing a profile must not save donor data");checks++;
+   }
+   await openManagedProfile();
+   await page.getByRole("dialog").getByLabel(ui(locale,"الاسم"),{exact:true}).fill("Edited fixture through row menu");
+   await page.getByRole("dialog").getByRole("button",{name:ui(locale,"حفظ"),exact:true}).click();
+   await verifyUnlockedNavigation();
+   assert.equal(requests.filter(row=>row.path.endsWith("/profile")&&row.method==="PUT").at(-1).body.name,"Edited fixture through row menu");checks++;
+   await open("donorManagement");
+   await page.getByText(ui(locale,"المتبرعون الذين لديهم حساب مسجل"),{exact:true}).waitFor();await page.getByText("42",{exact:true}).waitFor();
+   await page.getByRole("button",{name:ui(locale,"الإجراءات"),exact:true}).click();
+   await page.getByRole("menuitem",{name:ui(locale,"تعديل الصلاحيات"),exact:true}).click();
+   await page.getByRole("dialog").getByRole("heading",{name:ui(locale,"تعديل الدور والصلاحيات"),exact:true}).waitFor();
+   await page.getByRole("dialog").getByRole("button",{name:ui(locale,"إلغاء"),exact:true}).click();
+   await page.getByRole("dialog").waitFor({state:"detached"});
+   await page.waitForFunction(()=>getComputedStyle(document.body).pointerEvents!=="none",undefined,{timeout:3000});
+   await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-donor-menu-unlocked-${label}.png`),fullPage:true});
+   await verifyUnlockedNavigation();checks++;
+ }
+ await page.setViewportSize({width:1440,height:1000});
+ const initialProfileWrites=requests.filter(row=>row.path.endsWith("/profile")&&row.method==="PUT").length;
+ // Real donor editor: validation, cancel, save and stale-write recovery at all viewport sizes.
+ await open("donorProfile");
+ await page.getByText(ui(locale,"عضو مسجل"),{exact:true}).waitFor();
+ await page.getByRole("dialog").getByLabel(ui(locale,"الاسم"),{exact:true}).fill("Edited fixture");
+ await page.getByRole("button",{name:ui(locale,"إلغاء"),exact:true}).click();
+ assert.equal(requests.filter(row=>row.path.endsWith("/profile")&&row.method==="PUT").length,initialProfileWrites);checks++;
+ await open("donorProfile");profileConflict=true;
+ await page.getByRole("button",{name:ui(locale,"حفظ"),exact:true}).click();
+ await page.getByRole("alert").getByText(ui(locale,"تغيرت البيانات. أغلق النافذة وحدّث القائمة ثم حاول مجددًا."),{exact:true}).waitFor();
+ assert.equal(await page.getByRole("dialog").count(),1);checks++;
+ profileConflict=false;await page.getByRole("dialog").getByLabel(ui(locale,"الاسم"),{exact:true}).fill("Edited fixture");
+ await page.getByRole("button",{name:ui(locale,"حفظ"),exact:true}).click();await page.getByText("Closed",{exact:true}).waitFor();
+ const profileWrite=requests.filter(row=>row.path.endsWith("/profile")&&row.method==="PUT").at(-1);
+ assert.equal(profileWrite.body.name,"Edited fixture");assert.equal(profileWrite.body.updatedAt,"2026-10-26T00:00:00.000Z");assert.equal(profileWrite.body.role,undefined);checks++;
+ for(const [width,height,label] of [[1440,1000,"desktop"],[390,844,"mobile"],[320,780,"narrow"]]){
+   await page.setViewportSize({width,height});await open("donorProfile");await page.getByRole("dialog").waitFor();
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+   const saveBounds=await page.getByRole("button",{name:ui(locale,"حفظ"),exact:true}).boundingBox();
+   assert.ok(saveBounds.y>=0&&saveBounds.y+saveBounds.height<=height,"Save must remain visible while the profile fields scroll");
+   const titleBounds=await page.getByRole("dialog").getByRole("heading").evaluate(node=>{const range=document.createRange();range.selectNodeContents(node);return range.getBoundingClientRect().toJSON()});
+   const closeBounds=await page.getByRole("dialog").getByRole("button",{name:"Close",exact:true}).boundingBox();
+   assert.ok(Math.min(titleBounds.x+titleBounds.width,closeBounds.x+closeBounds.width)-Math.max(titleBounds.x,closeBounds.x)<=1||Math.min(titleBounds.y+titleBounds.height,closeBounds.y+closeBounds.height)-Math.max(titleBounds.y,closeBounds.y)<=1,"The profile close control must not overlap its title in either text direction");
+   await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-donor-profile-"+label+".png"),fullPage:true});checks++;
+   const fields=page.getByRole("dialog").locator("form > div.overflow-y-auto");
+   const fieldsBounds=await fields.boundingBox();
+   assert.ok(fieldsBounds.y+fieldsBounds.height<saveBounds.y,"Scrolling profile fields must stay above the action buttons");
+   const preferredLanguage=page.getByRole("dialog").getByLabel(ui(locale,"اللغة المفضلة"),{exact:true});
+   await preferredLanguage.scrollIntoViewIfNeeded();
+   const languageBounds=await preferredLanguage.boundingBox();
+   assert.ok(languageBounds.y>=fieldsBounds.y&&languageBounds.y+languageBounds.height<=fieldsBounds.y+fieldsBounds.height+1,"The final profile field must be reachable without hiding the actions");
+   assert.equal(await preferredLanguage.evaluate(node=>{const r=node.getBoundingClientRect();return node===document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)}),true,"The final profile field must accept pointer input");
+   await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-donor-profile-scrolled-"+label+".png"),fullPage:true});checks++;
+   await open("topbar");const link=page.getByRole("link",{name:ui(locale,"واتساب، {0} محادثة غير مقروءة").replace("{0}","27"),exact:true});await link.waitFor();
+   assert.equal(await link.getAttribute("href"),"/dashboard/communication/conversations");const bounds=await link.boundingBox();assert.ok(bounds.width>=40&&bounds.height>=40);
+   const overlaps=await page.locator("header button, header a").evaluateAll(nodes=>{
+     const controls=nodes.map(node=>({rect:node.getBoundingClientRect(),label:node.getAttribute("aria-label")||node.textContent})).filter(item=>item.rect.width>0&&item.rect.height>0);
+     const collisions=[];for(let i=0;i<controls.length;i++)for(let j=i+1;j<controls.length;j++){
+       const a=controls[i].rect,b=controls[j].rect;
+       if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)collisions.push([controls[i].label,controls[j].label]);
+     }return collisions;
+   });
+   assert.deepEqual(overlaps,[],"Header controls must never overlap");
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+   await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-whatsapp-button-"+label+".png"),fullPage:true});checks++;
+ }
+ await page.setViewportSize({width:1440,height:1000});
+ // Actual inbox component: out-of-order responses, isolated drafts, retained history/scroll.
+ const contacts=["A","B"].map((name,index)=>({id:"sender:+1555555000"+index,phone:"+1555555000"+index,donor:{name,userId:null},needsReply:true,unresolved:false,sender:{id:"sender",name:"Business",phone:"+15555559999"}}));
+ let releaseFirst; let firstHeld=true; let state="SENT"; let failSend=false; let posts=0;
+ const timeline=contact=>Array.from({length:35},(_,index)=>({id:contact+"-"+index,kind:index%2?"outbound":"inbound",text:contact+" message "+index,status:index%2?state:null,at:new Date(Date.UTC(2026,9,26,10,index)).toISOString()}));
+ let releaseInboxList;let holdInboxList=true;let failSenderLoad=false;
+ const inboxSenders=[1,2,3].map(number=>({id:"sender-"+number,name:"Business "+number,phone:"+1555555550"+number}));
+ await page.route("**/api/dashboard/communication/inbox**",async route=>{
+  const url=new URL(route.request().url());const contact=decodeURIComponent(url.pathname.split("/").at(-1));
+  const finish=(body,status=200)=>route.fulfill({status,contentType:"application/json",body:JSON.stringify(body)});
+  if(contact==="senders")return finish(failSenderLoad?{error:"INBOX_SENDERS_UNAVAILABLE"}:{ok:true,senders:inboxSenders},failSenderLoad?503:200);
+  if(contact==="summary")return finish({ok:true,unread:2,needsReply:2});
+  if(contact==="inbox"){if(holdInboxList){holdInboxList=false;await new Promise(resolve=>{releaseInboxList=resolve;});}return finish({ok:true,conversations:contacts,senders:[],needsReply:2});}
+  const name=contact===contacts[0].id?"A":"B";
+  if(route.request().method()==="POST"){if(url.pathname.endsWith("/media")){posts++;assert.match(route.request().headers()["content-type"],/multipart\/form-data/);return finish({ok:true,deliveryId:"media-reply"});}if(route.request().postDataJSON()?.action==="read")return finish({ok:true});posts++;return finish(failSend?{error:"PROVIDER_REJECTED"}:{ok:true,deliveryId:"reply"},failSend?502:200);}
+  if(name==="A"&&firstHeld){firstHeld=false;await new Promise(resolve=>{releaseFirst=resolve;});}
+  const older=url.searchParams.has("before");
+  return finish({ok:true,conversation:{...contacts[name==="A"?0:1],timeline:older?[{id:name+"-older",kind:"inbound",text:name+" older history",status:null,at:"2026-10-25T00:00:00Z"}]:timeline(name),hasMore:!older,oldestAt:older?"2026-10-25T00:00:00Z":"2026-10-26T10:00:00Z"},replyWindow:{open:true,lastInboundAt:"2026-10-26T10:00:00Z",remainingMs:3600000}});
+ });
+ await open("inbox");await page.getByRole("combobox",{name:ui(locale,"رقم واتساب"),exact:true}).getByRole("option",{name:/Business 3/}).waitFor({state:"attached"});assert.equal(await page.getByRole("combobox",{name:ui(locale,"رقم واتساب"),exact:true}).getByRole("option").count(),4);assert.equal(await page.getByText(ui(locale,"لا شيء بانتظار ردّ"),{exact:true}).count(),0);await page.getByText(ui(locale,"جارٍ تحميل العدد…"),{exact:true}).waitFor();assert.ok(releaseInboxList);releaseInboxList();checks++;await page.waitForFunction(()=>document.querySelectorAll("li button").length===2);assert.equal(releaseFirst,undefined,"opening the inbox must not select or read a hidden conversation");await page.locator("li button").filter({has:page.getByText("A",{exact:true})}).click();for(let attempt=0;!releaseFirst&&attempt<200;attempt++)await new Promise(resolve=>setTimeout(resolve,10));assert.ok(releaseFirst,"initial detail request must be held");
+ await page.locator("li button").filter({has:page.getByText("B",{exact:true})}).click();await page.getByText("B message 34",{exact:true}).waitFor();releaseFirst();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));assert.equal(await page.getByText("A message 34",{exact:true}).count(),0);assert.equal(await page.getByText("B message 34",{exact:true}).count(),1);
+ await page.getByPlaceholder(ui(locale,"اكتب ردًّا…")).fill("Draft B");await page.locator("li button").filter({has:page.getByText("A",{exact:true})}).click();await page.getByText("A message 34",{exact:true}).waitFor();assert.equal(await page.locator("textarea").inputValue(),"");assert.equal(await page.getByText("B message 34",{exact:true}).count(),0);
+ await page.locator("textarea").fill("Draft A");await page.locator("li button").filter({has:page.getByText("B",{exact:true})}).click();await page.getByText("B message 34",{exact:true}).waitFor();assert.equal(await page.locator("textarea").inputValue(),"Draft B");checks++;
+ await page.getByRole("button",{name:ui(locale,"تحميل رسائل أقدم"),exact:true}).click();await page.getByText("B older history",{exact:true}).waitFor();
+ const thread=page.locator("div.overflow-y-auto").filter({has:page.getByText("B message 34",{exact:true})});await thread.evaluate(node=>{node.scrollTop=10;node.dispatchEvent(new Event("scroll"));});state="READ";
+ await page.getByRole("button",{name:ui(locale,"تحديث"),exact:true}).click();await page.getByText("B older history",{exact:true}).waitFor();await page.getByText(ui(locale,"قُرئت"),{exact:false}).first().waitFor();assert.ok(await thread.evaluate(node=>node.scrollTop)<80);assert.equal(await page.getByText("B message 34",{exact:true}).count(),1);checks++;
+ failSend=true;await page.getByRole("button",{name:ui(locale,"إرسال"),exact:true}).click();await page.getByText("PROVIDER_REJECTED",{exact:false}).waitFor();assert.equal(await page.locator("textarea").inputValue(),"Draft B");assert.equal(posts,1);checks++;
+
+
+ failSend=false;await page.locator('input[type="file"]').setInputFiles({name:"fixture.png",mimeType:"image/png",buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3i0AAAAASUVORK5CYII=","base64")});
+ await page.getByText("fixture.png",{exact:true}).waitFor();await page.getByRole("button",{name:ui(locale,"إرسال"),exact:true}).click();await page.getByText(ui(locale,"أُرسل الردّ."),{exact:true}).waitFor();assert.equal(await page.getByText("fixture.png",{exact:true}).count(),0);checks++;
+ await page.context().grantPermissions(["microphone"]);await page.getByRole("button",{name:ui(locale,"تسجيل رسالة صوتية"),exact:true}).click();await page.getByRole("button",{name:ui(locale,"إيقاف التسجيل"),exact:true}).waitFor();assert.equal(await page.getByRole("button",{name:ui(locale,"إرسال"),exact:true}).isDisabled(),true);
+ await page.waitForTimeout(350);await page.getByRole("button",{name:ui(locale,"إيقاف التسجيل"),exact:true}).click();await page.getByText(ui(locale,"رسالة صوتية جاهزة للإرسال"),{exact:true}).waitFor();assert.equal(await page.locator("audio[controls]").count(),1);checks++;
+ await page.locator("textarea").fill("Text stays with audio");await expect(page.locator("textarea")).toHaveValue("Text stays with audio");await page.getByRole("button",{name:ui(locale,"إرسال"),exact:true}).click();await page.getByText(ui(locale,"أُرسل الردّ."),{exact:true}).waitFor();assert.equal(await page.locator("textarea").inputValue(),"Text stays with audio");checks++;
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-inbox-mobile.png"),fullPage:true});await page.setViewportSize({width:1440,height:1000});await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-inbox-desktop.png"),fullPage:true});checks++;
+ failSenderLoad=true;await page.getByRole("button",{name:ui(locale,"تحديث"),exact:true}).click();await page.getByRole("alert").filter({hasText:ui(locale,"تعذّر تحميل أرقام واتساب. أعد المحاولة؛ الأرقام المحفوظة لم تُحذف.")}).waitFor();assert.equal(await page.getByRole("combobox",{name:ui(locale,"رقم واتساب"),exact:true}).getByRole("option").count(),4);checks++;
+ await page.unroute("**/api/dashboard/communication/inbox**");
+ trackingSettings={googleAdsConversionId:null,googleAdsConversionLabel:null};
+ await open("tracking");
+ const adsCard=page.getByRole("region",{name:/Google Ads/});
+ await adsCard.getByLabel("Conversion ID",{exact:true}).waitFor();
+ await adsCard.getByLabel("Conversion ID",{exact:true}).fill("AW-123456789");
+ await adsCard.getByLabel("Conversion Label",{exact:true}).fill("fixture_label");
+ const readiness=adsCard.getByRole("button",{name:ui(locale,"فحص جاهزية الإعدادات"),exact:true});
+ assert.equal(await readiness.isDisabled(),true,"unsaved pixel edits cannot test stale saved configuration");
+ await page.getByRole("status").filter({hasText:ui(locale,"تعديلات غير محفوظة")}).waitFor();
+ const beforeTracking=requests.filter(row=>row.path==="/api/admin/tracking"&&row.method==="PUT").length;
+ page.once("dialog",dialog=>dialog.dismiss());
+ await page.getByRole("button",{name:ui(locale,"حفظ الإعدادات"),exact:true}).first().click();
+ assert.equal(requests.filter(row=>row.path==="/api/admin/tracking"&&row.method==="PUT").length,beforeTracking);
+ assert.equal(await readiness.isDisabled(),true);
+ page.once("dialog",dialog=>dialog.accept());
+ await page.getByRole("button",{name:ui(locale,"حفظ الإعدادات"),exact:true}).first().click();
+ await readiness.waitFor({state:"visible"});
+ await page.waitForFunction(()=>!Array.from(document.querySelectorAll('[role="region"]')).find(node=>node.getAttribute("aria-label")?.includes("Google Ads"))?.querySelector("button")?.disabled);
+ await page.getByText(ui(locale,"مُعدّ"),{exact:true}).waitFor();
+ await readiness.click();
+ await page.getByText("Fixture saved settings checked",{exact:false}).first().waitFor();
+ const trackingSaves=requests.filter(row=>row.path==="/api/admin/tracking"&&row.method==="PUT");
+ assert.equal(trackingSaves.length,beforeTracking+1);
+ assert.equal(trackingSaves.at(-1).body.googleAdsConversionId,"AW-123456789");
+ assert.deepEqual(requests.filter(row=>row.path==="/api/admin/tracking/test").at(-1).body,{platform:"google_ads"});
+ await page.setViewportSize({width:390,height:844});await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-tracking-readiness-mobile.png"),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks+=3;
+ aiSettings={revision:null,source:"ENVIRONMENT",keyPresent:true,enabled:true,model:"gpt-4.1-mini",updatedAt:null,canSave:true};
+ await open("aiConnection");
+ const aiCard=page.getByRole("region",{name:ui(locale,"اتصال الذكاء الاصطناعي للموقع"),exact:true});
+ const aiKey=aiCard.getByLabel(ui(locale,"مفتاح OpenAI API"),{exact:true});
+ const aiModel=aiCard.getByLabel(ui(locale,"النموذج الافتراضي"),{exact:true});
+ const aiSave=aiCard.getByRole("button",{name:ui(locale,"حفظ اتصال الذكاء الاصطناعي"),exact:true});
+ const aiTest=aiCard.getByRole("button",{name:ui(locale,"اختبار الوصول للنموذج"),exact:true});
+ await aiKey.waitFor();assert.equal(await aiKey.inputValue(),"");assert.equal(await aiSave.isDisabled(),true);checks++;
+ const aiBeforeSaves=requests.filter(row=>row.path==="/api/admin/ai/connection"&&row.method==="PUT").length;
+ await aiKey.fill("sk-fixture-browser-key-123456789");
+ await aiCard.getByText(ui(locale,"لديك تغييرات لم تُحفظ بعد"),{exact:true}).waitFor();
+ await aiTest.click();await aiCard.getByRole("status").filter({hasText:ui(locale,"نجح اختبار الوصول إلى النموذج {0}. لم يُحفظ الاختبار ولم يُنشأ محتوى؛ الرصيد والتوليد يحتاجان تحققًا منفصلًا.").replace("{0}","gpt-4.1-mini")}).waitFor();
+ assert.equal(requests.filter(row=>row.path==="/api/admin/ai/connection"&&row.method==="PUT").length,aiBeforeSaves);checks++;
+ await aiSave.click();await aiCard.getByText(ui(locale,"تم حفظ اتصال الذكاء الاصطناعي للموقع. تسري الإعدادات على الطلبات الجديدة."),{exact:true}).waitFor();
+ assert.equal(await aiKey.inputValue(),"");assert.equal(await aiSave.isDisabled(),true);assert.equal(requests.filter(row=>row.path==="/api/admin/ai/connection"&&row.method==="PUT").at(-1).body.apiKey,"sk-fixture-browser-key-123456789");checks++;
+ await aiModel.fill("gpt-4o-mini");await aiSave.click();await aiCard.getByText(ui(locale,"تم حفظ اتصال الذكاء الاصطناعي للموقع. تسري الإعدادات على الطلبات الجديدة."),{exact:true}).waitFor();assert.equal(requests.filter(row=>row.path==="/api/admin/ai/connection"&&row.method==="PUT").at(-1).body.apiKey,undefined);checks++;
+ await page.route("**/api/admin/ai/connection",route=>route.request().method()==="POST"?route.fulfill({status:502,contentType:"application/json",body:JSON.stringify({ok:false,error:"AI_RATE_LIMITED"})}):route.continue());
+ await aiTest.click();await aiCard.getByRole("alert").filter({hasText:ui(locale,"بلغت خدمة الذكاء الاصطناعي حد الطلبات المؤقت. أعد المحاولة لاحقًا.")}).waitFor();checks++;
+ await page.unroute("**/api/admin/ai/connection");
+ await aiCard.getByLabel(ui(locale,"تفعيل اتصال الذكاء الاصطناعي في الموقع"),{exact:true}).uncheck();await aiSave.click();await aiCard.getByText(ui(locale,"الاتصال غير مفعّل"),{exact:true}).waitFor();checks++;
+ await aiModel.fill("gpt-4.1-mini");await page.route("**/api/admin/ai/connection",route=>route.request().method()==="PUT"?route.fulfill({status:409,contentType:"application/json",body:JSON.stringify({ok:false,error:"AI_SETTINGS_CONFLICT"})}):route.continue());
+ await aiSave.click();await aiCard.getByText(ui(locale,"تغير الاتصال في جلسة أخرى. حدّث الإعدادات قبل الحفظ."),{exact:false}).waitFor();assert.equal(await aiSave.isDisabled(),true);
+ await aiModel.fill("gpt-4.1");assert.equal(await aiCard.getByRole("button",{name:ui(locale,"تحميل الإعدادات الحالية وإلغاء التغييرات"),exact:true}).isVisible(),true);
+ await page.unroute("**/api/admin/ai/connection");await aiCard.getByRole("button",{name:ui(locale,"تحميل الإعدادات الحالية وإلغاء التغييرات"),exact:true}).click();await aiKey.waitFor();assert.equal(await aiModel.inputValue(),"gpt-4o-mini");checks++;
+ for(const width of [1440,390,320]){await page.setViewportSize({width,height:1000});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);if(width<=390){const description=await aiCard.locator("p").first().boundingBox();assert.ok(description.width>=width-180,"AI connection introduction keeps readable width beside its icon");}await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-ai-connection-"+width+".png"),fullPage:true});checks++;}
+ await page.setViewportSize({width:1440,height:1000});
+ await open("aiConnection","&viewOnly=1");await aiKey.waitFor();assert.equal(await aiKey.isDisabled(),true);assert.equal(await aiModel.isDisabled(),true);assert.equal(await aiSave.count(),0);await aiTest.click();await aiCard.getByRole("status").waitFor();assert.deepEqual(requests.filter(row=>row.path==="/api/admin/ai/connection"&&row.method==="POST").at(-1).body,{});checks++;
+ await page.route("**/api/admin/ai/connection",route=>route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:"AI_SETTINGS_UNAVAILABLE"})}));
+ await open("aiConnection");await aiCard.getByRole("alert").waitFor();assert.equal(await aiKey.count(),0);assert.equal(await aiSave.count(),0);
+ await page.unroute("**/api/admin/ai/connection");await aiCard.getByRole("button",{name:ui(locale,"إعادة المحاولة"),exact:true}).click();await aiKey.waitFor();checks++;
+ await open("summary");
+ await page.getByRole("heading",{name:ui(locale,"المؤشرات"),exact:true}).waitFor();
+ const metricSection=page.getByRole("region",{name:ui(locale,"المؤشرات"),exact:true});
+ await metricSection.getByText("$100",{exact:true}).waitFor();
+ const todayCard=metricSection.getByRole("article",{name:ui(locale,"إيرادات ناجحة ({0})").replace("{0}",ui(locale,"اليوم")),exact:true});
+ await todayCard.getByText("$7",{exact:true}).waitFor();
+ assert.equal(await metricSection.getByRole("article").count(),8);
+ await metricSection.getByText("$75",{exact:true}).waitFor();
+ await metricSection.getByText(ui(locale,"متوسط التبرع"),{exact:true}).waitFor();
+ assert.equal(await page.getByRole("region",{name:ui(locale,"نتائج الفترة المحددة"),exact:true}).count(),0);
+ assert.equal(requests.some(row=>row.path==="/api/admin/dashboard-summary"||row.path==="/api/admin/bank-transfers/summary"),false,"filtered cards must not fetch unscoped summaries");checks++;
+
+ for(const width of [1440,390,320]){
+  await page.setViewportSize({width,height:1000});
+  const dimensions=await metricSection.getByRole("article").evaluateAll(cards=>cards.map(card=>({height:card.getBoundingClientRect().height,scroll:card.scrollWidth,width:card.clientWidth})));
+  assert.equal(dimensions.length,8);assert.ok(dimensions.every(card=>card.height<=130&&card.scroll<=card.width+1),"compact revenue cards remain readable without horizontal overflow");
+  await metricSection.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-compact-revenue-"+width+".png")});checks++;
+ }
+ await page.setViewportSize({width:1440,height:1000});
+ await page.getByRole("cell",{name:"EN",exact:true}).first().waitFor();
+ await page.getByRole("row").filter({hasText:"Fixture DAILY"}).getByRole("cell",{name:ui(locale,"ناجح")+" 2D",exact:true}).waitFor();
+ await page.getByRole("row").filter({hasText:"Fixture DAILY"}).getByRole("button",{name:ui(locale,"عرض"),exact:true}).click();
+ await page.getByRole("dialog").getByText(ui(locale,"عرض التفاصيل"),{exact:true}).waitFor();
+ await page.getByRole("dialog").getByText("Fixture DAILY",{exact:true}).waitFor();
+ await page.keyboard.press("Escape");checks++;
+ const gateway=page.getByRole("button",{name:ui(locale,"بوابة الدفع"),exact:true});
+ const providerReads=Promise.all(["/api/donations","/api/admin/stats","/api/admin/donations/chart"].map(endpoint=>page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname===endpoint&&url.searchParams.get("provider")==="PAYPAL"})));
+ await gateway.click();await page.getByRole("checkbox",{name:"PayPal",exact:true}).check({noWaitAfter:true});
+ await providerReads;await page.getByRole("button",{name:ui(locale,"تم"),exact:true}).click();
+ await metricSection.getByText("$35",{exact:true}).waitFor();await todayCard.getByText("$3",{exact:true}).waitFor();await metricSection.getByText("$30",{exact:true}).waitFor();assert.equal(await metricSection.getByText("$100",{exact:true}).count(),0,"old unfiltered revenue must disappear");checks++;
+ for(const endpoint of ["/api/donations","/api/admin/stats","/api/admin/donations/chart"]) assert.ok(requests.some(row=>row.path===endpoint&&row.query.provider==="PAYPAL"),endpoint+" must retain provider filter");
+ await page.getByRole("button",{name:ui(locale,"تصدير التقرير"),exact:true}).click();
+ assert.equal(await page.getByRole("dialog").getByRole("combobox",{name:ui(locale,"بوابة الدفع"),exact:true}).textContent(),"PayPal");await page.keyboard.press("Escape");
+ await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-revenue-dashboard-desktop.png"),fullPage:true});
+ await page.setViewportSize({width:390,height:844});await page.waitForFunction(()=>document.documentElement.scrollWidth<=innerWidth+1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,"home controls must remain inside the mobile viewport");await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-revenue-dashboard-mobile.png"),fullPage:true});await page.setViewportSize({width:320,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-revenue-dashboard-small-mobile.png"),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks++;
+ await open("calendar");
+ const calendarCell=day=>page.getByRole("button",{name:new RegExp("^"+ui(locale,"عرض تفاصيل اليوم {0} من الشهر").replace("{0}",String(day))+" — ")});
+ await expect(page.locator("[data-weekday-header]")).toHaveCount(7);assert.equal(await page.locator("[data-calendar-blank]").count(),4);checks++;
+ await calendarCell(26).waitFor();assert.equal(await calendarCell(25).isEnabled(),false);assert.equal(await calendarCell(26).isEnabled(),true);checks++;
+ await calendarCell(31).click();await page.getByRole("dialog").getByText("Calendar fixture",{exact:true}).waitFor();assert.equal(requests.at(-1).query.month,"2026-10");assert.equal(requests.at(-1).query.day,"31");await page.getByRole("dialog").getByText("Oct 31, 2026",{exact:true}).waitFor();await page.keyboard.press("Escape");checks++;
+ await page.getByRole("button",{name:ui(locale,"المحصّل"),exact:true}).click();assert.equal(await calendarCell(25).isEnabled(),true);assert.equal(await calendarCell(26).isEnabled(),false);checks++;
+ await page.getByRole("button",{name:ui(locale,"المتوقع"),exact:true}).click();await page.locator('input[type="month"]').fill("2026-11");await calendarCell(30).waitFor();assert.deepEqual(await page.locator("[data-calendar-date][data-weekday=\"5\"]").evaluateAll(cells=>cells.map(cell=>Number(cell.dataset.calendarDate.slice(-2)))),[6,13,20,27]);assert.equal(await calendarCell(31).count(),0);assert.equal(await calendarCell(1).isEnabled(),true);checks++;
+ await page.locator('input[type="month"]').fill("2028-02");await calendarCell(29).waitFor();assert.equal(await calendarCell(30).count(),0);checks++;
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-recurring-calendar-mobile.png"),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks++;
+ await open("linksAudit");await page.getByLabel(ui(locale,"اسم الحملة"),{exact:true}).fill("Fixture campaign");await expect(page.getByRole("button",{name:ui(locale,"حفظ ونسخ الرابط"),exact:true})).toBeEnabled();await page.evaluate(()=>Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async()=>{throw new Error("fixture denied")}}}));await page.getByRole("button",{name:ui(locale,"حفظ ونسخ الرابط"),exact:true}).click();await page.getByText(ui(locale,"تم حفظ الرابط في سجل الحملات"),{exact:true}).waitFor();assert.equal((await page.locator("body").innerText()).includes(ui(locale,"· تم نسخه أيضًا").trim()),false);checks++;
+ await page.evaluate(()=>Object.defineProperty(navigator,"clipboard",{configurable:true,value:{writeText:async value=>{window.fixtureCopied=value}}}));await page.getByRole("button",{name:ui(locale,"حفظ ونسخ الرابط"),exact:true}).click();await page.waitForFunction(()=>Boolean(window.fixtureCopied));await page.getByText(ui(locale,"· تم نسخه أيضًا").trim(),{exact:false}).waitFor();checks++;
+ }
+ bankImportDone=false;bankArchived=false;bankApprovalHeld=false;
+ await open("bankAudit");await page.getByRole("button",{name:ui(locale,"عرض ومراجعة"),exact:true}).first().waitFor();
+ await page.getByRole("row").filter({hasText:"Synthetic approved donor"}).getByRole("button").click();await page.getByRole("dialog").getByText(ui(locale,"العملية معتمدة. يجب معالجة أي تعديل مالي من سجل التبرع المرتبط."),{exact:true}).waitFor();assert.equal(await page.getByRole("dialog").getByRole("button",{name:ui(locale,"اعتماد كتبرع"),exact:true}).count(),0);await page.keyboard.press("Escape");checks++;
+ await page.getByRole("row").filter({hasText:"Synthetic pending donor"}).getByRole("button").click();assert.equal(await page.getByRole("dialog").getByRole("button",{name:ui(locale,"اعتماد كتبرع"),exact:true}).isEnabled(),true);await expect(page.getByRole("dialog").getByLabel(ui(locale,"لغة المتبرع"),{exact:true}).locator("option")).toHaveCount(19);page.once("dialog",dialog=>dialog.accept());await page.getByRole("dialog").getByRole("button",{name:ui(locale,"اعتماد كتبرع"),exact:true}).click();await page.getByRole("dialog").getByText(ui(locale,"الإجراء يحتاج تحققًا. لا تكرر الاعتماد قبل مراجعة الحالة."),{exact:true}).waitFor();assert.equal(await page.getByRole("dialog").getByRole("button",{name:ui(locale,"اعتماد كتبرع"),exact:true}).count(),0);await page.keyboard.press("Escape");checks++;
+ await page.getByRole("button",{name:ui(locale,"استيراد كشف حساب"),exact:true}).click();assert.equal(await page.getByRole("combobox",{name:ui(locale,"البنك"),exact:true}).inputValue(),"named");assert.equal(await page.getByRole("button",{name:ui(locale,"معاينة"),exact:true}).isEnabled(),false);checks++;
+ await page.locator('#statement-file').setInputFiles({name:"synthetic.csv",mimeType:"text/csv",buffer:Buffer.from("Tarih,Tutar\n01.10.2026,25")});await page.getByRole("button",{name:ui(locale,"معاينة"),exact:true}).click();await page.getByText("TR000000000000000000000042",{exact:true}).waitFor();
+ const commitLabel=ui(locale,"إدخال {0} حركة للمراجعة");const commit=count=>page.getByRole("button",{name:commitLabel.replace("{0}",String(count)),exact:true});assert.equal(await commit(2).isEnabled(),false);assert.equal(await page.getByRole("checkbox",{name:ui(locale,"تضمين الصف {0}").replace("{0}","5"),exact:true}).isEnabled(),false);checks++;
+ await page.getByRole("checkbox",{name:ui(locale,"تضمين الصف {0}").replace("{0}","9"),exact:true}).uncheck();await page.getByText(ui(locale,"تغيّر اختيار الصفوف أو الورقة. أعد المعاينة لتحديث الأرقام قبل التأكيد."),{exact:true}).waitFor();assert.equal(await commit(2).isEnabled(),false);await page.getByRole("button",{name:ui(locale,"إعادة المعاينة"),exact:true}).click();await commit(3).waitFor();checks++;
+ await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-bank-statement-preview-desktop.png"),fullPage:true});await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await page.locator("[data-mobile-statement-rows]").getByText("25.00 TRY",{exact:true}).waitFor();await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-bank-statement-preview-mobile.png"),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks++;
+ await page.getByRole("checkbox",{name:ui(locale,"راجعت الحساب والعملة والتواريخ والمبالغ، وأريد إدخال الحركات الجديدة للمراجعة."),exact:true}).check();await commit(3).click();await page.getByText(ui(locale,"اكتمل إدخال الكشف للمراجعة"),{exact:true}).waitFor();checks++;
+ await page.getByRole("button",{name:ui(locale,"إعادة المعاينة"),exact:true}).count().then(async count=>{if(!count)await page.getByRole("button",{name:ui(locale,"معاينة"),exact:true}).click()});await commit(0).waitFor();assert.equal(await commit(0).isEnabled(),false);checks++;
+ await page.getByRole("button",{name:ui(locale,"سجل الكشوف"),exact:true}).click();await page.getByRole("cell",{name:"synthetic.csv Named bank · TRY",exact:false}).waitFor();page.once("dialog",dialog=>dialog.accept());await page.getByRole("button",{name:ui(locale,"أرشفة"),exact:true}).click();await page.getByText(ui(locale,"لا توجد كشوف مسجلة في هذه القائمة."),{exact:true}).waitFor();await page.getByRole("checkbox",{name:ui(locale,"إظهار المؤرشف"),exact:true}).check();await page.getByText(ui(locale,"مؤرشف"),{exact:true}).waitFor();checks++;
+ await page.getByRole("button",{name:ui(locale,"مراجعة العمليات"),exact:true}).click();
+ await page.locator("summary").filter({hasText:ui(locale,"تصفية متقدمة")}).click();await page.getByLabel(ui(locale,"قيمة من"),{exact:true}).fill("5");assert.equal(await page.getByLabel(ui(locale,"قيمة من"),{exact:true}).getAttribute("type"),"number");await page.getByLabel(ui(locale,"من تاريخ"),{exact:true}).fill("2026-10-01");await page.locator("summary").filter({hasText:ui(locale,"تصفية متقدمة")}).click();checks++;
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-bank-audit-mobile.png"),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks++;
+ if(process.env.TEST_SURFACE==="bank"){await page.close();continue}
+ await open("certificateAudit");await page.getByRole("tab",{name:ui(locale,"نصوص الشهادات"),exact:true}).click();await page.getByLabel(ui(locale,"عنوان الشهادة"),{exact:true}).fill("Fixture certificate");assert.equal(await page.getByLabel(ui(locale,"نص الشهادة"),{exact:true}).count(),1);await page.getByRole("button",{name:ui(locale,"حفظ"),exact:true}).click();await page.getByRole("button",{name:ui(locale,"حفظ"),exact:true}).waitFor();assert.ok(requests.some(row=>row.path==="/api/certificates/copy"&&row.method==="PUT"&&JSON.stringify(row.body).includes("Fixture certificate")));checks++;
+ await open("donations");
+ for(const [name,label] of [["DAILY","يومي"],["FRIDAY","تبرع كل جمعة"],["MONTHLY","شهري"],["ONCE","مرة واحدة"]]){const row=page.getByRole("row").filter({hasText:"Fixture "+name});await row.getByRole("cell",{name:ui(locale,label),exact:true}).waitFor();checks++;}
+ await page.getByRole("row").filter({hasText:"Fixture DAILY"}).getByRole("button",{name:ui(locale,"إجراءات"),exact:true}).click();
+ await page.getByRole("menuitem",{name:ui(locale,"عرض"),exact:true}).click();
+ await page.getByRole("dialog").getByText("00",{exact:true}).waitFor();
+ assert.equal(await page.locator("#fixture-nav").textContent(),"");checks++;
+ for(const [scenario,message] of [
+  ["paypal-action","بانتظار استكمال المتبرع لخطوات PayPal؛ لا يوجد تحصيل مؤكد."],
+  ["paypal-404","لم يعثر PayPal على الطلب. قد يتعلق الأمر بصلاحية الطلب أو مرجعه أو صلاحيات الوصول؛ لا تثبت هذه النتيجة حصول خصم أو فشل الدفع."],
+  ["paypal-hold","التحصيل معلّق لدى PayPal. راجع سبب الانتظار وحساب التاجر."],
+  ["bank-failed","Fraud Şüphesi"],
+ ]){
+  gatewayScenario=scenario;const start=requests.length;await open("donations");
+  await page.getByRole("row").filter({hasText:"Fixture DAILY"}).getByRole("button",{name:ui(locale,"إجراءات"),exact:true}).click();
+  await page.getByRole("menuitem",{name:ui(locale,"عرض"),exact:true}).click();
+  const dialog=page.getByRole("dialog");await dialog.getByText(ui(locale,message),{exact:scenario!=="bank-failed"}).waitFor();
+  await dialog.getByText(ui(locale,"المبلغ المطلوب من البوابة"),{exact:true}).waitFor();
+  assert.equal(await dialog.getByText(ui(locale,"المبلغ المسجل عند تأكيد الدفع"),{exact:true}).count(),0);
+  assert.equal(await dialog.getByText(ui(locale,"تمت العملية"),{exact:true}).count(),0);
+  assert.ok(requests.slice(start).every(row=>row.method==="GET"));
+  if(scenario==="paypal-hold")await dialog.getByText("ECHECK",{exact:true}).waitFor();
+  await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-${scenario}-desktop.png`),fullPage:true});checks++;
+  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
+  await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-${scenario}-mobile.png`),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks++;
+ }
+ gatewayScenario="paid";
+ await page.route("**/api/global-settings",route=>route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({error:"Unavailable"})}));
+ await open("gateways");await page.getByRole("alert").filter({hasText:ui(locale,"تعذّر تحميل إعدادات الدفع. أعد المحاولة قبل تعديل أي إعداد.")}).waitFor();
+ assert.equal(await page.getByRole("radio").count(),0,"a failed settings read must not expose an inferred gateway");checks++;
+ await page.unroute("**/api/global-settings");await page.getByRole("button",{name:ui(locale,"إعادة المحاولة"),exact:true}).click();
+ await page.getByRole("heading",{name:ui(locale,"التكرار"),exact:true}).waitFor();checks++;
+ await open("gateways");await page.getByRole("heading",{name:ui(locale,"التكرار"),exact:true}).waitFor();await page.getByText(ui(locale,"يومي")+" / "+ui(locale,"كل جمعة"),{exact:true}).waitFor();assert.equal(await page.getByText(ui(locale,"شهري"),{exact:true}).count(),1);assert.equal(await page.getByText(ui(locale,"التبرعات الشهرية تمرّ دائمًا عبر Stripe لأنها تحتاج إلى تحصيل متكرر لا توفّره بوابتا 3D Secure. كما يبقى Stripe هو المسار الاحتياطي عند فشل أي عملية 3D Secure."),{exact:true}).count(),0);await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);const payforHeading=await page.getByRole("heading",{name:/PayFor/,level:3}).boundingBox();const payforSwitch=await page.getByRole("switch").last().boundingBox();assert.ok(payforHeading&&payforSwitch&&(Math.min(payforHeading.x+payforHeading.width,payforSwitch.x+payforSwitch.width)<=Math.max(payforHeading.x,payforSwitch.x)||Math.min(payforHeading.y+payforHeading.height,payforSwitch.y+payforSwitch.height)<=Math.max(payforHeading.y,payforSwitch.y)),"gateway switch must not cover its heading on mobile");await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-recurring-readiness-mobile.png`),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks++;
+ for(const width of [1440,390]){
+ await page.setViewportSize({width,height:900});await open("deliveryPreview");
+ const preview=page.getByRole("dialog");await preview.getByText("Fixture template",{exact:true}).waitFor();
+ await preview.getByRole("button",{name:"Close",exact:true}).click();await preview.waitFor({state:"hidden"});
+ await page.getByRole("button",{name:"Header navigation",exact:true}).click();assert.equal(await page.locator("#fixture-nav").textContent(),"usable");checks++;
+ }
+ await page.setViewportSize({width:1440,height:1000});
+ const financialPattern="**/api/communication/campaigns?includeArchived=true&outcomesMode=poll";
+ let releaseFinancial;const financialGate=new Promise(resolve=>{releaseFinancial=resolve});
+ await page.route(financialPattern,async route=>{await financialGate;await route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false})})});
+ await open("campaignOverview");
+ await page.getByRole("link",{name:"Fixture confirmed campaign",exact:true}).waitFor();
+ await page.getByRole("button",{name:ui(locale,"الإيرادات والتتبع"),exact:true}).click();
+ await page.getByText(ui(locale,"الحملات ظاهرة؛ جارٍ تحميل الإيرادات المؤكدة."),{exact:true}).waitFor();checks++;
+ releaseFinancial();await page.getByRole("alert").filter({hasText:ui(locale,"تعذّر تحميل إسناد الإيرادات؛ بيانات الحملات متاحة والمبالغ غير متاحة مؤقتًا.")}).waitFor();
+ await page.getByRole("button",{name:ui(locale,"الإرسال والمتابعة"),exact:true}).click();
+ assert.equal(await page.getByRole("link",{name:"Fixture confirmed campaign",exact:true}).isVisible(),true);checks++;
+ await page.getByRole("button",{name:ui(locale,"الإيرادات والتتبع"),exact:true}).click();
+ await page.setViewportSize({width:390,height:844});await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-campaign-financial-unavailable.png"),fullPage:true});
+ await page.unroute(financialPattern);await page.getByRole("button",{name:ui(locale,"إعادة المحاولة"),exact:true}).click();
+ await page.getByText("150.25",{exact:true}).first().waitFor();checks++;
+ const basePattern="**/api/communication/campaigns?includeArchived=true&includeOutcomes=false&includeCounters=false";
+ await page.route(basePattern,route=>route.fulfill({status:503,contentType:"text/html",body:"<html>Unavailable</html>"}));
+ await open("campaignOverview");await page.getByRole("alert").filter({hasText:ui(locale,"تعذّر تحميل الحملات. البيانات السابقة قد تكون قديمة؛ أعد المحاولة.")}).waitFor();
+ assert.equal(await page.getByText(ui(locale,"لا توجد حملات تسويقية بعد"),{exact:true}).count(),0);checks++;
+ await page.unroute(basePattern);await page.getByRole("button",{name:ui(locale,"إعادة المحاولة"),exact:true}).click();
+ await page.getByRole("link",{name:"Fixture confirmed campaign",exact:true}).waitFor();await page.setViewportSize({width:1440,height:1000});
+ await open("campaignOverview");
+ await page.getByRole("link",{name:"Fixture confirmed campaign",exact:true}).waitFor();
+ await page.getByRole("button",{name:ui(locale,"الإيرادات والتتبع"),exact:true}).click();
+ await page.getByText(ui(locale,"إيراد تواصل غير منسوب: {0} دولار من {1} تبرع مؤكد. الروابط القديمة لا تحدد حملة واحدة؛ هذا المبلغ غير مضاف إلى صفوف الحملات.").replace("{0}","75.5").replace("{1}","3"),{exact:false}).waitFor();
+ assert.equal(await page.getByText("150.25",{exact:true}).filter({visible:true}).count(),2,"campaign row and total use only attributed income");
+ await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await page.screenshot({animations:"disabled",path:path.join(artifacts,locale+"-campaign-attribution-mobile.png"),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks+=2;
+ await open("campaigns");const campaignLink=page.getByRole("link",{name:"Fixture campaign with a readable name",exact:true});await campaignLink.waitFor();assert.ok((await campaignLink.boundingBox()).width>=180,"campaign name must remain readable beside numeric columns");await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-campaigns.png`),fullPage:true});await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,"wide campaign columns must scroll inside the table");assert.ok((await campaignLink.boundingBox()).width>=180);await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-campaigns-mobile.png`),fullPage:true});await page.setViewportSize({width:1440,height:1000});checks++;
+ await open("amounts");const teamInput=page.getByRole("textbox",{name:"Team support amounts",exact:true});const projectInput=page.getByRole("textbox",{name:"Project amounts",exact:true});await projectInput.waitFor();assert.notEqual(await teamInput.getAttribute("id"),await projectInput.getAttribute("id"));await page.getByText("Project amounts",{exact:true}).click();assert.equal(await projectInput.evaluate(element=>element===document.activeElement),true,"each repeated editor label must focus its own input");checks++;
+ await open("donation");await page.locator("#donation-team-support").waitFor();await page.locator("#donation-team-support").fill("-1");assert.equal(await page.getByRole("button",{name:ui(locale,"حفظ التعديلات"),exact:true}).isEnabled(),false);await page.locator("#donation-team-support").fill("25");await page.getByRole("button",{name:ui(locale,"حفظ التعديلات"),exact:true}).click();await page.getByPlaceholder("128").fill("128");await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-donation-support.png`),fullPage:true});await page.getByRole("button",{name:ui(locale,"نعم، طبّق التعديل"),exact:true}).click();await page.getByRole("dialog").waitFor({state:"hidden"});assert.equal(savedSupport.teamSupport,25);assert.equal(savedSupport.items,undefined);checks++;
+ await open("smart");await page.getByRole("combobox").selectOption("approved");assert.equal(await page.getByRole("button",{name:ui(locale,"إرسال"),exact:true}).isEnabled(),true);await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-approved-template.png`),fullPage:true});await page.getByRole("link",{name:ui(locale,"سجل المحادثة"),exact:true}).click();await page.getByRole("heading",{name:ui(locale,"سجل تواصل المتبرع"),exact:true}).waitFor();assert.equal(await page.getByRole("dialog").count(),0);checks++;
+ await open("smart");await page.getByRole("combobox").selectOption("approved");const count=sends;await page.getByRole("button",{name:ui(locale,"إرسال"),exact:true}).click();await page.getByRole("dialog").waitFor({state:"hidden"});assert.equal(sends,count+1);checks++;
+ await open("badges");await page.getByText(badgeName,{exact:true}).waitFor();assert.equal(await page.getByRole("tab").first().getAttribute("aria-selected"),"true");assert.equal(await page.getByText("Wrong translated label",{exact:true}).count(),0);await page.getByRole("button",{name:ui(locale,"تعديل"),exact:true}).click();await page.getByRole("dialog").waitFor();assert.equal(await page.locator("#badge-translation-locale").count(),0);await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-segment.png`),fullPage:true});checks++;
+ await open("analytics");await page.getByRole("heading",{name:ui(locale,"صفحات الدخول وفرص SEO"),exact:true}).waitFor();await page.locator("#ga4-range").selectOption("custom");await page.getByLabel(ui(locale,"من تاريخ"),{exact:true}).fill("2026-10-01");await page.getByLabel(ui(locale,"إلى تاريخ"),{exact:true}).fill("2026-10-20");await page.getByRole("button",{name:ui(locale,"تطبيق الفترة"),exact:true}).click();await page.getByText("2026-10-01 — 2026-10-20",{exact:false}).first().waitFor();await page.getByRole("button",{name:ui(locale,"تحليل هذه الفترة"),exact:true}).click();await page.getByText("Fixture evidence based analysis",{exact:true}).waitFor();await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-analytics.png`),fullPage:true});checks++;
+ await page.getByRole("link",{name:ui(locale,"مراجعة SEO بهذه البيانات"),exact:true}).first().click();await page.getByRole("heading",{name:ui(locale,"SEO الصفحات العامة"),exact:true}).waitFor();await page.getByText(ui(locale,"الاستفادة من تقارير الزيارات في الاقتراحات"),{exact:true}).click();await page.getByLabel(ui(locale,"استخدام بيانات GA4 في اقتراح SEO"),{exact:true}).waitFor();assert.equal(await page.getByLabel(ui(locale,"استخدام بيانات GA4 في اقتراح SEO"),{exact:true}).isChecked(),true);await page.getByRole("button",{name:ui(locale,"اقتراح SEO للغة الحالية"),exact:true}).click();await page.getByText("Fixture research",{exact:true}).waitFor();const seoRequest=requests.filter(row=>row.path.startsWith("/api/admin/page-seo/")&&row.method==="POST").at(-1);assert.equal(seoRequest.body.analyticsPeriod.startDate,"2026-10-01");checks++;
+ const seoWritesBefore=requests.filter(row=>row.path.startsWith("/api/admin/page-seo/")&&row.method==="PUT").length;
+ await page.getByRole("group",{name:ui(locale,"اختيار لغة المحتوى"),exact:true}).getByRole("button",{name:"العربية",exact:true}).click();
+ const seoTitle=page.getByLabel(ui(locale,"عنوان البحث"),{exact:true}).first();await seoTitle.fill("Unsaved manual title");
+ await Promise.all([page.waitForResponse(r=>r.url().includes("/api/admin/page-seo/")&&r.request().method()==="POST"),page.getByRole("button",{name:ui(locale,"اقتراح SEO للغة الحالية"),exact:true}).click()]);await page.getByText("Fixture research",{exact:true}).waitFor();
+ assert.equal(requests.filter(row=>row.path.startsWith("/api/admin/page-seo/")&&row.method==="POST").at(-1).body.sourceDraft.metaTitle,"Unsaved manual title","SEO must use the unsaved Arabic master independently of dashboard language");checks++;
+ for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.locator("section").filter({has:page.getByRole("heading",{name:ui(locale,"مراجعة الاقتراح"),exact:true})}).screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-seo-field-comparison-${width}.png`)});}await page.setViewportSize({width:1440,height:1000});
+
+ await page.getByRole("button",{name:ui(locale,"تطبيق {0} في المسودة").replace("{0}",ui(locale,"وصف البحث")),exact:true}).click();assert.equal(await seoTitle.inputValue(),"Unsaved manual title");assert.equal(await page.getByLabel(ui(locale,"وصف البحث"),{exact:true}).first().inputValue(),"Research description");checks++;
+ await seoTitle.fill("Newer manual title");await page.getByRole("button",{name:ui(locale,"تطبيق {0} في المسودة").replace("{0}",ui(locale,"عنوان البحث")),exact:true}).click();await page.getByRole("alert").filter({hasText:ui(locale,"تغير هذا الحقل بعد إعداد الاقتراح. راجع المسودة واطلب اقتراحًا جديدًا.")}).waitFor();assert.equal(await seoTitle.inputValue(),"Newer manual title");assert.equal(requests.filter(row=>row.path.startsWith("/api/admin/page-seo/")&&row.method==="PUT").length,seoWritesBefore);checks++;
+ const seoRequestsBefore=requests.filter(row=>row.path.startsWith("/api/admin/page-seo/")&&row.method==="POST").length;await page.getByRole("button",{name:ui(locale,"اقتراح SEO لجميع اللغات"),exact:true}).click();await page.getByRole("button",{name:ui(locale,"تطبيق الجميع في المسودة"),exact:true}).waitFor();assert.equal(await page.getByRole("dialog").count(),0);await page.getByRole("button",{name:ui(locale,"اقتراح SEO لجميع اللغات"),exact:true}).waitFor({state:"visible"});await page.waitForFunction(label=>Array.from(document.querySelectorAll("button")).some(button=>button.textContent===label&&!button.disabled),ui(locale,"اقتراح SEO لجميع اللغات"));assert.equal(requests.filter(row=>row.path.startsWith("/api/admin/page-seo/")&&row.method==="POST").length-seoRequestsBefore,19);assert.equal(requests.filter(row=>row.path.startsWith("/api/admin/page-seo/")&&row.method==="PUT").length,seoWritesBefore);assert.equal(await seoTitle.inputValue(),"Newer manual title");checks++;
+ let quotaRequests=0;await page.route("**/api/admin/page-seo/*",route=>{if(route.request().method()!=="POST")return route.continue();quotaRequests++;return route.fulfill({status:502,contentType:"application/json",body:JSON.stringify({error:"AI quota review fixture",reason:"AI_QUOTA_EXCEEDED",stopBatch:true})})});
+ await page.getByRole("button",{name:ui(locale,"اقتراح SEO لجميع اللغات"),exact:true}).click();assert.equal(await page.getByRole("dialog").count(),0);await page.getByRole("link",{name:ui(locale,"مراجعة اتصال الذكاء الاصطناعي والنموذج"),exact:true}).waitFor();assert.equal(quotaRequests,1);assert.equal(await page.getByRole("button",{name:ui(locale,"تطبيق الجميع في المسودة"),exact:true}).count(),0);assert.equal(await seoTitle.inputValue(),"Newer manual title");checks++;
+ for(const width of [1440,390,320]){await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${locale} SEO failure overflow ${width}`);await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-seo-failure-review-${width}.png`),fullPage:true});checks++}await page.unroute("**/api/admin/page-seo/*");await page.setViewportSize({width:1440,height:1000});
+ let queuedSuggestions=0,proposalPolls=0,queuedContext;
+ await page.route("**/api/admin/page-seo/*",route=>{if(route.request().method()!=="POST")return route.continue();queuedSuggestions++;queuedContext={...route.request().postDataJSON(),key:new URL(route.request().url()).pathname.split("/").at(-1)};assert.equal(route.request().headers().prefer,"respond-async");return route.fulfill({status:202,contentType:"application/json",body:JSON.stringify({taskId:"a".repeat(64),status:"QUEUED"})});});
+ await page.route("**/api/admin/ai/suggestions/*",route=>{proposalPolls++;return route.fulfill({status:proposalPolls===1?202:200,contentType:"application/json",body:JSON.stringify(proposalPolls===1?{status:"RUNNING"}:{key:queuedContext.key,locale:queuedContext.locale,revision:queuedContext.revision,values:{metaTitle:"Retained async title"},research:{summary:"Retained async research",sources:[{url:"https://example.org/async"}]}})});});
+ await page.getByRole("button",{name:ui(locale,"اقتراح SEO للغة الحالية"),exact:true}).click();await page.getByText("Retained async research",{exact:true}).waitFor();assert.equal(queuedSuggestions,1);assert.equal(proposalPolls,2);assert.equal(await seoTitle.inputValue(),"Newer manual title");assert.equal(requests.filter(row=>row.path.startsWith("/api/admin/page-seo/")&&row.method==="PUT").length,seoWritesBefore);checks++;
+ await page.unroute("**/api/admin/page-seo/*");await page.unroute("**/api/admin/ai/suggestions/*");
+ await open("history");await page.getByRole("heading",{name:ui(locale,"سجل تواصل المتبرع"),exact:true}).waitFor();await page.getByLabel(ui(locale,"القناة"),{exact:true}).selectOption("EMAIL");await page.getByText("EMAIL · EMAIL receipt",{exact:true}).waitFor();await page.getByText(ui(locale,"عرض محتوى الرسالة"),{exact:true}).click();await page.locator("iframe").waitFor();await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-history.png`),fullPage:true});checks++;
+ await page.setViewportSize({width:390,height:844});await open("analytics");await page.getByRole("heading",{name:ui(locale,"صفحات الدخول وفرص SEO"),exact:true}).waitFor();await page.screenshot({animations:"disabled",path:path.join(artifacts,`${locale}-analytics-mobile.png`),fullPage:true});const viewport=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll("body *")].filter(node=>node.getBoundingClientRect().right>innerWidth+1||node.getBoundingClientRect().left< -1).slice(0,12).map(node=>({tag:node.tagName,class:node.className,width:node.getBoundingClientRect().width}))}));assert.ok(viewport.scroll<=viewport.width+1,JSON.stringify(viewport));checks++;
+ const initialOverviewRequests=requests.filter(row=>row.path==="/api/admin/content-editor/categories").length;
+ const initialQualityRequests=requests.filter(row=>row.path==="/api/admin/content-editor/readiness").length;
+ await open("overview");await page.locator("details > summary").first().waitFor();
+ assert.equal(requests.filter(row=>row.path==="/api/admin/content-editor/categories").length,initialOverviewRequests);
+ await page.locator("details > summary").first().click();await page.locator("details details > summary").click();
+ await page.getByText("Fixture category",{exact:true}).waitFor();
+ assert.equal(requests.filter(row=>row.path==="/api/admin/content-editor/readiness").length,initialQualityRequests);
+ await page.getByRole("button",{name:ui(locale,"عرض الجاهزية"),exact:true}).click();
+ const readinessCenter=page.getByLabel(ui(locale,"مركز SEO والترجمات"),{exact:true});
+ await readinessCenter.getByRole("link",{name:"Fixture category",exact:true}).waitFor();
+ await readinessCenter.getByRole("button",{name:ui(locale,"تحديث الفحص"),exact:true}).waitFor();
+ assert.equal(requests.filter(row=>row.path==="/api/admin/content-editor/readiness").length,initialQualityRequests+1);
+ assert.equal(requests.filter(row=>row.path==="/api/admin/content-editor/categories").length,initialOverviewRequests+1);
+ await page.locator("details > summary").first().click();await page.locator("details > summary").first().click();
+ assert.equal(requests.filter(row=>row.path==="/api/admin/content-editor/categories").length,initialOverviewRequests+1);checks++;
+ await page.close();}
+ const quickPage=await browser.newPage({viewport:{width:1440,height:1000}});quickPage.on("pageerror",error=>errors.push(error.message));
+ await quickPage.goto(`${origin}/?surface=quick&unmapped=1&lang=ar`);await quickPage.locator("#qb-destination").waitFor();assert.equal(await quickPage.getByRole("button",{name:"donateNow",exact:true}).isEnabled(),false);await quickPage.locator("#qb-destination").click();await quickPage.getByRole("option",{name:"Fixture project",exact:true}).click();await quickPage.getByRole("button",{name:"donateNow",exact:true}).click();await quickPage.locator("#fixture-nav").getByText("/ar/cart",{exact:true}).waitFor();assert.equal(requests.filter(row=>row.path==="/api/quick-donation/resolve").at(-1).body.destination,id);checks++;
+ await quickPage.goto(`${origin}/?surface=quick&lang=ar`);await quickPage.getByRole("button",{name:"donateNow",exact:true}).click();await quickPage.locator("#fixture-nav").getByText("/ar/cart",{exact:true}).waitFor();assert.equal(requests.filter(row=>row.path==="/api/quick-donation/resolve").at(-1).body.destination,"where-needed");assert.equal(await quickPage.evaluate(id=>Object.values(localStorage).some(value=>value.includes(id)),id),true);checks++;
+ failQuickResolve=true;await quickPage.goto(`${origin}/?surface=quick&lang=ar`);await quickPage.getByRole("button",{name:"donateNow",exact:true}).click();await quickPage.getByText("quickDestinationUnavailable",{exact:true}).waitFor();assert.equal(await quickPage.locator("#fixture-nav").textContent(),"");await quickPage.setViewportSize({width:390,height:844});await quickPage.screenshot({animations:"disabled",path:path.join(artifacts,"quick-destination-unavailable-mobile.png"),fullPage:true});checks++;await quickPage.close();
+ assert.deepEqual(errors,[]);await writeFile(path.join(artifacts,"verification.json"),JSON.stringify({checks,locales:["ar","en","tr"],externalMessages:0,productionWrites:0},null,2));console.log(`dashboard followup browser: ${checks} checks passed`);
+}finally{await browser?.close();await new Promise(resolve=>server.close(resolve))}

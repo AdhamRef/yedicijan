@@ -1,5 +1,5 @@
-import { htmlEscape } from "./client";
-import { getCountryDisplayNameFromCode } from "@/lib/dashboard/country-display-name";
+import { htmlEscape } from "./html";
+import { getCountryDisplayNameFromCode } from "../dashboard/country-display-name";
 import { describeFailureInArabic } from "./failure-reason-ar";
 
 /** Shape of a donation row this module knows how to render. Mirrors the
@@ -87,12 +87,17 @@ function providerLabel(d: { provider: string | null; paymentMethod: string | nul
         ? "PayFor (Ziraat)"
         : d.provider === "ALBARAKA"
           ? "Albaraka Türk"
-          : d.provider ?? "—";
-  const m = d.paymentMethod === "CARD" ? "Card" : d.paymentMethod === "PAYPAL" ? "PayPal" : d.paymentMethod ?? "";
+          : d.provider === "PAYPAL"
+            ? "PayPal"
+            : d.provider === "BANK_TRANSFER"
+            ? "تحويل بنكي"
+            : d.provider ?? "—";
+  /* A bank transfer names itself once; "تحويل بنكي · BANK_TRANSFER" says nothing twice. */
+  const m = d.paymentMethod === "CARD" ? "Card" : d.paymentMethod === "PAYPAL" ? "PayPal" : d.paymentMethod === "BANK_TRANSFER" ? "" : d.paymentMethod ?? "";
   return m ? `${p} · ${m}` : p;
 }
 
-/** wa.me only accepts digits — strip "+", spaces, dashes, parens. */
+/** wa.me only accepts digits  strip "+", spaces, dashes, parens. */
 function whatsappDigits(phone: string): string {
   return phone.replace(/\D+/g, "");
 }
@@ -103,7 +108,7 @@ function donorLine(donor: { name: string | null; email: string; phone: string | 
   const rawPhone = donor.phone?.trim() ?? "";
   if (!rawPhone) return htmlEscape(name);
   const digits = whatsappDigits(rawPhone);
-  // No usable digits — show the raw value so the admin still sees something.
+  // No usable digits  show the raw value so the admin still sees something.
   if (!digits) return `${htmlEscape(name)} (${htmlEscape(rawPhone)})`;
   return `${htmlEscape(name)} (<a href="https://wa.me/${digits}">${htmlEscape(rawPhone)}</a>)`;
 }
@@ -125,7 +130,7 @@ function adCampaignLine(d: FormattableDonation): string | null {
 
 export interface DonationNotificationOptions {
   /**
-   * Donor has no other successful donation — marks the name with a star instead
+   * Donor has no other successful donation  marks the name with a star instead
    * of the separate "first donation" banner this used to post as a second message.
    */
   isNewDonor?: boolean;
@@ -146,11 +151,12 @@ export function formatDonationNotification(
   lines.push(`<b>${status.emoji} ${headline}</b>`);
   lines.push("");
 
-  // المبلغ — show local + USD if different
+  // المبلغ  show local + USD if different
   const local = formatMoneyLocal(d.totalAmount || d.amount, d.currency);
   const usd = formatMoneyUSD(d.amountUSD);
   const amountLine = usd && d.currency !== "USD" ? `${local} (≈ ${usd})` : local;
   lines.push(`💰 <b>المبلغ:</b> ${htmlEscape(amountLine)}`);
+  lines.push(`🕒 <b>الوقت:</b> ${htmlEscape(formatIstanbulDateTime(d.paidAt ?? d.createdAt))}`);
 
   // ⭐ = first-time donor. Inline on the donor line rather than a second message.
   lines.push(`👤 <b>المتبرع:</b> ${options.isNewDonor ? "⭐ " : ""}${donorLine(d.donor)}`);
@@ -167,7 +173,7 @@ export function formatDonationNotification(
   if (ad) lines.push(`📣 <b>الإعلان:</b> ${ad}`);
 
   if (d.status === "FAILED") {
-    // Always Arabic — the gateway localises this to the DONOR's checkout language,
+    // Always Arabic  the gateway localises this to the DONOR's checkout language,
     // which is meaningless to the admins reading this channel.
     lines.push("");
     lines.push(`⚠️ <b>سبب الفشل:</b> <i>${htmlEscape(describeFailureInArabic(d))}</i>`);
@@ -178,7 +184,7 @@ export function formatDonationNotification(
 
 /** Long-form details block used by the /donation <id> command. */
 export function formatDonationDetails(d: FormattableDonation): string {
-  // For details we want everything — reuse notification + raw fields the brief skips.
+  // For details we want everything  reuse notification + raw fields the brief skips.
   const base = formatDonationNotification(d);
   const extras: string[] = [];
   if (d.providerOrderId) extras.push(`🆔 <b>Order ID:</b> <code>${htmlEscape(d.providerOrderId)}</code>`);
@@ -204,7 +210,7 @@ export interface StatsSnapshot {
 
 export function formatStatsSnapshot(s: StatsSnapshot): string {
   const lines: string[] = [];
-  lines.push(`📊 <b>إحصائيات — ${htmlEscape(s.periodLabel)}</b>`);
+  lines.push(`📊 <b>إحصائيات  ${htmlEscape(s.periodLabel)}</b>`);
   lines.push("");
   lines.push(`✅ <b>ناجح:</b> ${s.paidCount} تبرع · ${formatMoneyUSD(s.paidTotalUSD) || "$0"}`);
   if (s.failedCount > 0) lines.push(`❌ <b>فاشل:</b> ${s.failedCount}`);
@@ -213,7 +219,7 @@ export function formatStatsSnapshot(s: StatsSnapshot): string {
     lines.push("");
     lines.push("<b>أعلى المشاريع:</b>");
     for (const c of s.topCampaigns.slice(0, 5)) {
-      lines.push(`  • ${htmlEscape(c.title)} — ${formatMoneyUSD(c.total) || "$0"} (${c.count})`);
+      lines.push(`  • ${htmlEscape(c.title)}  ${formatMoneyUSD(c.total) || "$0"} (${c.count})`);
     }
   }
   return lines.join("\n");
@@ -224,22 +230,22 @@ export function formatHelp(): string {
     "<b>🤖 بوت تبرعات الجمعية</b>",
     "",
     "<b>الإحصائيات</b>",
-    "<code>/today</code> — تبرعات اليوم",
-    "<code>/week</code> — آخر ٧ أيام",
-    "<code>/month</code> — آخر ٣٠ يوم",
-    "<code>/total</code> — الإجمالي الكلي",
+    "<code>/today</code>  تبرعات اليوم",
+    "<code>/week</code>  آخر ٧ أيام",
+    "<code>/month</code>  آخر ٣٠ يوم",
+    "<code>/total</code>  الإجمالي الكلي",
     "",
     "<b>قوائم</b>",
-    "<code>/failed</code> — آخر التبرعات الفاشلة",
-    "<code>/pending</code> — قيد التأكيد",
-    "<code>/recent</code> — آخر التبرعات الناجحة",
+    "<code>/failed</code>  آخر التبرعات الفاشلة",
+    "<code>/pending</code>  قيد التأكيد",
+    "<code>/recent</code>  آخر التبرعات الناجحة",
     "",
     "<b>بحث</b>",
-    "<code>/donation &lt;id&gt;</code> — تفاصيل تبرع",
-    "<code>/donor &lt;email|name&gt;</code> — بحث متبرع",
-    "<code>/campaign &lt;اسم&gt;</code> — أعلى التبرعات لمشروع",
+    "<code>/donation &lt;id&gt;</code>  تفاصيل تبرع",
+    "<code>/donor &lt;email|name&gt;</code>  بحث متبرع",
+    "<code>/campaign &lt;اسم&gt;</code>  أعلى التبرعات لمشروع",
     "",
-    "<code>/help</code> — هذه القائمة",
+    "<code>/help</code>  هذه القائمة",
   ].join("\n");
 }
 
@@ -257,7 +263,7 @@ export function formatDonorSummary(donor: {
   if (donor.countryCode) lines.push(`🌍 ${countryLine(donor.countryCode)}`);
   lines.push("");
   lines.push(
-    `✅ ${donor.donationsCount} تبرع ناجح — ${formatMoneyUSD(donor.totalUSD) || "$0"}`
+    `✅ ${donor.donationsCount} تبرع ناجح  ${formatMoneyUSD(donor.totalUSD) || "$0"}`
   );
   if (donor.lastDonationAt) {
     lines.push(`🕒 آخر تبرع: ${htmlEscape(formatIstanbulDateTime(donor.lastDonationAt))}`);

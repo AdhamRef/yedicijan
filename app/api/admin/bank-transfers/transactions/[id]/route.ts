@@ -65,7 +65,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // a "تحويل بنكي" hint. Deduped by donorName; idempotent per transaction hash; no messages sent.
     let donationId: string | null = null;
     if (status === "APPROVED") {
-      const found = await prisma.$runCommandRaw({ find: COLLECTION, filter: { _id: { $oid: id } }, limit: 1 }).catch(() => null);
+      const found = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({ find: COLLECTION, filter: { _id: { $oid: id } }, limit: 1 }).catch(() => null);
       const doc = isRecord(found) && isRecord(found.cursor) && Array.isArray(found.cursor.firstBatch)
         ? (found.cursor.firstBatch[0] as Record<string, unknown> | undefined) ?? null
         : null;
@@ -97,7 +97,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
     }
 
-    await prisma.$runCommandRaw({
+    await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
       update: COLLECTION,
       updates: [{ q: { _id: { $oid: id } }, u: { $set }, upsert: false }],
     });
@@ -131,7 +131,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     const now = new Date();
     const actor = auditActorFromDashboardSession(session!);
 
-    await prisma.$runCommandRaw({
+    await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
       update: COLLECTION,
       updates: [{
         q: { _id: { $oid: id } },

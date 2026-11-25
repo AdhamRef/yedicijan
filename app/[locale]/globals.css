@@ -1,13 +1,22 @@
+@config "../../tailwind.public.config.ts";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-* {
+/* Smooth in-page anchor jumps. On the root only: `* { scroll-behavior: smooth }`
+   made every scroll container animate its own initial positioning (the RTL
+   rails), and Chrome then recorded no Largest Contentful Paint for the
+   homepage at all  PageSpeed's NO_LCP. Script-driven scrolls pass
+   `behavior: "smooth"` themselves. */
+html {
   scroll-behavior: smooth;
 }
 
+/* The platform's faces. `.mia-scope` sets font-family on itself, so this governs
+   the dashboard and the auth pages  everything outside the public site. */
 body {
-  font-family: 'Inter', 'Segoe UI', Arial, Helvetica, sans-serif;
+  font-family: var(--font-cairo), Cairo, Almarai, var(--font-montserrat), Montserrat,
+    'Segoe UI', system-ui, sans-serif;
 }
 
 /* Scrollbar utilities */
@@ -27,7 +36,7 @@ body {
   display: none;
 }
 
-/* Dashboard sidebar scrollbar — thin, brand-coloured */
+/* Dashboard sidebar scrollbar  thin, brand-coloured */
 .sidebar-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.50) transparent;
@@ -46,7 +55,7 @@ body {
   background-color: rgba(255,255,255,0.80);
 }
 
-/* Dashboard sidebar scrollbar — light variant, for the neutral (white) shell. */
+/* Dashboard sidebar scrollbar  light variant, for the neutral (white) shell. */
 .sidebar-scroll-light {
   scrollbar-width: thin;
   scrollbar-color: rgb(203 213 225) transparent;
@@ -177,7 +186,7 @@ body {
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-  }
+    }
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -298,6 +307,146 @@ input[type="checkbox"]:checked::before {
 [dir="rtl"] .phone-input-wrapper .react-international-phone-country-selector-dropdown {
   right: 0 !important;
   left: auto !important;
+}
+
+/* ── Phone input: mobile responsiveness ──────────────────────────────────
+   The library ships a fixed 300px dropdown and a 13px input, both of which
+   overflow / trigger iOS focus-zoom on small screens. Keep the field inside
+   its container and the dropdown inside the viewport. */
+.phone-input-wrapper,
+.phone-input-wrapper .react-international-phone-input-container {
+  width: 100%;
+  max-width: 100%;
+}
+.phone-input-wrapper .react-international-phone-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+.phone-input-wrapper .react-international-phone-country-selector,
+.phone-input-wrapper .react-international-phone-country-selector-button {
+  flex: 0 0 auto;
+}
+.phone-input-wrapper .react-international-phone-country-selector-dropdown {
+  width: max(240px, 100%);
+  max-width: calc(100vw - 32px);
+  max-height: min(50vh, 240px);
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 640px) {
+  /* 16px keeps iOS Safari from zooming the page on focus. */
+  .phone-input-wrapper .react-international-phone-input {
+    font-size: 16px;
+  }
+  .phone-input-wrapper .react-international-phone-country-selector-button {
+    min-height: 44px; /* comfortable touch target */
+  }
+  .phone-input-wrapper .react-international-phone-country-selector-dropdown__list-item {
+    min-height: 40px;
+  }
+  .phone-input-wrapper .react-international-phone-country-selector-dropdown__list-item-country-name {
+    font-size: 14px;
+  }
+}
+
+/* Shared searchable phone dial-code picker. Keep the dropdown inside dialogs,
+   with a sticky search field and independently scrollable results. */
+.phone-input-wrapper .searchable-phone-selector {
+  position: relative;
+  display: flex;
+  height: 100%;
+  flex: 0 0 auto;
+}
+.phone-input-wrapper .searchable-phone-dropdown {
+  position: absolute;
+  z-index: 120;
+  inset-inline-start: 0;
+  bottom: calc(100% + 6px);
+  width: min(350px, calc(100vw - 32px));
+  max-height: min(60vh, 350px);
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 1px solid #d8dee5;
+  border-radius: 12px;
+  box-shadow: 0 18px 45px rgba(17, 24, 39, .18);
+  overflow: hidden;
+  direction: ltr;
+}
+[dir="rtl"] .phone-input-wrapper .searchable-phone-dropdown {
+  left: auto;
+  right: 0;
+}
+
+.phone-input-wrapper .searchable-phone-search {
+  padding: 10px;
+  border-bottom: 1px solid #e5e7eb;
+  flex: 0 0 auto;
+}
+.phone-input-wrapper .searchable-phone-search input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  font-size: 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #17212e;
+  background: #fff;
+  outline-offset: 2px;
+}
+.phone-input-wrapper .searchable-phone-search input:focus {
+  outline: 2px solid #2563eb;
+}
+.phone-input-wrapper .searchable-phone-options {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+  overscroll-behavior: contain;
+}
+.phone-input-wrapper .searchable-phone-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  min-height: 46px;
+  text-align: start;
+  font-size: 14px;
+  color: #17212e;
+  background: #fff;
+  border: 0;
+  cursor: pointer;
+}
+.phone-input-wrapper .searchable-phone-option:hover,
+.phone-input-wrapper .searchable-phone-option.is-active {
+  background: #f1f5f9;
+}
+.phone-input-wrapper .searchable-phone-option .react-international-phone-flag-emoji {
+  flex: 0 0 auto;
+}
+.phone-input-wrapper .searchable-phone-country-name {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+.phone-input-wrapper .searchable-phone-dial {
+  flex: 0 0 auto;
+  color: #475569;
+}
+.phone-input-wrapper .searchable-phone-empty {
+  padding: 16px;
+  margin: 0;
+  text-align: center;
+  color: #64748b;
+}
+@media (max-width: 640px) {
+  .phone-input-wrapper .searchable-phone-dropdown {
+    max-height: min(55vh, 300px);
+  }
 }
 
 /* Floating CartReminder entrance */

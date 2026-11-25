@@ -14,17 +14,24 @@ import {
 
 export type GlobalSettings = {
   suggestedTeamSupport: SuggestedTeamSupportConfig;
+  /** The basket's "support the team" step. Default true. */
+  teamSupportEnabled: boolean;
   /** Master switch for the PayFor gateway. Default true. */
   payforEnabled: boolean;
   /**
    * True when Albaraka is set up to collect the card on its own hosted page.
-   * The checkout dialogs must then skip our card form entirely — Albaraka signs
+   * The checkout dialogs must then skip our card form entirely  Albaraka signs
    * the card fields into the request MAC, so a card we collect locally would
    * have to be posted to our server to be signed.
    */
   albarakaUseOOS: boolean;
   /** False when ALBARAKA_ENC_KEY is missing, i.e. the gateway can't sign anything. */
   albarakaConfigured: boolean;
+  /**
+   * False (default): every donation line is worth at least $1. True: any
+   * positive amount in the donor's currency, exactly as given.
+   */
+  allowAnyAmount: boolean;
 };
 
 let cached: GlobalSettings | null = null;
@@ -55,19 +62,23 @@ export async function fetchGlobalSettings(
       const data = (await res.json().catch(() => null)) as
         | {
             suggestedTeamSupport?: unknown;
+            teamSupportEnabled?: unknown;
             payforEnabled?: unknown;
             albarakaUseOOS?: unknown;
             albarakaConfigured?: unknown;
+            allowAnyAmount?: unknown;
           }
         | null;
       const parsed: GlobalSettings = {
         suggestedTeamSupport: parseSuggestedTeamSupport(data?.suggestedTeamSupport),
+        teamSupportEnabled: data?.teamSupportEnabled !== false,
         // Treat anything that isn't an explicit `false` as enabled. This keeps
         // the donation flow working before the first record is persisted and
         // when the API response shape is incomplete for any reason.
         payforEnabled: data?.payforEnabled !== false,
         albarakaUseOOS: data?.albarakaUseOOS === true,
         albarakaConfigured: data?.albarakaConfigured === true,
+        allowAnyAmount: data?.allowAnyAmount === true,
       };
       cached = parsed;
       return parsed;

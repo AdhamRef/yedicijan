@@ -133,7 +133,7 @@ function donationReceiptAllowed(d: Pick<DonationForProfile, "paymentStatus">) {
 
 const ProfilePage = () => {
   const t = useTranslations("Profile");
-  const { data: session } = useSession();
+  const { data: session, status: sessionStatus } = useSession();
   const locale = useLocale();
   const isRtl = locale === "ar";
   const { convertToCurrency } = useCurrency();
@@ -167,6 +167,14 @@ const ProfilePage = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A signed-out visitor is sent to sign in and brought back here, rather than
+  // left on a page that waits for a session that will never arrive.
+  useEffect(() => {
+    if (sessionStatus !== "unauthenticated") return;
+    const back = `/${locale}/profile${window.location.search}`;
+    window.location.replace(`/${locale}/auth/signin?callbackUrl=${encodeURIComponent(back)}`);
+  }, [sessionStatus, locale]);
 
   useEffect(() => {
     if (!id) return;
@@ -237,26 +245,30 @@ const ProfilePage = () => {
 
   // ─────────────────────────────── donations ───────────────────────────────
 
+  const downloadReceipt = async (donationId: string) => {
+    const localeParam = typeof locale === "string" ? locale : "en";
+    const response = await axios.get(
+      `/api/donations/${donationId}/receipt?locale=${encodeURIComponent(localeParam)}`,
+      { responseType: "blob", timeout: 30000, validateStatus: (s) => s === 200 }
+    );
+    if (!(response.data instanceof Blob)) throw new Error("invalid response");
+    const blob = new Blob([response.data], { type: "application/pdf" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `receipt-${donationId.slice(-8)}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    }, 100);
+  };
+
   const handleDownload = async (donationId: string) => {
+    setIsDownloading(donationId);
     try {
-      setIsDownloading(donationId);
-      const localeParam = typeof locale === "string" ? locale : "en";
-      const response = await axios.get(
-        `/api/donations/${donationId}/receipt?locale=${encodeURIComponent(localeParam)}`,
-        { responseType: "blob", timeout: 30000, validateStatus: (s) => s === 200 }
-      );
-      if (!(response.data instanceof Blob)) throw new Error("invalid response");
-      const blob = new Blob([response.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `receipt-${donationId.slice(-8)}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
+      await downloadReceipt(donationId);
       toast.success(t("toast.receiptDownloadSuccess"));
     } catch {
       toast.error(t("toast.receiptDownloadFailed"));
@@ -265,15 +277,18 @@ const ProfilePage = () => {
     }
   };
 
+  // One toast for the batch: each receipt is downloaded directly (not through
+  // `handleDownload`, which toasted per file and cleared the "all" spinner), and
+  // a failed receipt no longer reads as a batch success.
   const handleDownloadAll = async (donations: DonationForProfile[]) => {
+    setIsDownloading("all");
+    let failed = 0;
     try {
-      setIsDownloading("all");
       for (const donation of donations) {
-        await handleDownload(donation.id);
+        try { await downloadReceipt(donation.id); } catch { failed++; }
       }
-      toast.success(t("toast.allReceiptsDownloadSuccess"));
-    } catch {
-      toast.error(t("toast.allReceiptsDownloadFailed"));
+      if (failed) toast.error(t("toast.allReceiptsDownloadFailed"));
+      else toast.success(t("toast.allReceiptsDownloadSuccess"));
     } finally {
       setIsDownloading(null);
     }
@@ -662,7 +677,7 @@ const ProfilePage = () => {
               )
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm" dir={isRtl ? "rtl" : "ltr"}>
+                <table className="w-full min-w-[620px] text-sm md:min-w-0" dir={isRtl ? "rtl" : "ltr"}>
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
                       <th
@@ -726,7 +741,7 @@ const ProfilePage = () => {
                           <tr key={donation.id} className="hover:bg-slate-50 transition-colors">
                             <td className="py-3 px-3 text-gray-600 whitespace-nowrap">
                               {new Date(donation.createdAt).toLocaleDateString(
-                                locale === "ar" ? "ar-EG" : undefined,
+                                locale === "ar" ? "ar-EG-u-nu-latn" : undefined,
                                 { day: "numeric", month: "short", year: "numeric" }
                               )}
                             </td>
@@ -892,19 +907,20 @@ const ProfilePage = () => {
       <Toaster position="top-center" />
       <div className="min-h-screen bg-gray-50">
         {/* Mobile tabs — label-first; icon only shows alongside on sm+ where there's room. */}
-        <div className="lg:hidden sticky top-0 z-50 bg-gray-50 pt-4 pb-4 px-4 sm:px-6 shadow-sm">
+        <div className="lg:hidden sticky top-0 z-50 bg-gray-50 py-2 px-3 sm:px-6 shadow-sm">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="w-full grid grid-cols-4 h-12 p-1 bg-[#A5243D]/10 rounded-xl">
+            {/* Phones: one scrolling row, so no label is cut off (Minber #293). */}
+            <TabsList className="flex w-full flex-nowrap justify-start gap-1 overflow-x-auto h-auto p-1 bg-[#A5243D]/10 rounded-xl [scrollbar-width:none]">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <TabsTrigger
                     key={item.id}
                     value={item.id}
-                    className="gap-1.5 text-xs sm:text-sm font-medium px-1 sm:px-3 data-[state=active]:bg-[#A5243D] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-lg"
+                    className="min-h-10 shrink-0 gap-1.5 whitespace-nowrap text-xs sm:text-sm font-medium px-3 py-2 data-[state=active]:bg-[#A5243D] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-lg"
                   >
                     <Icon className="w-4 h-4 shrink-0 hidden sm:inline-block" />
-                    <span className="truncate">{item.label}</span>
+                    <span className="whitespace-nowrap text-center leading-5">{item.label}</span>
                   </TabsTrigger>
                 );
               })}

@@ -1,6 +1,7 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { Heart, Gift, Star, Sparkles, ArrowLeft, Check, PartyPopper } from 'lucide-react';
+import { publicCampaignImage } from '@/lib/minbar/project-image-fallback';
+import { Heart, Star, Sparkles, ArrowLeft, Check } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
 
 // Dummy campaign datapixel
@@ -43,12 +44,6 @@ const DonationSuccessPage = () => {
   const locale = useLocale() as string;
   const [showConfetti, setShowConfetti] = useState(false);
   const donation = dummyDonation;
-
-  // Helper function to get locale-specific property
-  const getLocalizedProperty = (obj: any, key: string) => {
-    const localeKey = `${key}${locale.charAt(0).toUpperCase() + locale.slice(1)}`;
-    return obj[localeKey] || obj[key] || '';
-  };
 
   useEffect(() => {
     setShowConfetti(true);
@@ -209,7 +204,7 @@ const DonationSuccessPage = () => {
                 <div key={item.id} className="flex gap-4 p-4 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl border-2 border-purple-200">
                   <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-md border-2 border-white">
                     <img
-                      src={item.campaign.images[0]}
+                      src={publicCampaignImage(item.campaign.images)}
                       alt={item.campaign.title}
                       className="w-full h-full object-cover"
                     />

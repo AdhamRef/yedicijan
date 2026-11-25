@@ -1,3 +1,6 @@
+import { economicalAiFetch } from "./economical-fetch";
+import { getOpenAiRuntime } from "./connection-settings";
+import { openAiResponseText } from "./openai-response";
 import type { AiAssistantContextDefinition, AiProviderStatus } from "./ai-core-types";
 
 type ProviderDraftInput = {
@@ -12,35 +15,13 @@ type ProviderDraftResult = {
   status: "FALLBACK" | "COMPLETED" | "FAILED";
 };
 
-const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
-
-function externalCallsEnabled() {
-  return process.env.AI_CORE_ENABLE_EXTERNAL_CALLS === "true";
-}
-
-function openAiModel() {
-  return process.env.AI_CORE_OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1-mini";
-}
-
-function openAiBaseUrl() {
-  return (process.env.AI_CORE_OPENAI_BASE_URL || DEFAULT_OPENAI_BASE_URL).replace(/\/+$/, "");
-}
-
-export function getOpenAiProviderStatus(): AiProviderStatus {
-  const configured = Boolean(process.env.OPENAI_API_KEY);
-  const callsEnabled = externalCallsEnabled();
+export async function getOpenAiProviderStatus(runtime?: Awaited<ReturnType<typeof getOpenAiRuntime>>): Promise<AiProviderStatus> {
+  const config = runtime ?? await getOpenAiRuntime();
   return {
-    provider: "openai",
-    configured,
-    externalCallsEnabled: callsEnabled,
-    model: configured ? openAiModel() : null,
-    baseUrl: openAiBaseUrl(),
-    mode: configured && callsEnabled ? "ready" : "safe-fallback",
-    reason: configured
-      ? callsEnabled
-        ? "OpenAI provider is configured on the server and external calls are explicitly enabled."
-        : "OPENAI_API_KEY is present, but AI_CORE_ENABLE_EXTERNAL_CALLS is not true."
-      : "OPENAI_API_KEY is not configured on the server.",
+    provider: "openai", configured: config.configured, externalCallsEnabled: config.enabled,
+    model: config.configured ? config.model : null, baseUrl: config.baseUrl,
+    mode: config.apiKey ? "ready" : "safe-fallback",
+    reason: config.error ? "AI connection settings are unavailable." : config.apiKey ? "The shared OpenAI connection is configured and enabled." : config.configured ? "The shared OpenAI connection is disabled." : "The shared OpenAI connection has no key.",
   };
 }
 
@@ -53,8 +34,9 @@ function fallbackAnswer(input: ProviderDraftInput, reason: string) {
 }
 
 export async function generateOpenAiDraft(input: ProviderDraftInput): Promise<ProviderDraftResult> {
-  const status = getOpenAiProviderStatus();
-  if (status.mode !== "ready" || !process.env.OPENAI_API_KEY) {
+  const runtime = await getOpenAiRuntime();
+  const status = await getOpenAiProviderStatus(runtime);
+  if (status.mode !== "ready" || !runtime.apiKey) {
     return {
       mode: "SAFE_FALLBACK",
       status: "FALLBACK",
@@ -63,14 +45,15 @@ export async function generateOpenAiDraft(input: ProviderDraftInput): Promise<Pr
   }
 
   try {
-    const response = await fetch(`${status.baseUrl}/responses`, {
+    const response = await economicalAiFetch(`${status.baseUrl}/responses`, {
       method: "POST",
+      signal: AbortSignal.timeout(90_000),
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${runtime.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: status.model,
+        model: status.model, store: false, max_output_tokens: 2400,
         input: [
           `Role: ${input.context.systemRole}`,
           `Safety rules: ${input.systemSafety.join(" | ")}`,
@@ -87,11 +70,11 @@ export async function generateOpenAiDraft(input: ProviderDraftInput): Promise<Pr
       };
     }
 
-    const json = await response.json().catch(() => null) as { output_text?: string } | null;
+    const json = await response.json().catch(() => null) as unknown;
     return {
       mode: "OPENAI",
       status: "COMPLETED",
-      answer: json?.output_text?.trim() || fallbackAnswer(input, "OpenAI response did not include output_text."),
+      answer: openAiResponseText(json),
     };
   } catch {
     return {

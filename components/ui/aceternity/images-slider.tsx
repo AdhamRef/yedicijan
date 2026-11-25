@@ -1,6 +1,6 @@
 "use client";
 import { cn } from "@/lib/utils";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 import React, { useEffect, useState } from "react";
 
 export const ImagesSlider = ({
@@ -21,7 +21,6 @@ export const ImagesSlider = ({
   direction?: "up" | "down";
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(false);
   const [loadedImages, setLoadedImages] = useState<string[]>([]);
 
   const handleNext = () => {
@@ -41,7 +40,6 @@ export const ImagesSlider = ({
   }, []);
 
   const loadImages = () => {
-    setLoading(true);
     const loadPromises = images.map((image) => {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -54,7 +52,6 @@ export const ImagesSlider = ({
     Promise.all(loadPromises)
       .then((loadedImages) => {
         setLoadedImages(loadedImages as string[]);
-        setLoading(false);
       })
       .catch((error) => console.error("Failed to load images", error));
   };
@@ -83,7 +80,7 @@ export const ImagesSlider = ({
     };
   }, []);
 
-  const slideVariants = {
+  const slideVariants: Variants = {
     enter: (direction: 'up' | 'down') => ({
       y: direction === 'up' ? '100%' : '-100%',
       opacity: 1,
@@ -93,7 +90,7 @@ export const ImagesSlider = ({
       opacity: 1,
       transition: {
         duration: 0.4,
-        ease: [0.25, 0.1, 0.25, 1],
+        ease: [0.25, 0.1, 0.25, 1] as const,
       },
     },
     exit: (direction: 'up' | 'down') => ({
@@ -101,7 +98,7 @@ export const ImagesSlider = ({
       opacity: 1,
       transition: {
         duration: 0.4,
-        ease: [0.25, 0.1, 0.25, 1],
+        ease: [0.25, 0.1, 0.25, 1] as const,
       },
     }),
   };

@@ -3,12 +3,13 @@
 import type { ReactNode } from "react";
 import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { dt } from "@/lib/dashboard/i18n";
 
 type Props = {
   searchValue?: string;
   onSearchChange?: (value: string) => void;
   searchPlaceholder?: string;
-  /** Selects, date pickers, toggles — laid out after the search box. */
+  /** Selects, date pickers, toggles  laid out after the search box. */
   children?: ReactNode;
   /** Right-aligned actions: export, refresh, bulk actions. */
   actions?: ReactNode;
@@ -23,7 +24,7 @@ type Props = {
  * offset in particular was re-derived (and got re-broken) on each page.
  */
 export function FilterBar({
-  searchValue, onSearchChange, searchPlaceholder = "بحث…", children, actions, className,
+  searchValue, onSearchChange, searchPlaceholder = dt("بحث…"), children, actions, className,
 }: Props) {
   const showSearch = typeof onSearchChange === "function";
 
@@ -50,7 +51,7 @@ export function FilterBar({
             <button
               type="button"
               onClick={() => onSearchChange?.("")}
-              aria-label="مسح البحث"
+              aria-label={dt("مسح البحث")}
               className="absolute end-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200"
             >
               <X className="w-3.5 h-3.5" />

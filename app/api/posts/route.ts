@@ -25,7 +25,45 @@ export async function GET(request: NextRequest) {
     const locale = params.get('locale') || 'ar';
     const search = params.get('search')?.toLowerCase();
 
+    const where = search
+      ? {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' as const } },
+            { description: { contains: search, mode: 'insensitive' as const } },
+            { content: { contains: search, mode: 'insensitive' as const } },
+            {
+              translations: {
+                some: {
+                  locale,
+                  OR: [
+                    { title: { contains: search, mode: 'insensitive' as const } },
+                    { description: { contains: search, mode: 'insensitive' as const } },
+                    { content: { contains: search, mode: 'insensitive' as const } },
+                    { seoKeywords: { has: search } },
+                  ],
+                },
+              },
+            },
+            {
+              category: {
+                is: {
+                  OR: [
+                    { name: { contains: search, mode: 'insensitive' as const } },
+                    {
+                      translations: {
+                        some: { locale, name: { contains: search, mode: 'insensitive' as const } },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        }
+      : undefined;
+
     const posts = await prisma.post.findMany({
+      where,
       take: limit + 1,
       ...(cursor && { skip: 1, cursor: { id: cursor } }),
       orderBy: { createdAt: 'desc' },
@@ -36,6 +74,10 @@ export async function GET(request: NextRequest) {
         description: true,
         content: true,
         image: true,
+        metaTitle: true,
+        metaDescription: true,
+        seoKeywords: true,
+        imageAlt: true,
         published: true,
         createdAt: true,
         updatedAt: true,
@@ -47,23 +89,15 @@ export async function GET(request: NextRequest) {
             translations: { where: translationLocaleWhere(locale), take: 2, select: { locale: true, name: true, slug: true } }
           }
         },
-        translations: { where: translationLocaleWhere(locale), take: 2, select: { locale: true, title: true, description: true, content: true, image: true, slug: true } },
+        translations: { where: translationLocaleWhere(locale), take: 2, select: { locale: true, title: true, description: true, content: true, image: true, slug: true, metaTitle: true, metaDescription: true, seoKeywords: true, imageAlt: true } },
         campaignIds: true,
       }
     });
 
-    let filtered = posts;
-    if (search) {
-      filtered = posts.filter(p => {
-        const t = pickTranslation(p.translations, locale);
-        const title = t?.title || p.title || '';
-        const desc = t?.description || p.description || '';
-        return title.toLowerCase().includes(search) || desc.toLowerCase().includes(search);
-      });
-    }
-
-    const hasMore = filtered.length > limit;
-    const items = hasMore ? filtered.slice(0, -1) : filtered;
+    // Search is applied in the database before pagination. Filtering after `take`
+    // made valid matches beyond the first page invisible and produced incorrect hasMore values.
+    const hasMore = posts.length > limit;
+    const items = hasMore ? posts.slice(0, -1) : posts;
     const nextCursor = hasMore ? items[items.length - 1]?.id : null;
 
     const allCampaignIds = [...new Set(items.flatMap((p) => p.campaignIds ?? []))];
@@ -108,6 +142,10 @@ export async function GET(request: NextRequest) {
         description: tP?.description || p.description,
         content: tP?.content || p.content,
         image: tP?.image || p.image,
+        metaTitle: tP?.metaTitle || p.metaTitle,
+        metaDescription: tP?.metaDescription || p.metaDescription,
+        seoKeywords: tP?.seoKeywords?.length ? tP.seoKeywords : p.seoKeywords,
+        imageAlt: tP?.imageAlt || p.imageAlt || tP?.title || p.title,
         published: p.published,
         category: p.category
           ? {
@@ -140,7 +178,7 @@ export async function POST(request: NextRequest) {
     if (denied) return denied;
 
     const data = await request.json();
-    const { title, description, content, image, published, categoryId, campaignIds, campaignId, translations } = data;
+    const { title, description, content, image, metaTitle, metaDescription, seoKeywords, imageAlt, published, categoryId, campaignIds, campaignId, translations } = data;
     const resolvedCampaignIds = sanitizeCampaignIds(
       campaignIds !== undefined ? campaignIds : campaignId != null ? [campaignId] : []
     );
@@ -164,6 +202,10 @@ export async function POST(request: NextRequest) {
       description?: string;
       content?: string;
       image?: string;
+      metaTitle?: string;
+      metaDescription?: string;
+      seoKeywords?: string[];
+      imageAlt?: string;
       requestedSlug: string | null;
     }[] = [];
     if (translations && typeof translations === 'object') {
@@ -176,6 +218,10 @@ export async function POST(request: NextRequest) {
             description: tt.description,
             content: tt.content,
             image: tt.image,
+            metaTitle: tt.metaTitle,
+            metaDescription: tt.metaDescription,
+            seoKeywords: Array.isArray(tt.seoKeywords) ? tt.seoKeywords : [],
+            imageAlt: tt.imageAlt,
             requestedSlug: normalizeUserSlug(tt.slug),
           });
         }
@@ -197,6 +243,10 @@ export async function POST(request: NextRequest) {
           description: description || "",
           content: content || "",
           image: image || "",
+          metaTitle: metaTitle || title || "",
+          metaDescription: metaDescription || description || "",
+          seoKeywords: Array.isArray(seoKeywords) ? seoKeywords : [],
+          imageAlt: imageAlt || title || "",
           slug,
           published: !!published,
           categoryId: categoryId || null,
@@ -219,6 +269,10 @@ export async function POST(request: NextRequest) {
             description: t.description || '',
             content: t.content || '',
             image: t.image || '',
+            metaTitle: t.metaTitle || t.title || '',
+            metaDescription: t.metaDescription || t.description || '',
+            seoKeywords: t.seoKeywords || [],
+            imageAlt: t.imageAlt || t.title || '',
             slug: localeSlug,
           },
         });
@@ -239,7 +293,7 @@ export async function POST(request: NextRequest) {
         published: true,
         categoryId: true,
         campaignIds: true,
-        translations: { select: { locale: true, title: true, description: true, content: true, image: true, slug: true } },
+        translations: { select: { locale: true, title: true, description: true, content: true, image: true, slug: true, metaTitle: true, metaDescription: true, seoKeywords: true, imageAlt: true } },
       },
     });
 

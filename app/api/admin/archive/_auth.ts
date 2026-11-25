@@ -37,5 +37,6 @@ export async function readJson(request: Request) {
 }
 
 export function dashboardUser(session: Awaited<ReturnType<typeof getServerSession>>) {
-  return session?.user?.email || session?.user?.name || "dashboard-user";
+  const user = (session as { user?: { email?: string | null; name?: string | null } } | null)?.user;
+  return user?.email || user?.name || "dashboard-user";
 }

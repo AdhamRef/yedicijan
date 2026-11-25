@@ -8,12 +8,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * Daily clean-up of donations that never reached a confirmed payment.
+ * Half-hour confirmation polling for online donations. Provider uncertainty
+ * stays distinguishable from an authoritative unpaid result after 24 hours.
  *
- * A donation row is created as `status=PAID, paidAt=null` before the donor reaches the bank's
- * 3D Secure page; only the gateway callback sets `paidAt` and increments campaign `currentAmount`.
- * Rows still unconfirmed past the stale window are abandoned carts — this marks them FAILED so
- * they stop masquerading as pending.
+ * The existing provider settlement owns paidAt and revenue. Albaraka rows are asked
+ * of the bank and reuse that settlement; PayFor has no status lookup, so its abandoned
+ * carts are aged out after 48 hours. For Albaraka,
+ * age by itself is never proof that an unknown bank response means unpaid.
  *
  * `?dryRun=1` reports the same summary without writing anything.
  */
@@ -26,6 +27,21 @@ export async function GET(request: NextRequest) {
 
   try {
     const summary = await reconcileUnconfirmedDonations({ dryRun });
+
+    // Recovered money is the whole point of the job  make it loud rather than leaving it in a
+    // response body nobody reads.
+    if (summary.credited.length > 0 && !dryRun) {
+      await writeAuditLog({
+        actorRole: "SYSTEM",
+        action: "DONATIONS_RECONCILED_FROM_PROVIDERS",
+        messageAr: `تم اعتماد ${summary.credited.length} تبرع مؤكد لدى بوابة الدفع لم يصل إشعارها (${summary.creditedTotalUSD.toFixed(2)} دولار)`,
+        messageEn: `Credited ${summary.credited.length} donation(s) confirmed paid by their provider whose confirmation never arrived ($${summary.creditedTotalUSD.toFixed(2)})`,
+        entityType: "Donation",
+        metadata: { externalCall: true, donationIds: summary.credited.map((c) => c.donationId) },
+        stream: "TEAM",
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ ok: true, ...summary });
   } catch (error) {
     console.error("reconcile-donations cron failed", error);

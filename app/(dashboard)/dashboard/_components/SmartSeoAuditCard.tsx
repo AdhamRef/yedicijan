@@ -1,9 +1,14 @@
 "use client";
 
 import { SmartSeoWorkbenchCard } from "./SmartSeoWorkbenchCard";
+import type { SupportedLocale } from "@/lib/locales";
 
 type SeoContentType = "campaign" | "category" | "blog";
-type LocaleCode = "ar" | "en" | "fr" | "tr" | "id" | "pt" | "es" | "de";
+/**
+ * Every publicly routed locale. Derived from the single source of truth rather
+ * than listed here, so promoting a locale cannot leave this behind.
+ */
+type LocaleCode = SupportedLocale;
 
 export function SmartSeoAuditCard({
   type,
@@ -12,6 +17,7 @@ export function SmartSeoAuditCard({
   description,
   slug,
   imageCount = 0,
+  arabicSource,
 }: {
   type: SeoContentType;
   locale?: LocaleCode;
@@ -19,6 +25,7 @@ export function SmartSeoAuditCard({
   description?: string | null;
   slug?: string | null;
   imageCount?: number;
+  arabicSource?: { title: string; description: string };
 }) {
   return (
     <SmartSeoWorkbenchCard
@@ -28,6 +35,7 @@ export function SmartSeoAuditCard({
       description={description}
       slug={slug}
       imageCount={imageCount}
+      arabicSource={arabicSource}
     />
   );
 }

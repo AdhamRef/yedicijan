@@ -8,6 +8,7 @@ import type {
   AdPlatform,
   DonationSourceStatus,
 } from "@/lib/attribution/detect-source";
+import { dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
 
 interface JourneyEntry {
   id: string;
@@ -39,6 +40,7 @@ const STATUS_PILL: Record<DonationSourceStatus, string> = {
   "utm-only": "bg-amber-50 text-amber-700 border-amber-200",
   "tracking-error": "bg-rose-50 text-rose-700 border-rose-200",
   organic: "bg-slate-50 text-slate-600 border-slate-200",
+  unknown: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
 const STATUS_DOT: Record<DonationSourceStatus, string> = {
@@ -46,11 +48,12 @@ const STATUS_DOT: Record<DonationSourceStatus, string> = {
   "utm-only": "bg-amber-400",
   "tracking-error": "bg-rose-500",
   organic: "bg-slate-300",
+  unknown: "bg-slate-300",
 };
 
 function formatIstanbulShort(iso: string | null): string {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat("ar-EG", {
+  return new Intl.DateTimeFormat(dashIntl("ar-EG"), {
     timeZone: "Europe/Istanbul",
     year: "numeric",
     month: "short",
@@ -90,7 +93,7 @@ export function DonorAttributionJourney({ donorId }: { donorId: string }) {
       .catch((e) => {
         if (cancelled) return;
         setError(
-          (e?.response?.data?.error as string | undefined) ?? "تعذر تحميل رحلة المتبرع الإعلانية"
+          (e?.response?.data?.error as string | undefined) ?? dt("تعذر تحميل رحلة المتبرع الإعلانية")
         );
       })
       .finally(() => {
@@ -104,8 +107,7 @@ export function DonorAttributionJourney({ donorId }: { donorId: string }) {
   if (loading) {
     return (
       <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-center justify-center text-sm text-muted-foreground gap-2">
-        <Loader2 className="w-4 h-4 animate-spin" /> جاري تحميل رحلة المتبرع الإعلانية…
-      </div>
+        <Loader2 className="w-4 h-4 animate-spin" /> {dt(" جاري تحميل رحلة المتبرع الإعلانية…")}</div>
     );
   }
 
@@ -120,8 +122,7 @@ export function DonorAttributionJourney({ donorId }: { donorId: string }) {
   if (!data || data.journey.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground text-center">
-        لا توجد تبرعات سابقة لهذا المتبرع
-      </div>
+        {dt("لا توجد تبرعات سابقة لهذا المتبرع")}</div>
     );
   }
 
@@ -131,14 +132,13 @@ export function DonorAttributionJourney({ donorId }: { donorId: string }) {
     <div className="space-y-3">
       <div className="rounded-lg border border-border bg-gradient-to-l from-brand/5 to-white p-4">
         <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2 mb-2">
-          <Megaphone className="w-4 h-4" /> مصدر الاكتساب الأول
-        </h3>
+          <Megaphone className="w-4 h-4" /> {dt(" مصدر الاكتساب الأول")}</h3>
         {first ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
             <StatusBadge entry={first} />
             {first.adCampaign ? (
               <span className="text-slate-700">
-                <span className="text-slate-400">الحملة: </span>
+                <span className="text-slate-400">{dt("الحملة: ")}</span>
                 {first.adCampaign}
               </span>
             ) : null}
@@ -154,20 +154,19 @@ export function DonorAttributionJourney({ donorId }: { donorId: string }) {
             </span>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">لم يُسجَّل أي إسناد إعلاني لهذا المتبرع.</p>
+          <p className="text-sm text-muted-foreground">{dt("لم يُسجَّل أي إسناد إعلاني لهذا المتبرع.")}</p>
         )}
       </div>
 
       <div className="rounded-lg border border-border bg-muted/30 p-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-            <Calendar className="w-4 h-4" /> رحلة المتبرع
-          </h3>
+            <Calendar className="w-4 h-4" /> {dt(" رحلة المتبرع")}</h3>
           <span className="text-[11px] text-muted-foreground">
-            {data.paidDonations} مدفوع من {data.totalDonations}
+            {dtx("{0} مدفوع من {1}", [data.paidDonations, data.totalDonations])}
           </span>
         </div>
-        <ol className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+        <ol className="space-y-1.5 max-h-64 overflow-y-auto ps-1">
           {data.journey.map((j, idx) => (
             <li
               key={j.id}
@@ -178,15 +177,14 @@ export function DonorAttributionJourney({ donorId }: { donorId: string }) {
               </span>
               <StatusBadge entry={j} />
               <span className="text-xs text-slate-600 truncate flex-1">
-                {j.adCampaign ?? j.campaign ?? <span className="text-slate-400">بدون حملة</span>}
+                {j.adCampaign ?? j.campaign ?? <span className="text-slate-400">{dt("بدون حملة")}</span>}
               </span>
               <span className="text-[11px] text-slate-500 whitespace-nowrap">
                 {formatIstanbulShort(j.paidAt ?? j.createdAt)}
               </span>
               {j.status !== "PAID" ? (
                 <span className="text-[10px] px-1.5 py-px rounded-full bg-rose-50 text-rose-600 whitespace-nowrap">
-                  فشل
-                </span>
+                  {dt("فشل")}</span>
               ) : null}
             </li>
           ))}

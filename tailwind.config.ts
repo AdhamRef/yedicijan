@@ -9,8 +9,14 @@ export default {
   ],
   theme: {
   	extend: {
+  		/**
+  		 * `font-arabic` sits on `<body>` in `app/layout.tsx`: Tajawal (`--font-arabic`),
+  		 * as in the Yedicihan design. `latin` is the Montserrat stack some dashboard
+  		 * views opt into; the variables are set in `app/layout.tsx`.
+  		 */
   		fontFamily: {
   			arabic: ["var(--font-arabic)"],
+  			latin: ["var(--font-montserrat)", "Montserrat", "system-ui", "sans-serif"],
   			poppins: ["var(--font-poppins)"],
   		},
   		colors: {
@@ -107,11 +113,17 @@ export default {
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
+  			sm: 'calc(var(--radius) - 4px)',
+  			pill: '999px'
   		},
+  		/* `soft` and `lift` are the Yedicihan design's; `card`, `pop` and `cta` are extra
+  		   elevations used by dashboard views. */
   		boxShadow: {
   			soft: '0 18px 40px -20px rgba(0,0,0,.18)',
-  			lift: '0 24px 70px -36px rgba(2,29,50,.45)'
+  			card: '0 18px 50px rgba(16, 33, 43, .12)',
+  			lift: '0 24px 70px -36px rgba(2,29,50,.45)',
+  			pop: '0 22px 48px rgba(0, 0, 0, .28)',
+  			cta: '0 12px 26px rgba(169, 52, 40, .32)'
   		},
   		keyframes: {
   			'accordion-down': {

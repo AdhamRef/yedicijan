@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import { withDonationToken } from '@/lib/donations/access-token-link';
+import { resolveGuestDonationAccess } from '@/lib/donations/guest-access-client';
 import { useRouter } from '@/i18n/routing';
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from '@/lib/currency-link';
 import { useTranslations } from 'next-intl';
@@ -52,6 +54,11 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const DonationSuccessPage = () => {
   const params = useParams();
   const id = params?.id as string | undefined;
+  // A guest reads their own order with the access token the gateway redirect
+  // appended (`?t=`), or the one this tab remembered when the order was made.
+  const searchParams = useSearchParams();
+  const guestToken = id ? resolveGuestDonationAccess(id, searchParams?.get('t')) : null;
+  const withAccess = (path: string) => withDonationToken(path, guestToken);
   const router = useRouter();
   const pathname = usePathname() ?? '/';
   const t = useTranslations('DonationSuccess');
@@ -89,7 +96,7 @@ const DonationSuccessPage = () => {
   const fetchDonation = async () => {
     if (!id) return;
     try {
-      const response = await axios.get(`/api/donations/${id}`);
+      const response = await axios.get(withAccess(`/api/donations/${id}`));
       setDonation(response.data);
     } catch (error) {
       console.error('Error fetching donation:', error);
@@ -134,7 +141,7 @@ const DonationSuccessPage = () => {
       for (let attempt = 1; attempt <= DONATE_TRACKING_MAX_ATTEMPTS; attempt += 1) {
         if (cancelled) return;
         try {
-          const res = await axios.get(`/api/donations/${id}/tracking`, {
+          const res = await axios.get(withAccess(`/api/donations/${id}/tracking`), {
             headers: { 'Cache-Control': 'no-store' },
           });
           if (res.data?.ok === true) {
@@ -266,7 +273,7 @@ const DonationSuccessPage = () => {
     linkAttemptedRef.current = true;
     setLinkState('linking');
     axios
-      .post('/api/users/link-guest', { donationId: id })
+      .post('/api/users/link-guest', { donationId: id, accessToken: guestToken })
       .then(async () => {
         setLinkState('linked');
         await fetchDonation();
@@ -289,7 +296,7 @@ const DonationSuccessPage = () => {
     
     setIsDownloading(true);
     try {
-      const response = await axios.get(`/api/donations/${id}/receipt`, {
+      const response = await axios.get(withAccess(`/api/donations/${id}/receipt`), {
         responseType: 'blob',
       });
       

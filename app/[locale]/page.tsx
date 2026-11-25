@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { LOCALE_SEO, buildPageMetadata, SITE_URL } from "@/lib/seo";
+import { LOCALE_SEO, SITE_URL } from "@/lib/seo";
 import type { Locale } from "@/lib/seo";
+import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
+import { withInstitutionalHomeIdentity } from "@/lib/site-identity";
 import HomePageContent from "./_components/homepage/HomePageContent";
 import type { SlideItem } from "./_components/homepage/HeroSlider";
 
@@ -12,12 +14,13 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
-  return buildPageMetadata(locale, {
+  // Dashboard-managed SEO overrides (Content editor → page SEO) win over the defaults.
+  return withInstitutionalHomeIdentity(await buildManagedPageMetadata("home", locale, {
     title: seo.title,
     description: seo.description,
     path: "/",
     keywords: seo.keywords,
-  });
+  }), locale);
 }
 
 /**

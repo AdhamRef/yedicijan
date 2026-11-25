@@ -71,7 +71,7 @@ export async function recomputeCategoryCurrentAmount(tx: Tx, categoryId: string)
  * An admin typed a total into the campaign edit form. Honour it exactly, and record the part
  * that donations don't explain as the offline baseline so later recomputes preserve it.
  * A desired total BELOW the settled donation total yields a baseline of 0 rather than a
- * negative one — the donations are real and can't be subtracted away.
+ * negative one  the donations are real and can't be subtracted away.
  */
 export async function setCampaignDisplayTotal(
   tx: Tx,

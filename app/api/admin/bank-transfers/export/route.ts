@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
     }
 
-    const result = await prisma.$runCommandRaw({
+    const result = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
       find: COLLECTION,
       filter: buildFilter(url),
       sort: { transactionDate: -1, createdAt: -1 },

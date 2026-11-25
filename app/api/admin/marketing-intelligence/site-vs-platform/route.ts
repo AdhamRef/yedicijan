@@ -64,7 +64,7 @@ async function platformMetrics(days: number, platform?: string | null): Promise<
   from.setDate(to.getDate() - days + 1);
   const filter: JsonMap = { date: { $gte: dateKey(from), $lte: dateKey(to) } };
   if (platform && platform !== "ALL") filter.platform = platform.toUpperCase();
-  const result = await prisma.$runCommandRaw({
+  const result = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
     find: "MarketingPlatformDailyMetric",
     filter,
     sort: { date: -1, spend: -1 },

@@ -9,7 +9,7 @@ import {
   getActiveBrevoSmsRuntimeConfig,
   type ActiveRuntimeConfig,
 } from "@/lib/communication/runtime-config";
-import { RETRYABLE_STATUSES } from "@/lib/communication/communication-runtime-types";
+import { retryPreflight } from "@/lib/communication/delivery-retry-service";
 import { summarizeSmsSegments } from "@/lib/communication/sms-segments";
 
 export const runtime = "nodejs";
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  *
  * SMS differs from the other two channels in three ways that shape this payload:
  *
- *  1. **The ladder ends at delivery.** There is no open, no read receipt, no reply — a carrier DLR
+ *  1. **The ladder ends at delivery.** There is no open, no read receipt, no reply  a carrier DLR
  *     saying "handset received it" is the last thing that can ever be known. So there is no
  *     engagement funnel to report, and pretending otherwise would invent a metric.
  *  2. **Volume is not the cost.** SMS bills per 140-byte segment, and Arabic forces UCS-2 at 70
@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
  *     2–3× on this platform, so segments are returned as a first-class figure.
  *  3. **The provider is chosen per recipient, not per account.** Turkish numbers route to Netgsm,
  *     everything else to Brevo. Either can be unconfigured independently, which means SMS can be
- *     half-working — able to reach Turkey but not abroad — and a single "configured" flag would
+ *     half-working  able to reach Turkey but not abroad  and a single "configured" flag would
  *     hide exactly that.
  */
 
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(sp.get("page") || "1"));
     const limit = Math.min(100, Math.max(1, parseInt(sp.get("limit") || "25")));
 
-    // A campaign deep-link scopes the entire page — summary, chart and list — to that campaign,
+    // A campaign deep-link scopes the entire page  summary, chart and list  to that campaign,
     // and drops the date window while doing it. The campaign IS the range; keeping the default
     // 30 days would report zeros for any campaign sent earlier than that.
     const campaignId = sp.get("campaign")?.trim() || "";
@@ -78,11 +78,11 @@ export async function GET(request: NextRequest) {
 
     const [
       total, byStatus, byProvider, deliveredCount, failedCount, allTimeTotal,
-      rows, listTotal, bucketRows, netgsm, brevoSms, retryableCount,
+      rows, listTotal, bucketRows, netgsm, brevoSms, retryPreflightResult,
     ] = await Promise.all([
       prisma.communicationDelivery.count({ where: rangeWhere }),
       prisma.communicationDelivery.groupBy({ by: ["status"], where: rangeWhere, _count: { _all: true } }),
-      // Which carrier actually carried the traffic — the visible half of destination-based routing.
+      // Which carrier actually carried the traffic  the visible half of destination-based routing.
       prisma.communicationDelivery.groupBy({ by: ["provider"], where: rangeWhere, _count: { _all: true } }),
       prisma.communicationDelivery.count({ where: { ...rangeWhere, deliveredAt: { not: null } } }),
       prisma.communicationDelivery.count({ where: { ...rangeWhere, status: { in: [...FAILED_STATUSES] } } }),
@@ -109,14 +109,7 @@ export async function GET(request: NextRequest) {
       }),
       getActiveNetgsmRuntimeConfig(),
       getActiveBrevoSmsRuntimeConfig(),
-      prisma.communicationDelivery.count({
-        where: {
-          ...rangeWhere,
-          status: { in: [...RETRYABLE_STATUSES] },
-          // See the email route: on MongoDB `null` misses documents written before the field existed.
-          OR: [{ retriedAt: null }, { retriedAt: { isSet: false } }],
-        },
-      }),
+      retryPreflight({ channel: "SMS", campaignId: campaignId || undefined, ...(campaignId ? {} : { from, to }) }),
     ]);
 
     const statusCounts: Record<string, number> = {};
@@ -137,7 +130,7 @@ export async function GET(request: NextRequest) {
       buckets.set(key, bucket);
     }
 
-    // Only messages that were actually handed over cost money — a SKIPPED row was never billed.
+    // Only messages that were actually handed over cost money  a SKIPPED row was never billed.
     const segments = summarizeSmsSegments(
       bucketRows
         .filter((row) => !["SKIPPED", "RENDERED", "DRAFT"].includes(row.status))
@@ -169,7 +162,7 @@ export async function GET(request: NextRequest) {
       },
       /** Carrier delivery receipts. Until one arrives, "وصلت" is unknown rather than zero. */
       trackingLive: deliveredCount > 0 || (statusCounts.DELIVERED ?? 0) > 0,
-      retryableCount,
+      retryableCount: retryPreflightResult.eligible,
       /**
        * Both routes, separately. `anyConfigured` is what decides whether SMS can send at all;
        * the per-route flags are what say *where* it can send.
@@ -182,7 +175,7 @@ export async function GET(request: NextRequest) {
       },
       segments,
       /**
-       * `enum MessageChannel` in Prisma is EMAIL | WHATSAPP — no trigger can emit SMS, so an
+       * `enum MessageChannel` in Prisma is EMAIL | WHATSAPP  no trigger can emit SMS, so an
        * empty channel here is an architectural fact, not a delivery problem. The page says so
        * rather than leaving an operator to hunt for a broken integration.
        */

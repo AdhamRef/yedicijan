@@ -1,9 +1,11 @@
 import {
-  Activity, Archive, Award, BarChart3, Briefcase, Calendar, Contact, FileClock,
+  ShieldCheck, Activity, Archive, Award, BarChart3, Briefcase, Calendar, Contact, FileClock,
   FileStack, Globe, Heart, HeartHandshake, HeartPulse, History, Images, Inbox,
   Landmark, LayoutDashboard, LayoutTemplate, Lightbulb, Link2, ListChecks, Mail,
-  Megaphone, MessageCircle, MessageSquare, PenLine, Plug, Radar, ScrollText, Send,
+  Megaphone, MessageCircle, MessageSquare, PenLine, Plug, Radar, Repeat, ScrollText, Send,
   Server, Settings, Target, Ticket, TrendingUp, UserCog, Users, Webhook,
+  Video, ListVideo, GraduationCap, FileText, BookOpen, HelpCircle, AlertTriangle, Layers, Receipt, ShoppingCart,
+  Sparkles, MessagesSquare, Bot,
   type LucideIcon,
 } from "lucide-react";
 
@@ -11,6 +13,7 @@ import {
 // nav-config.ts, so nav-config stays a plain serialisable data module that server
 // components (the team permissions page) can import without dragging in icon components.
 export const NAV_ICONS = {
+  shield: ShieldCheck,
   activity: Activity,
   archive: Archive,
   award: Award,
@@ -23,6 +26,7 @@ export const NAV_ICONS = {
   globe: Globe,
   heart: Heart,
   heartHandshake: HeartHandshake,
+  shoppingCart: ShoppingCart,
   heartPulse: HeartPulse,
   history: History,
   images: Images,
@@ -40,6 +44,7 @@ export const NAV_ICONS = {
   penLine: PenLine,
   plug: Plug,
   radar: Radar,
+  repeat: Repeat,
   scrollText: ScrollText,
   send: Send,
   server: Server,
@@ -50,6 +55,18 @@ export const NAV_ICONS = {
   userCog: UserCog,
   users: Users,
   webhook: Webhook,
+  video: Video,
+  layers: Layers,
+  listVideo: ListVideo,
+  graduationCap: GraduationCap,
+  fileText: FileText,
+  bookOpen: BookOpen,
+  helpCircle: HelpCircle,
+  alertTriangle: AlertTriangle,
+  receipt: Receipt,
+  sparkles: Sparkles,
+  messagesSquare: MessagesSquare,
+  bot: Bot,
 } satisfies Record<string, LucideIcon>;
 
 export type NavIconName = keyof typeof NAV_ICONS;

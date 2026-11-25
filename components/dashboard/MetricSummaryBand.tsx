@@ -1,17 +1,17 @@
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
-import { Info } from "lucide-react";
+import { Info, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type SummaryStat = {
   label: string;
   value: string;
-  /** Small mark beside the label — a silhouette to scan for, not decoration. */
+  /** Small mark beside the label  a silhouette to scan for, not decoration. */
   icon?: LucideIcon;
   /** Optional delta, e.g. "+12.4%". Colour is chosen from `trend`. */
   delta?: string;
   trend?: "up" | "down" | "flat";
-  /** Short qualifier printed beside the value. Keep it to a couple of words. */
+  /** Short qualifier printed beside the value. Keep it to a couple of words1 */
   hint?: string;
 };
 
@@ -24,7 +24,7 @@ type Props = {
   note?: string;
   /** Secondary figures, shown inline to the side. */
   stats?: SummaryStat[];
-  /** Badge on the eyebrow row, e.g. "كل الوقت" — states the figure's scope at a glance. */
+  /** Badge on the eyebrow row, e.g. "كل الوقت"  states the figure's scope at a glance. */
   badge?: string;
   /** Mark on the icon tile. */
   icon?: LucideIcon;
@@ -38,20 +38,27 @@ const TREND_CLASS: Record<NonNullable<SummaryStat["trend"]>, string> = {
   flat: "text-slate-400",
 };
 
+/** Each secondary figure gets its own hue so the row scans as four things, not one grey strip. */
+const STAT_TONES = [
+  "bg-violet-100 text-violet-600",
+  "bg-emerald-100 text-emerald-600",
+  "bg-orange-100 text-orange-600",
+  "bg-sky-100 text-sky-600",
+] as const;
+
 /**
- * The headline band for an analytics page — one row, roughly 80px tall.
+ * The headline band for an analytics page  one row, roughly 80px tall.
  *
  * Everything sits on a single baseline pair: the label row and the figure row. The secondary
  * figures repeat that rhythm to the side, separated by hairlines rather than wrapped in cards,
  * because four bordered boxes cost three times the height and read as a second toolbar rather
  * than as context for the number they belong to.
  *
- * The scope note is attached to an info affordance instead of a third line of text — it is
+ * The scope note is attached to an info affordance instead of a third line of text  it is
  * clarification, not content, and a permanent line of small print pushes the page's actual
  * content below the fold. It stays reachable by pointer (title) and by screen reader (sr-only).
  *
- * The wash is decorative only. Every value is slate-900 on white, so contrast never depends on
- * where the gradient happens to land.
+ * Flat white surface; colour comes only from the icon badges.
  */
 export function MetricSummaryBand({
   eyebrow,
@@ -65,27 +72,18 @@ export function MetricSummaryBand({
 }: Props) {
   return (
     <section
+      aria-label={eyebrow}
       className={cn(
         "relative isolate overflow-hidden rounded-2xl border border-slate-200/90 bg-white",
-        "shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-18px_rgba(2,94,184,0.35)]",
+        "shadow-[0_1px_2px_rgba(16,24,40,0.04)]",
         className,
       )}
     >
-      {/* Decorative only — pointer-events-none so it can never eat a click. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(110%_140%_at_100%_0%,rgba(2,94,184,0.07),transparent_55%)]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-px bg-gradient-to-l from-transparent via-brand/35 to-transparent"
-      />
-
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-4 px-5 py-4">
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 px-3 py-3 sm:gap-y-4 sm:px-5 sm:py-4">
         {/* Headline: label row over figure row. */}
         <div className="flex min-w-0 items-center gap-3">
           {Icon && (
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-white shadow-[0_4px_12px_-4px_rgba(2,94,184,0.6)]">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
               <Icon className="h-5 w-5" />
             </span>
           )}
@@ -94,36 +92,51 @@ export function MetricSummaryBand({
               <p className="truncate text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
                 {eyebrow}
               </p>
+              {note && (
+                <Popover><PopoverTrigger asChild><button
+                  type="button"
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+                  title={note}
+                  aria-label={note}
+                >
+                  <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                </button></PopoverTrigger><PopoverContent className="max-w-[calc(100vw-2rem)] text-xs leading-6">{note}</PopoverContent></Popover>
+              )}
               {badge && (
-                <span className="shrink-0 rounded-full border border-brand/20 bg-brand/8 px-2 py-0.5 text-[10px] font-semibold text-brand">
+                <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
                   {badge}
                 </span>
               )}
             </div>
-            <p className="mt-0.5 text-[30px] font-bold leading-tight tabular-nums tracking-tight text-slate-900 sm:text-[34px]">
+            <p className="mt-0.5 break-words text-[26px] font-bold leading-tight tabular-nums tracking-tight text-slate-900 sm:text-[34px]" dir="ltr">
               {value}
             </p>
           </div>
         </div>
 
-        {/* Secondary figures — hairline-separated, same two-line rhythm as the headline. */}
+        {/* Secondary figures  hairline-separated, same two-line rhythm as the headline. */}
         {stats && stats.length > 0 && (
-          <div className="ms-auto flex flex-wrap items-center gap-y-3">
-            {stats.map((stat) => {
+          <div className="grid w-full grid-cols-2 gap-x-3 gap-y-3 sm:ms-auto sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+            {stats.map((stat, i) => {
               const StatIcon = stat.icon;
+              const tone = STAT_TONES[i % STAT_TONES.length];
               return (
                 <div
                   key={stat.label}
-                  className="border-s border-slate-200 px-5 first:border-s-0 first:ps-0 last:pe-0"
+                  className="min-w-0 sm:border-s sm:border-slate-200 sm:px-5 sm:first:border-s-0 sm:first:ps-0 sm:last:pe-0"
                 >
                   <div className="flex items-center gap-1.5">
-                    {StatIcon && <StatIcon className="h-3.5 w-3.5 shrink-0 text-brand/70" />}
-                    <p className="whitespace-nowrap text-[11px] font-medium text-slate-500">
+                    {StatIcon && (
+                      <span className={cn("flex h-5 w-5 shrink-0 items-center justify-center rounded-md", tone)}>
+                        <StatIcon className="h-3 w-3" />
+                      </span>
+                    )}
+                    <p className="text-[11px] font-medium sm:whitespace-nowrap text-slate-500">
                       {stat.label}
                     </p>
                   </div>
                   <div className="mt-0.5 flex items-baseline gap-1.5">
-                    <p className="text-[19px] font-bold leading-tight tabular-nums text-slate-900">
+                    <p className="break-words text-lg font-bold sm:text-[19px] leading-tight tabular-nums text-slate-900">
                       {stat.value}
                     </p>
                     {stat.delta && (

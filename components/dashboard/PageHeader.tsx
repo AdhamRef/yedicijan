@@ -10,7 +10,7 @@ type Props = {
    * markup, not just text.
    */
   description?: ReactNode;
-  /** Small label above the title — section name, breadcrumb-ish context. */
+  /** Small label above the title  section name, breadcrumb-ish context. */
   eyebrow?: string;
   icon?: LucideIcon;
   /** Buttons, filters, export controls. */
@@ -33,7 +33,7 @@ export function PageHeader({
   title, description, eyebrow, icon: Icon, actions, children, className,
 }: Props) {
   return (
-    <div className={cn("mb-5", className)}>
+    <div className={cn("mb-4 sm:mb-5", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3 min-w-0">
           {Icon && (
@@ -56,7 +56,7 @@ export function PageHeader({
           </div>
         </div>
 
-        {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
+        {actions && <div className="flex w-full min-w-0 flex-wrap items-center gap-2 [&>button]:min-h-10 [&>a]:min-h-10 sm:w-auto sm:shrink-0">{actions}</div>}
       </div>
 
       {children && <div className="mt-4">{children}</div>}

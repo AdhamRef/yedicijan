@@ -78,6 +78,7 @@ const STATUS_COLOR: Record<AttributionStatus, string> = {
   organic: "bg-slate-300",
   direct: "bg-slate-400",
   tracking_issue: "bg-rose-500",
+  unknown: "bg-rose-500",
 };
 
 const STATUS_ORDER: AttributionStatus[] = [

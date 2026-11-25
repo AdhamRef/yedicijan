@@ -1,5 +1,6 @@
+import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
 import type { Metadata } from "next";
-import { LOCALE_SEO, buildPageMetadata } from "@/lib/seo";
+import { LOCALE_SEO } from "@/lib/seo";
 import type { Locale } from "@/lib/seo";
 import TermsPage from "./TermsPage";
 
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     pt: "Termos de Uso",
     es: "Términos de Uso",
   };
-  return buildPageMetadata(locale, {
+  return buildManagedPageMetadata("terms", locale, {
     title: titles[locale] ?? titles.en,
     description: seo.description,
     path: "/terms",

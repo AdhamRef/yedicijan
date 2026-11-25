@@ -1,13 +1,40 @@
+import { institutionalTitle } from "./institutional-title";
+import { pickLocaleSlug } from "./slug";
+import { clipSeoDescription } from "@/lib/seo-description";
 import type { Metadata } from "next";
-import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/locales";
+import { SUPPORTED_LOCALES, isValidLocale, type SupportedLocale } from "@/lib/locales";
 
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.yedicihan.org").replace(/\/$/, "");
+/* The bare domain is the one the site is served, signed in (NEXTAUTH_URL) and
+   tested on; `www` 301s to it (next.config.ts). Canonicals and hreflang used to
+   name `www`, which PageSpeed read as a page whose canonical points at another
+   hreflang location. */
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://yedicihan.org").replace(/\/$/, "");
+
+/**
+ * Only the production deployment is meant to be found. Preview and
+ * development deployments say noindex three ways  the `X-Robots-Tag` header
+ * in `next.config.ts`, `app/robots.ts`, and the root layout's metadata  and
+ * all three key off this (`DEPLOYED_VS_DESIGN_AUDIT.md` § P1.1).
+ *
+ * On Vercel, `VERCEL_ENV` tells production from previews. The VPS has no
+ * Vercel variables at all, and this used to read that as "not production", so
+ * the live site told every crawler noindex. Off Vercel a production build is
+ * production, unless `SITE_INDEXING=off` says otherwise (a staging server).
+ */
+export const isProductionDeployment = (): boolean => {
+  if (process.env.SITE_INDEXING === "off") return false;
+  if (process.env.VERCEL) return process.env.VERCEL_ENV === "production";
+  return process.env.NODE_ENV === "production";
+};
+
+/** Vercel Analytics / Speed Insights only exist on Vercel; elsewhere their scripts 404. */
+export const isVercelDeployment = (): boolean => Boolean(process.env.VERCEL);
 export const SITE_NAME = "Yedicihan";
 export const OG_IMAGE = `${SITE_URL}/og-image.jpg`;
 
 // Locales derive from the single source of truth (`lib/locales.ts`). The
 // per-locale maps below are `Record<Locale, …>`, so enabling a new public locale
-// becomes a compile error here until its SEO/OG content is filled in — that is the
+// becomes a compile error here until its SEO/OG content is filled in  that is the
 // intended drift guard for translated content.
 export const LOCALES = SUPPORTED_LOCALES;
 export type Locale = SupportedLocale;
@@ -35,6 +62,7 @@ type LocaleSEO = {
   blog: { title: string; description: string };
 };
 
+/** Institutional SEO for every public locale (Yedicihan's own copy, all 8 public locales). */
 export const LOCALE_SEO: Record<Locale, LocaleSEO> = {
   ar: {
     siteName: "جمعية يدي جيهان",
@@ -280,16 +308,27 @@ export const LOCALE_SEO: Record<Locale, LocaleSEO> = {
   },
 };
 
+/**
+ * Canonical paths never include a language prefix or tracking parameters.
+ * Guard even if a caller accidentally supplies /en/blog or /ar?utm_*.
+ */
+function normalizePublicSeoPath(path: string): string {
+  const clean = `/${path.replace(/^\/+/, "")}`.split(/[?#]/, 1)[0].replace(/\/+$/, "");
+  const localePrefix = new RegExp(`^/(?:${LOCALES.join("|")})(?=/|$)`);
+  return clean.replace(localePrefix, "") || "";
+}
+
 /** Build hreflang alternates for a given path (e.g. "/campaigns") */
 export function buildHreflang(path: string, currentLocale: string) {
-  const normalizedPath = path === "/" ? "" : path;
+  const normalizedPath = normalizePublicSeoPath(path);
+  const canonicalLocale: Locale = isValidLocale(currentLocale) ? currentLocale : "ar";
   const languages: Record<string, string> = {};
   for (const locale of LOCALES) {
     languages[locale] = `${SITE_URL}/${locale}${normalizedPath}`;
   }
   languages["x-default"] = `${SITE_URL}/ar${normalizedPath}`;
   return {
-    canonical: `${SITE_URL}/${currentLocale}${normalizedPath}`,
+    canonical: `${SITE_URL}/${canonicalLocale}${normalizedPath}`,
     languages,
   };
 }
@@ -318,24 +357,32 @@ export function buildLocalizedAlternates(args: {
   translations?: Array<{ locale: string; slug?: string | null }> | null;
   /** Used when neither a translation slug nor base slug is set (typically the entity id) */
   fallback: string;
-  /** Locale of the page we're rendering — drives `canonical` */
+  /** Locale of the page we're rendering  drives `canonical` */
   currentLocale: string;
+  /** Emit hreflang only for locales with genuinely equivalent localized content. */
+  availableLocales?: string[];
 }): { canonical: string; languages: Record<string, string> } {
-  const { basePath, baseSlug, translations, fallback, currentLocale } = args;
-  const slugFor = (loc: string): string => {
-    const t = translations?.find((tt) => tt.locale === loc && tt.slug);
-    return t?.slug || baseSlug || fallback;
-  };
+  const { basePath, baseSlug, translations, fallback, currentLocale, availableLocales } = args;
+  // Keep canonical and hreflang on the very same slug as the public page.
+  // Missing locale slugs follow the existing English-then-Arabic fallback.
   const url = (loc: string): string =>
-    `${SITE_URL}/${loc}${basePath}/${encodeURIComponent(slugFor(loc))}`;
+    `${SITE_URL}/${loc}${normalizePublicSeoPath(basePath)}/${encodeURIComponent(pickLocaleSlug(baseSlug, translations, loc) || fallback)}`;
 
+  const allowed = availableLocales
+    ? LOCALES.filter((locale) => availableLocales.includes(locale))
+    : LOCALES;
   const languages: Record<string, string> = {};
-  for (const locale of LOCALES) languages[locale] = url(locale);
-  languages["x-default"] = url("ar");
-  return { canonical: url(currentLocale), languages };
+  for (const locale of allowed) languages[locale] = url(locale);
+  const fallbackLocale = allowed.includes("ar") ? "ar" : allowed[0];
+  if (fallbackLocale) languages["x-default"] = url(fallbackLocale);
+  const canonicalLocale = allowed.includes(currentLocale as Locale)
+    ? currentLocale
+    : fallbackLocale || currentLocale;
+  return { canonical: url(canonicalLocale), languages };
 }
 
-/** Build full per-page metadata (layout/page generateMetadata helper) */
+export { clipSeoDescription } from "@/lib/seo-description";
+
 export function buildPageMetadata(
   locale: string,
   overrides: {
@@ -343,32 +390,43 @@ export function buildPageMetadata(
     description: string;
     path: string;
     image?: string;
+    imageAlt?: string;
     keywords?: string[];
     type?: "website" | "article";
+    alternates?: { canonical: string; languages: Record<string, string> };
+    robots?: Metadata["robots"];
   }
 ): Metadata {
   const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
+  const title = institutionalTitle(overrides.title, seo.siteName);
   const image = overrides.image ?? OG_IMAGE;
-  const alternates = buildHreflang(overrides.path, locale);
+  const alternates = overrides.alternates ?? buildHreflang(overrides.path, locale);
+  /* Clipped here, once, for every page that goes through this funnel  pages pass
+     their full copy and no longer each carry a hand-written `.slice(0, 165)`. */
+  const description = clipSeoDescription(overrides.description, locale);
 
   return {
-    title: overrides.title,
-    description: overrides.description,
+    title: { absolute: title },
+    description,
     keywords: overrides.keywords ?? seo.keywords,
     alternates,
+    ...(overrides.robots ? { robots: overrides.robots } : {}),
     openGraph: {
-      title: overrides.title,
-      description: overrides.description,
+      title,
+      description,
       url: alternates.canonical,
       siteName: seo.siteName,
       locale: OG_LOCALE_MAP[locale as Locale] ?? "en_US",
+      alternateLocale: LOCALES.filter((candidate) => candidate !== locale && Boolean(alternates.languages?.[candidate])).map(
+        (candidate) => OG_LOCALE_MAP[candidate],
+      ),
       type: overrides.type ?? "website",
-      images: [{ url: image, width: 1200, height: 630, alt: overrides.title }],
+      images: [{ url: image, width: 1200, height: 630, alt: overrides.imageAlt || overrides.title }],
     },
     twitter: {
       card: "summary_large_image",
-      title: overrides.title,
-      description: overrides.description,
+      title,
+      description,
       images: [image],
     },
   };

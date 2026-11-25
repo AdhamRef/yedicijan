@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Dialog, DialogOverlay, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -24,6 +24,7 @@ import {
 import { toast } from "react-hot-toast";
 import { LOCALE_LABELS } from "@/lib/locales";
 import {
+  Trash2,
   Users,
   Search,
   Pencil,
@@ -61,6 +62,11 @@ import { DASHBOARD_PERMISSION_ROWS, ACTION_PERMISSION_ROWS } from "@/lib/dashboa
 import { useViewUserProfile } from "@/context/ViewUserProfileContext";
 import type { UserProfileCardData } from "@/lib/dashboard/user-profile-card";
 import { resolveUserCountry } from "@/lib/dashboard/resolve-user-country";
+import { dashDir, dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
+
+import { TeamPermissionPicker } from "@/components/dashboard/TeamPermissionPicker";
+import { DonorProfileEditor } from "@/components/dashboard/DonorProfileEditor";
+import { DonorAccountBadge } from "@/components/dashboard/DonorAccountBadge";
 
 const PAGE_SIZE = 10;
 
@@ -75,22 +81,38 @@ interface BadgeOption {
 
 type Scope = "donors" | "team";
 
+function invalidateRequest(request: { current: number }) { request.current++; }
+
 export default function UsersManagement({ scope }: { scope: Scope }) {
   const { data: session } = useSession();
   const isFullAdmin = session?.user?.role === "ADMIN";
   const canOpenRevenue = userHasDashboardPermission(session?.user, "revenue");
+  const canSendEmail = userHasDashboardPermission(session?.user, "templates");
+  const canOpenCommunication = userHasDashboardPermission(session?.user, "messages");
   const { convertToCurrency } = useCurrency();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState(false);
+  const [listLoaded, setListLoaded] = useState(false);
+  const [registeredError, setRegisteredError] = useState(false);
   const [total, setTotal] = useState(0);
+  const [registeredTotal, setRegisteredTotal] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<UserRow | null>(null);
+  const [deleteText, setDeleteText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [permissionSaving, setPermissionSaving] = useState(false);
+  const [profileToEdit, setProfileToEdit] = useState<UserRow | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null);
   const { openUserProfileCard } = useViewUserProfile();
 
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+  const [searchInput, setSearchInput] = useState(() => searchParams.get("q") ?? "");
+  const [accountFilter, setAccountFilter] = useState("all");
+  const usersRequest = useRef(0);
   const [preferredLangFilter, setPreferredLangFilter] = useState<string>("all");
   const [badgeFilter, setBadgeFilter] = useState<string>("all");
   const [genderFilter, setGenderFilter] = useState<GenderFilterValue>("all");
@@ -110,36 +132,64 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
 
   const fetchUsers = useCallback(
     async (pageNum: number, append: boolean) => {
-      if (pageNum === 1) setLoading(true);
+      const requestId = ++usersRequest.current;
+      if (pageNum === 1) { setLoading(true); setSelectedUserIds(new Set()); setListLoaded(false); }
       else setLoadingMore(true);
+      setListError(false);
       try {
         const params = new URLSearchParams();
         params.set("scope", scope);
+        params.set("includeRegisteredCount", "0");
         params.set("page", String(pageNum));
         params.set("limit", String(PAGE_SIZE));
         params.set("sortBy", sortBy);
         params.set("sortOrder", sortOrder);
         if (search) params.set("search", search);
+        if (scope === "donors" && accountFilter !== "all") params.set("accountStatus", accountFilter);
         if (preferredLangFilter && preferredLangFilter !== "all")
           params.set("preferredLang", preferredLangFilter);
         if (scope === "donors" && badgeFilter && badgeFilter !== "all")
           params.set("badgeId", badgeFilter);
         if (genderFilter !== "all") params.set("gender", genderFilter);
         applyAgeBracketParams(params, ageFilter);
-        const res = await axios.get(`/api/users?${params}`);
-        const list = res.data?.users ?? [];
+        const res = await axios.get(`/api/users?${params}`, { timeout: 15000 });
+        if (requestId !== usersRequest.current) return;
+        if (!Array.isArray(res.data?.users) || !Number.isInteger(res.data?.pagination?.total) || res.data.pagination.total < 0) throw new Error("Invalid user list");
+        const list = res.data.users;
         setUsers((prev) => (append ? [...prev, ...list] : list));
         setTotal(res.data?.pagination?.total ?? 0);
-      } catch (err) {
-        console.error("Error fetching users:", err);
-        toast.error("فشل في تحميل المستخدمين");
+        setListLoaded(true);
+      } catch {
+        if (requestId !== usersRequest.current) return;
+        if (append) setPage(previous => Math.max(1, previous - 1));
+        setListError(true);
+        setSendDialog(previous => ({ ...previous, open: false }));
+        console.error("Error fetching users");
+        toast.error(dt("فشل في تحميل المستخدمين"));
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (requestId === usersRequest.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
-    [scope, search, preferredLangFilter, badgeFilter, genderFilter, ageFilter, sortBy, sortOrder]
+    [scope, search, preferredLangFilter, badgeFilter, genderFilter, ageFilter, sortBy, sortOrder, accountFilter]
   );
+
+  const registeredRequest = useRef(0);
+  const loadRegisteredTotal = useCallback(async () => {
+    if (scope !== "donors") return;
+    const request = ++registeredRequest.current;
+    setRegisteredError(false);
+    try {
+      const response = await axios.get("/api/users?scope=donors&summary=registered", { timeout: 15000 });
+      if (request !== registeredRequest.current) return;
+      const count = response.data?.registeredDonorsTotal;
+      if (!Number.isInteger(count) || count < 0) throw new Error("Invalid registered count");
+      setRegisteredTotal(count);
+    } catch { if (request === registeredRequest.current) setRegisteredError(true); }
+  }, [scope]);
+  useEffect(() => { void loadRegisteredTotal(); return () => invalidateRequest(registeredRequest); }, [loadRegisteredTotal]);
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput.trim()), 400);
@@ -148,7 +198,8 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
 
   useEffect(() => {
     setPage(1);
-    fetchUsers(1, false);
+    void fetchUsers(1, false);
+    return () => invalidateRequest(usersRequest);
   }, [search, preferredLangFilter, badgeFilter, genderFilter, ageFilter, sortBy, sortOrder, fetchUsers]);
 
   useEffect(() => {
@@ -169,7 +220,7 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
 
   const handleEditClick = (user: UserRow) => {
     setSelectedUser({ ...user });
-    setEditPermissions(user.dashboardPermissions ?? []);
+    setEditPermissions([...(user.dashboardPermissions ?? []).filter(key => key !== "users"), ...((user.dashboardPermissions ?? []).includes("users") ? ["donors", "team", "logs"] : [])]);
     setIsDialogOpen(true);
   };
 
@@ -179,60 +230,54 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
     setEditPermissions([]);
   };
 
-  const toggleEditPermission = (key: string) => {
-    setEditPermissions((prev) =>
-      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
-    );
-  };
-
   const handleUserAuthoritySave = async () => {
-    if (!selectedUser) return;
+    if (!selectedUser || permissionSaving) return;
     const hasDashboardPagePermission = editPermissions.some((key) =>
       DASHBOARD_PERMISSION_ROWS.some((row) => row.key === key)
     );
     if (selectedUser.role === "STAFF" && !hasDashboardPagePermission) {
-      toast.error("اختر صفحة واحدة على الأقل من لوحة التحكم لعضو الطاقم");
+      toast.error(dt("اختر صفحة واحدة على الأقل من لوحة التحكم لعضو الطاقم"));
       return;
     }
+    setPermissionSaving(true);
     try {
-      const payload: { role: string; dashboardPermissions?: string[] } = {
-        role: selectedUser.role,
+      const payload: { role: string; dashboardPermissions?: string[]; updatedAt?: string } = {
+        role: selectedUser.role, updatedAt: selectedUser.updatedAt ?? undefined,
       };
       if (selectedUser.role === "STAFF") {
         payload.dashboardPermissions = editPermissions;
       }
       await axios.put(`/api/users/${selectedUser.id}`, payload);
-      toast.success("تم حفظ الصلاحيات بنجاح");
-      if (scope === "team") {
-        setUsers((prev) =>
-          prev.map((u) =>
-            u.id === selectedUser.id
-              ? {
-                  ...u,
-                  role: selectedUser.role,
-                  dashboardPermissions:
-                    selectedUser.role === "STAFF" ? [...editPermissions] : [],
-                }
-              : u
-          )
-        );
-      } else {
-        fetchUsers(1, false);
-        setPage(1);
-      }
+      toast.success(dt("تم حفظ الصلاحيات بنجاح"));
+      // Reload the authoritative row and revision; a second edit must not submit
+      // the previous timestamp, and a demoted member must leave the team list.
+      await fetchUsers(1, false);
+      setPage(1);
       handleDialogClose();
     } catch (err) {
       console.error("Error updating user:", err);
-      toast.error("فشل في تحديث المستخدم");
-    }
+      toast.error(dt("فشل في تحديث المستخدم"));
+    } finally { setPermissionSaving(false); }
+  };
+  const deleteMember = async () => {
+    if (!memberToDelete || deleting || deleteText !== (memberToDelete.name || memberToDelete.email || memberToDelete.id)) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`/api/users/${memberToDelete.id}`);
+      setMemberToDelete(null); setDeleteText(""); setPage(1); await fetchUsers(1, false); if (scope === "donors") void loadRegisteredTotal();
+      toast.success(dt("تم حذف حساب العضو مع الاحتفاظ بسجلاته المالية"));
+    } catch (error) {
+      const code = axios.isAxiosError(error) ? error.response?.data?.error : null;
+      toast.error(code === "ACTIVE_SUBSCRIPTIONS" ? dt("لدى العضو اشتراكات نشطة؛ ألغها من قسم التبرعات الدورية أولًا.") : code === "ADMIN_ACCOUNT_CHANGE_ROLE_FIRST" ? dt("غيّر دور المدير أولًا قبل حذف حسابه.") : dt("تعذر حذف العضو؛ لم تتغير القائمة."));
+    } finally { setDeleting(false); }
   };
 
   const pageTitle =
-    scope === "donors" ? "المتبرعين" : "فريق العمل";
+    scope === "donors" ? dt("المتبرعين") : dt("فريق العمل");
   const pageSubtitle =
     scope === "donors"
-      ? "عرض المتبرعين، الشارات، والتبرعات (تعديل الأدوار للمدير فقط)"
-      : "المدراء وأعضاء الطاقم — المدراء يظهرون أولًا؛ لا يظهر حسابك الحالي في القائمة";
+      ? dt("إدارة بيانات المتبرعين والشارات والتبرعات")
+      : dt("المدراء وأعضاء الطاقم  المدراء يظهرون أولًا؛ لا يظهر حسابك الحالي في القائمة");
 
   const toggleSelectUser = (id: string) => {
     setSelectedUserIds((prev) => {
@@ -259,10 +304,12 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
     return "$" + (typeof n === "number" ? n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : "0");
   };
 
-  const hasMore = users.length < total && !loadingMore;
+  const listReady = listLoaded && !listError && !loading;
+  const hasMore = listReady && users.length < total && !loadingMore;
 
   const hasActiveFilters =
     search !== "" ||
+    (scope === "donors" && accountFilter !== "all") ||
     preferredLangFilter !== "all" ||
     badgeFilter !== "all" ||
     genderFilter !== "all" ||
@@ -270,32 +317,18 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
 
   const resetFilters = () => {
     setSearchInput("");
+    setAccountFilter("all");
     setPreferredLangFilter("all");
     setBadgeFilter("all");
     setGenderFilter("all");
     setAgeFilter("all");
   };
 
-  if (loading && users.length === 0) {
-    return (
-      <div className="min-h-0" dir="rtl">
-        <div className="space-y-6 p-4 md:p-6 max-w-[1600px] mx-auto">
-          <div className="h-10 w-64 bg-slate-200 rounded animate-pulse" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-24 rounded-lg bg-slate-200 animate-pulse" />
-            ))}
-          </div>
-          <div className="h-64 rounded-lg bg-slate-200 animate-pulse" />
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="min-h-0" dir="rtl">
+    <div className="min-h-0" dir={dashDir()}>
       <div className="space-y-6 sm:space-y-8 p-0 sm:p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto">
-        <header className="text-right">
+        <header className="text-start">
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
             {pageTitle}
           </h1>
@@ -304,26 +337,32 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
           </p>
         </header>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border border-border shadow-sm" dir="rtl">
+        {listError ? <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <span>{dt("فشل في تحميل المستخدمين")}{users.length ? " · " + dt("تعذّر تحديث القائمة الآن؛ المعروض هو آخر بيانات ناجحة.") : ""}</span>
+          <Button variant="outline" size="sm" onClick={() => { setPage(1); void fetchUsers(1, false); }}>{dt("إعادة المحاولة")}</Button>
+        </div> : null}
+        <section className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${scope === "donors" ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
+          {scope === "donors" ? <Card className="border border-sky-100 shadow-sm"><div className="p-5 text-start"><p className="text-xs font-medium text-slate-500">{dt("المتبرعون الذين لديهم حساب مسجل")}</p><p className="mt-2 text-xl font-bold tabular-nums">{registeredTotal === null || registeredError ? dt("غير متاح") : registeredTotal.toLocaleString()}</p><p className="mt-1 text-xs text-slate-500">{dt("إجمالي الحسابات المسجلة في الموقع، مستقل عن فلاتر القائمة.")}</p>{registeredError ? <div role="alert" className="mt-2 text-xs text-red-700"><span>{dt("تعذر تحميل البيانات")}</span><button type="button" className="ms-2 underline" onClick={() => void loadRegisteredTotal()}>{dt("إعادة المحاولة")}</button></div> : null}</div></Card> : null}
+
+          <Card className="border border-border shadow-sm" dir={dashDir()}>
             <div className="p-5 flex items-start gap-4">
               <div className="p-2.5 rounded-lg shrink-0 bg-brand-orange/8 text-brand-orange border border-brand-orange/20">
                 <Users className="w-5 h-5" />
               </div>
-              <div className="min-w-0 text-right">
-                <p className="text-xs font-medium text-slate-500">إجمالي المستخدمين</p>
-                <p className="text-xl font-bold text-slate-900 tabular-nums">{total}</p>
+              <div className="min-w-0 text-start">
+                <p className="text-xs font-medium text-slate-500">{dt("المطابقون للتصفية")}</p>
+                <p className="text-xl font-bold text-slate-900 tabular-nums">{listReady ? total : "—"}</p>
               </div>
             </div>
           </Card>
-          <Card className="border border-border shadow-sm" dir="rtl">
+          <Card className="border border-border shadow-sm" dir={dashDir()}>
             <div className="p-5 flex items-start gap-4">
               <div className="p-2.5 rounded-lg shrink-0 bg-brand text-white border border-gray-200">
                 <Receipt className="w-5 h-5" />
               </div>
-              <div className="min-w-0 text-right">
-                <p className="text-xs font-medium text-slate-500">المستخدمين المعروضين</p>
-                <p className="text-xl font-bold text-slate-900 tabular-nums">{users.length}</p>
+              <div className="min-w-0 text-start">
+                <p className="text-xs font-medium text-slate-500">{dt("المستخدمين المعروضين")}</p>
+                <p className="text-xl font-bold text-slate-900 tabular-nums">{listReady ? users.length : "—"}</p>
               </div>
             </div>
           </Card>
@@ -333,32 +372,31 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
           <CardHeader className="py-4">
             <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2 justify-end">
               <Search className="w-4 h-4 shrink-0" />
-              تصفية وبحث
-            </CardTitle>
+              {dt("تصفية وبحث")}</CardTitle>
           </CardHeader>
-          <CardContent className="pt-0 space-y-4" dir="rtl">
+          <CardContent className="pt-0 space-y-4" dir={dashDir()}>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2 text-right">
-                <label className="text-[11px] font-medium text-slate-500">بحث (اسم أو بريد)</label>
+              <div className="space-y-2 text-start">
+                <label htmlFor="directory-search" className="text-[11px] font-medium text-slate-500">{dt("بحث (اسم أو بريد)")}</label>
         <Input
-                  placeholder="بحث..."
+                  id="directory-search" placeholder={dt("بحث...")}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   className="w-full h-9 text-xs rounded-lg border-slate-200 bg-slate-50"
         />
       </div>
               {scope === "donors" && (
-              <div className="space-y-2 text-right">
-                <label className="text-[11px] font-medium text-slate-500">الشارة</label>
+              <div className="space-y-2 text-start">
+                <label className="text-[11px] font-medium text-slate-500">{dt("الشارة")}</label>
                 <Select value={badgeFilter} onValueChange={setBadgeFilter}>
                   <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50">
-                    <SelectValue placeholder="الكل" />
+                    <SelectValue placeholder={dt("الكل")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all" className="text-xs">الكل</SelectItem>
+                    <SelectItem value="all" className="text-xs">{dt("الكل")}</SelectItem>
                     {badges.map((b) => (
                       <SelectItem key={b.id} value={b.id} className="text-xs">
-                        <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: b.color }} />
+                        <span className="inline-block w-2 h-2 rounded-full ms-2" style={{ backgroundColor: b.color }} />
                         {b.translatedName || b.name}
                       </SelectItem>
                     ))}
@@ -366,14 +404,14 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                 </Select>
               </div>
               )}
-              <div className="space-y-2 text-right">
-                <label className="text-[11px] font-medium text-slate-500">اللغة المفضلة</label>
+              <div className="space-y-2 text-start">
+                <label className="text-[11px] font-medium text-slate-500">{dt("اللغة المفضلة")}</label>
                 <Select value={preferredLangFilter} onValueChange={setPreferredLangFilter}>
                   <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50">
-                    <SelectValue placeholder="الكل" />
+                    <SelectValue placeholder={dt("الكل")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all" className="text-xs">الكل</SelectItem>
+                    <SelectItem value="all" className="text-xs">{dt("الكل")}</SelectItem>
                     {Object.entries(LOCALE_LABELS).map(([code, label]) => (
                       <SelectItem key={code} value={code} className="text-xs">{label}</SelectItem>
                     ))}
@@ -381,8 +419,8 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                 </Select>
               </div>
               {scope === "donors" && (
-              <div className="space-y-2 text-right">
-                <label className="text-[11px] font-medium text-slate-500">الجنس</label>
+              <div className="space-y-2 text-start">
+                <label className="text-[11px] font-medium text-slate-500">{dt("الجنس")}</label>
                 <GenderFilterSelect
                   value={genderFilter}
                   onChange={setGenderFilter}
@@ -391,8 +429,8 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
               </div>
               )}
               {scope === "donors" && (
-              <div className="space-y-2 text-right">
-                <label className="text-[11px] font-medium text-slate-500">العمر</label>
+              <div className="space-y-2 text-start">
+                <label className="text-[11px] font-medium text-slate-500">{dt("العمر")}</label>
                 <AgeFilterSelect
                   value={ageFilter}
                   onChange={setAgeFilter}
@@ -400,33 +438,40 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                 />
               </div>
               )}
-              <div className="space-y-2 text-right">
-                <label className="text-[11px] font-medium text-slate-500">ترتيب حسب</label>
+              {scope === "donors" && <label className="space-y-2 text-start text-[11px] font-medium text-slate-500">
+                <span>{dt("نوع الحساب")}</span>
+                <select value={accountFilter} onChange={event => setAccountFilter(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs">
+                  <option value="all">{dt("الكل")}</option><option value="MEMBER">{dt("عضو مسجل")}</option>
+                  <option value="GUEST">{dt("زائر")}</option><option value="UNKNOWN">{dt("غير محدد")}</option>
+                </select>
+              </label>}
+              <div className="space-y-2 text-start">
+                <label className="text-[11px] font-medium text-slate-500">{dt("ترتيب حسب")}</label>
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                   <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="createdAt" className="text-xs">تاريخ التسجيل</SelectItem>
-                    <SelectItem value="name" className="text-xs">الاسم</SelectItem>
-                    <SelectItem value="email" className="text-xs">البريد</SelectItem>
+                    <SelectItem value="createdAt" className="text-xs">{dt("تاريخ التسجيل")}</SelectItem>
+                    <SelectItem value="name" className="text-xs">{dt("الاسم")}</SelectItem>
+                    <SelectItem value="email" className="text-xs">{dt("البريد")}</SelectItem>
                     {scope === "team" && (
-                      <SelectItem value="role" className="text-xs">الدور (مدير ثم طاقم)</SelectItem>
+                      <SelectItem value="role" className="text-xs">{dt("الدور (مدير ثم طاقم)")}</SelectItem>
                     )}
-                    <SelectItem value="donationsCount" className="text-xs">عدد التبرعات</SelectItem>
-                    <SelectItem value="totalDonated" className="text-xs">إجمالي التبرعات</SelectItem>
+                    <SelectItem value="donationsCount" className="text-xs">{dt("عدد التبرعات")}</SelectItem>
+                    <SelectItem value="totalDonated" className="text-xs">{dt("إجمالي التبرعات")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2 text-right">
-                <label className="text-[11px] font-medium text-slate-500">الاتجاه</label>
+              <div className="space-y-2 text-start">
+                <label className="text-[11px] font-medium text-slate-500">{dt("الاتجاه")}</label>
                 <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "asc" | "desc")}>
                   <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="desc" className="text-xs">تنازلي</SelectItem>
-                    <SelectItem value="asc" className="text-xs">تصاعدي</SelectItem>
+                    <SelectItem value="desc" className="text-xs">{dt("تنازلي")}</SelectItem>
+                    <SelectItem value="asc" className="text-xs">{dt("تصاعدي")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -435,19 +480,19 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
         </Card>
 
         <section>
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-right mb-4">
-            {scope === "donors" ? "قائمة المتبرعين" : "قائمة فريق العمل"}
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-start mb-4">
+            {scope === "donors" ? dt("قائمة المتبرعين") : dt("قائمة فريق العمل")}
           </h2>
           <Card className="border-border shadow-sm">
             {scope === "donors" && (
               <div
                 className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 bg-slate-50/80"
-                dir="rtl"
+                dir={dashDir()}
               >
                 <span className="text-sm text-slate-700">
                   {selectedUserIds.size > 0
-                    ? `تم اختيار ${selectedUserIds.size} مستخدم`
-                    : `إرسال للنتائج المُصفّاة الحالية (${total})`}
+                    ? dt("تم اختيار {0} مستخدم", [selectedUserIds.size])
+                    : listReady ? dt("إرسال للنتائج المُصفّاة الحالية ({0})", [total]) : dt("غير متاح")}
                 </span>
                 <div className="flex items-center gap-2 flex-wrap">
                   {selectedUserIds.size > 0 && (
@@ -456,40 +501,42 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                       size="sm"
                       onClick={() => setSelectedUserIds(new Set())}
                     >
-                      إلغاء التحديد
-                    </Button>
+                      {dt("إلغاء التحديد")}</Button>
                   )}
-                  <Button
-                    size="sm"
-                    onClick={() => setSendDialog({ open: true, channel: "email" })}
-                    disabled={total === 0}
-                    className="gap-2 bg-brand hover:bg-brand/90"
-                  >
-                    <Mail className="w-4 h-4" /> إرسال بريد
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setSendDialog({ open: true, channel: "whatsapp" })}
-                    disabled={total === 0}
-                    className="gap-2 bg-[#25D366] hover:bg-[#25D366]/90 text-white"
-                  >
-                    <MessageCircle className="w-4 h-4" /> إرسال واتساب
-                  </Button>
+                  {/* Shown only when the send API would accept it (`templates`). */}
+                  {canSendEmail && (
+                    <Button
+                      size="sm"
+                      onClick={() => setSendDialog({ open: true, channel: "email" })}
+                      disabled={!listReady || total === 0}
+                      className="gap-2 bg-brand hover:bg-brand/90"
+                    >
+                      <Mail className="w-4 h-4" /> {dt(" إرسال بريد")}</Button>
+                  )}
+                  {/* WhatsApp is sent from the Communication Center (approved Meta templates);
+                      the old dialog here could not send, so this goes there directly. */}
+                  {canOpenCommunication && (
+                    <Button
+                      size="sm"
+                      onClick={() => router.push("/dashboard/communication/whatsapp")}
+                      disabled={!listReady || total === 0}
+                      className="gap-2 bg-[#25D366] hover:bg-[#25D366]/90 text-white"
+                    >
+                      <MessageCircle className="w-4 h-4" /> {dt(" واتساب من مركز التواصل")}</Button>
+                  )}
                 </div>
               </div>
             )}
             {scope !== "donors" && selectedUserIds.size > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 bg-slate-50/80" dir="rtl">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 bg-slate-50/80" dir={dashDir()}>
                 <span className="text-sm text-slate-700">
-                  تم اختيار {selectedUserIds.size} مستخدم
-                </span>
+                  {dtx("تم اختيار {0} مستخدم", [selectedUserIds.size])}</span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedUserIds(new Set())}
                 >
-                  إلغاء التحديد
-                </Button>
+                  {dt("إلغاء التحديد")}</Button>
               </div>
             )}
             <CardContent className="p-0">
@@ -501,54 +548,55 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                     <div key={i} className="h-12 animate-pulse rounded-lg border border-slate-200 bg-slate-100" />
                   ))}
                 </div>
-              ) : users.length === 0 ? (
+              ) : listError && users.length === 0 ? <div className="p-6 text-sm text-slate-600">{dt("غير متاح")}</div> : users.length === 0 ? (
                 <EmptyState
                   icon={Users}
-                  title="لا يوجد مستخدمين مطابقين"
-                  description="جرّب توسيع التصفية أو مسحها."
+                  title={dt("لا يوجد مستخدمين مطابقين")}
+                  description={dt("جرّب توسيع التصفية أو مسحها.")}
                   action={
                     hasActiveFilters ? (
-                      <Button variant="outline" size="sm" onClick={resetFilters}>مسح التصفية</Button>
+                      <Button variant="outline" size="sm" onClick={resetFilters}>{dt("مسح التصفية")}</Button>
                     ) : undefined
                   }
                 />
               ) : (
-              <div className="overflow-x-auto rounded-lg border border-slate-200" dir="rtl">
-                <table className="w-full min-w-[900px] text-right text-sm">
+              <div className="overflow-x-auto rounded-lg border border-slate-200" dir={dashDir()}>
+                <table className="w-full min-w-[900px] text-start text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/80 text-slate-700">
                       <th className="w-10 px-3 py-2.5">
                         <Checkbox
+                          disabled={!listReady}
                           checked={isAllDisplayedSelected}
                           onCheckedChange={(checked: boolean | "indeterminate") => selectAllDisplayed(checked === true)}
-                          aria-label="تحديد الكل"
+                          aria-label={dt("تحديد الكل")}
                         />
                       </th>
-                      <th className="min-w-[210px] px-3 py-2.5 text-right text-xs font-semibold">
-                        {scope === "donors" ? "المتبرع" : "العضو"}
+                      <th className="min-w-[210px] px-3 py-2.5 text-start text-xs font-semibold">
+                        {scope === "donors" ? dt("المتبرع") : dt("العضو")}
                       </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold">الدور</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold">اللغة</th>
+                      <th className="px-3 py-2.5 text-start text-xs font-semibold">{dt("الدور")}</th>
+                      <th className="px-3 py-2.5 text-start text-xs font-semibold">{dt("اللغة")}</th>
                       {scope === "donors" && (
-                      <th className="min-w-[110px] px-3 py-2.5 text-right text-xs font-semibold">الجنس / العمر</th>
+                      <th className="min-w-[110px] px-3 py-2.5 text-start text-xs font-semibold">{dt("الجنس / العمر")}</th>
                       )}
                       {scope === "donors" && (
-                      <th className="min-w-[130px] px-3 py-2.5 text-right text-xs font-semibold">الموقع</th>
+                      <th className="min-w-[130px] px-3 py-2.5 text-start text-xs font-semibold">{dt("الموقع")}</th>
                       )}
                       {scope === "donors" && (
-                      <th className="min-w-[130px] px-3 py-2.5 text-right text-xs font-semibold">الشارات</th>
+                      <th className="min-w-[130px] px-3 py-2.5 text-start text-xs font-semibold">{dt("الشارات")}</th>
                       )}
                       {scope === "team" && (
-                      <th className="min-w-[180px] px-3 py-2.5 text-right text-xs font-semibold">حملات لوحة التحكم</th>
+                      <th className="min-w-[180px] px-3 py-2.5 text-start text-xs font-semibold">{dt("حملات لوحة التحكم")}</th>
                       )}
                       {scope === "donors" && (
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold">عدد التبرعات</th>
+                      <th className="px-3 py-2.5 text-start text-xs font-semibold">{dt("عدد التبرعات")}</th>
                       )}
                       {scope === "donors" && (
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold">إجمالي التبرعات</th>
+                      <th className="px-3 py-2.5 text-start text-xs font-semibold">{dt("إجمالي التبرعات")}</th>
                       )}
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold whitespace-nowrap">التسجيل</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold">الإجراءات</th>
+                      <th className="px-3 py-2.5 text-start text-xs font-semibold whitespace-nowrap">{dt("التسجيل")}</th>
+                      <th className="px-3 py-2.5 text-end text-xs font-semibold">{dt("الإجراءات")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -567,8 +615,9 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                           <td className="px-3 py-2.5">
                             <Checkbox
                               checked={selected}
+                              disabled={!listReady}
                               onCheckedChange={() => toggleSelectUser(u.id)}
-                              aria-label={`تحديد ${u.name || u.email}`}
+                              aria-label={dt("تحديد {0}", [u.name || u.email])}
                             />
                           </td>
 
@@ -579,11 +628,14 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                               <Avatar className="h-8 w-8 shrink-0 rounded-full ring-1 ring-slate-200">
                                 <AvatarImage src={u.image ?? undefined} alt="" />
                                 <AvatarFallback className="rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-[10px] font-bold text-white">
-                                  {(u.name ?? u.email ?? "؟").charAt(0).toUpperCase()}
+                                  {(u.name ?? u.email ?? dt("؟")).charAt(0).toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
                               <div className="min-w-0">
-                                <p className="truncate text-[13px] font-medium text-slate-900">{u.name ?? "بلا اسم"}</p>
+                                <p className="flex min-w-0 items-center gap-1 text-[13px] font-medium text-slate-900">
+                                  <span className="truncate">{u.name ?? dt("بلا اسم")}</span>
+                                  {scope === "donors" && <DonorAccountBadge status={u.accountStatus} />}
+                                </p>
                                 <p className="truncate text-[11px] text-slate-500" title={u.email ?? undefined}>
                                   {u.email ?? u.phone ?? "—"}
                                 </p>
@@ -603,10 +655,10 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                               )}
                             >
                               {u.role === "ADMIN"
-                                ? "مدير"
+                                ? dt("مدير")
                                 : u.role === "STAFF"
-                                  ? "طاقم"
-                                  : "متبرع"}
+                                  ? dt("طاقم")
+                                  : dt("متبرع")}
                             </span>
                           </td>
 
@@ -622,7 +674,7 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                               <span className="flex items-center gap-1.5 text-[12px] text-slate-700 whitespace-nowrap">
                                 {genderKey ? GENDER_LABEL_AR[genderKey] : "—"}
                                 {age !== null && (
-                                  <span className="text-slate-400">· {age} سنة</span>
+                                  <span className="text-slate-400">{dtx("· {0} سنة", [age])}</span>
                                 )}
                               </span>
                             ) : (
@@ -659,7 +711,7 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                               {(u.badgeIds ?? []).map((bid) => {
                                 const badge = badges.find((b) => b.id === bid);
                                 if (!badge) return null;
-                                const label = badge.translatedName || badge.name;
+                                const label = badge.name;
                                 return (
                                   <span
                                     key={bid}
@@ -684,8 +736,7 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                           <td className="px-3 py-2.5">
                             {u.role === "ADMIN" ? (
                               <span className="inline-flex rounded-full border border-brand-orange/20 bg-brand-orange/8 px-1.5 py-0.5 text-[10px] text-brand-orange">
-                                كل الحملات
-                              </span>
+                                {dt("كل الحملات")}</span>
                             ) : (
                               <div className="flex max-w-[220px] flex-wrap gap-1">
                                 {(u.dashboardPermissions ?? []).map((key) => {
@@ -724,43 +775,45 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                           )}
 
                           <td className="px-3 py-2.5 text-[12px] text-slate-500 whitespace-nowrap">
-                            {new Date(u.createdAt).toLocaleDateString("ar-EG", { dateStyle: "medium" })}
+                            {new Date(u.createdAt).toLocaleDateString(dashIntl("ar-EG"), { dateStyle: "medium" })}
                           </td>
 
-                          <td className="px-3 py-2.5 text-left">
-                            <DropdownMenu>
+                          <td className="px-3 py-2.5 text-end">
+                            {/* Dialogs opened from this menu own the modal background lock. */}
+                            <DropdownMenu modal={false}>
                               <DropdownMenuTrigger asChild>
-                                <Button size="sm" variant="outline" className="gap-1 rounded-full">
+                                <Button disabled={!listReady} size="sm" variant="outline" aria-label={dt("الإجراءات")} className="gap-1 rounded-full">
                                   <MoreHorizontal className="w-4 h-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="start" className="min-w-[160px]">
+                              {scope === "donors" && canOpenCommunication && <DropdownMenuItem onClick={() => router.push(`/dashboard/users/donors/${u.id}/communication`)}><MessageCircle className="w-4 h-4 me-2" />{dt("سجل الرسائل")}</DropdownMenuItem>}
                               <DropdownMenuItem onClick={() => openUserProfileCard(u)}>
                                   <UserCircle className="w-4 h-4 me-2" />
-                                  عرض الملف
-                                </DropdownMenuItem>
+                                  {dt("عرض الملف")}</DropdownMenuItem>
                                 {canOpenRevenue && (
                                   <DropdownMenuItem onClick={() => router.push(`/dashboard?userId=${u.id}`)}>
                                     <BarChart3 className="w-4 h-4 me-2" />
-                                    تحليل تبرعات
-                                  </DropdownMenuItem>
+                                    {dt("تحليل تبرعات")}</DropdownMenuItem>
                                 )}
                                 {scope === "team" &&
                                   isFullAdmin &&
                                   (u.role === "STAFF" || u.role === "ADMIN") && (
                                   <DropdownMenuItem onClick={() => handleEditClick(u)}>
                                     <Pencil className="w-4 h-4 me-2" />
-                                    تعديل الصلاحيات
+                                    {dt("تعديل الصلاحيات")}</DropdownMenuItem>
+                                )}
+                                {isFullAdmin && (
+                                  <DropdownMenuItem onClick={() => setProfileToEdit(u)}>
+                                    <Pencil className="w-4 h-4 me-2" />{dt("تعديل بيانات العضو")}
                                   </DropdownMenuItem>
                                 )}
-                                {scope === "donors" &&
-                                  u.role === "DONOR" &&
-                                  isFullAdmin && (
+                                {scope === "donors" && u.role === "DONOR" && isFullAdmin && (
                                   <DropdownMenuItem onClick={() => handleEditClick(u)}>
-                                    <Pencil className="w-4 h-4 me-2" />
-                                    تعديل الصلاحيات
+                                    <Pencil className="w-4 h-4 me-2" />{dt("تعديل الصلاحيات")}
                                   </DropdownMenuItem>
                                 )}
+                                {isFullAdmin && u.id !== session?.user?.id && <DropdownMenuItem className="text-red-700" onClick={() => { setMemberToDelete(u); setDeleteText(""); }}><Trash2 className="me-2 h-4 w-4" />{dt("حذف العضو")}</DropdownMenuItem>}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
@@ -781,33 +834,36 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                     className="gap-2"
                   >
                     {loadingMore ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronDown className="w-4 h-4 rotate-180" />}
-                    عرض المزيد
-                  </Button>
+                    {dt("عرض المزيد")}</Button>
                 </div>
               )}
               {total > 0 && (
-                <p className="text-xs text-slate-500 px-4 py-2 border-t border-slate-100 text-right">
-                  عرض {users.length} من {total} مستخدم
-                </p>
+                <p className="text-xs text-slate-500 px-4 py-2 border-t border-slate-100 text-start">
+                  {dtx("عرض {0} من {1} مستخدم", [users.length, total])}</p>
               )}
             </CardContent>
           </Card>
         </section>
       </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={(open) => !open && handleDialogClose()}>
-        <DialogOverlay className="fixed inset-0 bg-black/50" />
-        <DialogContent className="fixed top-1/2 left-1/2 w-[calc(100%-2rem)] max-w-lg max-h-[min(90vh,640px)] overflow-y-auto p-4 sm:p-6 transform -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground border border-border rounded-lg shadow-lg" dir="rtl">
-          <DialogTitle className="text-lg font-bold text-foreground">تعديل الدور والصلاحيات</DialogTitle>
+      {profileToEdit && <DonorProfileEditor adminMember key={profileToEdit.id} user={profileToEdit} canEditEmail={isFullAdmin}
+        onClose={() => setProfileToEdit(null)} onSaved={() => { setPage(1); void fetchUsers(1, false); }} />}
+      <Dialog open={Boolean(memberToDelete)} onOpenChange={open => { if (!open && !deleting) setMemberToDelete(null); }}>
+        <DialogContent dir={dashDir()}><DialogTitle>{dt("حذف العضو")}</DialogTitle><p className="text-sm leading-7">{dt("سيُغلق الحساب وتُحذف بياناته الشخصية وإمكانية دخوله. تبقى التبرعات والإيصالات والسجلات المالية. لا يمكن التراجع عن هذا الإجراء.")}</p><label className="text-sm">{dt("اكتب اسم العضو للتأكيد: {0}", [memberToDelete?.name || memberToDelete?.email || memberToDelete?.id || ""])}<Input value={deleteText} disabled={deleting} onChange={event => setDeleteText(event.target.value)} /></label><div className="flex gap-2"><Button variant="outline" disabled={deleting} onClick={() => setMemberToDelete(null)}>{dt("إلغاء")}</Button><Button variant="destructive" disabled={deleting || deleteText !== (memberToDelete?.name || memberToDelete?.email || memberToDelete?.id)} onClick={deleteMember}>{deleting ? dt("جار الحذف…") : dt("حذف العضو")}</Button></div></DialogContent>
+      </Dialog>
+      <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open && !permissionSaving) handleDialogClose(); }}>
+        <DialogContent className="fixed top-1/2 left-1/2 w-[calc(100%_-_2rem)] max-w-3xl max-h-[min(90vh,640px)] overflow-y-auto p-4 sm:p-6 transform -translate-x-1/2 -translate-y-1/2 bg-card text-card-foreground border border-border rounded-lg shadow-lg" dir={dashDir()}>
+          <DialogTitle className="text-lg font-bold text-foreground">{dt("تعديل الدور والصلاحيات")}</DialogTitle>
           {selectedUser && (
             <div className="space-y-4 mt-4">
               <p className="text-sm text-muted-foreground">
-                {selectedUser.name ?? "—"} — {selectedUser.email ?? "—"}
+                {selectedUser.name ?? "—"}  {selectedUser.email ?? "—"}
               </p>
               <div className="space-y-2">
-                <label className="text-sm font-medium">الدور</label>
+                <label className="text-sm font-medium">{dt("الدور")}</label>
                 <Select
                   value={selectedUser.role}
+                  disabled={permissionSaving}
                   onValueChange={(v) => {
                     setSelectedUser({ ...selectedUser, role: v });
                     if (v !== "STAFF") setEditPermissions([]);
@@ -817,77 +873,21 @@ export default function UsersManagement({ scope }: { scope: Scope }) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="DONOR">متبرع</SelectItem>
-                    <SelectItem value="STAFF">طاقم (لوحة تحكم محدودة)</SelectItem>
-                    <SelectItem value="ADMIN">مدير (كل الحملات)</SelectItem>
+                    <SelectItem value="DONOR">{dt("متبرع")}</SelectItem>
+                    <SelectItem value="STAFF">{dt("طاقم (لوحة تحكم محدودة)")}</SelectItem>
+                    <SelectItem value="ADMIN">{dt("مدير (كل الحملات)")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {selectedUser.role === "STAFF" && (
-                <>
-                  <div className="space-y-2 rounded-lg border border-border p-3 bg-muted/40">
-                    <p className="text-sm font-medium">حملات لوحة التحكم</p>
-                    <p className="text-xs text-muted-foreground">
-                      فعّل كل حملة يحق لهذا المستخدم الدخول إليه. بدون تفعيل لا يظهر في القائمة الجانبية.
-                    </p>
-                    <div className="grid gap-2 max-h-56 overflow-y-auto pe-1">
-                      {DASHBOARD_PERMISSION_ROWS.map((row) => (
-                        <label
-                          key={row.key}
-                          className="flex items-start gap-2 text-sm cursor-pointer rounded-md p-2 hover:bg-muted/80"
-                        >
-                          <Checkbox
-                            checked={editPermissions.includes(row.key)}
-                            onCheckedChange={() => toggleEditPermission(row.key)}
-                            className="mt-0.5"
-                          />
-                          <span>
-                            <span className="font-medium">{row.title}</span>
-                            <span className="text-muted-foreground text-xs block">{row.group}</span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3">
-                    <p className="text-sm font-medium">صلاحيات إضافية</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      فعّل الإجراءات الإضافية التي يحق لهذا المستخدم تنفيذها داخل الصفحات المسموحة له.
-                    </p>
-                    <div className="grid gap-2 pe-1 pt-1">
-                      {ACTION_PERMISSION_ROWS.map((row) => (
-                        <label
-                          key={row.key}
-                          className="flex items-start gap-2 text-sm cursor-pointer rounded-md border border-border bg-background/70 p-2.5 hover:bg-muted/80"
-                        >
-                          <Checkbox
-                            checked={editPermissions.includes(row.key)}
-                            onCheckedChange={() => toggleEditPermission(row.key)}
-                            className="mt-0.5"
-                          />
-                          <span>
-                            <span className="font-medium">{row.title}</span>
-                            <span className="text-muted-foreground text-xs block leading-relaxed mt-0.5">
-                              {row.description}
-                            </span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
+              {selectedUser.role === "STAFF" && <TeamPermissionPicker value={editPermissions} onChange={setEditPermissions} disabled={permissionSaving} />}
               {selectedUser.role === "ADMIN" && (
                 <p className="text-xs text-muted-foreground">
-                  المدير يملك صلاحية جميع حملات لوحة التحكم تلقائيًا.
-                </p>
+                  {dt("المدير يملك صلاحية جميع حملات لوحة التحكم تلقائيًا.")}</p>
               )}
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={handleDialogClose}>
-                  إلغاء
-                </Button>
-                <Button onClick={handleUserAuthoritySave}>حفظ</Button>
+                <Button type="button" variant="outline" disabled={permissionSaving} onClick={handleDialogClose}>
+                  {dt("إلغاء")}</Button>
+                <Button disabled={permissionSaving} onClick={handleUserAuthoritySave}>{permissionSaving ? dt("جار الحفظ…") : dt("حفظ")}</Button>
               </div>
             </div>
           )}

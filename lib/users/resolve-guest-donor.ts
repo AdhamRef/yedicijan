@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { countryCodeFromPhone } from "@/lib/donations/donor-country-code";
+import { findUserByEmail } from "./account-claim";
 
 export interface GuestPayload {
   firstName?: string | null;
@@ -48,33 +49,31 @@ export async function resolveGuestDonor(
   opts: ResolveOptions
 ): Promise<ResolvedDonor> {
   const email = guest.email?.trim().toLowerCase() || null;
-  const phone = guest.phone?.trim() || null;
+  const rawPhone = guest.phone?.trim() || null;
+  /* The checkout's phone field always carries the dial code, so a guest who
+     leaves it empty sends just "+20" or "+90". Hundreds of accounts hold such a
+     bare code, and matching on it merged unrelated guests into the oldest of
+     them  their gift, and their email if that account had none. A number
+     needs at least 7 digits to identify anyone; anything shorter is no phone. */
+  const phone = rawPhone && rawPhone.replace(/\D/g, "").length >= 7 ? rawPhone : null;
   const name = [guest.firstName, guest.lastName].filter(Boolean).join(" ").trim() || null;
   // Phone-derived country is a stronger signal than IP geo and lets us avoid
   // leaving brand-new donors with an empty `countryCode` (which then defaults
-  // to whatever Meta CAPI infers from the request IP — often wrong on mobile
+  // to whatever Meta CAPI infers from the request IP  often wrong on mobile
   // carriers and VPNs).
   const countryCode =
-    guest.countryCode?.trim().toUpperCase() || countryCodeFromPhone(phone) || null;
+    // The dial code alone still says which country, even when it is no number.
+    guest.countryCode?.trim().toUpperCase() || countryCodeFromPhone(rawPhone) || null;
   const city = guest.city?.trim() || null;
   const region = guest.region?.trim() || null;
   const birthdate = normalizeBirthdate(guest.birthdate);
   const gender = normalizeGender(guest.gender);
 
+  /* A donor imported from the old site who gives again is matched here  by
+     email whatever its case (`findUserByEmail`), else by phone  so the gift
+     lands on their existing record and what they typed completes it. */
   if (email) {
-    const existing = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        countryCode: true,
-        city: true,
-        region: true,
-        birthdate: true,
-        gender: true,
-      },
-    });
+    const existing = await findUserByEmail(email);
     if (existing) {
       await backfillExistingUser(prisma, existing.id, existing, {
         name,
@@ -102,6 +101,7 @@ export async function resolveGuestDonor(
         region: true,
         birthdate: true,
         gender: true,
+        verifiedAt: true,
       },
       orderBy: { createdAt: "asc" },
       take: 10,
@@ -132,6 +132,7 @@ export async function resolveGuestDonor(
       birthdate: birthdate ?? undefined,
       gender: gender ?? undefined,
       preferredLang: opts.preferredLang ?? undefined,
+      verifiedAt: new Date(),
     },
     select: { id: true, name: true },
   });
@@ -148,6 +149,7 @@ type ExistingShape = {
   region?: string | null;
   birthdate?: string | null;
   gender?: string | null;
+  verifiedAt?: Date | null;
 };
 
 type IncomingShape = {
@@ -176,6 +178,9 @@ async function backfillExistingUser(
   if (!existing.region && incoming.region) data.region = incoming.region;
   if (!existing.birthdate && incoming.birthdate) data.birthdate = incoming.birthdate;
   if (!existing.gender && incoming.gender) data.gender = incoming.gender;
+  // Giving through checkout is coming back: the dashboard stops showing them
+  // as an untouched import.
+  if (!existing.verifiedAt) data.verifiedAt = new Date();
   if (Object.keys(data).length === 0) return;
   await prisma.user.update({ where: { id: userId }, data });
 }

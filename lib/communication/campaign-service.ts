@@ -1,14 +1,15 @@
+import { findClassifiedTemplate } from "./template-usage";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit-log";
 import type { CommunicationCampaign, Prisma } from "@prisma/client";
 import { isCommunicationChannel, type CommunicationChannelId, type CampaignStatusId } from "./communication-runtime-types";
-import { safeCountValue } from "@/lib/dashboard/safe-count";
+import { canDeleteUnsentCampaign } from "./campaign-lifecycle";
 
 /**
- * CampaignService — CRUD + status transitions for CommunicationCampaign. This package
+ * CampaignService  CRUD + status transitions for CommunicationCampaign. This package
  * covers the workflow up to (but not including) sending: DRAFT → REVIEW → APPROVED →
- * SCHEDULED, plus CANCELLED. Campaigns never send automatically and never move to
- * SENDING/SENT here — that is a later package behind explicit human approval + a provider.
+ * SCHEDULED, plus CANCELLED. This service only records operator transitions; the scheduler owns sending and moves to
+ * SENDING/SENT here  that is a later package behind explicit human approval + a provider.
  */
 
 type Actor = { actorId?: string | null; actorName?: string | null; actorRole?: string | null } | null;
@@ -20,6 +21,12 @@ export type CampaignInput = {
   audienceSegmentKey?: string | null;
   templateGroupId?: string | null;
   senderRoutingMode?: string;
+  /**
+   * Initial metadata. Used to link a campaign to what it announces
+   * `{ sourceUpdate: { updateId, campaignId } }` for a campaign-update email,
+   * which the send executor reads to fill the `{{update.*}}` variables.
+   */
+  metadata?: Record<string, unknown>;
 };
 
 export type ServiceResult<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
@@ -29,17 +36,12 @@ function dbUnavailable() {
 }
 
 export async function listCampaigns(opts: { includeArchived?: boolean } = {}): Promise<CommunicationCampaign[]> {
-  if (!process.env.DATABASE_URL) return [];
-  try {
-    return await prisma.communicationCampaign.findMany({
+  if (!process.env.DATABASE_URL) throw new Error("CAMPAIGN_DATABASE_UNAVAILABLE");
+  return prisma.communicationCampaign.findMany({
       where: opts.includeArchived ? undefined : { status: { not: "ARCHIVED" } },
       orderBy: { updatedAt: "desc" },
       take: 200,
     });
-  } catch (error) {
-    console.error("listCampaigns failed", error);
-    return [];
-  }
 }
 
 export async function getCampaign(id: string): Promise<CommunicationCampaign | null> {
@@ -57,6 +59,10 @@ export async function createCampaign(input: CampaignInput, actor?: Actor): Promi
   if (!isCommunicationChannel(input.channel)) return { ok: false, status: 400, error: "Invalid channel." };
   if (!input.name?.trim()) return { ok: false, status: 400, error: "Name is required." };
   try {
+    if (input.templateGroupId) {
+      const template = await findClassifiedTemplate(input.channel, input.templateGroupId);
+      if (!template || template.kind !== "CAMPAIGN" || template.status === "ARCHIVED") return { ok: false, status: 409, error: "اختر قالبًا تسويقيًا متاحًا لهذه القناة." };
+    }
     const row = await prisma.communicationCampaign.create({
       data: {
         name: input.name.trim(),
@@ -66,6 +72,7 @@ export async function createCampaign(input: CampaignInput, actor?: Actor): Promi
         templateGroupId: input.templateGroupId ?? null,
         senderRoutingMode: input.senderRoutingMode ?? "AUTO",
         status: "DRAFT",
+        ...(input.metadata ? { metadata: input.metadata as Prisma.InputJsonValue } : {}),
       },
     });
     await writeAuditLog({
@@ -100,7 +107,7 @@ export type CampaignUpdate = {
 export async function updateCampaign(id: string, patch: CampaignUpdate, actor?: Actor): Promise<ServiceResult<CommunicationCampaign>> {
   if (!process.env.DATABASE_URL) return dbUnavailable();
   try {
-    const current = await prisma.communicationCampaign.findUnique({ where: { id }, select: { status: true, metadata: true } });
+    const current = await prisma.communicationCampaign.findUnique({ where: { id }, select: { status: true, metadata: true, channel: true } });
     if (!current) return { ok: false, status: 404, error: "Campaign not found." };
 
     // Core fields (audience / template / language decisions) that change what would be sent.
@@ -121,6 +128,12 @@ export async function updateCampaign(id: string, patch: CampaignUpdate, actor?: 
       }
     } else {
       return { ok: false, status: 409, error: "لا يمكن تعديل هذه الحملة في حالتها الحالية." };
+    }
+
+    if (patch.templateGroupId) {
+      if (!isCommunicationChannel(current.channel)) return { ok: false, status: 400, error: "Invalid channel." };
+      const template = await findClassifiedTemplate(current.channel, patch.templateGroupId);
+      if (!template || template.kind !== "CAMPAIGN" || template.status === "ARCHIVED") return { ok: false, status: 409, error: "اختر قالبًا تسويقيًا متاحًا لهذه القناة." };
     }
 
     // An approved campaign whose core changed drops back to REVIEW (approval cleared).
@@ -174,23 +187,25 @@ const TRANSITIONS: Record<CampaignAction, { from: CampaignStatusId[]; to: Campai
   CANCEL: { from: ["DRAFT", "REVIEW", "APPROVED", "SCHEDULED"], to: "CANCELLED" },
 };
 
+/** Campaign owners can confirm their own campaigns, regardless of audience size. */
 export async function transitionCampaign(
   id: string,
   action: CampaignAction,
   opts?: { scheduledAt?: Date | null; actor?: Actor }
 ): Promise<ServiceResult<CommunicationCampaign>> {
+  if (action === "SCHEDULE" && (!opts?.scheduledAt || !Number.isFinite(opts.scheduledAt.getTime()) || opts.scheduledAt <= new Date())) return { ok: false, status: 400, error: "اختر موعدًا صحيحًا في المستقبل." };
   if (!process.env.DATABASE_URL) return dbUnavailable();
   const rule = TRANSITIONS[action];
   if (!rule) return { ok: false, status: 400, error: "Unknown action." };
   try {
-    const current = await prisma.communicationCampaign.findUnique({ where: { id }, select: { status: true, name: true } });
+    const current = await prisma.communicationCampaign.findUnique({ where: { id }, select: { status: true, name: true, updatedAt: true } });
     if (!current) return { ok: false, status: 404, error: "Campaign not found." };
     if (!rule.from.includes(current.status as CampaignStatusId)) {
       return { ok: false, status: 409, error: `Cannot ${action} from ${current.status}.` };
     }
     const actor = opts?.actor;
-    const row = await prisma.communicationCampaign.update({
-      where: { id },
+    const changed = await prisma.communicationCampaign.updateMany({
+      where: { id, status: current.status, updatedAt: current.updatedAt },
       data: {
         status: rule.to,
         scheduledAt: action === "SCHEDULE" ? opts?.scheduledAt ?? null : undefined,
@@ -198,6 +213,8 @@ export async function transitionCampaign(
         approvedAt: action === "APPROVE" ? new Date() : undefined,
       },
     });
+    if (changed.count !== 1) return { ok: false, status: 409, error: "تغيرت الحملة؛ حدّثها قبل تأكيد الإجراء." };
+    const row = await prisma.communicationCampaign.findUniqueOrThrow({ where: { id } });
     await writeAuditLog({
       actorId: actor?.actorId ?? undefined,
       actorName: actor?.actorName ?? undefined,
@@ -267,32 +284,38 @@ export async function duplicateCampaign(id: string, opts: { name?: string | null
   }
 }
 
-/**
- * Delete a DRAFT campaign. Only DRAFT can be hard-deleted, and only when it has NO deliveries. If any
- * delivery exists (logs must be preserved) the campaign is archived instead. Returns which happened.
- */
-export async function deleteDraftCampaign(id: string, actor?: Actor): Promise<ServiceResult<{ deleted: boolean; archived: boolean }>> {
+/** Delete an unsent campaign atomically with its pending work; delivery history is never removed. */
+export async function deleteUnsentCampaign(id: string, actor?: Actor): Promise<ServiceResult<{ deleted: boolean; archived: boolean }>> {
   if (!process.env.DATABASE_URL) return dbUnavailable();
   try {
-    const current = await prisma.communicationCampaign.findUnique({ where: { id }, select: { status: true, name: true } });
-    if (!current) return { ok: false, status: 404, error: "Campaign not found." };
-    if (current.status !== "DRAFT") return { ok: false, status: 409, error: "لا يمكن حذف إلا المسودات." };
-
-    const deliveries = await safeCountValue("campaign.deliveries", () => prisma.communicationDelivery.count({ where: { campaignId: id } }));
-    if (deliveries > 0) {
-      await prisma.communicationCampaign.update({ where: { id }, data: { status: "ARCHIVED" } });
-      await auditCampaign(actor ?? null, "communication.campaign.archive", `أرشفة مسودة لها سجلات: ${current.name}`, `Archived draft with deliveries: ${current.name}`, id, { reason: "HAS_DELIVERIES", deliveries });
-      return { ok: true, data: { deleted: false, archived: true } };
-    }
-
-    await prisma.communicationCampaign.delete({ where: { id } });
-    await auditCampaign(actor ?? null, "communication.campaign.delete", `حذف مسودة حملة: ${current.name}`, `Deleted draft campaign: ${current.name}`, id, { hardDeleted: true });
+    const result = await prisma.$transaction(async tx => {
+      const current = await tx.communicationCampaign.findUnique({ where: { id } });
+      if (!current) return { ok: false as const, status: 404, error: "Campaign not found." };
+      if (!canDeleteUnsentCampaign(current)) return { ok: false as const, status: 409, error: "يمكن حذف الحملات التي لم يبدأ إرسالها فقط. استخدم الأرشفة للحملات ذات السجل." };
+      const metadata = current.metadata as Record<string, unknown> | null;
+      if (metadata?.sendLease || metadata?.sendProgress) return { ok: false as const, status: 409, error: "للحملة عملية إرسال قائمة أو سابقة؛ راجع سجلها قبل الأرشفة." };
+      // A failed count must abort. A fallback zero here used to authorize deletion during DB errors.
+      const deliveries = await tx.communicationDelivery.count({ where: { campaignId: id } });
+      if (deliveries > 0) return { ok: false as const, status: 409, error: "للحملة سجلات محاولة إرسال؛ يمكن أرشفتها مع الاحتفاظ بالسجل." };
+      const removed = await tx.communicationCampaign.deleteMany({ where: { id, status: current.status, updatedAt: current.updatedAt, sentCount: 0, deliveredCount: 0, readCount: 0, failedCount: 0, repliedCount: 0, clickedCount: 0 } });
+      if (removed.count !== 1) throw new Error("CAMPAIGN_CHANGED_RELOAD");
+      await tx.communicationCampaignDeferredRecipient.deleteMany({ where: { campaignId: id } });
+      // Links are soft financial references: retain their URLs and attribution evidence.
+      await tx.communicationCampaignTrackingLink.updateMany({ where: { campaignId: id }, data: { status: "ARCHIVED" } });
+      return { ok: true as const, name: current.name, status: current.status };
+    });
+    if (!result.ok) return result;
+    await auditCampaign(actor ?? null, "communication.campaign.delete", `حذف حملة لم تُرسل: ${result.name}`, `Deleted unsent campaign: ${result.name}`, id, { hardDeleted: true, from: result.status, deliveryHistoryRemoved: false });
     return { ok: true, data: { deleted: true, archived: false } };
   } catch (error) {
-    console.error("deleteDraftCampaign failed", error);
-    return { ok: false, status: 500, error: "Failed to delete campaign." };
+    console.error("deleteUnsentCampaign failed", error);
+    const conflict = error instanceof Error && error.message === "CAMPAIGN_CHANGED_RELOAD" || (error as { code?: string })?.code === "P2034";
+    return { ok: false, status: conflict ? 409 : 503, error: conflict ? "تغيرت الحملة أثناء الحذف؛ حدّث القائمة ثم أعد المحاولة." : "تعذّر التحقق من سجل الحملة؛ لم يتم حذفها. أعد المحاولة." };
   }
 }
+
+/** Compatibility for older callers; all eligibility checks live in the same transaction. */
+export const deleteDraftCampaign = deleteUnsentCampaign;
 
 const ARCHIVABLE = ["SENT", "SENT_WITH_ISSUES", "FAILED", "BLOCKED", "CANCELLED"];
 
@@ -313,14 +336,16 @@ export async function archiveCampaign(id: string, actor?: Actor): Promise<Servic
   }
 }
 
-/** Cancel a SCHEDULED campaign's schedule — returns it to APPROVED and clears the time. */
+/** Cancel a SCHEDULED campaign's schedule  returns it to APPROVED and clears the time. */
 export async function cancelSchedule(id: string, actor?: Actor): Promise<ServiceResult<CommunicationCampaign>> {
   if (!process.env.DATABASE_URL) return dbUnavailable();
   try {
-    const current = await prisma.communicationCampaign.findUnique({ where: { id }, select: { status: true, name: true } });
+    const current = await prisma.communicationCampaign.findUnique({ where: { id }, select: { status: true, name: true, updatedAt: true } });
     if (!current) return { ok: false, status: 404, error: "Campaign not found." };
     if (current.status !== "SCHEDULED") return { ok: false, status: 409, error: "لا يمكن إلغاء الجدولة إلا لحملة مجدولة." };
-    const row = await prisma.communicationCampaign.update({ where: { id }, data: { status: "APPROVED", scheduledAt: null } });
+    const changed = await prisma.communicationCampaign.updateMany({ where: { id, status: "SCHEDULED", updatedAt: current.updatedAt }, data: { status: "APPROVED", scheduledAt: null } });
+    if (changed.count !== 1) return { ok: false, status: 409, error: "تغيرت الحملة؛ حدّثها قبل تأكيد الإجراء." };
+    const row = await prisma.communicationCampaign.findUniqueOrThrow({ where: { id } });
     await auditCampaign(actor ?? null, "communication.campaign.cancel-schedule", `إلغاء جدولة حملة: ${current.name}`, `Cancelled schedule: ${current.name}`, id, { to: "APPROVED" });
     return { ok: true, data: row };
   } catch (error) {

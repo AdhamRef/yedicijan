@@ -1,3 +1,5 @@
+import { resolveTemplateKind } from "./template-kind";
+import { findClassifiedTemplate } from "./template-usage";
 import type { TReaderDocument } from "@usewaypoint/email-builder";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_LOCALE, isValidLocale, type SupportedLocale } from "@/lib/locales";
@@ -5,13 +7,15 @@ import { resolveEmailVariant, resolveWhatsappBody } from "@/lib/templates/locale
 import { renderEmailHtml, renderEmailSubject } from "@/lib/templates/render";
 import { mergeText, type TemplateContext } from "@/lib/templates/variables";
 import { SAMPLE_TEMPLATE_CONTEXT } from "@/lib/templates/sample-context";
+import { localizeDonationFailureLinks } from "@/lib/templates/localize-donation-failure-link";
 import { renderTemplatePreview } from "./template-renderer";
 import type { CommunicationChannelId } from "./communication-runtime-types";
+import { templateLocaleFromLanguage } from "./template-locale-media";
 
 /**
  * Compatibility layer over the EmailTemplate / WhatsappTemplate / SmsTemplate models so campaigns
  * can list templates, compute language coverage against `translations`, and render per-locale
- * previews — without a dedicated CommunicationTemplateGroup model (not overbuilt).
+ * previews  without a dedicated CommunicationTemplateGroup model (not overbuilt).
  *
  * SMS used to borrow the WhatsApp store because both are "a text body". That was wrong in practice:
  * the two are authored against opposite constraints (see the `SmsTemplate` model note), and the
@@ -41,12 +45,12 @@ function localesFromTranslations(base: SupportedLocale, translations: unknown): 
  * Branched explicitly rather than by picking a Prisma delegate into a variable: the two delegates
  * are structurally identical here but their generated types are not assignable to one another, so
  * a shared handle only typechecks behind a cast that would drop the `select` checking entirely.
- * Email is absent by design — it has a document, not a body.
+ * Email is absent by design  it has a document, not a body.
  */
-type TextTemplateSummary = { id: string; name: string; translations: unknown; kind: string | null };
+type TextTemplateSummary = { id: string; name: string; translations: unknown; kind: string | null; purpose?: string | null };
 
 async function listTextTemplates(channel: CommunicationChannelId): Promise<TextTemplateSummary[] | null> {
-  const query = { select: { id: true, name: true, translations: true, kind: true }, orderBy: { createdAt: "desc" }, take: 200 } as const;
+  const query = { where: { OR: [{ status: { not: "ARCHIVED" } }, { status: null }, { status: { isSet: false } }] }, select: { id: true, name: true, translations: true, kind: true, purpose: true } as const, orderBy: { createdAt: "desc" } as const, take: 200 };
   if (channel === "WHATSAPP") return prisma.whatsappTemplate.findMany(query);
   if (channel === "SMS") return prisma.smsTemplate.findMany(query);
   return null;
@@ -63,12 +67,12 @@ async function findTextTemplate(
 }
 
 /**
- * Ids of templates that are SYSTEM (platform-event) templates — either flagged `kind = "SYSTEM"`
+ * Ids of templates that are SYSTEM (platform-event) templates  either flagged `kind = "SYSTEM"`
  * or referenced by a MessageTrigger. Campaign Builder must not offer these by default.
  */
-async function systemTemplateIds(): Promise<Set<string>> {
+async function systemTemplateIds(channel: CommunicationChannelId): Promise<Set<string>> {
   const ids = new Set<string>();
-  const triggers = await prisma.messageTrigger.findMany({ select: { templateId: true } }).catch(() => []);
+  const triggers = await prisma.messageTrigger.findMany({ where: { channel }, select: { templateId: true } });
   for (const t of triggers) ids.add(t.templateId);
   return ids;
 }
@@ -81,31 +85,92 @@ export async function listChannelTemplates(
   channel: CommunicationChannelId,
   opts: { includeSystem?: boolean } = {}
 ): Promise<ChannelTemplateSummary[]> {
-  if (!process.env.DATABASE_URL) return [];
+  if (!process.env.DATABASE_URL) throw new Error("COMMUNICATION_TEMPLATE_DATABASE_UNAVAILABLE");
   try {
-    const systemIds = opts.includeSystem ? new Set<string>() : await systemTemplateIds();
-    const keep = (row: { id: string; kind?: string | null }) =>
-      opts.includeSystem || (row.kind !== "SYSTEM" && !systemIds.has(row.id));
+    const systemIds = opts.includeSystem ? new Set<string>() : await systemTemplateIds(channel);
+    const keep = (row: { id: string; kind?: string | null; purpose?: string | null; category?: string | null }) =>
+      opts.includeSystem || resolveTemplateKind(row, systemIds.has(row.id)) === "CAMPAIGN";
+
+    if (channel === "WHATSAPP") {
+      // Aggregate status spans every WABA and can be MISSING_IN_WABA while the
+      // default sender is approved. Campaigns use that sender only, so coverage
+      // must come from its exact provider rows, just like the send path.
+      const defaults = await prisma.communicationSender.findMany({
+        where: { channel: "WHATSAPP", provider: "META_WHATSAPP", enabled: true, status: "ACTIVE", isDefault: true, businessAccountId: { not: null } },
+        select: { businessAccountId: true }, take: 2,
+      });
+      const waba = defaults.length === 1 ? defaults[0].businessAccountId?.trim() : null;
+      if (!waba) throw new Error("ONE_ACTIVE_DEFAULT_WHATSAPP_SENDER_REQUIRED");
+      const rows = await prisma.whatsappTemplate.findMany({
+        where: { OR: [{ status: { not: "ARCHIVED" } }, { status: null }, { status: { isSet: false } }] },
+        select: {
+          id: true,
+          name: true,
+          kind: true,
+          purpose: true,
+          category: true,
+          wabaVariants: {
+            where: { provider: "META_WHATSAPP", businessAccountId: waba, approvalStatus: "APPROVED", providerTemplateId: { not: null } },
+            select: { locale: true, languageCode: true, providerTemplateName: true, providerTemplateId: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      return rows
+        .filter(keep)
+        .map((row) => {
+          const locales = new Set<SupportedLocale>();
+          for (const variant of row.wabaVariants) {
+            if (!variant.providerTemplateName?.trim() || !variant.providerTemplateId?.trim()) continue;
+            const candidate = templateLocaleFromLanguage(variant.languageCode);
+            if (isValidLocale(candidate)) locales.add(candidate as SupportedLocale);
+          }
+          return { id: row.id, name: row.name, availableLocales: [...locales] };
+        })
+        .filter((row) => row.availableLocales.length > 0);
+    }
 
     const textRows = await listTextTemplates(channel);
     if (textRows) {
       return textRows.filter(keep).map((t) => ({ id: t.id, name: t.name, availableLocales: localesFromTranslations(DEFAULT_LOCALE, t.translations) }));
     }
     const rows = await prisma.emailTemplate.findMany({
-      select: { id: true, name: true, translations: true, kind: true },
+      where: { OR: [{ status: { not: "ARCHIVED" } }, { status: null }, { status: { isSet: false } }] },
+      select: { id: true, name: true, translations: true, kind: true, purpose: true },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
     return rows.filter(keep).map((t) => ({ id: t.id, name: t.name, availableLocales: localesFromTranslations(DEFAULT_LOCALE, t.translations) }));
   } catch (error) {
     console.error("listChannelTemplates failed", error);
-    return [];
+    throw error;
   }
 }
 
 export async function getTemplateAvailableLocales(channel: CommunicationChannelId, templateId: string): Promise<SupportedLocale[]> {
-  const list = await listChannelTemplates(channel);
-  return list.find((t) => t.id === templateId)?.availableLocales ?? [];
+  if (!process.env.DATABASE_URL) throw new Error("COMMUNICATION_TEMPLATE_DATABASE_UNAVAILABLE");
+  // A gate for ONE saved campaign must not load the whole catalogue. Besides
+  // slowing every batch, the 200-item picker cap hid older valid templates.
+  const trigger = await prisma.messageTrigger.findFirst({ where: { channel, templateId }, select: { id: true } });
+  if (channel === "WHATSAPP") {
+    const defaults = await prisma.communicationSender.findMany({ where: { channel: "WHATSAPP", provider: "META_WHATSAPP", enabled: true, status: "ACTIVE", isDefault: true, businessAccountId: { not: null } }, select: { businessAccountId: true }, take: 2 });
+    const waba = defaults.length === 1 ? defaults[0].businessAccountId?.trim() : null;
+    if (!waba) throw new Error("ONE_ACTIVE_DEFAULT_WHATSAPP_SENDER_REQUIRED");
+    const row = await prisma.whatsappTemplate.findUnique({ where: { id: templateId }, select: { id: true, kind: true, purpose: true, category: true, status: true,
+      wabaVariants: { where: { provider: "META_WHATSAPP", businessAccountId: waba, approvalStatus: "APPROVED", providerTemplateId: { not: null } }, select: { languageCode: true, providerTemplateName: true, providerTemplateId: true } } } });
+    if (!row || row.status === "ARCHIVED" || resolveTemplateKind(row, Boolean(trigger)) !== "CAMPAIGN") return [];
+    const locales = new Set<SupportedLocale>();
+    for (const variant of row.wabaVariants) {
+      if (!variant.providerTemplateName?.trim() || !variant.providerTemplateId?.trim()) continue;
+      const locale = templateLocaleFromLanguage(variant.languageCode);
+      if (isValidLocale(locale)) locales.add(locale);
+    }
+    return [...locales];
+  }
+  const query = { where: { id: templateId }, select: { id: true, kind: true, purpose: true, status: true, translations: true } } as const;
+  const row = channel === "SMS" ? await prisma.smsTemplate.findUnique(query) : await prisma.emailTemplate.findUnique(query);
+  if (!row || row.status === "ARCHIVED" || resolveTemplateKind(row, Boolean(trigger)) !== "CAMPAIGN") return [];
+  return localesFromTranslations(DEFAULT_LOCALE, row.translations);
 }
 
 export type RenderedTemplate = {
@@ -128,7 +193,7 @@ export type RenderedTemplate = {
  *  - **Send** (`ctx` supplied): merge that recipient's real data.
  *
  * Without `ctx` it previously did preview-only work for *both*, so campaigns went out with sample
- * variable values — every donor greeted by the sample name — and the email body was a literal
+ * variable values  every donor greeted by the sample name  and the email body was a literal
  * placeholder sentence rather than the template. `ctx` is what separates the two, and the email
  * branch now renders the actual builder document through the same `renderEmailHtml` the trigger
  * dispatcher uses, so a campaign email and a triggered email are produced by one code path.
@@ -137,14 +202,20 @@ export async function renderChannelTemplate(
   channel: CommunicationChannelId,
   templateId: string,
   locale: SupportedLocale,
-  ctx?: TemplateContext | null
+  ctx?: TemplateContext | null,
+  fallbackLocale: SupportedLocale = DEFAULT_LOCALE,
+  expectedKind?: "SYSTEM" | "CAMPAIGN",
 ): Promise<RenderedTemplate | null> {
   if (!process.env.DATABASE_URL) return null;
   try {
+    if (expectedKind) {
+      const classified = await findClassifiedTemplate(channel, templateId);
+      if (!classified || classified.kind !== expectedKind || classified.status === "ARCHIVED") return null;
+    }
     if (channel === "WHATSAPP" || channel === "SMS") {
       const tpl = await findTextTemplate(channel, templateId);
       if (!tpl) return null;
-      const variant = resolveWhatsappBody(tpl, locale);
+      const variant = resolveWhatsappBody(tpl, locale, fallbackLocale);
       const preview = renderTemplatePreview(variant.body);
       return {
         channel,
@@ -152,19 +223,22 @@ export async function renderChannelTemplate(
         resolvedLocale: variant.resolvedLocale,
         usedFallback: variant.resolvedLocale !== locale,
         subject: null,
-        body: ctx ? mergeText(variant.body, ctx) : preview.rendered,
+        body: localizeDonationFailureLinks(ctx ? mergeText(variant.body, ctx) : preview.rendered, locale),
         variables: preview.variables,
         templateName: tpl.name,
       };
     }
     const tpl = await prisma.emailTemplate.findUnique({ where: { id: templateId }, select: { name: true, subject: true, document: true, translations: true } });
     if (!tpl) return null;
-    const variant = resolveEmailVariant(tpl, locale);
+    const variant = resolveEmailVariant(tpl, locale, fallbackLocale);
     const subjectPreview = renderTemplatePreview(variant.subject);
-    // Sample context for previews so the body is real HTML either way — an empty-looking preview
+    // Sample context for previews so the body is real HTML either way  an empty-looking preview
     // is what let the placeholder survive unnoticed.
     const renderCtx = ctx ?? SAMPLE_TEMPLATE_CONTEXT;
-    const html = await renderEmailHtml(variant.document as TReaderDocument, renderCtx);
+    const html = localizeDonationFailureLinks(
+      await renderEmailHtml(variant.document as TReaderDocument, renderCtx, variant.resolvedLocale),
+      locale,
+    );
     return {
       channel,
       locale,

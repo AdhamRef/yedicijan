@@ -170,7 +170,7 @@ test("admin and staff with blog permission can load blog editor data", async () 
   }
 });
 
-test("layouts remain defense in depth and pages use only editor data loaders", () => {
+test("layouts and shared editor pages preserve section permissions before data access", () => {
   for (const permission of protectedSections) {
     const layout = readFileSync(
       `app/(dashboard)/dashboard/${permission}/layout.tsx`,
@@ -184,11 +184,20 @@ test("layouts remain defense in depth and pages use only editor data loaders", (
     "app/(dashboard)/dashboard/blog/create/page.tsx",
     "utf8",
   );
+  const entryPage = readFileSync("app/(dashboard)/dashboard/blog/create/[postId]/page.tsx", "utf8");
+  assert.match(entryPage, /await requireDashboardPagePermission\("blog"\)/);
+  assert.doesNotMatch(entryPage, /prisma\.|getPost/);
   const editPage = readFileSync(
-    "app/(dashboard)/dashboard/blog/create/[postId]/page.tsx",
+    "app/(dashboard)/dashboard/blog/settings/[postId]/page.tsx",
     "utf8",
   );
-  assert.match(createPage, /loadBlogCreateEditorData\(\)/);
+  assert.match(createPage, /await requireDashboardPagePermission\(CONFIG\["blog"\]\.permission\)/);
+  assert.match(createPage, /<ContentEditor kind="blog" id="new"/);
+  const sharedApi = readFileSync("app/api/admin/content-editor/[kind]/[id]/route.ts", "utf8");
+  assert.match(sharedApi, /requireAdminOrDashboardPermission\(session, CONFIG\[kind\]\.permission\)/);
+  assert.ok(sharedApi.indexOf("await access(ctx)") < sharedApi.indexOf("documentFor(kind, id ==="));
+  const catalogApi = readFileSync("app/api/admin/content-editor/[kind]/catalog/route.ts", "utf8");
+  assert.ok(catalogApi.indexOf("if (denied) return denied") < catalogApi.indexOf("prisma.category.findMany"));
   assert.match(editPage, /loadBlogEditEditorData\(postId\)/);
   assert.doesNotMatch(createPage, /prisma\.|getPost|loadDashboardPageData/);
   assert.doesNotMatch(editPage, /prisma\.|getPost|loadDashboardPageData/);
@@ -310,20 +319,27 @@ test("read-only localization audit retains actionable item details", () => {
   assert.match(card, /emptyFields/);
   assert.match(card, /identicalToArabicFields/);
   assert.match(card, /ملاحظات جودة العربية/);
-  assert.match(card, /label="حقول فارغة" value=\{totals\.emptyFields\}/);
+  assert.match(card, /label=\{dt\("حقول فارغة"\)\} value=\{totals\.emptyFields\}/);
   assert.doesNotMatch(card, /حقول ناقصة أوفارغة/);
 });
 
 // "operations content permission boundary remains unchanged" read
 // app/(dashboard)/dashboard/operations/layout.tsx, removed with التشغيل. There is no boundary
-// left to assert on — the permission key is gone too.
+// left to assert on  the permission key is gone too.
 
 test("targeted CMS security TypeScript check passes", () => {
-  execFileSync(process.execPath, [
+  try {
+    execFileSync(process.execPath, [
     "node_modules/typescript/bin/tsc",
     "-p",
     "tsconfig.cms-security.json",
-  ], { stdio: "pipe" });
+    ], { encoding: "utf8", stdio: "pipe" });
+  } catch (error) {
+    // The default child-process exception hides compiler diagnostics behind
+    // Buffer previews. Surface stderr/stdout so a failed gate is actionable.
+    const output = error as { stdout?: string; stderr?: string; message?: string };
+    assert.fail(`CMS TypeScript check failed:\n${output.stdout ?? ""}\n${output.stderr ?? ""}\n${output.message ?? ""}`);
+  }
 });
 
 test("primary Prisma schema validates without modification", () => {
@@ -332,5 +348,9 @@ test("primary Prisma schema validates without modification", () => {
     "validate",
     "--schema",
     "prisma/schema.prisma",
-  ], { stdio: "pipe" });
+  ], {
+    stdio: "pipe",
+    // Schema validation only parses the URL; it never connects to this database.
+    env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL || "mongodb://127.0.0.1:27017/schema_validation" },
+  });
 });

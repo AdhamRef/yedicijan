@@ -1,19 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { IntegrationProvider } from "@/lib/integration-settings/catalog";
 import type { SafeProviderConnectionTestResponse } from "@/lib/integration-settings/types";
 import { safeErrorMessage } from "@/lib/integration-settings/ui";
 import { ROTATABLE_WEBHOOK_PROVIDERS, type IntegrationUiSnapshot } from "./model";
+import { dt } from "@/lib/dashboard/i18n";
 
 type Notice = { kind: "success" | "error"; text: string } | null;
 type Drafts = Record<string, string>;
 
 type WebhookReveal = { url: string; candidateVersion: string | null } | null;
 
-async function json(response: Response): Promise<Record<string, any>> {
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(body.error || "تعذر تنفيذ العملية."), { code: body.code });
+async function json(response: Response): Promise<Record<string, unknown>> {
+  const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+  if (!response.ok) {
+    const message = typeof body.error === "string" ? body.error : dt("تعذر تنفيذ العملية.");
+    const code = typeof body.code === "string" ? body.code : undefined;
+    throw Object.assign(new Error(message), { code });
+  }
   return body;
 }
 
@@ -23,6 +28,8 @@ function cleanDrafts(snapshot: IntegrationUiSnapshot): Drafts {
 
 export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]) {
   const [providers, setProviders] = useState(initialProviders);
+  const providersRef = useRef(providers);
+  providersRef.current = providers;
   const [active, setActive] = useState<IntegrationProvider>("META_WHATSAPP");
   const [drafts, setDrafts] = useState<Drafts>(() => cleanDrafts(initialProviders[0]));
   const [dirty, setDirty] = useState<Set<string>>(new Set());
@@ -45,7 +52,7 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
   }, [hasDirty]);
 
   useEffect(() => {
-    const selected = providers.find((item) => item.provider === active);
+    const selected = providersRef.current.find((item) => item.provider === active);
     if (!selected) return;
     setDrafts(cleanDrafts(selected));
     setDirty(new Set());
@@ -61,7 +68,7 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
 
   function chooseProvider(provider: IntegrationProvider) {
     if (provider === active) return;
-    if (hasDirty && !window.confirm("لديك تغييرات لم يتم حفظها. هل تريد الانتقال دون حفظها؟")) return;
+    if (hasDirty && !window.confirm(dt("لديك تغييرات لم يتم حفظها. هل تريد الانتقال دون حفظها؟"))) return;
     setActive(provider);
   }
 
@@ -83,9 +90,9 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
       .filter((field) => dirty.has(field.key))
       .filter((field) => !field.isSecret || drafts[field.key]?.length > 0)
       .map((field) => ({ key: field.key, value: drafts[field.key] ?? "" }));
-    if (!settings.length) return setNotice({ kind: "error", text: "لا توجد تغييرات صالحة للحفظ." });
+    if (!settings.length) return setNotice({ kind: "error", text: dt("لا توجد تغييرات صالحة للحفظ.") });
     if (!snapshot.encryptionKeyConfigured && settings.some((item) => snapshot.fields.find((field) => field.key === item.key)?.isSecret)) {
-      return setNotice({ kind: "error", text: "مفتاح تشفير إعدادات التكاملات غير مضبوط على السيرفر." });
+      return setNotice({ kind: "error", text: dt("مفتاح تشفير إعدادات التكاملات غير مضبوط على السيرفر.") });
     }
     setBusy("save");
     try {
@@ -99,7 +106,7 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
       setDrafts(cleanDrafts(next));
       setDirty(new Set());
       setLastCandidateTest(null);
-      setNotice({ kind: "success", text: "تم حفظ التغييرات بأمان، ويجب اختبار الاتصال قبل اعتمادها." });
+      setNotice({ kind: "success", text: dt("تم حفظ التغييرات بأمان، ويجب اختبار الاتصال قبل اعتمادها.") });
     } catch (error) {
       const e = error as Error & { code?: string };
       setNotice({ kind: "error", text: safeErrorMessage(e.code, e.message) });
@@ -115,7 +122,10 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
       }));
       setLastCandidateTest(body as unknown as SafeProviderConnectionTestResponse);
       await refreshProvider();
-      setNotice({ kind: body.success ? "success" : "error", text: body.success ? "نجح اختبار التغييرات. يمكنك الآن اعتماد الإعدادات." : `${safeErrorMessage(body.failureCode, body.messageAr)} التكوين العامل لم يتغير.` });
+      const success = body.success === true;
+      const failureCode = typeof body.failureCode === "string" ? body.failureCode : undefined;
+      const message = typeof body.messageAr === "string" ? body.messageAr : dt("تعذر تنفيذ العملية.");
+      setNotice({ kind: success ? "success" : "error", text: success ? dt("نجح اختبار التغييرات. يمكنك الآن اعتماد الإعدادات.") : dt("{0} التكوين العامل لم يتغير.", [safeErrorMessage(failureCode, message)]) });
     } catch (error) {
       const e = error as Error & { code?: string };
       setNotice({ kind: "error", text: safeErrorMessage(e.code, e.message) });
@@ -131,7 +141,10 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
       }));
       setLastActiveTest(body as unknown as SafeProviderConnectionTestResponse);
       await refreshProvider();
-      setNotice({ kind: body.success ? "success" : "error", text: body.success ? "نجح فحص الإعدادات الحالية." : safeErrorMessage(body.failureCode, body.messageAr) });
+      const success = body.success === true;
+      const failureCode = typeof body.failureCode === "string" ? body.failureCode : undefined;
+      const message = typeof body.messageAr === "string" ? body.messageAr : dt("تعذر تنفيذ العملية.");
+      setNotice({ kind: success ? "success" : "error", text: success ? dt("نجح فحص الإعدادات الحالية.") : safeErrorMessage(failureCode, message) });
     } catch (error) {
       const e = error as Error & { code?: string };
       setNotice({ kind: "error", text: safeErrorMessage(e.code, e.message) });
@@ -141,9 +154,11 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
   async function activateCandidate() {
     const candidateVersion = snapshot.candidate.version;
     if (!candidateVersion) return;
+    // Activation switches live sending (email/WhatsApp/SMS) to the new settings at once.
+    if (!window.confirm(dt("سيتم تفعيل الإعدادات الجديدة فورًا، وستُرسل كل الرسائل القادمة عبرها. هل تريد المتابعة؟"))) return;
     setBusy("activate");
     try {
-      const body = await json(await fetch(`/api/admin/integration-settings/${active}/activate-candidate`, {
+      await json(await fetch(`/api/admin/integration-settings/${active}/activate-candidate`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ candidateVersion }),
       }));
       const next = await refreshProvider();
@@ -151,7 +166,7 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
       setDirty(new Set());
       setLastCandidateTest(null);
       setWebhookReveal(null);
-      setNotice({ kind: "success", text: "تم اعتماد الإعدادات بنجاح." });
+      setNotice({ kind: "success", text: dt("تم اعتماد الإعدادات بنجاح.") });
     } catch (error) {
       const e = error as Error & { code?: string };
       if (e.code === "CANDIDATE_VERSION_MISMATCH" || e.code === "CANDIDATE_NOT_VERIFIED") await refreshProvider().catch(() => null);
@@ -161,7 +176,7 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
 
   async function discardCandidate() {
     const candidateVersion = snapshot.candidate.version;
-    if (!candidateVersion || !window.confirm("سيتم حذف التغييرات غير المعتمدة، وستظل الإعدادات الحالية تعمل. هل تريد المتابعة؟")) return;
+    if (!candidateVersion || !window.confirm(dt("سيتم حذف التغييرات غير المعتمدة، وستظل الإعدادات الحالية تعمل. هل تريد المتابعة؟"))) return;
     setBusy("discard");
     try {
       await json(await fetch(`/api/admin/integration-settings/${active}/discard-candidate`, {
@@ -172,7 +187,7 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
       setDirty(new Set());
       setLastCandidateTest(null);
       setWebhookReveal(null);
-      setNotice({ kind: "success", text: "تم إلغاء التغييرات، ولم يتأثر التكوين العامل." });
+      setNotice({ kind: "success", text: dt("تم إلغاء التغييرات، ولم يتأثر التكوين العامل.") });
     } catch (error) {
       const e = error as Error & { code?: string };
       setNotice({ kind: "error", text: safeErrorMessage(e.code, e.message) });
@@ -186,9 +201,12 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
     setNotice(null);
     try {
       const body = await json(await fetch(`/api/admin/integration-settings/${active}/webhook-token`, { method: "POST" }));
-      setWebhookReveal({ url: String(body.webhookUrl), candidateVersion: body.candidateVersion ?? null });
+      setWebhookReveal({
+        url: typeof body.webhookUrl === "string" ? body.webhookUrl : "",
+        candidateVersion: typeof body.candidateVersion === "string" ? body.candidateVersion : null,
+      });
       await refreshProvider(active);
-      setNotice({ kind: "success", text: "تم إنشاء رابط جديد بانتظار اعتماد الإعدادات." });
+      setNotice({ kind: "success", text: dt("تم إنشاء رابط جديد بانتظار اعتماد الإعدادات.") });
     } catch (error) {
       const e = error as Error & { code?: string };
       setNotice({ kind: "error", text: safeErrorMessage(e.code, e.message) });
@@ -197,12 +215,12 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
 
   async function deleteField(key: string, label: string) {
     if (active === "SYSTEM") return;
-    if (!window.confirm(`سيتم حذف إعداد «${label}». قد يعود النظام إلى قيمة إعدادات السيرفر إن كانت موجودة. هل تريد المتابعة؟`)) return;
+    if (!window.confirm(dt("سيتم حذف إعداد «{0}». قد يعود النظام إلى قيمة إعدادات السيرفر إن كانت موجودة. هل تريد المتابعة؟", [label]))) return;
     setBusy(`delete:${key}`);
     try {
       await json(await fetch(`/api/admin/integration-settings/${active}`, { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ key, confirm: true }) }));
       await refreshProvider();
-      setNotice({ kind: "success", text: `تم حذف إعداد ${label}.` });
+      setNotice({ kind: "success", text: dt("تم حذف إعداد {0}.", [label]) });
     } catch (error) {
       const e = error as Error & { code?: string };
       setNotice({ kind: "error", text: safeErrorMessage(e.code, e.message) });
@@ -213,16 +231,16 @@ export function useIntegrationSettings(initialProviders: IntegrationUiSnapshot[]
     if (active === "SYSTEM") return;
     const action = snapshot.enabled ? "DISABLE" : "ENABLE";
     const warning = active === "ELASTIC_EMAIL"
-      ? "تعطيل Elastic Email سيوقف كل رسائل البريد الإلكتروني."
+      ? dt("تعطيل Elastic Email سيوقف كل رسائل البريد الإلكتروني.")
       : active === "BREVO"
-        ? "تعطيل Brevo سيوقف SMS للأرقام الدولية."
-        : "تعطيل المزود قد يوقف إرسال الرسائل المرتبطة به.";
-    if (!window.confirm(`${warning} هل تريد المتابعة؟`)) return;
+        ? dt("تعطيل Brevo سيوقف SMS للأرقام الدولية.")
+        : dt("تعطيل المزود قد يوقف إرسال الرسائل المرتبطة به.");
+    if (!window.confirm(dt("{0} هل تريد المتابعة؟", [warning]))) return;
     setBusy("toggle");
     try {
       await json(await fetch(`/api/admin/integration-settings/${active}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) }));
       await refreshProvider();
-      setNotice({ kind: "success", text: action === "ENABLE" ? "تم تفعيل المزود." : "تم تعطيل المزود." });
+      setNotice({ kind: "success", text: action === "ENABLE" ? dt("تم تفعيل المزود.") : dt("تم تعطيل المزود.") });
     } catch (error) {
       const e = error as Error & { code?: string };
       setNotice({ kind: "error", text: safeErrorMessage(e.code, e.message) });

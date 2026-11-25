@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { LOCALE_LABELS } from "@/lib/locales";
 import { type CampaignRow, channelMeta, statusMeta, hasResults, audienceLabel } from "./campaign-ui";
 import { CampaignRowActions } from "./CampaignRowActions";
+import { campaignBlockLabel } from "./CampaignRecoveryDialog";
+import { dashIntl, dt } from "@/lib/dashboard/i18n";
 
 /**
  * The campaign list as a table.
@@ -18,7 +20,7 @@ import { CampaignRowActions } from "./CampaignRowActions";
  * anything. Sorting only makes sense once they are columns, which is the other half of the move.
  */
 
-type SortKey = "name" | "channel" | "status" | "sentCount" | "deliveredCount" | "failedCount" | "date";
+type SortKey = "name" | "channel" | "status" | "sentCount" | "deliveredCount" | "readCount" | "clickedCount" | "repliedCount" | "donationCount" | "revenue" | "failedCount" | "date";
 type SortDir = "asc" | "desc";
 export type CampaignSort = { key: SortKey; dir: SortDir };
 
@@ -27,8 +29,8 @@ function rowDate(c: CampaignRow): { iso: string; label: string; caption: string 
   const iso = c.scheduledAt ?? c.updatedAt;
   return {
     iso,
-    label: new Date(iso).toLocaleDateString("ar-EG", { dateStyle: "medium" }),
-    caption: c.scheduledAt ? "موعد الإرسال" : "آخر تحديث",
+    label: new Date(iso).toLocaleDateString(dashIntl("ar-EG"), { dateStyle: "medium" }),
+    caption: c.scheduledAt ? dt("موعد الإرسال") : dt("آخر تحديث"),
   };
 }
 
@@ -46,7 +48,10 @@ export function sortCampaigns(rows: CampaignRow[], sort: CampaignSort): Campaign
       case "date":
         return (new Date(rowDate(a).iso).getTime() - new Date(rowDate(b).iso).getTime()) * factor;
       default:
-        return (a[sort.key] - b[sort.key]) * factor;
+        // Unavailable financial values stay last in either direction.
+        if (a[sort.key] == null) return b[sort.key] == null ? 0 : 1;
+        if (b[sort.key] == null) return -1;
+        return (a[sort.key]! - b[sort.key]!) * factor;
     }
   });
 }
@@ -68,7 +73,7 @@ function SortHeader({
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        aria-label={`ترتيب حسب ${label}`}
+        aria-label={dt("ترتيب حسب {0}", [label])}
         className={cn(
           "inline-flex items-center gap-1 rounded transition-colors hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand",
           align === "left" ? "flex-row-reverse" : "",
@@ -82,11 +87,11 @@ function SortHeader({
   );
 }
 
-/** A count cell. Campaigns that never went out show a dash — a column of zeros reads as broken. */
-function CountCell({ value, show, tone }: { value: number; show: boolean; tone?: string }) {
+/** A count cell. Campaigns that never went out show a dash  a column of zeros reads as broken. */
+function CountCell({ value, show, tone }: { value: number | null; show: boolean; tone?: string }) {
   return (
-    <td className="whitespace-nowrap px-3 py-2.5 text-left align-middle tabular-nums">
-      {!show ? (
+    <td className="whitespace-nowrap px-3 py-2.5 text-end align-middle tabular-nums">
+      {!show || value == null ? (
         <span className="text-slate-300">—</span>
       ) : (
         <span className={cn("font-semibold", value === 0 ? "text-slate-400" : tone ?? "text-slate-900")}>
@@ -98,9 +103,10 @@ function CountCell({ value, show, tone }: { value: number; show: boolean; tone?:
 }
 
 export function CampaignsTable({
-  campaigns, sort, onSort, onChanged,
+  campaigns, sort, onSort, onChanged, includeFinancials = false,
 }: {
   campaigns: CampaignRow[];
+  includeFinancials?: boolean;
   sort: CampaignSort;
   onSort: (key: SortKey) => void;
   /** Re-fetch the list after a row action changes a campaign's status. */
@@ -110,21 +116,36 @@ export function CampaignsTable({
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="divide-y md:hidden">
+        {campaigns.map(c => { const channel=channelMeta(c.channel), status=statusMeta(c.status);return <article key={c.id} className="space-y-3 p-4">
+          <div className="flex items-start justify-between gap-3"><div className="min-w-0"><Link className="break-words text-sm font-semibold text-slate-900 hover:text-brand" href={`${channel.href}?campaign=${c.id}`}>{c.name}</Link><p className="mt-1 text-xs text-slate-500">{channel.label} · {rowDate(c).label}</p></div><span className={cn("shrink-0 rounded-full border px-2 py-1 text-[10px]",status.tone)}>{status.label}</span></div>
+          {c.status === "BLOCKED" && c.metadata?.lastRun?.blocked ? <p className="text-xs leading-6 text-rose-700">{campaignBlockLabel(c.metadata.lastRun.blocked)}</p> : null}
+          <dl className="grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-xs">{[[dt("أُرسلت"),c.sentCount],[dt("وصلت"),c.deliveredCount],[dt("فشلت"),c.failedCount]].map(([label,value])=><div key={label}><dt className="text-slate-500">{label}</dt><dd className="mt-1 font-semibold tabular-nums">{hasResults(c)?Number(value).toLocaleString("en-US"):"—"}</dd></div>)}</dl>
+          <CampaignRowActions campaign={c} onChanged={onChanged}/>
+        </article>; })}
+      </div>
       {/* Wide content scrolls inside its own container so the page body never scrolls sideways. */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-right text-xs">
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[980px] text-start text-xs">
           <thead>
             {/* Sticky so the numeric columns stay labelled while scrolling a long list. */}
             <tr className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50/90 text-[11px] font-semibold text-slate-500 backdrop-blur">
-              <SortHeader label="الحملة" sortKey="name" sort={sort} onSort={onSort} className="w-full max-w-0 text-right" />
-              <SortHeader label="القناة" sortKey="channel" sort={sort} onSort={onSort} />
-              <SortHeader label="الحالة" sortKey="status" sort={sort} onSort={onSort} />
-              <SortHeader label="أُرسلت" sortKey="sentCount" sort={sort} onSort={onSort} align="left" className="text-left" />
-              <SortHeader label="وصلت" sortKey="deliveredCount" sort={sort} onSort={onSort} align="left" className="text-left" />
-              <SortHeader label="فشلت" sortKey="failedCount" sort={sort} onSort={onSort} align="left" className="text-left" />
-              <SortHeader label="التاريخ" sortKey="date" sort={sort} onSort={onSort} />
-              <th scope="col" className="w-px px-3 py-2.5">
-                <span className="sr-only">إجراءات</span>
+              <SortHeader label={dt("الحملة")} sortKey="name" sort={sort} onSort={onSort} className="min-w-[12rem] text-start" />
+              <SortHeader label={dt("القناة")} sortKey="channel" sort={sort} onSort={onSort} />
+              <SortHeader label={dt("الحالة")} sortKey="status" sort={sort} onSort={onSort} />
+              <SortHeader label={dt("أُرسلت")} sortKey="sentCount" sort={sort} onSort={onSort} align="left" className="text-end" />
+              <SortHeader label={dt("وصلت")} sortKey="deliveredCount" sort={sort} onSort={onSort} align="left" className="text-end" />
+              <SortHeader label={dt("فتح/قرأ")} sortKey="readCount" sort={sort} onSort={onSort} align="left" className="text-end" />
+              <SortHeader label={dt("ضغط")} sortKey="clickedCount" sort={sort} onSort={onSort} align="left" className="text-end" />
+              <SortHeader label={dt("رد")} sortKey="repliedCount" sort={sort} onSort={onSort} align="left" className="text-end" />
+              {includeFinancials ? <>
+              <SortHeader label={dt("تبرعات")} sortKey="donationCount" sort={sort} onSort={onSort} align="left" className="text-end" />
+              <SortHeader label={dt("إيراد $")} sortKey="revenue" sort={sort} onSort={onSort} align="left" className="text-end" />
+              </> : null}
+              <SortHeader label={dt("فشلت")} sortKey="failedCount" sort={sort} onSort={onSort} align="left" className="text-end" />
+              <SortHeader label={dt("التاريخ")} sortKey="date" sort={sort} onSort={onSort} />
+              <th scope="col" className="sticky end-0 z-20 w-px bg-slate-50 px-3 py-2.5 shadow-sm">
+                <span className="sr-only">{dt("إجراءات")}</span>
               </th>
             </tr>
           </thead>
@@ -136,7 +157,7 @@ export function CampaignsTable({
               const showResults = hasResults(c);
               const date = rowDate(c);
               // Straight to the campaign's report on its own channel page. The
-              // separate detail screen this used to open has been removed — it
+              // separate detail screen this used to open has been removed  it
               // showed a summary of numbers the channel page already owns, and
               // its lifecycle buttons now live in the row menu at the end.
               const href = `${ch.href}?campaign=${c.id}`;
@@ -144,10 +165,16 @@ export function CampaignsTable({
               return (
                 <tr
                   key={c.id}
-                  onClick={() => router.push(href)}
+                  onClick={event => {
+                    // React portal events bubble through this row even though the dialog is
+                    // outside the table. Actions must never navigate away from an active send.
+                    const target = event.target as HTMLElement;
+                    if (!event.currentTarget.contains(target) || target.closest("button, a, input, select, textarea, [role='dialog'], [role='alertdialog'], [role='menu']")) return;
+                    router.push(href);
+                  }}
                   className="cursor-pointer border-b border-slate-50 transition-colors last:border-0 hover:bg-slate-50/70"
                 >
-                  <td className="max-w-0 px-3 py-2.5 align-middle">
+                  <td className="min-w-[12rem] max-w-[20rem] px-3 py-2.5 align-middle">
                     <div className="flex items-center gap-2.5">
                       <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-lg", ch.tile)}>
                         <Icon className="h-4 w-4" />
@@ -178,13 +205,35 @@ export function CampaignsTable({
                   </td>
 
                   <td className="whitespace-nowrap px-3 py-2.5 align-middle">
-                    <span className={cn("inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium", st.tone)}>
-                      {st.label}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={cn("inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium", st.tone)}>
+                        {st.label}
+                      </span>
+                      {c.status === "BLOCKED" && c.metadata?.lastRun?.blocked ? <p className="max-w-56 whitespace-normal text-[11px] leading-5 text-rose-700">{campaignBlockLabel(c.metadata.lastRun.blocked)}</p> : null}
+                      {c.metadata?.sendControls?.paused && (
+                        <span className="inline-block rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                          {dt("متوقفة مؤقتًا")}</span>
+                      )}
+                    </div>
                   </td>
 
                   <CountCell value={c.sentCount} show={showResults} />
                   <CountCell value={c.deliveredCount} show={showResults} tone="text-emerald-700" />
+                  <CountCell value={c.readCount} show={showResults} tone="text-sky-700" />
+                  <CountCell value={c.clickedCount} show={showResults} tone="text-violet-700" />
+                  <CountCell value={c.repliedCount} show={showResults} tone="text-amber-700" />
+                  {includeFinancials ? <>
+                  <CountCell value={c.donationCount} show={showResults} tone="text-emerald-700" />
+                  <td className="whitespace-nowrap px-3 py-2.5 text-end align-middle tabular-nums">
+                    {!showResults || c.revenue == null ? (
+                      <span className="text-slate-300">—</span>
+                    ) : (
+                      <span className={cn("font-semibold", c.revenue === 0 ? "text-slate-400" : "text-emerald-700")}>
+                        {c.revenue.toLocaleString("en-US", { maximumFractionDigits: 2 })}{(c.unpricedPaidCount ?? 0) > 0 && <span title={dt("توجد {0} تبرعات دون تحويل مؤكد للدولار.", [c.unpricedPaidCount ?? 0])}> *</span>}
+                      </span>
+                    )}
+                  </td>
+                  </> : null}
                   <CountCell value={c.failedCount} show={showResults} tone="text-rose-700" />
 
                   <td className="whitespace-nowrap px-3 py-2.5 align-middle text-slate-600">
@@ -194,7 +243,7 @@ export function CampaignsTable({
                     </div>
                   </td>
 
-                  <td className="w-px whitespace-nowrap px-3 py-2.5 align-middle">
+                  <td className="sticky end-0 z-10 w-px whitespace-nowrap bg-white px-3 py-2.5 align-middle shadow-sm">
                     <div className="flex items-center justify-end gap-1.5">
                       <CampaignRowActions campaign={c} onChanged={onChanged} />
                     </div>
@@ -208,4 +257,5 @@ export function CampaignsTable({
     </div>
   );
 }
+
 

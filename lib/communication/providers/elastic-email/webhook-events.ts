@@ -48,7 +48,7 @@ const STATUS_BY_EVENT: Record<string, DeliveryStatusId> = {
   failed: "FAILED",
   // A spam complaint is NOT a failure: the message was delivered and then the
   // recipient pressed "report spam". Filing it under FAILED both overstated the
-  // failure count and, worse, produced no consent consequence — so the same
+  // failure count and, worse, produced no consent consequence  so the same
   // donor stayed in every future audience and kept being mailed, which is what
   // damages sender reputation. It is an opt-out, and the strongest kind.
   abusereport: "UNSUBSCRIBED",
@@ -58,7 +58,7 @@ const STATUS_BY_EVENT: Record<string, DeliveryStatusId> = {
   complaint: "UNSUBSCRIBED",
   complained: "UNSUBSCRIBED",
   suppressed: "FAILED",
-  // The pull feed (`GET /v4/events`) spells this one "Suppress", not "Suppressed" — and it is the
+  // The pull feed (`GET /v4/events`) spells this one "Suppress", not "Suppressed"  and it is the
   // event that says "we accepted your message and then refused to deliver it", i.e. exactly the
   // outcome a SENT delivery row is wrong about. Dropping it left those rows reading as successful.
   suppress: "FAILED",
@@ -69,7 +69,7 @@ const STATUS_BY_EVENT: Record<string, DeliveryStatusId> = {
 /**
  * Only events that prove the address is permanently unusable suppress it.
  *
- * A soft bounce (mailbox full, greylisted, temporary DNS) must not — muting a
+ * A soft bounce (mailbox full, greylisted, temporary DNS) must not  muting a
  * donor over a full inbox loses a real recipient permanently. Elastic Email's
  * single "Bounce/Error" checkbox delivers both kinds, so the distinction is made
  * here, on the event name, and an ambiguous plain "bounce" is treated as soft.
@@ -90,6 +90,21 @@ const SUPPRESSION_BY_EVENT: Record<string, EmailSuppressionReason> = {
 
 function normalizeEventKey(event: string): string {
   return event.toLowerCase().replace(/[\s_-]/g, "");
+}
+
+/**
+ * Elastic reports a refused send as a "suppress"/"error" event whose reason is only in the text
+ * (owner audit, 2026-11-18: 1,736 such addresses were never suppressed). Only permanent reasons
+ * suppress; a spam block or a temporary 4.x.x failure is about reputation or timing, not the address.
+ */
+export function suppressionForError(message: string | null | undefined): EmailSuppressionReason {
+  const m = String(message ?? "");
+  if (!m) return "none";
+  if (/status was\W{0,3}unsubscribed/i.test(m)) return "unsubscribe";
+  if (/status was\W{0,3}(abuse|complaint|spam)/i.test(m)) return "complaint";
+  if (/status was\W{0,3}(invalid|bounced|not ?deliverable)/i.test(m)) return "hard-bounce";
+  if (/\b5\.1\.[0-9]\b|user unknown|no such user|account (does not exist|is disabled|has been disabled)|mailbox (not found|does not exist)|recipient address rejected: (user|unknown)/i.test(m)) return "hard-bounce";
+  return "none";
 }
 
 export function suppressionForEvent(event: string | null): EmailSuppressionReason {
@@ -166,7 +181,8 @@ export function normalizeElasticEmailEvents(payload: unknown): NormalizedEmailEv
       errorMessage: status === "FAILED" || status === "BOUNCED" ? pick(raw, ERROR_KEYS) : null,
       occurredAt,
       idempotencyKey: `elastic:${providerMessageId}:${resolvedEvent}:${occurredAt ?? ""}`,
-      suppression: suppressionForEvent(resolvedEvent),
+      suppression: suppressionForEvent(resolvedEvent) !== "none" ? suppressionForEvent(resolvedEvent)
+        : status === "FAILED" || status === "BOUNCED" ? suppressionForError(pick(raw, ERROR_KEYS)) : "none",
     });
   }
   return out;

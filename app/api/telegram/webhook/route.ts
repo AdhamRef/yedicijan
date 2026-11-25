@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTelegramConfig } from "@/lib/telegram/config";
+import { adoptMigratedChat, getTelegramConfig } from "@/lib/telegram/config";
 import { dispatchTelegramCommand } from "@/lib/telegram/commands";
 
 // Bump the Node serverless time budget so cold-start + Prisma connect + a few
@@ -12,11 +12,11 @@ export const maxDuration = 60;
  *
  * Security: we registered the webhook with `secret_token` set. Telegram echoes
  * that value back as `X-Telegram-Bot-Api-Secret-Token` on every call. We
- * compare it before doing anything — that's how we know the caller is really
+ * compare it before doing anything  that's how we know the caller is really
  * Telegram (and not a random script that found this URL).
  *
  * Reliability: on Vercel/serverless, work scheduled with `void promise.then()`
- * after the response is sent gets terminated when the function exits — so
+ * after the response is sent gets terminated when the function exits  so
  * fire-and-forget would intermittently never run. We `await` the dispatcher
  * before responding. Telegram tolerates up to 60s per webhook delivery; our
  * commands complete well under that, even cold. The whole handler is wrapped
@@ -35,9 +35,9 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 }
 
 export async function POST(req: NextRequest) {
-  const cfg = getTelegramConfig();
+  const cfg = await getTelegramConfig();
   if (!cfg) {
-    // Don't reveal that we're misconfigured — just 200 so Telegram backs off.
+    // Don't reveal that we're misconfigured  just 200 so Telegram backs off.
     return NextResponse.json({ ok: true });
   }
 
@@ -72,6 +72,14 @@ export async function POST(req: NextRequest) {
     ? (message.entities as Array<{ type?: string; offset?: number; length?: number }>)
     : null;
 
+  // The service message Telegram posts in a group just upgraded to a
+  // supergroup: carry the old chat's role over to the new id.
+  const migratedFrom = message.migrate_from_chat_id;
+  if (chat?.id != null && (typeof migratedFrom === "number" || typeof migratedFrom === "string")) {
+    await adoptMigratedChat(String(migratedFrom), String(chat.id));
+    return NextResponse.json({ ok: true });
+  }
+
   if (!chat?.id || !text) return NextResponse.json({ ok: true });
 
   const started = Date.now();
@@ -93,7 +101,7 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     // Caught here means the dispatcher threw or hit the 45s safety timeout.
-    // We still respond 200 so Telegram doesn't retry-storm us — the command
+    // We still respond 200 so Telegram doesn't retry-storm us  the command
     // is just considered lost for this delivery.
     console.error(`[telegram webhook] dispatch failed after ${Date.now() - started}ms:`, err, "text:", text.slice(0, 80), "from:", from?.id);
   }

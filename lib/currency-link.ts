@@ -1,4 +1,4 @@
-import { SUPPORTED_CURRENCY_OPTIONS } from "@/lib/supported-currencies";
+import { SUPPORTED_CURRENCY_OPTIONS } from "./supported-currencies";
 
 /** Stable list for dashboards / link builders (DEFAULT first, then same order as `CurrencySelector`). */
 export const URL_CURRENCY_CODES_ORDERED = [
@@ -28,9 +28,14 @@ export function currencyCodeForUrl(cookieValue: string | undefined): string {
  */
 export function getCurrencyCodeForLinks(): string {
   if (typeof document === "undefined") return currencyCodeForUrl(undefined);
-  const match = document.cookie.match(/(?:^|; )currency=([^;]*)/);
-  const raw = match ? decodeURIComponent(match[1]) : undefined;
-  return currencyCodeForUrl(raw);
+  try {
+    const match = document.cookie.match(/(?:^|; )currency=([^;]*)/);
+    const raw = match ? decodeURIComponent(match[1]) : undefined;
+    return currencyCodeForUrl(raw);
+  } catch {
+    // A malformed or inaccessible cookie must not break navigation rendering.
+    return currencyCodeForUrl(undefined);
+  }
 }
 
 export function isValidCurrencyParam(value: string | null | undefined): value is string {

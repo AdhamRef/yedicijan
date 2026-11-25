@@ -1,0 +1,252 @@
+name: Release gates
+
+# The checks that must pass before a change can ship. Each one is a separate job so a failure names
+# itself in the PR list rather than hiding behind "build failed".
+#
+# The fixture build below has no production credentials and performs no live payment or message.
+# Passing it verifies compilation and public styles; VPS activation and provider acceptance are
+# separate release checks.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # tsc over this codebase exceeds Node's default heap and dies with a V8 fatal error part-way
+  # through, which looks exactly like "no errors" to anything reading its output.
+  NODE_OPTIONS: --max-old-space-size=8192
+
+jobs:
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # The Prisma client is generated code that the typecheck reads; without it every model access
+      # is an error.
+      - run: npx prisma generate
+      - run: npx prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Targeted typechecks
+        run: |
+          npm run typecheck:communication-runtime
+          npm run typecheck:integration-release
+          npm run typecheck:content-editor-service
+      - name: Whole-repo typecheck (ratchet)
+        # The baseline file is empty, so this is now simply "no type errors at all". It stays a
+        # ratchet rather than a bare `tsc` so that a deliberately accepted error, if one is ever
+        # added back, has to be recorded rather than silently tolerated.
+        run: npm run typecheck:baseline
+
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      # Fails on any critical finding, and on any increase in the ratcheted ones.
+      - run: npm run lint:ci
+
+  unit:
+    name: Integration-settings suite
+    # Pin Noble to avoid rolling Ubuntu apt-mirror stalls on FFmpeg.
+    runs-on: ubuntu-24.04
+    env:
+      # Prisma validate only needs a syntactically valid datasource URL; source-contract
+      # tests must not depend on a live production/staging database.
+      DATABASE_URL: mongodb://127.0.0.1:27017/minberiaksa_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npx prisma generate --schema prisma/integration-settings.schema.prisma
+      - name: Voice encoder prerequisite
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends ffmpeg
+          fi
+          command -v ffmpeg
+          ffmpeg -hide_banner -version | head -n 1
+      - run: npm run test:integration-settings
+      - name: Content editor and audit regressions
+        run: npm run test:content-editors
+
+  audits:
+    name: i18n and locale audits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run i18n:audit:strict
+      - run: npm run locale:audit:strict
+
+  content-browser:
+    name: Browser · ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Content editors
+            artifact: editors
+            script: scripts/content-editor-browser-test.mjs
+          - name: Major projects and previews
+            artifact: major-projects
+            script: scripts/major-projects-browser-test.mjs
+          - name: Inbox media
+            artifact: inbox-media
+            script: scripts/inbox-media-browser-test.mjs
+          - name: WhatsApp language and purpose
+            artifact: whatsapp-language
+            script: scripts/whatsapp-language-browser-test.mjs
+          - name: Inbox microphone
+            artifact: inbox-microphone
+            script: scripts/inbox-permissions-browser-test.mjs
+          - name: Public media
+            artifact: public-media
+            script: scripts/public-media-browser-test.mjs
+          - name: Dashboard flows
+            artifact: dashboard
+            script: scripts/dashboard-followup-browser-test.mjs
+          - name: Operations and Search
+            artifact: operations
+            script: scripts/operations-review-browser-test.mjs
+          - name: Scheduling and routing
+            artifact: scheduling
+            script: scripts/saudi-mobile-browser-test.mjs
+          - name: Project ordering and donor profile
+            artifact: project-profile-requests
+            script: scripts/project-profile-requests-browser-test.mjs
+          - name: Donor requests and payment cards
+            artifact: donor-management
+            script: scripts/donor-management-browser-test.mjs
+          - name: Donor lifecycle and public content
+            artifact: donor-lifecycle
+            script: scripts/donor-lifecycle-browser-test.mjs
+          - name: Subscription management
+            artifact: subscriptions
+            script: scripts/subscription-management-browser-test.mjs
+          - name: Certificates and saved cards
+            artifact: certificates-saved-cards
+            script: scripts/certificates-saved-cards-browser-test.mjs
+          - name: Bank operations
+            artifact: bank-operations
+            script: scripts/bank-operations-browser-test.mjs
+          - name: Donation experience
+            artifact: donation-experience
+            script: scripts/donation-experience-browser-test.mjs
+          - name: Campaign single operator
+            artifact: campaign-operator
+            script: scripts/brand-campaign-browser-test.mjs
+          - name: Campaign revenue and recovery
+            artifact: campaign-recovery
+            script: scripts/campaign-recovery-browser-test.mjs
+          - name: Search emergency and recovery
+            artifact: google-search-recovery
+            script: scripts/google-search-recovery-browser-test.mjs
+          - name: Subscription card authentication
+            artifact: subscription-card
+            script: scripts/subscription-card-browser-test.mjs
+          - name: Checkout
+            artifact: checkout
+            script: scripts/checkout-readiness-browser-test.mjs
+    env:
+      CONTENT_EDITOR_ARTIFACTS: .artifacts/${{ matrix.artifact }}
+      CAMPAIGNS_ONLY: "1"
+      DATABASE_URL: mongodb://127.0.0.1:27017/minberiaksa_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npx playwright install chromium
+      - name: Run read-only browser fixtures
+        run: node --import tsx ${{ matrix.script }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-${{ matrix.artifact }}
+          path: ${{ env.CONTENT_EDITOR_ARTIFACTS }}/
+          if-no-files-found: error
+          retention-days: 7
+
+
+  # Fail-closed: the previous job ran mutating E2E on main whenever a database
+  # secret or URL existed; that cannot prove this is isolated Staging.
+  # Re-enable only in a separate, reviewed workflow after exact-SHA, DB role,
+  # process/PM2, egress and GitHub Environment attestation is in place.
+  e2e:
+    name: Connected E2E — blocked until approved Staging isolation
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "CONNECTED_E2E_DISABLED_STAGING_ATTESTATION_REQUIRED"
+
+  fixture-build:
+    name: Production build and public style fixtures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      DATABASE_URL: mongodb://127.0.0.1:27018/minberi_fixture?serverSelectionTimeoutMS=500&connectTimeoutMS=500
+      GOOGLE_CLIENT_ID: fixture-client
+      GOOGLE_CLIENT_SECRET: fixture-secret
+      NEXTAUTH_SECRET: fixture-auth-build-secret
+      NEXTAUTH_URL: http://127.0.0.1:3106
+      STRIPE_SECRET_KEY: sk_test_fixture_no_network
+      CONTENT_EDITOR_ARTIFACTS: .artifacts/public-build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Staging build and connected E2E fail-closed guard
+        run: node --test tests/release/production-staging-boundary.test.mjs
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npx prisma generate --schema prisma/integration-settings.schema.prisma
+      - run: npm run preflight:release-metadata
+      # Deliberately bypass the package build's post-build production index writes.
+      - run: npx --no-install next build
+      - run: npx playwright install chromium
+      - run: node --import tsx scripts/public-style-build-test.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-build-fixtures
+          path: .artifacts/public-build/
+          retention-days: 7

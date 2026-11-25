@@ -5,7 +5,7 @@ import { VARIABLE_CATALOG } from "./variables";
  *
  * Template editors need to show what a message will look like once merged, but must never reach
  * for a real donor to do it. Deriving the sample from `VARIABLE_CATALOG` means a newly added
- * variable gets a sensible preview value for free — and, more importantly, that every editor
+ * variable gets a sensible preview value for free  and, more importantly, that every editor
  * previews against the *same* values, so two channels can be compared side by side.
  *
  * Extracted from the WhatsApp editor when SMS needed the same thing; it is preview-only data and
@@ -54,6 +54,19 @@ export const SAMPLE_TEMPLATE_CONTEXT = (() => {
         ],
       },
     ],
+    subscription: { id: "sample-subscription", frequency: "DAILY" as const, frequencyLabel: get("subscription.frequencyLabel"), amount: get("subscription.amount"), currency: get("subscription.currency"), nextBillingDate: get("subscription.nextBillingDate") },
+    update: {
+      title: get("update.title"),
+      description: get("update.description"),
+      image: get("update.image"),
+      videoUrl: get("update.videoUrl"),
+      videoThumbnail: get("update.videoThumbnail"),
+      cover: get("update.cover"),
+      date: get("update.date"),
+      campaignTitle: get("update.campaignTitle"),
+      url: get("update.url"),
+      donateUrl: get("update.donateUrl"),
+    },
     totals: {
       count: get("totals.count"),
       amountUSD: get("totals.amountUSD"),
@@ -61,10 +74,17 @@ export const SAMPLE_TEMPLATE_CONTEXT = (() => {
     },
     donation: {
       id: "sample-1",
-      amount: get("amount"),
-      amountUSD: get("amountUSD"),
-      currency: get("currency"),
-      totalAmount: get("amount"),
+      amount: get("donation.amount"),
+      amountUSD: get("donation.amountUSD"),
+      currency: get("donation.currency"),
+      totalAmount: get("donation.totalAmount"),
+      projectsAmount: get("donation.projectsAmount"),
+      teamSupport: get("donation.teamSupport"),
+      fees: get("donation.fees"),
+      amountBreakdown: get("donation.amountBreakdown"),
+      notificationAmount: "الإجمالي: 55 (المشاريع: 50; دعم الفريق: 5)",
+      receiptSummary: get("donation.receiptSummary"),
+      displayDate: get("donation.displayDate"),
       status: "PAID",
       createdAt: get("createdAt"),
       campaignTitle: get("campaignTitle"),
