@@ -9917,5 +9917,11 @@
   "مرّت أكثر من 24 ساعة على آخر رسالة من المتبرع، فقواعد واتساب لا تسمح بالرد الحر. يمكن مراسلته بقالب معتمد من صفحة الحملات.": "More than 24 hours have passed since the donor's last message, so WhatsApp rules do not allow a free reply. You can message them with an approved template from the campaigns page.",
   "نافذة الرد مغلقة": "Reply window closed",
   "نافذة الرد مفتوحة: متبقٍّ {0}": "Reply window open: {0} left",
-  "هذا المتبرع طلب عدم التواصل.": "This donor asked not to be contacted."
+  "هذا المتبرع طلب عدم التواصل.": "This donor asked not to be contacted.",
+  "كل المصادر": "All sources",
+  "فيسبوك": "Facebook",
+  "إنستغرام": "Instagram",
+  "إعلانات Google": "Google Ads",
+  "بحث Google": "Google Search",
+  "تيك توك": "TikTok"
 }
