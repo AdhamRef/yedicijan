@@ -9944,5 +9944,7 @@
   "تعذّر إرسال القالب.": "Could not send the template.",
   "هذا القالب يحتاج بيانات غير موجودة في المحادثة (مثل تفاصيل تبرع). اختر قالباً آخر.": "This template needs data a conversation does not have (such as donation details). Choose another template.",
   "هذا القالب غير معتمد لدى Meta لهذا الرقم.": "This template is not approved by Meta for this number.",
-  "هذا المتبرع أوقف الرسائل التسويقية؛ يمكن إرسال قالب خدمي فقط.": "This donor stopped marketing messages; only a service template can be sent."
+  "هذا المتبرع أوقف الرسائل التسويقية؛ يمكن إرسال قالب خدمي فقط.": "This donor stopped marketing messages; only a service template can be sent.",
+  "محادثة واتساب": "WhatsApp conversation",
+  "عضو مسجّل: للمتبرع حساب مفعّل على الموقع.": "Registered member: this donor has an active account on the site."
 }

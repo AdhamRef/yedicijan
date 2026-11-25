@@ -9865,5 +9865,7 @@
   "تعذّر إرسال القالب.": "Şablon gönderilemedi.",
   "هذا القالب يحتاج بيانات غير موجودة في المحادثة (مثل تفاصيل تبرع). اختر قالباً آخر.": "Bu şablon konuşmada bulunmayan veriler istiyor (bağış ayrıntıları gibi). Başka bir şablon seçin.",
   "هذا القالب غير معتمد لدى Meta لهذا الرقم.": "Bu şablon bu numara için Meta tarafından onaylanmamış.",
-  "هذا المتبرع أوقف الرسائل التسويقية؛ يمكن إرسال قالب خدمي فقط.": "Bu bağışçı pazarlama mesajlarını durdurdu; yalnızca hizmet şablonu gönderilebilir."
+  "هذا المتبرع أوقف الرسائل التسويقية؛ يمكن إرسال قالب خدمي فقط.": "Bu bağışçı pazarlama mesajlarını durdurdu; yalnızca hizmet şablonu gönderilebilir.",
+  "محادثة واتساب": "WhatsApp konuşması",
+  "عضو مسجّل: للمتبرع حساب مفعّل على الموقع.": "Kayıtlı üye: bu bağışçının sitede aktif bir hesabı var."
 }
