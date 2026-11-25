@@ -9855,5 +9855,15 @@
   "عنوان الرد": "Yanıt başlığı",
   "حفظ كرد جاهز": "Hazır yanıt olarak kaydet",
   "الردود الجاهزة": "Hazır yanıtlar",
-  "تفاصيل تقنية:": "Teknik ayrıntılar:"
+  "تفاصيل تقنية:": "Teknik ayrıntılar:",
+  "مرّت أكثر من 24 ساعة على آخر رسالة من المتبرع، فقواعد واتساب لا تسمح بالرد الحر. أرسل قالباً معتمداً لبدء المحادثة من جديد.": "Bağışçının son mesajının üzerinden 24 saatten fazla geçti; WhatsApp kuralları serbest yanıta izin vermez. Konuşmayı yeniden başlatmak için onaylı bir şablon gönderin.",
+  "إرسال قالب معتمد": "Onaylı şablon gönder",
+  "القوالب المعتمدة": "Onaylı şablonlar",
+  "لا قوالب معتمدة متاحة لهذا الرقم.": "Bu numara için onaylı şablon yok.",
+  "تعذّر تحميل القوالب.": "Şablonlar yüklenemedi.",
+  "إرسال القالب «{0}» إلى {1}؟": "“{0}” şablonu {1} kişisine gönderilsin mi?",
+  "تعذّر إرسال القالب.": "Şablon gönderilemedi.",
+  "هذا القالب يحتاج بيانات غير موجودة في المحادثة (مثل تفاصيل تبرع). اختر قالباً آخر.": "Bu şablon konuşmada bulunmayan veriler istiyor (bağış ayrıntıları gibi). Başka bir şablon seçin.",
+  "هذا القالب غير معتمد لدى Meta لهذا الرقم.": "Bu şablon bu numara için Meta tarafından onaylanmamış.",
+  "هذا المتبرع أوقف الرسائل التسويقية؛ يمكن إرسال قالب خدمي فقط.": "Bu bağışçı pazarlama mesajlarını durdurdu; yalnızca hizmet şablonu gönderilebilir."
 }
