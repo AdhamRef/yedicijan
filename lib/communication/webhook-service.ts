@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { markDeliveryStatus } from "./delivery-log-service";
+import { normalizePhoneE164 } from "./phone";
 import type { NormalizedWebhookEvent } from "./providers/meta-whatsapp/types";
 
 /**
@@ -58,6 +59,12 @@ async function recordEvent(data: {
     console.error("recordEvent failed", error);
     return false;
   }
+}
+
+function messageEventTime(timestamp: number | null): Date {
+  const now = Date.now();
+  const milliseconds = timestamp === null ? NaN : timestamp * 1000;
+  return new Date(Number.isFinite(milliseconds) && milliseconds > 0 && milliseconds <= now + 300_000 ? milliseconds : now);
 }
 
 export async function processWhatsappEvents(events: NormalizedWebhookEvent[]): Promise<WebhookProcessSummary> {
@@ -128,6 +135,11 @@ export async function processWhatsappEvents(events: NormalizedWebhookEvent[]): P
     }
     summary.processed += 1;
     summary.inbound += 1;
+    // Inbox conversation layer (language tab, unread, ordering). Lazy and fail-safe: never blocks receiving.
+    const contact = normalizePhoneE164(event.from) ?? event.from;
+    if (contact) void import("./inbox-conversations")
+      .then((m) => m.touchInbound({ senderId, phone: contact, text: event.text ?? (event.messageType ? `[${event.messageType}]` : null), profileName: event.profileName ?? null, at: messageEventTime(event.timestamp) }))
+      .catch(() => undefined);
 
     // Mark the most recent outbound delivery to this contact as REPLIED (best-effort).
     if (event.from) {
