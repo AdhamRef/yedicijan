@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { publicOrigin } from "@/lib/public-origin";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 // Donate (success) CAPI now fires server-side from `dispatchDonationPaid`
 // the moment the donation flips to PAID — that's the only path that
 // reliably catches donors whose browser never returns from 3DS (mobile
@@ -12,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 // get the signal on bank rejects.
 import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversion-server";
 import { dispatchDonationPaid, dispatchEvent } from "@/lib/events/dispatch";
+import { PAYFOR_UNVERIFIED_APPROVAL, verifyPayForRequestEcho, verifyPayForResponseHash } from "@/lib/payfor";
 
 export async function POST(req: NextRequest) {
   const origin = publicOrigin(req);
@@ -50,6 +52,16 @@ export async function POST(req: NextRequest) {
 
       // Idempotency: if already confirmed by a prior callback, just redirect to success
       if (donation.paidAt !== null) return { ok: true as const };
+
+      /* Nothing changes without proof the callback is genuine and about this donation: the bank's
+         signature, or our own request signature echoed back (3D-stage failures carry only that).
+         A forged POST is ignored and the donor simply sees the failure page (Minber #253). */
+      const genuine = (orderId === donation.id || (!!donation.providerOrderId && orderId === donation.providerOrderId))
+        && (verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS) || verifyPayForRequestEcho(raw, process.env.PAYFOR_MERCHANT_PASS));
+      if (!genuine) {
+        console.error("[PayFor OK] callback not authenticated; donation left unchanged", { donationId: donation.id, procReturnCode });
+        return { ok: false as const, reason: "unverified" as const };
+      }
 
       // Basic linkage check
       if (donation.providerOrderId && orderId && donation.providerOrderId !== orderId) {
@@ -103,6 +115,19 @@ export async function POST(req: NextRequest) {
           },
         });
         return { ok: false as const, reason: "failed" as const };
+      }
+
+      /* An approval only counts when the bank signed it. Our own request signature (accepted above)
+         is visible in the donor's browser, so it is not proof of payment. A "00" that fails the bank's
+         hash leaves the donation unconfirmed (never FAILED, so a genuine charge can still be reconciled
+         by hand) and the response is kept for that check. */
+      if (!verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS)) {
+        console.error("[PayFor OK] ResponseHash did not verify; donation left unconfirmed", { donationId: donation.id, procReturnCode });
+        await tx.donation.update({
+          where: { id: donation.id },
+          data: { providerErrorMessage: PAYFOR_UNVERIFIED_APPROVAL, providerRaw: raw as unknown as Prisma.InputJsonValue },
+        });
+        return { ok: false as const, reason: "unverified" as const };
       }
 
       await tx.donation.update({
