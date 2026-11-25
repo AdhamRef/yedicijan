@@ -9867,5 +9867,16 @@
   "هذا القالب غير معتمد لدى Meta لهذا الرقم.": "Bu şablon bu numara için Meta tarafından onaylanmamış.",
   "هذا المتبرع أوقف الرسائل التسويقية؛ يمكن إرسال قالب خدمي فقط.": "Bu bağışçı pazarlama mesajlarını durdurdu; yalnızca hizmet şablonu gönderilebilir.",
   "محادثة واتساب": "WhatsApp konuşması",
-  "عضو مسجّل: للمتبرع حساب مفعّل على الموقع.": "Kayıtlı üye: bu bağışçının sitede aktif bir hesabı var."
+  "عضو مسجّل: للمتبرع حساب مفعّل على الموقع.": "Kayıtlı üye: bu bağışçının sitede aktif bir hesabı var.",
+  "حالة التواصل": "İletişim durumu",
+  "طلب المتبرع عدم التواصل نهائياً": "Bağışçı hiç iletişim kurulmamasını istedi",
+  "لا رقم هاتف": "Telefon numarası yok",
+  "أوقف الرسائل التسويقية": "Pazarlama mesajlarını durdurdu",
+  "الرقم لا يستقبل واتساب ({0} محاولة فاشلة)": "Numara WhatsApp almıyor ({0} başarısız deneme)",
+  "يستقبل": "Alıyor",
+  "لا بريد": "E-posta yok",
+  "ألغى الاشتراك": "Abonelikten çıktı",
+  "بريد مرتجع (لا يصل)": "Geri döndü (ulaşmıyor)",
+  "أبلغ عن رسالة كمزعجة": "Bir mesajı spam olarak bildirdi",
+  "الرسائل الخدمية (الإيصالات والشهادات) تصل رغم إيقاف التسويق، إلا عند طلب عدم التواصل.": "Hizmet mesajları (makbuz, sertifika) pazarlama durdurulsa da ulaşır; bağışçı hiç iletişim istemediyse ulaşmaz."
 }

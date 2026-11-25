@@ -9946,5 +9946,16 @@
   "هذا القالب غير معتمد لدى Meta لهذا الرقم.": "This template is not approved by Meta for this number.",
   "هذا المتبرع أوقف الرسائل التسويقية؛ يمكن إرسال قالب خدمي فقط.": "This donor stopped marketing messages; only a service template can be sent.",
   "محادثة واتساب": "WhatsApp conversation",
-  "عضو مسجّل: للمتبرع حساب مفعّل على الموقع.": "Registered member: this donor has an active account on the site."
+  "عضو مسجّل: للمتبرع حساب مفعّل على الموقع.": "Registered member: this donor has an active account on the site.",
+  "حالة التواصل": "Contact status",
+  "طلب المتبرع عدم التواصل نهائياً": "The donor asked not to be contacted at all",
+  "لا رقم هاتف": "No phone number",
+  "أوقف الرسائل التسويقية": "Stopped marketing messages",
+  "الرقم لا يستقبل واتساب ({0} محاولة فاشلة)": "Number does not receive WhatsApp ({0} failed attempts)",
+  "يستقبل": "Receives",
+  "لا بريد": "No e-mail",
+  "ألغى الاشتراك": "Unsubscribed",
+  "بريد مرتجع (لا يصل)": "Bounced (not delivered)",
+  "أبلغ عن رسالة كمزعجة": "Reported a message as spam",
+  "الرسائل الخدمية (الإيصالات والشهادات) تصل رغم إيقاف التسويق، إلا عند طلب عدم التواصل.": "Service messages (receipts, certificates) still arrive after a marketing stop, unless the donor asked not to be contacted."
 }
