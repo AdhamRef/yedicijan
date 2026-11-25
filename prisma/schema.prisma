@@ -503,6 +503,8 @@ model Donation {
 
   /// UTM/ads/GA/Meta snapshot from client at checkout (JSON). Server conversions use the same donation id as event_id.
   attribution            Json?
+  /// Classified donation source (lib/attribution/source-channel.ts), set by /api/cron/donation-source.
+  sourceChannel          String?
   /// Set when Meta CAPI + GA4 MP "Donate" success events were sent for this row (idempotent).
   conversionEventsSentAt  DateTime?
   /// Set when Meta CAPI "DonateFailed" event was sent for this row (idempotent). Feeds lookalike audiences for almost-donors.

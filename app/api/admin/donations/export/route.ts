@@ -1,3 +1,4 @@
+import { donationSourceWhere } from "@/lib/dashboard/donation-source-filter";
 /**
  * GET /api/admin/donations/export
  *
@@ -81,6 +82,8 @@ export async function GET(request: NextRequest) {
     }
 
     const filters: Prisma.DonationWhereInput[] = [baseWhere];
+    const sourceFilter = donationSourceWhere(sp.get("source"));
+    if (sourceFilter) filters.push(sourceFilter);
     if (locale && locale !== "all") {
       filters.push(
         locale === "__unset"

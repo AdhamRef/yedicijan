@@ -1,5 +1,6 @@
 "use client";
 
+import { dt } from "@/lib/dashboard/i18n";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useLocale } from "next-intl";
 import Link from "next/link";
@@ -318,6 +319,7 @@ export default function DashboardPage() {
     "all" | "ar" | "en" | "fr" | "tr" | "id" | "pt" | "es" | "de" | "__unset"
   >("all");
   const [donationCountryFilter, setDonationCountryFilter] = useState<string>("all");
+  const [donationSourceFilter, setDonationSourceFilter] = useState("all");
   const [countryOptions, setCountryOptions] = useState<{ code: string; count: number }[]>([]);
   const [countryUnsetCount, setCountryUnsetCount] = useState(0);
 
@@ -453,6 +455,7 @@ export default function DashboardPage() {
     setChartLoading(true);
     try {
       const params = new URLSearchParams();
+      if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
       params.set("period", chartPeriod);
       // Compute the explicit Istanbul date range for every preset (not just
       // custom) so the chart endpoint uses the same calendar semantics as the
@@ -478,7 +481,7 @@ export default function DashboardPage() {
     } finally {
       setChartLoading(false);
     }
-  }, [selectedCategory, selectedCampaign, selectedUserId, searchParams, chartPeriod, dateFrom, dateTo, showFailed, donationLocaleFilter, donationCountryFilter]);
+  }, [selectedCategory, selectedCampaign, selectedUserId, searchParams, chartPeriod, dateFrom, dateTo, showFailed, donationLocaleFilter, donationCountryFilter, donationSourceFilter]);
 
   useEffect(() => {
     fetchChartData();
@@ -525,6 +528,7 @@ export default function DashboardPage() {
       try {
         const { start, end } = getDonationsDateRange(chartPeriod, dateFrom, dateTo);
         const params = new URLSearchParams();
+        if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
         params.set("page", String(page));
         params.set("limit", String(PAGE_SIZE));
         params.set("sortBy", donationsSortBy);
@@ -567,6 +571,7 @@ export default function DashboardPage() {
       donationsStatusFilter,
       donationLocaleFilter,
       donationCountryFilter,
+      donationSourceFilter,
       donationsSearch,
     ]
   );
@@ -576,7 +581,7 @@ export default function DashboardPage() {
     if (loading) return;
     setDonationsPage(1);
     fetchDonations(1, false);
-  }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationLocaleFilter, donationCountryFilter, donationsSearch, fetchDonations]);
+  }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationLocaleFilter, donationCountryFilter, donationsSearch, fetchDonations, donationSourceFilter]);
 
   const loadMoreDonations = () => {
     const next = donationsPage + 1;
@@ -1392,6 +1397,16 @@ export default function DashboardPage() {
                       التبرعات عبر الزمن
                     </TabsTrigger>
                   </TabsList>
+                  <Select value={chartView} onValueChange={(v) => setChartView(v as ChartViewType)}>
+                    <SelectTrigger className="h-8 w-[120px] px-2 text-xs rounded-lg border-slate-200 bg-white" aria-label={dt("نوع الرسم")}>
+                      <SelectValue placeholder={dt("نوع الرسم")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bar" className="text-xs">{dt("أعمدة")}</SelectItem>
+                      <SelectItem value="line" className="text-xs">{dt("خط")}</SelectItem>
+                      <SelectItem value="area" className="text-xs">{dt("منطقة")}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {chartView === "bar" && chartMetric === "amount" && (
                     <button
                       type="button"
@@ -1630,19 +1645,26 @@ export default function DashboardPage() {
     </Select>
   </div>
 
-  {/* Chart Type */}
-  <div className="space-y-1 text-right">
+  {/* Donation source (classified attribution) */}
+  <div className="space-y-1 text-start">
     <label className="text-[11px] font-semibold text-slate-600">
-      نوع الرسم
-    </label>
-    <Select value={chartView} onValueChange={(v) => setChartView(v as ChartViewType)}>
+      {dt("مصدر التبرع")}</label>
+    <Select value={donationSourceFilter} onValueChange={setDonationSourceFilter}>
       <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر النوع" />
+        <SelectValue placeholder={dt("كل المصادر")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="bar" className="text-xs">أعمدة</SelectItem>
-        <SelectItem value="line" className="text-xs">خط</SelectItem>
-        <SelectItem value="area" className="text-xs">منطقة</SelectItem>
+        <SelectItem value="all" className="text-xs">{dt("كل المصادر")}</SelectItem>
+        <SelectItem value="facebook" className="text-xs">{dt("فيسبوك")}</SelectItem>
+        <SelectItem value="instagram" className="text-xs">{dt("إنستغرام")}</SelectItem>
+        <SelectItem value="whatsapp" className="text-xs">{dt("واتساب")}</SelectItem>
+        <SelectItem value="email" className="text-xs">{dt("البريد الإلكتروني")}</SelectItem>
+        <SelectItem value="google_ads" className="text-xs">{dt("إعلانات Google")}</SelectItem>
+        <SelectItem value="google_search" className="text-xs">{dt("بحث Google")}</SelectItem>
+        <SelectItem value="tiktok" className="text-xs">{dt("تيك توك")}</SelectItem>
+        <SelectItem value="direct" className="text-xs">{dt("مباشر")}</SelectItem>
+        <SelectItem value="other" className="text-xs">{dt("أخرى")}</SelectItem>
+        <SelectItem value="unknown" className="text-xs">{dt("غير معروف")}</SelectItem>
       </SelectContent>
     </Select>
   </div>
