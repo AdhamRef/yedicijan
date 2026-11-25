@@ -1,7 +1,7 @@
 import type { SupportedLocale } from "../locales";
 
 export const RECEIPT_BRANDS: Record<SupportedLocale, string> = {
-  ar: "مؤسسة منبر الأقصى الدولية", tr: "Uluslararası Minberi Aksâ Derneği", en: "Minberi Aksa International Association",
+  ar: "جمعية يدي جيهان", tr: "Yedicihan Derneği", en: "Yedicihan Relief & Solidarity Association",
   fr: "Association internationale Minberi Aksa", de: "Internationaler Verein Minberi Aksa", es: "Asociación Internacional Minberi Aksa",
   id: "Asosiasi Internasional Minberi Aksa", pt: "Associação Internacional Minberi Aksa", ur: "بین الاقوامی منبر اقصیٰ تنظیم",
   sq: "Shoqata Ndërkombëtare Minberi Aksa", it: "Associazione Internazionale Minberi Aksa", nl: "Internationale Vereniging Minberi Aksa",

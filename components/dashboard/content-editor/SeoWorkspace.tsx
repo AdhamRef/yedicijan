@@ -118,7 +118,7 @@ export function SeoWorkspace({
             <h3 className="mb-4 font-semibold">
               {dt("معاينة Google ·")} {locale.toUpperCase()}
             </h3>
-            <p dir="ltr" className="mb-2 text-start text-xs text-slate-500">minberiaksa.org</p>
+            <p dir="ltr" className="mb-2 text-start text-xs text-slate-500">yedicihan.org</p>
             <p className="max-w-2xl break-words text-xl text-blue-800">{title}</p>
             <p className="mt-2 max-w-2xl break-words text-sm leading-7 text-slate-600">
               {publishedDescription || dt("أضف وصف نتيجة البحث")}

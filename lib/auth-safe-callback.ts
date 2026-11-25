@@ -1,4 +1,4 @@
-const ORIGIN = "https://minberiaksa.org";
+const ORIGIN = "https://www.yedicihan.org";
 /** Only a same-origin local path may leave the authentication error page. */
 export function safeAuthCallback(raw: unknown, locale = "ar"): string {
  const fallback = `/${locale}/checkout`;

@@ -604,7 +604,7 @@ export function WhatsappTemplateEditorDialog({ initialKind, id, open, onOpenChan
       buttons: [
         ...current.buttons,
         type === "URL"
-          ? { type, text: dt("زيارة الموقع"), url: "https://minberiaksa.org" }
+          ? { type, text: dt("زيارة الموقع"), url: "https://www.yedicihan.org" }
           : type === "PHONE_NUMBER"
             ? { type, text: dt("اتصل بنا"), phoneNumber: "+90" }
             : { type, text: dt("رد سريع") },

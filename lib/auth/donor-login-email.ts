@@ -3,8 +3,8 @@ export function donorLoginEmail(code: string, locale: string, loginUrl?: string)
   if (!/^\d{6}$/.test(code)) throw new Error("INVALID_CODE");
   const ar = locale.toLowerCase().split(/[-_]/)[0] === "ar";
   const copy = ar ? {
-    subject: "رمز الدخول إلى حسابك — منبر الأقصى",
-    title: "أهلًا بك في منبر الأقصى",
+    subject: "رمز الدخول إلى حسابك — يدي جيهان",
+    title: "أهلًا بك في يدي جيهان",
     intro: "استخدم الرمز التالي للدخول إلى حسابك أو تفعيله لأول مرة.",
     label: "رمز تسجيل الدخول",
     expiry: "صالح لمدة 10 دقائق",
@@ -12,10 +12,10 @@ export function donorLoginEmail(code: string, locale: string, loginUrl?: string)
     security: "لا تشارك هذا الرمز مع أي شخص.",
     ignore: "إذا لم تطلب هذا الرمز، يمكنك تجاهل هذه الرسالة.",
     button: "فتح صفحة الدخول وتفعيل الحساب",
-    footer: "منبر الأقصى · حساب المتبرع",
+    footer: "يدي جيهان · حساب المتبرع",
   } : {
-    subject: "Your Minber Al-Aqsa sign-in code",
-    title: "Welcome to Minber Al-Aqsa",
+    subject: "Your Yedicihan sign-in code",
+    title: "Welcome to Yedicihan",
     intro: "Use this code to sign in or activate your donor account for the first time.",
     label: "Your sign-in code",
     expiry: "Valid for 10 minutes",
@@ -23,14 +23,14 @@ export function donorLoginEmail(code: string, locale: string, loginUrl?: string)
     security: "Do not share this code with anyone.",
     ignore: "If you did not request this code, you can ignore this email.",
     button: "Open sign in and activate your account",
-    footer: "Minber Al-Aqsa · Donor account",
+    footer: "Yedicihan · Donor account",
   };
   const escape = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   let invitation = "";
   if (loginUrl) {
     try {
       const target = new URL(loginUrl);
-      const configured = new URL(process.env.NEXTAUTH_URL || "https://minberiaksa.org");
+      const configured = new URL(process.env.NEXTAUTH_URL || "https://www.yedicihan.org");
       if (target.origin === configured.origin && ["https:", "http:"].includes(target.protocol)) invitation = target.href;
     } catch { /* Never turn an invalid URL into an email action. */ }
   }
@@ -42,7 +42,7 @@ export function donorLoginEmail(code: string, locale: string, loginUrl?: string)
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f5f3ef"><tr><td align="center" style="padding:28px 12px">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" bgcolor="#ffffff" style="width:100%;max-width:560px;border:1px solid #e6e1d9;border-radius:18px;overflow:hidden">
 <tr><td height="7" bgcolor="#892e3c" style="height:7px;font-size:0;line-height:0">&nbsp;</td></tr>
-<tr><td align="center" style="padding:28px 24px 20px;border-bottom:1px solid #f0ece5"><a href="https://minberiaksa.org" style="text-decoration:none"><img src="https://minberiaksa.org/minbar/assets/logo-horizontal.png" width="220" alt="منبر الأقصى — Minber Al-Aqsa" style="display:block;width:220px;max-width:100%;height:auto;border:0"></a></td></tr>
+<tr><td align="center" style="padding:28px 24px 20px;border-bottom:1px solid #f0ece5"><a href="https://www.yedicihan.org" style="text-decoration:none"><img src="https://www.yedicihan.org/yedicijan_logo.png" width="220" alt="يدي جيهان — Yedicihan" style="display:block;width:220px;max-width:100%;height:auto;border:0"></a></td></tr>
 <tr><td align="center" style="padding:28px 28px 8px"><h1 style="margin:0;font-size:22px;line-height:1.6;font-weight:700;color:#243f4d">${copy.title}</h1></td></tr>
 <tr><td align="center" style="padding:0 28px 22px;font-size:15px;line-height:1.9;color:#647176">${copy.intro}</td></tr>
 <tr><td align="center" style="padding:0 28px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#faf5e9" style="border:1px solid #e6d4ad;border-radius:12px">
@@ -52,7 +52,7 @@ export function donorLoginEmail(code: string, locale: string, loginUrl?: string)
 <tr><td align="center" style="padding:20px 28px 12px;font-size:14px;line-height:1.9;color:#647176">${copy.instruction}</td></tr>
 ${action}
 <tr><td align="center" style="padding:6px 28px 22px;font-size:13px;line-height:1.9;color:#892e3c">${copy.security}</td></tr>
-<tr><td align="center" style="padding:20px 28px;border-top:1px solid #f0ece5;background:#fcfbf8;font-size:12px;line-height:1.9;color:#7b8588">${copy.ignore}<br>${copy.footer}<br><a href="https://minberiaksa.org" style="color:#892e3c;text-decoration:none">minberiaksa.org</a></td></tr>
+<tr><td align="center" style="padding:20px 28px;border-top:1px solid #f0ece5;background:#fcfbf8;font-size:12px;line-height:1.9;color:#7b8588">${copy.ignore}<br>${copy.footer}<br><a href="https://www.yedicihan.org" style="color:#892e3c;text-decoration:none">yedicihan.org</a></td></tr>
 </table></td></tr></table></body></html>`;
   const text = [copy.subject, copy.intro, copy.label + ": " + code, copy.expiry, copy.instruction, copy.security, invitation, copy.ignore].filter(Boolean).join("\n\n");
   return { subject: copy.subject, html, text };

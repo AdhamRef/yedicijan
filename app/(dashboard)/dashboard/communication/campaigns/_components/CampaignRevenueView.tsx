@@ -9,7 +9,7 @@ import {channelMeta,type CampaignRow} from "./campaign-ui";
 export function CampaignRevenueView({campaigns,ready,onTemplate}:{campaigns:CampaignRow[];ready:boolean;onTemplate:(id:string)=>void}) {
  const [copied,setCopied]=useState("");
  const copyLink=async(campaign:CampaignRow)=>{
-  const url=new URL("https://minberiaksa.org/ar/bagislar");
+  const url=new URL("https://www.yedicihan.org/ar/bagislar");
   for(const [key,value] of Object.entries({utm_source:campaign.channel.toLowerCase(),utm_medium:"communication",utm_campaign:campaign.id,utm_id:campaign.id}))url.searchParams.set(key,value);
   try{await navigator.clipboard.writeText(url.toString());setCopied(campaign.id);}catch{setCopied("failed");}
  };

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { certificateParameterSlots, certificateParameterOverrides, hasUnsupportedWaqfDonationButton } from "../templates/donation-link-parameters";
 
 export async function donationTemplateValues(input:{componentsSchema:unknown;scopedNames:Record<string,string>;values:Record<string,string|null|undefined>;donationId?:string|null;recipientUserId?:string|null}):Promise<{ok:true;values:Record<string,string|null|undefined>}|{ok:false;reason:string}>{
-  const trustedOrigin=process.env.NEXT_PUBLIC_SITE_URL || "https://minberiaksa.org";
+  const trustedOrigin=process.env.NEXT_PUBLIC_SITE_URL || "https://www.yedicihan.org";
   if(hasUnsupportedWaqfDonationButton(input.componentsSchema,input.scopedNames,trustedOrigin)){
     return{ok:false,reason:"DONATION_WAQF_LINK_REQUIRES_CERTIFICATE_ID"};
   }

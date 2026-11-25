@@ -49,7 +49,7 @@ async function getJson(url: string): Promise<Record<string, unknown> | null> {
     const res = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json", "User-Agent": "minberiaksa-geo/1.0" },
+      headers: { Accept: "application/json", "User-Agent": "yedicihan-geo/1.0" },
     });
     if (!res.ok) return null;
     const data = (await res.json()) as unknown;

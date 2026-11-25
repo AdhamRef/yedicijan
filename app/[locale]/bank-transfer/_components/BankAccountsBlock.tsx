@@ -203,8 +203,8 @@ export default function BankAccountsBlock() {
         : banks.map((bank) => <BankCard key={bank.name + bank.swift} bank={bank} t={t} />)}
       <p className="text-center text-sm text-gray-400 pt-2">
         {t("footer")}{" "}
-        <a href="mailto:info@minberiaksa.org" className="text-[#A5243D] font-semibold hover:underline">
-          info@minberiaksa.org
+        <a href="mailto:info@yedicihan.org" className="text-[#A5243D] font-semibold hover:underline">
+          info@yedicihan.org
         </a>
       </p>
     </div>

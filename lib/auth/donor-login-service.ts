@@ -31,7 +31,7 @@ export async function requestDonorLogin(input: { channel: LoginChannel; contact:
     invitationUserId: input.invitationUserId || null, expiresAt: new Date(Date.now() + 10 * MINUTE) } });
   let loginUrl: string | undefined;
   if (input.invitationUserId) {
-    const origin = new URL(process.env.NEXTAUTH_URL || "https://minberiaksa.org").origin;
+    const origin = new URL(process.env.NEXTAUTH_URL || "https://www.yedicihan.org").origin;
     loginUrl = `${origin}/${encodeURIComponent(input.locale)}/auth/signin?challenge=${id}&ticket=${ticket}`;
   }
   try {

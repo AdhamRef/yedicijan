@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { documentsDisabledResponse, donorDocumentsEnabled } from "@/lib/certificates/enabled";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
@@ -7,6 +8,7 @@ import { manualDocumentHtml, type ManualDocument } from "@/lib/certificates/manu
 import { paymentPublicOrigin } from "@/lib/payment-public-origin";
 
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  if (!donorDocumentsEnabled()) return documentsDisabledResponse();
   const session = await getServerSession(authOptions);
   const denied = requireAdminOrDashboardPermission(session, "siteContent"); if (denied) return denied;
   const { id } = await ctx.params;

@@ -16,7 +16,7 @@ export function emailHistoryLinkScan(cursor?: string) {
         page: [{ $group: { _id: null, count: { $sum: 1 }, lastId: { $last: "$_id" } } }],
         links: [
           { $match: { renderedBody: { $regex: "utm_campaign", $options: "i" } } },
-          { $project: { _id: 0, campaignId: 1, urls: { $map: { input: { $regexFindAll: { input: "$renderedBody", regex: "href\\s*=\\s*[\"']((?:https?://(?:www\\.)?minberiaksa\\.org)?/[^\"'\\s<>]*)[\"']", options: "i" } }, as: "link", in: { $arrayElemAt: ["$$link.captures", 0] } } } } },
+          { $project: { _id: 0, campaignId: 1, urls: { $map: { input: { $regexFindAll: { input: "$renderedBody", regex: "href\\s*=\\s*[\"']((?:https?://(?:www\\.)?yedicihan\\.org)?/[^\"'\\s<>]*)[\"']", options: "i" } }, as: "link", in: { $arrayElemAt: ["$$link.captures", 0] } } } } },
           { $unwind: "$urls" },
           { $match: { urls: { $regex: "[?&](?:amp;|#38;|#x26;)?utm_campaign=", $options: "i" }, $and: [{ urls: { $not: { $regex: "/(?:api|dashboard|auth|login|receipt|certificates?|success|failure)(?:/|[?])", $options: "i" } } }, { urls: { $not: { $regex: "[?&](?:amp;)?(?:t|token|accessToken|signature|orderId|donationId)=", $options: "i" } } }] } },
           { $group: { _id: { campaignId: "$campaignId", url: "$urls" } } },

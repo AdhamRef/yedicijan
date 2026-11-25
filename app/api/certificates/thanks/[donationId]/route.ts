@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { documentsDisabledResponse, donorDocumentsEnabled } from "@/lib/certificates/enabled";
 import { parseDonationDocumentPathToken } from "@/lib/donations/access-token-link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -26,6 +27,7 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ donationId: string }> }) {
+  if (!donorDocumentsEnabled()) return documentsDisabledResponse();
   const { donationId: rawDonationId } = await params;
   const documentPath = parseDonationDocumentPathToken(rawDonationId);
   if (!documentPath) return NextResponse.json({ error: "Donation not found" }, { status: 404 });

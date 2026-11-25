@@ -97,7 +97,7 @@ export function buildSearchOperations(input: { customerId: string; planId: strin
       const adGroup = resources("adGroups", temporary--);
       const destination = input.destinations.find(d => d.projectId === group.projectId && d.locale === campaign.locale)!;
       const url = new URL(destination.url);
-      if (url.protocol !== "https:" || url.hostname !== "minberiaksa.org") throw new Error("INVALID_SITE_DESTINATION");
+      if (url.protocol !== "https:" || url.hostname !== "yedicihan.org") throw new Error("INVALID_SITE_DESTINATION");
       url.searchParams.set("utm_source", "google"); url.searchParams.set("utm_medium", "cpc"); url.searchParams.set("utm_campaign", `gs-${input.planId}`); url.searchParams.set("utm_content", campaign.country ? campaign.locale+"-"+campaign.country : campaign.locale);
       operations.push({ adGroupOperation: { create: { resourceName: adGroup, campaign: resource, name: group.name, status: "ENABLED", type: "SEARCH_STANDARD" } } });
       operations.push({ adGroupAdOperation: { create: { adGroup, status: "ENABLED", ad: { finalUrls: [url.toString()], responsiveSearchAd: { headlines: group.headlines.map(text => ({ text })), descriptions: group.descriptions.map(text => ({ text })) } } } } });

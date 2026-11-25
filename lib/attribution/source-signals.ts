@@ -24,7 +24,7 @@ export function resolveDonationSourceSignals(input:Record<string,unknown>|null|u
   let referrer:string|null=null;
   for(const key of ["first_referrer","referrer","ga_referrer"]) {
     const value=attributionText(attr[key]);if(!value)continue;
-    try {const url=new URL(value);if(!/^https?:$/.test(url.protocol))continue;const host=url.hostname.replace(/^www\./,"");const current=attributionText(attr.conversion_page)||attributionText(attr.landing_page);const own=current?new URL(current).hostname.replace(/^www\./,""):"minberiaksa.org";if(host!==own&&host!=="minberiaksa.org"){referrer=host;break;}}catch{}
+    try {const url=new URL(value);if(!/^https?:$/.test(url.protocol))continue;const host=url.hostname.replace(/^www\./,"");const current=attributionText(attr.conversion_page)||attributionText(attr.landing_page);const own=current?new URL(current).hostname.replace(/^www\./,""):"yedicihan.org";if(host!==own&&host!=="yedicihan.org"){referrer=host;break;}}catch{}
   }
   const campaign=attributionText(attr.campaign_name)||attributionText(attr.utm_campaign);
   let sourceKind:SourceKind=paidEvidence?"paid":medium&&/^(organic)$/i.test(medium)?"organic":medium&&/^(social|social[_ -]?organic)$/i.test(medium)?"social":source||campaign?"campaign":referrer?"referral":attr.source_capture==="direct"?"direct":"unknown";

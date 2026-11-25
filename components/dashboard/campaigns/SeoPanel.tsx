@@ -209,7 +209,7 @@ export function SeoPanel({ campaignId }: { campaignId: string }) {
         <div className="space-y-4">
           <section className="rounded-lg border bg-white p-4">
             <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Search className="h-4 w-4" />{dt("معاينة نتائج البحث")}</h4>
-            <div className="text-xs text-slate-500" dir="ltr">minberiaksa.org / {locale} / {document.slug}</div>
+            <div className="text-xs text-slate-500" dir="ltr">yedicihan.org / {locale} / {document.slug}</div>
             <p className="mt-2 break-words text-xl text-blue-800">{title || dt("لا يوجد عنوان")}</p>
             <p className="mt-2 break-words text-sm leading-6 text-slate-600">{description || dt("لا يوجد وصف")}</p>
             <p className="mt-2 text-xs text-slate-500">{dt("معاينة تقريبية؛ جوجل قد يختار مقتطفًا مختلفًا.")}</p>

@@ -22,7 +22,7 @@ function scope(client: GoogleSearchClient, names: string[]) {
 function validAdGroup(client: GoogleSearchClient, name: string) { return new RegExp(`^customers/${client.id}/adGroups/\\d+$`).test(name); }
 function destinationUrl(url: string, planId: string, locale: string) {
   const value = new URL(url);
-  if (value.protocol !== "https:" || value.hostname !== "minberiaksa.org" || !value.pathname.startsWith(`/${locale}/`) || value.username || value.password) throw new Error("INVALID_SITE_DESTINATION");
+  if (value.protocol !== "https:" || value.hostname !== "yedicihan.org" || !value.pathname.startsWith(`/${locale}/`) || value.username || value.password) throw new Error("INVALID_SITE_DESTINATION");
   value.searchParams.set("utm_source", "google"); value.searchParams.set("utm_medium", "cpc");
   value.searchParams.set("utm_campaign", `gs-${planId}`); value.searchParams.set("utm_content", locale);
   return value.toString();

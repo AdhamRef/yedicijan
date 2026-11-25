@@ -30,8 +30,6 @@ import { CategoryStructureEditor } from "./CategoryStructureEditor";
 import { MediaCollectionEditor } from "./MediaCollectionEditor";
 import { ProgrammeWorkspace } from "./ProgrammeWorkspace";
 import { WorkspacePreview } from "./WorkspacePreview";
-import { previewDraftValues } from "@/lib/content-editor/public-preview";
-const PublicPagePreview = dynamic(() => import("./PublicPagePreview").then(module => module.PublicPagePreview), { ssr: false });
 import { WorkspaceSettings, useEditorCatalog } from "./WorkspaceSettings";
 import { SeoWorkspace } from "./SeoWorkspace";
 import { EDITOR_SECTIONS, settingsFor } from "@/lib/content-editor/workspace";
@@ -1217,7 +1215,7 @@ export function ContentEditor({ kind, id, initialSection = "content", initialLoc
                 {dt("إغلاق")}
               </button>
             </div>
-            {["campaigns", "super-categories", "categories", "blog"].includes(kind) ? <PublicPagePreview kind={kind} id={id} locale={locale} changes={previewDraftValues(kind,current,settingsDraft)} settings={{...Object.fromEntries(Object.entries(settingsDraft).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(settingsFor(kind, document.settings)[key]))), ...(kind === "campaigns" && presetsDirty ? {suggestedDonations: donationPresets.current?.getPayload(), suggestedShareCounts: sharePresets.current?.getPayload(), shareLabels: unitLabels.current?.getPayload()} : {})}} /> : <WorkspacePreview kind={kind} values={current} source={source} settings={liveSettings} locale={locale} expanded />}
+            {/* Yedicihan has no storefront renderer for the editor; the workspace preview shows the draft. */}<WorkspacePreview kind={kind} values={current} source={source} settings={liveSettings} locale={locale} expanded />
           </section>
         </EditorModal>
       ) : null}

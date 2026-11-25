@@ -78,8 +78,8 @@ export const VARIABLE_CATALOG: VariableGroup[] = [
       { token: "{{update.videoThumbnail}}", label: "لقطة الفيديو (رابط صورة)", exampleValue: "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg" },
       { token: "{{update.date}}", label: "تاريخ التحديث", exampleValue: "2026-09-29" },
       { token: "{{update.campaignTitle}}", label: "اسم المشروع", exampleValue: "سلال غذائية لغزة" },
-      { token: "{{update.url}}", label: "رابط التحديثات في صفحة المشروع", exampleValue: "https://minberiaksa.vercel.app/ar/projects/gaza-food#updates" },
-      { token: "{{update.donateUrl}}", label: "رابط التبرع للمشروع", exampleValue: "https://minberiaksa.vercel.app/ar/projects/gaza-food" },
+      { token: "{{update.url}}", label: "رابط التحديثات في صفحة المشروع", exampleValue: "https://www.yedicihan.org/ar/projects/gaza-food#updates" },
+      { token: "{{update.donateUrl}}", label: "رابط التبرع للمشروع", exampleValue: "https://www.yedicihan.org/ar/projects/gaza-food" },
     ],
   },
   {

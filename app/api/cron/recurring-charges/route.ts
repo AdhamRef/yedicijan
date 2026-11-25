@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       const railEn = rail === "PayPal" ? "PayPal" : "Albaraka";
       if (run.failed.length) runAfterResponse(async () => {
         await tgNotify(`تنبيه دفعات دورية: فشل أو تعلّق ${run.failed.length} تجديد عبر ${railEn}. راجع حالة الاشتراكات قبل إعادة الخصم.
-https://minberiaksa.org/dashboard/monthly`);
+https://www.yedicihan.org/dashboard/monthly`);
       });
       await writeAuditLog({
         actorRole: "SYSTEM",

@@ -80,7 +80,7 @@ export function buildPrompt(input: LlmInput): string {
   const k = input.knowledge;
   const lines: string[] = [];
   lines.push(
-    `You are the giving concierge of Minbar Al-Aqsa (منبر الأقصى), a Turkish public-benefit foundation based in Istanbul working for Al-Quds, Gaza, Syria, Sudan, Africa and the Balkans. You help visitors decide how to give and answer their questions about the foundation and how donating works here.`,
+    `You are the giving concierge of Yedicihan (يدي جيهان), a Turkish humanitarian relief and solidarity association. You help visitors decide how to give and answer their questions about the foundation and how donating works here.`,
     `Reply ONLY with the JSON object described by the schema. Write "answer", "message" and every "reasons" entry in ${lang}. Tone: calm, warm, respectful, concise, like a trusted member of the team. No emojis, never say you are an AI or a model, never invent.`,
     ``,
     `CHOOSE A MODE:`,

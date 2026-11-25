@@ -1,9 +1,9 @@
-export const INSTITUTION_EMAIL_LOGO_PATH = "/minbar/assets/logo-horizontal.png";
+export const INSTITUTION_EMAIL_LOGO_PATH = "/yedicijan_logo.png";
 
 /** Email clients cannot resolve relative paths; many strip base64 image URLs.
  * Repair the identifiable institutional logo without replacing donor/project photos. */
-export function normalizeEmailAssets(html: string, siteUrl = "https://minberiaksa.org"): string {
-  let origin = "https://minberiaksa.org";
+export function normalizeEmailAssets(html: string, siteUrl = "https://www.yedicihan.org"): string {
+  let origin = "https://www.yedicihan.org";
   try { const site = new URL(siteUrl); if (site.protocol === "https:") origin = site.origin; } catch {}
   return html.replace(/<(?:img|a)\b[^>]*>/gi, tag => {
     const isImage = /^<img\b/i.test(tag);

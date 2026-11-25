@@ -12,7 +12,7 @@ import { appendCurrencyQuery, getCurrencyCodeForLinks } from '@/lib/currency-lin
 import { getSocialLinks } from '@/lib/social-links';
 import { track } from '@vercel/analytics';
 
-const LOGO_URL = '/logometaminber.avif';
+const LOGO_URL = '/yedicijan_logo.png';
 
 const Footer = () => {
   const t = useTranslations('Footer');
@@ -229,13 +229,13 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="mailto:info@minberiaksa.org"
+                  href="mailto:info@yedicihan.org"
                   className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors"
                 >
                   <span className="w-8 h-8 rounded-lg bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                     <Mail className="w-4 h-4 text-gold" />
                   </span>
-                  info@minberiaksa.org
+                  info@yedicihan.org
                 </a>
               </li>
             </ul>

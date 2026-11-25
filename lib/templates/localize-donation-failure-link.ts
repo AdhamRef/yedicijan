@@ -11,7 +11,7 @@ export function localizeDonationFailureLinks(content: string, locale: string): s
   if (!content || !isValidLocale(locale)) return content;
 
   const expression = new RegExp(
-    `(^|[^A-Za-z0-9.:/-])(https?:\\/\\/(?:www\\.)?minberiaksa\\.org)?\\/(?:${SUPPORTED_LOCALE_PATTERN})\\/donation-failed(?=[?#/\\s"'<>)]|$)`,
+    `(^|[^A-Za-z0-9.:/-])(https?:\\/\\/(?:www\\.)?yedicihan\\.org)?\\/(?:${SUPPORTED_LOCALE_PATTERN})\\/donation-failed(?=[?#/\\s"'<>)]|$)`,
     "gi",
   );
 

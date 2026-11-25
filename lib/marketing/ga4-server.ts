@@ -40,7 +40,7 @@ export async function loadGa4DashboardReport(period: Ga4Period, forceRefresh = f
     try {
       const searchAuth = new JWT({email: account.client_email, key: account.private_key, scopes: ["https://www.googleapis.com/auth/webmasters.readonly"]});
       const searchToken = (await searchAuth.getAccessToken()).token;
-      report.organicSearch = searchToken ? await fetchSearchConsole({accessToken: searchToken, origin: process.env.NEXT_PUBLIC_SITE_URL || "https://minberiaksa.org", property: process.env.SEARCH_CONSOLE_SITE_URL, period}) : {status: "unavailable", rows: [], timezone: "America/Los_Angeles"};
+      report.organicSearch = searchToken ? await fetchSearchConsole({accessToken: searchToken, origin: process.env.NEXT_PUBLIC_SITE_URL || "https://www.yedicihan.org", property: process.env.SEARCH_CONSOLE_SITE_URL, period}) : {status: "unavailable", rows: [], timezone: "America/Los_Angeles"};
     } catch { report.organicSearch = {status: "unavailable", rows: [], timezone: "America/Los_Angeles"}; }
     const data = { propertyId, range: period.range, period, updatedAt: new Date().toISOString(), report, cached: false };
     if (cache.size >= 20) cache.delete(cache.keys().next().value!);

@@ -15,7 +15,7 @@ export function isMeasurementHost(
   if (environment !== "production") return false;
   const hosts = allowedHosts?.trim()
     ? allowedHosts.split(",").map((host) => host.trim().toLowerCase())
-    : ["minberiaksa.org", "www.minberiaksa.org"];
+    : ["yedicihan.org", "www.yedicihan.org"];
   const current = hostname.toLowerCase().replace(/\.$/, "");
   return hosts.some((host) => /^[a-z0-9.-]+$/.test(host) && host === current);
 }

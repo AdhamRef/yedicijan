@@ -18,5 +18,5 @@ export function paymentPublicOrigin(requestUrl: string): string {
       if (["https:", "http:"].includes(url.protocol) && !url.username && !url.password) return url.origin;
     } catch { /* Use the canonical site below. */ }
   }
-  return "https://minberiaksa.org";
+  return "https://www.yedicihan.org";
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { documentsDisabledResponse, donorDocumentsEnabled } from "@/lib/certificates/enabled";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { userHasDashboardPermission } from "@/lib/dashboard/permissions";
@@ -10,6 +11,7 @@ import { pdfErrorResponse } from "@/lib/certificates/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  if (!donorDocumentsEnabled()) return documentsDisabledResponse();
   const { id } = await ctx.params;
   if (!/^[a-f0-9]{24}$/i.test(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!issuedDocumentTokenMatches(id, request.nextUrl.searchParams.get("token"))) {

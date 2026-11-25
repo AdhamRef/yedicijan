@@ -25,7 +25,7 @@ export function selectProjectImages(
 const RETIRED_CLOUDINARY_IMAGE = /^https:\/\/res\.cloudinary\.com\/z9drzccl\//i;
 
 /** A neutral, locally hosted brand placeholder, never unrelated photography. */
-export const PUBLIC_CAMPAIGN_IMAGE_PLACEHOLDER = "/minbar/assets/logo-mark.png";
+export const PUBLIC_CAMPAIGN_IMAGE_PLACEHOLDER = "/yedicijan_logo.png";
 
 /** Public-facing images only. Database CMS values remain untouched so the
  * lost originals can be restored later. This is shared by legacy and modern

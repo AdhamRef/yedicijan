@@ -17,7 +17,7 @@ export async function searchDestinations(request: SearchPlanRequest): Promise<Se
   for (const project of projects) for (const locale of request.locales) {
     const value = locale === "ar" ? project : project.translations.find(t => t.locale === locale);
     if (!value?.title?.trim() || !value.description?.trim() || !value.slug?.trim()) continue;
-    destinations.push({ projectId: project.id, locale, title: value.title, description: value.description.replace(/<[^>]*>/g, " ").slice(0, 1600), url: `https://minberiaksa.org${miaPath("projectDetail", locale, encodeURIComponent(value.slug))}` });
+    destinations.push({ projectId: project.id, locale, title: value.title, description: value.description.replace(/<[^>]*>/g, " ").slice(0, 1600), url: `https://www.yedicihan.org${miaPath("projectDetail", locale, encodeURIComponent(value.slug))}` });
   }
   for (const locale of request.locales) if (!destinations.some(d => d.locale === locale)) throw new Error(`TRANSLATED_DESTINATION_MISSING:${locale}`);
   return destinations;

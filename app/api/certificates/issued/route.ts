@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { documentsDisabledResponse, donorDocumentsEnabled } from "@/lib/certificates/enabled";
 import { getServerSession } from "next-auth";
 import { createHash, randomBytes } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -20,6 +21,7 @@ export async function GET() {
   return NextResponse.json({ rows }, { headers: { "Cache-Control": "no-store" } });
 }
 export async function POST(request: NextRequest) {
+  if (!donorDocumentsEnabled()) return documentsDisabledResponse();
   const session = await getServerSession(authOptions);
   const denied = requireAdminOrDashboardPermission(session, "siteContent"); if (denied) return denied;
   const raw = await request.json().catch(() => null);

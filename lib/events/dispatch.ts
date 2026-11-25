@@ -17,6 +17,7 @@ import { loadSenderRoutingSnapshot, resolveSenderFromSnapshot, type SenderResolu
 import type { CommunicationPurposeId } from "@/lib/communication/communication-runtime-types";
 import type { SupportedLocale } from "@/lib/locales";
 import { donationAttachments, type EmailAttachment } from "@/lib/certificates/generate";
+import { donorDocumentsEnabled } from "@/lib/certificates/enabled";
 import { ensureDonationDocuments } from "@/lib/certificates/issue";
 import { getServerBaseUrl } from "@/lib/server-base-url";
 import { localizeDonationFailureLinks } from "@/lib/templates/localize-donation-failure-link";
@@ -388,6 +389,7 @@ export async function dispatchEvent(event: MessageTriggerEvent, input: EventDisp
 
 /** The PDFs for a confirmed donation, or nothing if they cannot be produced right now. */
 async function donationPaidAttachments(donationId: string): Promise<EmailAttachment[] | undefined> {
+  if (!donorDocumentsEnabled()) return undefined;
   try {
     const docs = await ensureDonationDocuments(donationId);
     if (!docs) return undefined;

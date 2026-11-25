@@ -86,7 +86,7 @@ function normalized(value: string | null | undefined): string | null {
 
 function paramsFor(url: string): URLSearchParams | null {
   try {
-    return new URL(url, "https://minberiaksa.org").searchParams;
+    return new URL(url, "https://www.yedicihan.org").searchParams;
   } catch {
     return null;
   }

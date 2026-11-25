@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { documentsDisabledResponse, donorDocumentsEnabled } from "@/lib/certificates/enabled";
 import { prisma } from "@/lib/prisma";
 import { giftCertificateToken, giftCertificateTokenMatches } from "@/lib/donations/gift-certificate-token";
 import { authorizeDonationAccess, pdfErrorResponse } from "@/lib/certificates/http";
@@ -10,6 +11,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!donorDocumentsEnabled()) return documentsDisabledResponse();
   const { id } = await params;
   if (!/^[a-f0-9]{24}$/i.test(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const item = await prisma.donationItem.findUnique({ where: { id }, include: { donation: { select: { id: true, paidAt: true, accessToken: true } } } });

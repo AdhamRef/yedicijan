@@ -16,7 +16,7 @@ export async function notifySubscriptionRequest(id: string, completed = false) {
   const donor = await prisma.user.findUnique({ where: { id: row.donorId }, select: { email: true, name: true } });
   const copy = subscriptionRequestCopy(row.locale), locale = receiptLocale(row.locale);
   const title = completed ? subscriptionRequestStatusLabel(row.status, row.locale) : copy[7], kind = copy[subscriptionRequestKindIndex(row.kind)];
-  const origin = paymentPublicOrigin("https://minberiaksa.org");
+  const origin = paymentPublicOrigin("https://www.yedicihan.org");
   await writeAuditLog({ actorRole: "SYSTEM", action: completed ? "SUBSCRIPTION_REQUEST_RESOLVED" : "SUBSCRIPTION_REQUEST_RECEIVED", entityType: "SubscriptionServiceRequest", entityId: id, stream: completed ? "TEAM" : "SITE", messageAr: completed ? "إغلاق متابعة طلب إدارة تبرع دوري" : "طلب جديد لإدارة تبرع دوري", metadata: { subscriptionId: row.subscriptionId, kind: row.kind, status: row.status } });
   if (!completed) await tgNotify(`طلب إدارة تبرع دوري\n${subscriptionRequestCopy("ar")[subscriptionRequestKindIndex(row.kind)]}\n${origin}${subscriptionManagementHref(row.donorId, row.subscriptionId, row.id)}`, { html: false }).catch(() => false);
   if (!donor?.email) return;

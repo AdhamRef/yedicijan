@@ -27,6 +27,17 @@ const intl = createIntlMiddleware({
   alternateLinks: false,
 });
 
+/** next-intl hands back the rewrite path decoded (and possibly in another Unicode
+ * form) while Next keeps the request path percent-encoded, so an Arabic slug never
+ * looked like a no-op rewrite and was proxied to itself (EPROTO). */
+function safeDecode(pathname: string): string {
+  try {
+    return decodeURI(pathname).normalize('NFC');
+  } catch {
+    return pathname;
+  }
+}
+
 const CURRENCY_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 /** ISO country code from edge-injected headers (Vercel / Cloudflare). */
@@ -130,7 +141,7 @@ function localizedResponse(req: NextRequest) {
     const current = new URL(req.url);
     const target = new URL(rewrite, current);
     if (
-      target.pathname === current.pathname &&
+      safeDecode(target.pathname) === safeDecode(current.pathname) &&
       target.search === current.search
     ) {
       response.headers.delete('x-middleware-rewrite');

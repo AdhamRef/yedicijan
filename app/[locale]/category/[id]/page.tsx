@@ -1,9 +1,7 @@
-import { applyEditorialSeo,readPublicEditorialSeo } from '@/lib/content-editor/public-seo';
-import { EditorialFaq } from '@/components/content/EditorialFaq';
 import React from "react";
 import { Metadata } from "next";
-import { notFound, redirect, permanentRedirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
+import { redirect } from "next/navigation";
+import MainPage from "./_components/MainPage";
 import { prisma } from "@/lib/prisma";
 import { isObjectId, pickLocaleSlug, whereByIdOrAnyLocaleSlug } from "@/lib/slug";
 import { pickTranslation } from "@/lib/i18n/translation-fallback";
@@ -14,27 +12,10 @@ import {
   buildLocalizedAlternates,
 } from "@/lib/seo";
 import type { Locale } from "@/lib/seo";
-import { getCategoryPage } from "@/lib/minbar/category-page";
-import { pageTemplate, type CategoryPageTemplate } from "@/lib/content/category-page-write";
-import { miaPath, type MinbarRoute } from "@/lib/minbar/routes";
-import MinbarMessages from "@/components/minbar/MinbarMessages";
-import CategoryLandingPage from "@/components/minbar/categories/CategoryLandingPage";
-import PageBanners from "@/components/minbar/banners/PageBanners";
-import { withIncomingQuery, type IncomingSearchParams } from "@/lib/minbar/redirect-query";
 
 interface Props {
   params: Promise<{ id: string; locale: string }>;
-  searchParams: Promise<IncomingSearchParams>;
 }
-
-/** The page's own namespaces, on top of the shell bundle. */
-const NAMESPACES = ["CampaignsPage", "homepage", "projects", "cart"] as const;
-
-/** Campaign figures change on donation, not per request. */
-export const revalidate = 60;
-
-/** Where each bound category is published. */
-const TEMPLATE_ROUTES: Record<CategoryPageTemplate, MinbarRoute> = { aqsa: "aqsa", zakat: "zakat" };
 
 async function fetchCategoryForSeo(idOrSlug: string) {
   return prisma.category.findFirst({
@@ -43,21 +24,16 @@ async function fetchCategoryForSeo(idOrSlug: string) {
       id: true,
       slug: true,
       name: true,
-      imageAlt: true,
-      metaTitle: true,
-      metaDescription: true,
       description: true,
       image: true,
-      heroImage: true,
-      heroLead: true,
       translations: {
-        select: { locale: true, name: true, imageAlt: true, metaTitle: true, metaDescription: true, description: true, slug: true, heroLead: true },
+        select: { locale: true, name: true, description: true, slug: true },
       },
     },
   });
 }
 
-async function generateBaseMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id, locale } = await params;
   const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
   // Always anchor canonical to the requested URL so the parent layout's
@@ -82,18 +58,9 @@ async function generateBaseMetadata({ params }: Props): Promise<Metadata> {
 
   const t = pickTranslation(category.translations, locale);
   const name = t?.name || category.name;
-  /* The row's hero lead is Arabic; elsewhere an untranslated one becomes the
-     same localized template the page itself shows. */
-  let arabicLead = category.heroLead || category.description;
-  if (locale !== "ar" && arabicLead) {
-    const [tLanding, tCert] = await Promise.all([
-      getTranslations({ locale, namespace: "CategoryLanding" }),
-      getTranslations({ locale, namespace: "certificates" }),
-    ]);
-    arabicLead = tLanding("heroLead", { name, org: tCert("orgName") });
-  }
-  const description = (t?.metaDescription || (locale === "ar" ? category.metaDescription : null) || t?.heroLead || t?.description || arabicLead || seo.campaigns.description).slice(0, 200);
-  const image = category.heroImage || category.image || `${SITE_URL}/og-image.jpg`;
+  const description =
+    (t?.description || category.description || seo.campaigns.description).slice(0, 200);
+  const image = category.image || `${SITE_URL}/og-image.jpg`;
 
   let alternates: { canonical: string; languages?: Record<string, string> };
   try {
@@ -109,7 +76,7 @@ async function generateBaseMetadata({ params }: Props): Promise<Metadata> {
     alternates = { canonical: requestedCanonical };
   }
 
-  const title = t?.metaTitle || (locale === "ar" ? category.metaTitle : null) || `${name} | ${seo.siteName}`;
+  const title = `${name} | ${seo.siteName}`;
 
   return {
     title,
@@ -123,7 +90,7 @@ async function generateBaseMetadata({ params }: Props): Promise<Metadata> {
       siteName: seo.siteName,
       locale: OG_LOCALE_MAP[locale as Locale] ?? "en_US",
       type: "website",
-      images: [{ url: image, width: 1200, height: 630, alt: t?.imageAlt || category.imageAlt || name }],
+      images: [{ url: image, width: 1200, height: 630, alt: name }],
     },
     twitter: {
       card: "summary_large_image",
@@ -135,48 +102,25 @@ async function generateBaseMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-/**
- * A category's own landing page  the layout of
- * `Minbar/مشروع ترميم منازل القدس.dc.html`, rendered from the database.
- *
- * Read on the server, like every other indexable page on this site: the copy,
- * the figures and the campaign cards all have to be in the first response
- * (`PRODUCTION_SEO_CONTRACT.md`). This replaced a client-side list that fetched
- * the category and its campaigns after hydration.
- */
-export default async function CategoryPage({ params, searchParams }: Props) {
-  const [{ id, locale }, query] = await Promise.all([params, searchParams]);
-  const oldLink = await prisma.category.findFirst({ where: { previousSlugs: { has: decodeURIComponent(id) } }, select: { id: true, slug: true, translations: { select: { locale: true, slug: true } } } });
-  if (oldLink) {
-    const canonical = pickLocaleSlug(oldLink.slug, oldLink.translations, locale) || oldLink.id;
-    if (canonical !== decodeURIComponent(id)) permanentRedirect(withIncomingQuery(`/${locale}/category/${encodeURIComponent(canonical)}`, query));
-  }
+export default async function CategoryPage({ params }: Props) {
+  const { id, locale } = await params;
 
-
-  // Redirect to the canonical per-locale slug when the URL doesn't match 
+  // Redirect to the canonical per-locale slug when the URL doesn't match —
   // e.g. after a language switch keeps the previous locale's slug, or when
-  // the URL uses the ObjectId. A category bound to one of the site's own
-  // pages (the mosque, zakat) is published there instead, so it goes there.
+  // the URL uses the ObjectId.
   try {
     const category = await prisma.category.findFirst({
       where: whereByIdOrAnyLocaleSlug(id),
       select: {
         id: true,
         slug: true,
-        pageTemplate: true,
         translations: { select: { locale: true, slug: true } },
       },
     });
     if (category) {
-      const template = pageTemplate(category.pageTemplate);
-      /* Localised slugs are Arabic in Arabic, and a `Location` header must be
-         ASCII, so the path is encoded segment by segment. */
-      // Both redirects keep the query: ad links carry utm_* / gclid / fbclid.
-      if (template) redirect(withIncomingQuery(encodeURI(miaPath(TEMPLATE_ROUTES[template], locale)), query));
-
       const canonical = pickLocaleSlug(category.slug, category.translations, locale) ?? category.id;
       if (id !== canonical && (isObjectId(id) || id !== category.id)) {
-        redirect(withIncomingQuery(`/${locale}/category/${encodeURIComponent(canonical)}`, query));
+        redirect(`/${locale}/category/${encodeURIComponent(canonical)}`);
       }
     }
   } catch (err) {
@@ -184,17 +128,5 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     console.error("Failed to resolve canonical category slug", err);
   }
 
-  const page = await getCategoryPage(decodeURIComponent(id), locale);
-  if (!page) notFound();
-
-  return (
-    <MinbarMessages locale={locale} namespaces={NAMESPACES}>
-      <PageBanners locale={locale} page="projects" slot="top" />
-      <CategoryLandingPage page={page} />
-      <EditorialFaq kind="categories" contentKey={decodeURIComponent(id)} locale={locale}/>
-      <PageBanners locale={locale} page="projects" slot="bottom" />
-    </MinbarMessages>
-  );
+  return <MainPage id={id} locale={locale} />;
 }
-
-export async function generateMetadata(args:Props):Promise<Metadata>{const {id,locale}=await args.params;const [base,extra]=await Promise.all([generateBaseMetadata(args),readPublicEditorialSeo('categories',decodeURIComponent(id),locale)]);return applyEditorialSeo(base,extra);}

@@ -13,7 +13,7 @@ export function siteIdentitySchemas(locale: string) {
         "@type": ["Organization", "NGO"], "@id": `${SITE_URL}/#organization`,
         url: `${SITE_URL}/`, name: seo.siteName, legalName: seo.siteName,
         description: seo.description,
-        logo: { "@type": "ImageObject", "@id": `${SITE_URL}/#logo`, url: `${SITE_URL}/brand/minber-logo-full.webp`, width: 2603, height: 633, caption: seo.siteName },
+        logo: { "@type": "ImageObject", "@id": `${SITE_URL}/#logo`, url: `${SITE_URL}/yedicijan_logo.png`, caption: seo.siteName },
       },
       {
         "@type": "WebSite", "@id": `${SITE_URL}/#website`, url: `${SITE_URL}/`,

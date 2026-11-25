@@ -53,7 +53,7 @@ export function alertOnNewInboxMessages(previous: number | null, next: number, t
   chime();
   if (notificationPermission() === "granted" && typeof document !== "undefined" && document.hidden) {
     try {
-      const n = new Notification(text.title, { body: text.body, tag: "mia-inbox", icon: "/minbar/assets/logo-mark.png" });
+      const n = new Notification(text.title, { body: text.body, tag: "mia-inbox", icon: "/yedicijan_logo.png" });
       n.onclick = () => { window.focus(); window.location.assign(text.href); n.close(); };
     } catch { /* some browsers only allow notifications from a service worker */ }
   }

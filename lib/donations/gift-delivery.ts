@@ -10,6 +10,7 @@ import { automaticEmailHtml } from "@/lib/templates/font";
 import { prisma } from "@/lib/prisma";
 import { messagesFor } from "@/i18n/locale-messages";
 import { generateThanksPdf } from "@/lib/certificates/generate";
+import { donorDocumentsEnabled } from "@/lib/certificates/enabled";
 import { ensureDonationDocuments } from "@/lib/certificates/issue";
 import { sendEmailMessage } from "@/lib/communication/providers/email/client";
 import { resolveTriggerSendConfig, resolveTriggerSender } from "@/lib/events/dispatch";
@@ -100,7 +101,7 @@ export async function deliverDonationGifts(donationId: string, options: { approv
   if (!docs) return result;
   const locale = docs.locale;
   const m = giftMessages(locale);
-  const base = paymentPublicOrigin("https://minberiaksa.org");
+  const base = paymentPublicOrigin("https://www.yedicihan.org");
   const sendConfig = await resolveTriggerSendConfig();
   const emailSender = resolveTriggerSender(sendConfig, "EMAIL", { locale, purpose: "TRANSACTIONAL" });
   const whatsappSender = resolveTriggerSender(sendConfig, "WHATSAPP", { locale, purpose: "TRANSACTIONAL" });
@@ -141,7 +142,7 @@ export async function deliverDonationGifts(donationId: string, options: { approv
           if (!routed.ok) throw new Error(routed.reason);
           if (channel === "EMAIL") {
             if (!line.giftRecipientEmail) throw new Error("GIFT_RECIPIENT_EMAIL_MISSING");
-            const pdf = await generateThanksPdf({ ...docs, thanks: { ...docs.thanks, donorName: recipientName } }, base);
+            const pdf = donorDocumentsEnabled() ? await generateThanksPdf({ ...docs, thanks: { ...docs.thanks, donorName: recipientName } }, base) : null;
             const archived = await createDeliveryRecord({ channel: "EMAIL", origin: "TRIGGER", purpose: "TRANSACTIONAL",
               senderId: routed.sender.id, recipientEmail: line.giftRecipientEmail, recipientName, locale, renderedSubject: fill(m.emailSubject, vars),
               renderedBody: giftEmailHtml(m, vars, line.giftShowAmount, line.giftMessage, projectUrl), variables: { giftItemId: line.id }, status: "RENDERED" });
@@ -151,7 +152,7 @@ export async function deliverDonationGifts(donationId: string, options: { approv
             const sent = await sendEmailMessage({ to: line.giftRecipientEmail, subject: fill(m.emailSubject, vars),
               html: automaticEmailHtml(giftEmailHtml(m, vars, line.giftShowAmount, line.giftMessage, projectUrl), locale),
               senderEmail: routed.sender.senderEmail, purpose: "TRANSACTIONAL", locale,
-              attachments: [{ filename: pdf.filename, content: pdf.pdf.toString("base64"), contentType: "application/pdf" }] });
+              attachments: pdf ? [{ filename: pdf.filename, content: pdf.pdf.toString("base64"), contentType: "application/pdf" }] : undefined });
             if (!sent.ok) {
               providerStarted = /REQUEST_FAILED|INVALID_RESPONSE|TIMEOUT|HTTP_5\d\d/.test(sent.reason);
               await markDeliveryStatus(archived.data.id, "FAILED", { errorMessage: sent.reason });

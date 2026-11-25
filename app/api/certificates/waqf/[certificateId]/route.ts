@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { documentsDisabledResponse, donorDocumentsEnabled } from "@/lib/certificates/enabled";
 import { prisma } from "@/lib/prisma";
 import { assetBaseUrl, authorizeDonationAccess, pdfErrorResponse, pdfResponse } from "@/lib/certificates/http";
 import { findWaqfCertificate } from "@/lib/certificates/documents";
@@ -20,6 +21,7 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ certificateId: string }> }) {
+  if (!donorDocumentsEnabled()) return documentsDisabledResponse();
   const { certificateId } = await params;
   try {
     let cert = await findWaqfCertificate(certificateId);

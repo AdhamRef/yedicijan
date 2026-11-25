@@ -35,7 +35,7 @@ export async function deliverIssuedCertificate(id: string, channel: "EMAIL" | "W
     const routed = resolveTriggerSender(config, channel, { locale, purpose: "TRANSACTIONAL" });
     if (!routed.ok) return { ok: false, reason: routed.reason };
     const document = row.document as unknown as ManualDocument;
-    const origin = paymentPublicOrigin("https://minberiaksa.org");
+    const origin = paymentPublicOrigin("https://www.yedicihan.org");
     const pdf = await manualDocumentPdf(document, origin);
     const title = manualDocumentTitle(document);
     const values: Record<string, string> = { "document.title": title, "document.recipientName": row.recipientName, "document.serial": row.serial, "document.date": document.kind === "waqf" ? document.certDate : document.kind === "receipt" ? document.issueDate : document.issuedDate || new Intl.DateTimeFormat(locale, { dateStyle: "long", timeZone: "Europe/Istanbul" }).format(row.issuedAt), "document.url": `${origin}/api/certificates/issued/${row.id}?token=${issuedDocumentToken(row.id)}` };

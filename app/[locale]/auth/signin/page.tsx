@@ -7,7 +7,7 @@ import { Heart } from 'lucide-react';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
 import DonorCodeLogin from '@/components/auth/DonorCodeLogin';
 
-const LOGO_URL = '/brand/minber-logo-full.webp';
+const LOGO_URL = '/yedicijan_logo.png';
 const LOGO_SIZES = '(max-width: 640px) calc(100vw - 80px), (max-width: 1023px) 400px, (min-width: 1280px) 500px, 40vw';
 
 export default function SignIn() {

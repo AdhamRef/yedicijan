@@ -77,7 +77,7 @@ export function buildTrackingParams(campaign: { id: string; channel: string }, o
 /** Append campaign-specific UTM params to a donation URL (keeps other query values intact). */
 export function decorateUrl(baseUrl: string, params: Record<string, string | undefined>): string {
   try {
-    const u = new URL(baseUrl, process.env.NEXT_PUBLIC_SITE_URL || "https://minberiaksa.org");
+    const u = new URL(baseUrl, process.env.NEXT_PUBLIC_SITE_URL || "https://www.yedicihan.org");
     if (u.protocol !== "http:" && u.protocol !== "https:") return baseUrl;
     for (const [k, v] of Object.entries(params)) if (v) u.searchParams.set(k, v);
     return u.toString();
