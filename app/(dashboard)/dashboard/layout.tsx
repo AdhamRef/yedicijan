@@ -1,3 +1,4 @@
+import RenewalAlerts from "@/components/dashboard/RenewalAlerts";
 import "@/styles/dashboard-utilities.css";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
@@ -60,7 +61,7 @@ export default async function DashboardLayout({
       locale={locale}
       enableVercelAnalytics={Boolean(process.env.VERCEL)}
     >
-      {children}
+      <RenewalAlerts />{children}
     </DashboardLayoutClient>
   );
 }
