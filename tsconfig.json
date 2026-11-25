@@ -46,6 +46,9 @@
     "tmp",
     // Playwright specs. Typechecked by tsconfig.typecheck.json, not built into the app.
     "e2e",
+    // Node test suites. Typechecked by their own configs (tsconfig.integration-tests.json etc.),
+    // not part of the app, so they must not be able to fail the production build.
+    "tests",
     // Unreferenced leftovers whose dependencies are not installed, so they cannot compile or run in
     // any configuration. Nothing imports them, so excluding them costs nothing and keeps the gate
     // honest; they are deletion candidates, not code to fix.

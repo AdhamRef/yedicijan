@@ -1,6 +1,6 @@
 import type { SupportedLocale } from "../locales";
 
-export const RECEIPT_BRANDS: Record<SupportedLocale, string> = {
+export const RECEIPT_BRANDS: Record<string, string> = {
   ar: "جمعية يدي جيهان", tr: "Yedicihan Derneği", en: "Yedicihan Relief & Solidarity Association",
   fr: "Association internationale Minberi Aksa", de: "Internationaler Verein Minberi Aksa", es: "Asociación Internacional Minberi Aksa",
   id: "Asosiasi Internasional Minberi Aksa", pt: "Associação Internacional Minberi Aksa", ur: "بین الاقوامی منبر اقصیٰ تنظیم",
@@ -9,7 +9,7 @@ export const RECEIPT_BRANDS: Record<SupportedLocale, string> = {
   ms: "Persatuan Antarabangsa Minberi Aksa", ja: "ミンベリ・アクサ国際協会", zh: "敏贝里阿克萨国际协会", hi: "मिनबेरी अक्सा अंतरराष्ट्रीय संस्था",
 };
 
-export const RECEIPT_BANK_COPY: Record<SupportedLocale, readonly [string, string]> = {
+export const RECEIPT_BANK_COPY: Record<string, readonly [string, string]> = {
   ar: ["المقابل البنكي لنفس التبرع", "عولجت هذه العملية بالليرة التركية عبر البنك التركي وفق سعر الصرف المثبت عند الدفع."],
   tr: ["Aynı bağışın bankada tahsil edilen karşılığı", "Bu ödeme, Türkiye’deki bankamız aracılığıyla ödeme anında belirlenen kur üzerinden Türk lirası olarak işlenmiştir."],
   en: ["Bank charge for this same donation", "This payment was processed in Turkish lira through our Turkish bank at the exchange rate fixed at the time of payment."],

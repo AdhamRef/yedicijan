@@ -2,7 +2,7 @@ import type { SupportedLocale } from "../locales";
 import { RECEIPT_BRANDS } from "../templates/receipt-localization";
 
 // Greeting, document handoff, closing, manual receipt label and cash method.
-export const MANUAL_DOCUMENT_TEXT: Record<SupportedLocale, readonly [string, string, string, string, string]> = {
+export const MANUAL_DOCUMENT_TEXT: Record<string, readonly [string, string, string, string, string]> = {
   ar: ["السلام عليكم ورحمة الله وبركاته،", "مستندكم الصادر عن المؤسسة جاهز. يمكنكم الاحتفاظ به أو تحميله عبر الرابط أدناه.", "بارك الله في عطائكم وتقبّل منكم.", "إيصال يدوي", "نقدًا"],
   tr: ["Selamünaleyküm,", "Derneğimiz tarafından düzenlenen belgeniz hazır. Aşağıdaki bağlantıdan indirebilir ve saklayabilirsiniz.", "Allah hayrınızı kabul etsin, bereketli kılsın.", "Manuel makbuz", "Nakit"],
   en: ["Peace be upon you,", "Your document issued by our association is ready. You may keep it or download it using the link below.", "May Allah accept your generosity and bless you.", "Manual receipt", "Cash"],

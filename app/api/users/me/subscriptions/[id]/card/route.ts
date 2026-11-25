@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const policy = albarakaChargeCurrency(), currency = plan.currency.toUpperCase();
     let amount = total, currencyCode = albarakaCurrencyCode(currency);
     if (policy === "USD" && !["USD", "US"].includes(currency)) { amount = convertAmountInCurrencyToUsd(total, currency, await getUsdBaseRatesForServer()); currencyCode = "US"; }
-    else if (policy !== "USD" && !(policy === "DONOR" && ["TRY", "TL", "USD", "US", "EUR", "EU"].includes(currency))) { amount = convertAmountInCurrencyToTry(total, currency, await getUsdBaseRatesForServer()); currencyCode = "TL"; }
+    else if (policy !== "USD" && !(policy === "DONATION" && ["TRY", "TL", "USD", "US", "EUR", "EU"].includes(currency))) { amount = convertAmountInCurrencyToTry(total, currency, await getUsdBaseRatesForServer()); currencyCode = "TL"; }
     const amountMinor = albarakaMinorUnits(amount);
     if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return NextResponse.json({ error: "INVALID_AUTHORIZATION_AMOUNT" }, { status: 409 });
     const locale = isValidLocale(body.locale) ? body.locale : "en", token = cardVerificationToken(), orderId = albarakaOrderId();

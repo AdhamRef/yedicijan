@@ -1,6 +1,6 @@
 import { type SupportedLocale } from "../locales";
 
-const COPY: Record<SupportedLocale, { button: string; footer: string }> = {
+const COPY: Record<string, { button: string; footer: string }> = {
   ar: { button: "إيقاف", footer: "لإلغاء الاشتراك اضغط «إيقاف» أو أرسل STOP." },
   tr: { button: "Dur", footer: "Durdurmak için düğmeye basın veya STOP yazın." },
   en: { button: "Stop", footer: "Tap Stop or reply STOP to stop messages." },

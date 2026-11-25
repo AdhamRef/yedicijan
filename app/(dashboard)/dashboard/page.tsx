@@ -336,6 +336,7 @@ export default function DashboardPage() {
   const [donationsSortOrder, setDonationsSortOrder] = useState<"asc" | "desc">("desc");
   const [showFailed, setShowFailed] = useState(false);
   const [donationsStatusFilter, setDonationsStatusFilter] = useState<"all" | "RESOLVED" | "PAID" | "PENDING" | "FAILED">("RESOLVED");
+  const [donationsTypeFilter, setDonationsTypeFilter] = useState<"all" | "ONE_TIME" | "MONTHLY">("all");
   /** Applied donor search (name or email) for the أحدث التبرعات table  server-side, not a page filter. */
   const [donationsSearch, setDonationsSearch] = useState("");
   const [donationLocaleFilter, setDonationLocaleFilter] = useState<

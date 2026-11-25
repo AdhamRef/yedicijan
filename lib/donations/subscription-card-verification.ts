@@ -18,7 +18,7 @@ export async function completeSubscriptionCardVerification(db: PrismaClient, id:
   const row = await db.subscriptionCardVerification.findUnique({ where: { id } });
   if (!row || !equal(cardVerificationHash(token), row.tokenHash)) return { ok: false as const, reason: "INVALID_VERIFICATION", subscriptionId: null };
   const result = (ok: boolean, reason: string) => ({ ok, reason, subscriptionId: row.subscriptionId });
-  if (!raw.MacNew || !equal(raw.MacNew, albarakaResponseMac(raw, cfg.encKey))) return result(false, "INVALID_BANK_SIGNATURE");
+  if (!(raw.Mac || raw.MacNew) || !equal(raw.Mac || raw.MacNew, albarakaResponseMac({ eci: raw.ECI ?? "", cavv: raw.CAVV ?? "", mdStatus: raw.MdStatus ?? "", mdErrorMessage: raw.MdErrorMessage ?? "", md: raw.MD ?? "", secureTransactionId: raw.SecureTransactionId ?? "" }, cfg.encKey))) return result(false, "INVALID_BANK_SIGNATURE");
   const linkage = albaraka3DLinkageError(raw, { orderId: row.orderId, amount: row.amountMinor, currencyCode: row.currencyCode, transactionType: "Sale", mode: "3D" }, row.orderId, row.merchantNo);
   if (linkage || row.merchantNo !== cfg.merchantNo || row.terminalNo !== cfg.terminalNo) return result(false, "BANK_RESULT_MISMATCH");
   if (raw.MdStatus !== "1" || !raw.SecureTransactionId?.trim() || !raw.CAVV?.trim() || !raw.ECI?.trim() || !raw.MD?.trim()) return result(false, "BANK_AUTHENTICATION_FAILED");

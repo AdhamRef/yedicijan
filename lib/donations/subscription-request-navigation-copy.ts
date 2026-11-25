@@ -2,7 +2,7 @@ import type { SupportedLocale } from "../locales";
 import { receiptLocale } from "../templates/receipt-localization";
 
 type NavigationCopy = { title: string; description: string; selectPlan: string; empty: string };
-const COPY: Record<SupportedLocale, NavigationCopy> = {
+const COPY: Record<string, NavigationCopy> = {
   ar: { title: "طلبات إدارة التبرع", description: "إرسال طلبات التعديل ومتابعة حالتها ورد الإدارة", selectPlan: "اختر التبرع الدوري", empty: "لا توجد لديك تبرعات دورية لإدارة طلباتها حاليًا." },
   en: { title: "Donation management requests", description: "Submit changes and follow request status and team replies", selectPlan: "Choose a recurring donation", empty: "You have no recurring donations to manage yet." },
   tr: { title: "Bağış yönetimi talepleri", description: "Değişiklik talebi gönderin, durumunu ve ekip yanıtlarını takip edin", selectPlan: "Düzenli bağış seçin", empty: "Henüz yönetebileceğiniz düzenli bir bağışınız yok." },

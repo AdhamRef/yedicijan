@@ -108,7 +108,7 @@ async function chargeFor(totalAmount: number, currency: string): Promise<{ amoun
     const rates = await getUsdBaseRatesForServer();
     return { amount: albarakaMinorUnits(convertAmountInCurrencyToUsd(totalAmount, currency, rates)), currencyCode: "US" };
   }
-  if (policy === "DONOR" && ["TRY", "TL", "USD", "US", "EUR", "EU"].includes(donationCurrency)) {
+  if (policy === "DONATION" && ["TRY", "TL", "USD", "US", "EUR", "EU"].includes(donationCurrency)) {
     return { amount: albarakaMinorUnits(totalAmount), currencyCode: albarakaCurrencyCode(donationCurrency) };
   }
   const rates = await getUsdBaseRatesForServer();

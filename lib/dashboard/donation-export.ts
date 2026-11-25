@@ -1098,3 +1098,39 @@ function addDetailedAnalysis(wb: ExcelJS.Workbook, input: DonationExportInput) {
     }), "التحليل خاص بالصفوف المصدّرة؛ نسبة النجاح من كل المحاولات، والمبالغ للدفعات المؤكدة فقط. النسبة بوحدة %. USD يجمع القيم المتاحة فقط.");
 }
 
+
+export type ExportRecurringFrequency = "DAILY" | "FRIDAY" | "MONTHLY";
+
+/** Rows of the subscriptions sheet (used by the shared codebase's subscription reports). */
+export interface SubscriptionExportRow {
+  id: string;
+  status: "ACTIVE" | "PAUSED" | "CANCELLED" | "PAYMENT_FAILED";
+  frequency?: ExportRecurringFrequency | null;
+  /** Per-charge USD amount on a monthly scale (daily ×30.44, Friday ×4.35). */
+  monthlyEquivalentUSD?: number | null;
+  donor: { id: string | null; name: string | null; email: string | null; phone: string | null; countryCode: string | null };
+  amount: number;
+  amountUSD: number | null;
+  currency: string;
+  teamSupport: number;
+  paymentMethod: string | null;
+  createdAt: Date;
+  lastBillingDate: Date | null;
+  nextBillingDate: Date | null;
+  campaigns: { id: string; title: string }[];
+  categories: { id: string; name: string }[];
+  referral: { id: string; code: string | null; name: string | null } | null;
+  /** Count of confirmed PAID charges that have already happened on this subscription. */
+  provider?: string | null;
+  totalChargesMissingUSD?: number;
+  reportChargesCount?: number;
+  reportChargesAmount?: number;
+  reportChargesUSD?: number;
+  reportChargesMissingUSD?: number;
+  totalChargesCount: number;
+  /** Sum of amount across confirmed PAID charges (in subscription currency). */
+  totalChargesAmount: number | null;
+  /** Sum of amountUSD across confirmed PAID charges. */
+  totalChargesAmountUSD: number;
+}
+

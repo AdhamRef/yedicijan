@@ -5,7 +5,7 @@ import { whatsappUnsubscribeCopy } from "./whatsapp-template-unsubscribe";
 
 // An unsolicited greeting is submitted as MARKETING, never disguised as a
 // transactional receipt. Every language has its own body, brand and stop control.
-const GREETINGS: Record<SupportedLocale, string> = {
+const GREETINGS: Record<string, string> = {
   ar: "السلام عليكم {{user.name}}،\n\nأهلًا وسهلًا بك. يسعدنا التواصل معك والإجابة عن استفساراتك حول مشاريعنا الخيرية وخدمة القدس وأهلها.\n\nكيف يمكننا مساعدتك اليوم؟ رد على هذه الرسالة وسيتابع معك فريقنا.",
   tr: "Merhaba {{user.name}},\n\nSizinle iletişim kurmaktan ve hayır projelerimiz ile Kudüs halkına yönelik çalışmalarımız hakkındaki sorularınızı yanıtlamaktan memnuniyet duyarız.\n\nBugün size nasıl yardımcı olabiliriz? Bu mesajı yanıtlayın; ekibimiz sizinle ilgilenecektir.",
   en: "Hello {{user.name}},\n\nWe’re happy to hear from you and answer your questions about our charitable projects and our work serving Jerusalem and its people.\n\nHow can we help you today? Reply to this message and our team will assist you.",
@@ -30,10 +30,10 @@ const GREETINGS: Record<SupportedLocale, string> = {
 export function greetingTemplateDraft(legacy = false) {
   const translations = Object.fromEntries(SUPPORTED_LOCALES.map(locale => {
     const copy = whatsappUnsubscribeCopy(locale);
-    const body = !legacy && locale === "ja" ? GREETINGS.ja.replace("{{user.name}}様、こんにちは。", "こんにちは、{{user.name}}様。")
-      : !legacy && locale === "zh" ? GREETINGS.zh.replace("{{user.name}}，您好！", "您好，{{user.name}}！") : GREETINGS[locale];
+    const body = !legacy && (locale as string) === "ja" ? GREETINGS.ja.replace("{{user.name}}様、こんにちは。", "こんにちは、{{user.name}}様。")
+      : !legacy && (locale as string) === "zh" ? GREETINGS.zh.replace("{{user.name}}，您好！", "您好，{{user.name}}！") : GREETINGS[locale];
     return [locale, { body: `${body}\n\n${RECEIPT_BRANDS[locale]}`, footerText: copy.footer, buttons: [{ type: "QUICK_REPLY", text: copy.button }] }];
-  })) as Record<SupportedLocale, { body: string; footerText: string; buttons: { type: string; text: string }[] }>;
+  })) as Record<string, { body: string; footerText: string; buttons: { type: string; text: string }[] }>;
   // Keep the existing provider family: its other 17 languages are already approved.
   // Setup may correct these two locales only while neither has entered Meta's lifecycle.
   const hash = legacy ? createHash("sha256").update(JSON.stringify(translations)).digest("hex").slice(0, 12) : "7be4a780e508";

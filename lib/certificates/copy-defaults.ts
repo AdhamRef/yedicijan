@@ -171,7 +171,7 @@ export const RECEIPT_LITERAL_DEFAULTS: Pick<ReceiptCopy, "docTitleLatin" | "pair
 
 /** The paired Turkish page stays separate; its explanation belongs to the
  * language of the donor's page. The dashboard can override this wording. */
-export const RECEIPT_PAIR_NOTES: Record<SupportedLocale, string> = {
+export const RECEIPT_PAIR_NOTES: Record<string, string> = {
   ar: "يُعتد بهذا الإيصال مع النسخة التركية المرفقة.",
   tr: RECEIPT_LITERAL_DEFAULTS.pairNote,
   en: "This receipt is valid together with the accompanying Turkish copy.",

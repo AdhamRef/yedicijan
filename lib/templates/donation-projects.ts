@@ -26,7 +26,7 @@ export function donationMessageLocale(...candidates: Array<string | null | undef
 }
 
 // A missing translation must not insert the Arabic canonical name into a foreign-language receipt.
-const PROJECT_LABELS: Record<SupportedLocale, { project: string; category: string }> = {
+const PROJECT_LABELS: Record<string, { project: string; category: string }> = {
   ar: { project: "مشروع التبرع", category: "تصنيف التبرع" },
   tr: { project: "Bağış projesi", category: "Bağış kategorisi" },
   en: { project: "Donation project", category: "Donation category" },
@@ -104,7 +104,7 @@ export function donationProjectSummary(donation: DonationProjectSource): {
   ];
   return {
     // Keep every monetary line while avoiding repeated display titles in a short notification.
-    campaignTitle: [...new Set(lines.map((line) => line.campaignTitle))].join(locale === "ar" || locale === "ur" ? "، " : ", ") || labels.general,
+    campaignTitle: [...new Set(lines.map((line) => line.campaignTitle))].join(locale === "ar" || (locale as string) === "ur" ? "، " : ", ") || labels.general,
     lines,
   };
 }

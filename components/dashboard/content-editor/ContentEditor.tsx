@@ -995,7 +995,7 @@ export function ContentEditor({ kind, id, initialSection = "content", initialLoc
             <div hidden={liveSettings.fundraisingMode === "SHARES"}><SuggestedDonationsSection key={"donations-" + presetEpoch} ref={donationPresets} initialConfig={parseSuggestedDonations(document.settings.suggestedDonations)} onDirty={markPresetsDirty} /></div>
             <div hidden={liveSettings.fundraisingMode !== "SHARES"} className="space-y-5">
               <SuggestedShareCountsSection key={"shares-" + presetEpoch} ref={sharePresets} initialConfig={parseSuggestedShareCounts(document.settings.suggestedShareCounts)} onDirty={markPresetsDirty} />
-              <ShareLabelsSection key={"units-" + presetEpoch} ref={unitLabels} initialConfig={parseShareLabels(document.settings.shareLabels)} onDirty={markPresetsDirty} activeLocale={locale as keyof typeof LOCALES} />
+              <ShareLabelsSection key={"units-" + presetEpoch} ref={unitLabels} initialConfig={parseShareLabels(document.settings.shareLabels)} onDirty={markPresetsDirty} activeLocale={locale as (typeof SUPPORTED_LOCALES)[number]} />
             </div>
           </div> : null}
           {section === "donation" ? (

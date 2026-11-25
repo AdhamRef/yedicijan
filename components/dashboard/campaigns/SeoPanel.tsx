@@ -143,8 +143,8 @@ export function SeoPanel({ campaignId }: { campaignId: string }) {
   };
   const faq = parseFaq(fields.faqContent);
   const writeFaq = (items: { q: string; a: string }[]) => edit("faqContent", items.length ? JSON.stringify(items) : "");
-  const titleLimit = locale === "ja" || locale === "zh" ? 42 : 70;
-  const descriptionLimit = locale === "ja" || locale === "zh" ? 90 : 160;
+  const titleLimit = (locale as string) === "ja" || (locale as string) === "zh" ? 42 : 70;
+  const descriptionLimit = (locale as string) === "ja" || (locale as string) === "zh" ? 90 : 160;
   const title = fields.seoTitle || document?.contentTitle || document?.defaultSeo.seoTitle || "";
   const description = fields.seoDescription || document?.contentDescription || document?.defaultSeo.seoDescription || "";
   const ogTitle = fields.ogTitle || title;

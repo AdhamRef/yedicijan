@@ -150,7 +150,7 @@ function CampaignCoveragePreview({ coverage }: { coverage: CampaignLanguageCover
           {coverage.locales.filter((locale) => locale.recipientCount > 0).map((locale) => (
             <div key={locale.locale} className={cn("rounded-lg border p-3 text-xs", locale.status === "EXISTS" ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900")}>
               <div className="flex items-center justify-between gap-3 font-semibold">
-                <span>{LOCALE_LABELS[locale.locale] ?? locale.label}</span>
+                <span>{(LOCALE_LABELS as Record<string, string>)[locale.locale] ?? locale.label}</span>
                 <span dir="ltr">{locale.recipientCount.toLocaleString("en-US")}</span>
               </div>
               <p className="mt-1">{locale.status === "EXISTS" ? dt("نسخة متاحة") : dt("نسخة غير متاحة؛ يلزم تجهيزها أو استبعاد اللغة صراحةً قبل الإرسال.")}</p>

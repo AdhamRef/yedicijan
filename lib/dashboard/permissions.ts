@@ -3,7 +3,7 @@ import type { Session } from "next-auth";
 type UserLike = { role?: string | null; dashboardPermissions?: string[] | null };
 
 export const DASHBOARD_PERMISSION_KEYS = [
-  "revenue", "referrals", "bankTransfers", "donors", "team", "logs",
+  "revenue", "monthly", "referrals", "bankTransfers", "donors", "team", "logs",
   "badges", "messages", "templates", "campaigns", "categories", "blog", "slides",
   // "operations" (the التشغيل section) and "monthly" (monthly donations) were removed. Any value still stored on a user row is
   // simply inert — it maps to no page and grants nothing.
@@ -92,6 +92,8 @@ const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
   { prefix: "/dashboard/google-analytics", key: "platformConnections" },
   { prefix: "/dashboard/platform-connections", key: "platformConnections" },
   { prefix: "/dashboard/marketing/attribution", key: "referrals" },
+  { prefix: "/dashboard/monthly", key: "monthly" },
+  { prefix: "/dashboard/subscription-requests", key: "monthly" },
   { prefix: "/dashboard/marketing/tracking", key: "pixels" },
   { prefix: "/dashboard/marketing/connections", key: "platformConnections" },
   { prefix: "/dashboard/marketing/google-search", key: "platformConnections" },

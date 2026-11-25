@@ -1,6 +1,6 @@
 import { isValidLocale, localeDirection, type SupportedLocale } from "../locales";
 // label, confirmation question, button and completed state stay in one language.
-const COPY: Record<SupportedLocale, readonly [string, string, string, string]> = {
+const COPY: Record<string, readonly [string, string, string, string]> = {
   ar: ["إلغاء الاشتراك من الرسائل التسويقية", "هل تريد إيقاف الرسائل التسويقية عبر البريد الإلكتروني؟", "تأكيد إلغاء الاشتراك", "تم إلغاء اشتراكك في الرسائل التسويقية عبر البريد الإلكتروني."],
   tr: ["Pazarlama e-postalarından aboneliği iptal et", "Pazarlama e-postalarını almayı durdurmak istiyor musunuz?", "Abonelik iptalini onayla", "Pazarlama e-postası aboneliğiniz iptal edildi."],
   en: ["Unsubscribe from marketing emails", "Stop receiving marketing emails?", "Confirm unsubscribe", "You have unsubscribed from marketing emails."],

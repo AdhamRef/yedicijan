@@ -538,3 +538,254 @@ export function albarakaMdStatusMessage(mdStatus: string): string {
   };
   return table[mdStatus] ?? `Unknown 3D status (${mdStatus || "empty"})`;
 }
+
+// ── Ported from the shared codebase so its recurring and 2D modules compile. ──
+// Recurring stays off unless ALBARAKA_RECURRING_ENABLED=1; checkout is 3D only.
+
+/** The 3D form for a card change on a recurring plan (shared codebase). Signed with
+ *  this file's `albarakaFormMac`, the same MAC the checkout's 3D form uses. */
+export function buildAlbaraka3DForm(input: {
+  orderId: string; amount: number; currencyCode: AlbarakaCurrencyCode; returnUrl: string; locale: string;
+  card: { number: string; expireDate: string; cvc2: string; holderName: string };
+}, cfg: AlbarakaConfig): Record<string, string> {
+  const fields: Record<string, string> = {
+    PosnetID: cfg.posnetId, MerchantNo: cfg.merchantNo, TerminalNo: cfg.terminalNo,
+    OrderId: input.orderId, TransactionType: "Sale", CardNo: input.card.number,
+    ExpiredDate: input.card.expireDate, Cvv: input.card.cvc2, CardHolderName: input.card.holderName,
+    Amount: String(input.amount), InstallmentCount: "0", MerchantReturnURL: input.returnUrl,
+    Language: albarakaLang(input.locale), CurrencyCode: input.currencyCode,
+    UseJokerVadaa: cfg.useJokerVadaa ? "1" : "0", KOICode: "", OpenNewWindow: "0",
+    UseOOS: "0", TxnState: "INITIAL", VftCode: "", gsmNo: "", packetCode: "",
+  };
+  const mac = albarakaFormMac({ merchantNo: cfg.merchantNo, terminalNo: cfg.terminalNo, cardNo: input.card.number, cvc2: input.card.cvc2, expireDate: input.card.expireDate, amount: String(input.amount) }, cfg.encKey);
+  return { ...fields, Mac: mac, MacParams: ALBARAKA_FORM_MAC_PARAMS };
+}
+
+
+export type AlbarakaRecurringConfig = AlbarakaConfig & {
+  /** Master switch: nothing is charged by the scheduler while this is off. */
+  enabled: boolean;
+  /** Explicit bank-confirmed Mail Order mode; ordinary ecommerce is the default. */
+  mailOrder?: boolean;
+};
+
+export function albarakaRecurringConfig(): AlbarakaRecurringConfig {
+  const base = albarakaConfig();
+  const mailOrder = (process.env.ALBARAKA_RECURRING_MAIL_ORDER || "N").trim().toUpperCase();
+  /* A scheduled instalment is a non-3D sale, like the checkout's 2D sale, so
+     without a dedicated recurring terminal it runs on the 2D (non-3D) terminal
+     with that terminal's own key  never the 3D terminal, which refuses a sale
+     without 3D Secure. The first instalment is charged on the 2D terminal, so
+     the plan's later ones then go to the same terminal. */
+  return {
+    ...base,
+    terminalNo: process.env.ALBARAKA_RECURRING_TERMINAL_NO || process.env.ALBARAKA_2D_TERMINAL_NO || base.terminalNo,
+    posnetId: process.env.ALBARAKA_RECURRING_POSNET_ID || process.env.ALBARAKA_2D_POSNET_ID || base.posnetId,
+    encKey: process.env.ALBARAKA_RECURRING_ENC_KEY || process.env.ALBARAKA_2D_ENC_KEY || base.encKey,
+    mailOrder: mailOrder === "Y",
+    enabled: process.env.ALBARAKA_RECURRING_ENABLED === "1" && ["N", "Y"].includes(mailOrder),
+  };
+}
+
+export function isAlbarakaRecurringEnabled(cfg: AlbarakaRecurringConfig = albarakaRecurringConfig()): boolean {
+  return cfg.enabled && isAlbarakaConfigured(cfg);
+}
+
+/** The signup sale uses the 2D terminal; renewals also need their enabled terminal. */
+export function isAlbarakaRecurringCheckoutReady(): boolean {
+  return isAlbarakaConfigured(albaraka2DConfig()) && isAlbarakaRecurringEnabled();
+}
+
+/**
+ * Non-3D orders are exactly 24 characters. The scheduler derives them from the plan
+ * and the cycle it is charging (`albarakaRecurringOrderId`), so a re-run for the same
+ * cycle produces the same id and the bank's own "ORDERID DAHA ONCE KULLANILMIS"
+ * refusal becomes a second line of defence against a double charge.
+ */
+export function albarakaRecurringOrderId(subscriptionId: string, cycleIso: string, attempt: number): string {
+  return crypto
+    .createHash("sha256")
+    .update(`${subscriptionId}:${cycleIso}:${attempt}`, "utf8")
+    .digest("hex")
+    .slice(0, 24)
+    .toUpperCase();
+}
+
+/**
+ * Saved cards keep their expiry as "MM/YY"; the bank wants "YYMM" ("2612" =
+ * December 2026). Empty when the stored value is not a four-digit date.
+ */
+export function albarakaExpiryFromStored(stored: string): string {
+  const digits = String(stored || "").replace(/\D/g, "");
+  if (digits.length !== 4) return "";
+  return `${digits.slice(2, 4)}${digits.slice(0, 2)}`;
+}
+
+/**
+ * A card is usable through the last day of its expiry month. Checked before a
+ * scheduled charge so an expired card fails the plan with a clear reason
+ * instead of a bank decline  and, per `DONATION_LOGIC_SPEC` § 1.3, is the
+ * hook for the "update your card" notice a week ahead.
+ */
+export function isStoredCardExpired(stored: string, now: Date = new Date()): boolean {
+  const digits = String(stored || "").replace(/\D/g, "");
+  if (digits.length !== 4) return true;
+  const month = Number(digits.slice(0, 2));
+  const year = 2000 + Number(digits.slice(2, 4));
+  if (!(month >= 1 && month <= 12)) return true;
+  // First instant of the month after expiry, in UTC  the card is dead from then.
+  const firstInvalid = Date.UTC(year, month, 1);
+  return now.getTime() >= firstInvalid;
+}
+
+/** MACParams the document lists for a standard (non-3D) sale. */
+export const ALBARAKA_NON_SECURE_MAC_PARAMS = "MerchantNo:TerminalNo:CardNo:Cvc2:ExpireDate:Amount";
+
+/**
+ * MAC for a standard /Sale  same construction as the 3D payment MAC (plain SHA256
+ * over the values concatenated without separators, key appended), over the six
+ * parameters the document's MACParams names for it. An absent Cvc2 takes part as
+ * an empty string, the way absent fields do in every other MAC of this API.
+ */
+export function albarakaNonSecureSaleMac(
+  params: { merchantNo: string; terminalNo: string; cardNo: string; cvc2: string; expireDate: string; amount: number },
+  encKey: string
+): string {
+  return sha256Base64(
+    params.merchantNo + params.terminalNo + params.cardNo + params.cvc2 + params.expireDate + String(params.amount) + encKey
+  );
+}
+
+/**
+ * The /Sale body for one scheduled charge. Pure, so the tests can pin the shape
+ * without a bank: the card is a stored credential, so it carries no Cvc2, and the
+ * transaction remains recurring. Mail Order is independently selected only when
+ * the merchant has configured that bank-confirmed transaction class.
+ */
+export function buildAlbarakaRecurringSale(
+  input: {
+    orderId: string;
+    amount: number;
+    currencyCode: AlbarakaCurrencyCode;
+    card: { number: string; expireDate: string; holderName: string };
+  },
+  cfg: AlbarakaRecurringConfig
+): Record<string, unknown> {
+  const mac = albarakaNonSecureSaleMac(
+    {
+      merchantNo: cfg.merchantNo,
+      terminalNo: cfg.terminalNo,
+      cardNo: input.card.number,
+      cvc2: "",
+      expireDate: input.card.expireDate,
+      amount: input.amount,
+    },
+    cfg.encKey
+  );
+  return {
+    ApiType: "JSON",
+    ApiVersion: "V100",
+    MerchantNo: cfg.merchantNo,
+    TerminalNo: cfg.terminalNo,
+    PaymentInstrumentType: "CARD",
+    IsEncrypted: "N",
+    IsTDSecureMerchant: "N",
+    IsMailOrder: cfg.mailOrder === true ? "Y" : "N",
+    IsRecurring: "Y",
+    CardInformationData: {
+      CardHolderName: input.card.holderName,
+      CardNo: input.card.number,
+      Cvc2: "",
+      ExpireDate: input.card.expireDate,
+    },
+    ThreeDSecureData: null,
+    MAC: mac,
+    MACParams: ALBARAKA_NON_SECURE_MAC_PARAMS,
+    Amount: String(input.amount),
+    CurrencyCode: input.currencyCode,
+    PointAmount: 0,
+    OrderId: input.orderId,
+    InstallmentCount: "0",
+    InstallmentType: "N",
+  };
+}
+
+// ── Checkout charges: 2D (non-3D) ────────────────────────────────────────────
+//
+// The checkout charges Albaraka without 3D Secure: the card is sent straight to
+// the bank's /Sale (the document's "Standart Satış") and the answer settles the
+// donation there and then  the donor is never sent to the bank's 3D page. The
+// 3D callback is kept only for a session that was already in flight.
+//
+// A non-3D sale runs on a terminal the bank has opened for it. Its numbers go in
+// ALBARAKA_2D_TERMINAL_NO / ALBARAKA_2D_POSNET_ID / ALBARAKA_2D_ENC_KEY (the key
+// is per terminal); each falls back to the recurring terminal's, then to the
+// main one's.
+
+export function albaraka2DConfig(): AlbarakaConfig {
+  const base = albarakaConfig();
+  return {
+    ...base,
+    terminalNo: process.env.ALBARAKA_2D_TERMINAL_NO || process.env.ALBARAKA_RECURRING_TERMINAL_NO || base.terminalNo,
+    posnetId: process.env.ALBARAKA_2D_POSNET_ID || process.env.ALBARAKA_RECURRING_POSNET_ID || base.posnetId,
+    encKey: process.env.ALBARAKA_2D_ENC_KEY || base.encKey,
+    // The bank's hosted card page is a 3D feature; a 2D sale always carries the card.
+    useOOS: false,
+  };
+}
+
+/** Non-3D orders are exactly 24 characters: 12 random bytes as uppercase hex. */
+export function albaraka2DOrderId(): string {
+  return crypto.randomBytes(12).toString("hex").toUpperCase();
+}
+
+/**
+ * The /Sale body for a donor-present 2D charge: the card with its CVC, neither
+ * 3D nor mail-order nor recurring. Pure, so the shape can be pinned without a bank.
+ */
+export function buildAlbaraka2DSale(
+  input: {
+    orderId: string;
+    amount: number;
+    currencyCode: AlbarakaCurrencyCode;
+    card: { number: string; expireDate: string; cvc2: string; holderName: string };
+  },
+  cfg: AlbarakaConfig
+): Record<string, unknown> {
+  const mac = albarakaNonSecureSaleMac(
+    {
+      merchantNo: cfg.merchantNo,
+      terminalNo: cfg.terminalNo,
+      cardNo: input.card.number,
+      cvc2: input.card.cvc2,
+      expireDate: input.card.expireDate,
+      amount: input.amount,
+    },
+    cfg.encKey
+  );
+  return {
+    ApiType: "JSON",
+    ApiVersion: "V100",
+    MerchantNo: cfg.merchantNo,
+    TerminalNo: cfg.terminalNo,
+    PaymentInstrumentType: "CARD",
+    IsEncrypted: "N",
+    IsTDSecureMerchant: "N",
+    IsMailOrder: "N",
+    CardInformationData: {
+      CardHolderName: input.card.holderName,
+      CardNo: input.card.number,
+      Cvc2: input.card.cvc2,
+      ExpireDate: input.card.expireDate,
+    },
+    ThreeDSecureData: null,
+    MAC: mac,
+    MACParams: ALBARAKA_NON_SECURE_MAC_PARAMS,
+    Amount: String(input.amount),
+    CurrencyCode: input.currencyCode,
+    PointAmount: 0,
+    OrderId: input.orderId,
+    InstallmentCount: "0",
+    InstallmentType: "N",
+  };
+}

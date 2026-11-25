@@ -30,7 +30,7 @@ export function isTranslationLocale(value: string): value is TranslationLocale {
 
 /** The flag each language is shown with. A language is not a country; these
  *  are the conventional pairings and nothing more. */
-const FLAG: Record<SupportedLocale, string> = {
+const FLAG: Record<string, string> = {
   ar: 'SA', en: 'GB', fr: 'FR', tr: 'TR', id: 'ID', pt: 'PT', es: 'ES', de: 'DE',
   ur: 'PK', sq: 'AL', it: 'IT', nl: 'NL', sv: 'SE', no: 'NO', da: 'DK', ms: 'MY',
   ja: 'JP', zh: 'CN', hi: 'IN',

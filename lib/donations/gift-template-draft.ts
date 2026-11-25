@@ -19,7 +19,7 @@ export function giftTemplateVariant(raw: unknown, locale: SupportedLocale) {
   };
 }
 
-const GIFT_COPY: Record<SupportedLocale, [string, string, string, string]> = {
+const GIFT_COPY: Record<string, [string, string, string, string]> = {
   ar: ["إشعار بإهداء تبرع خيري\n\nيسعدنا إبلاغك بوصول إهداء باسمك. تجد أدناه تفاصيل التبرع ورسالة المُهدي ورابط شهادة الإهداء الخاصة بك.", "رسالة المُهدي:", "لفتح شهادة الإهداء وتنزيلها، استخدم الرابط التالي:", "يمكنك الاحتفاظ بالشهادة ومشاركتها مع من تحب. إذا احتجت إلى مساعدة بشأن هذا الإهداء، تواصل معنا عبر الموقع الرسمي للمؤسسة."],
   tr: ["Adınıza yapılan bağış hediyesi hakkında\n\nAdınıza bir bağış hediyesi yapıldığını bildirmekten mutluluk duyarız. Bağış bilgileri, bağışçının mesajı ve hediye belgenizin bağlantısı aşağıdadır.", "Bağışçının mesajı:", "Hediye belgenizi görüntülemek ve indirmek için bu bağlantıyı kullanın:", "Belgenizi saklayabilir ve sevdiklerinizle paylaşabilirsiniz. Bu hediye hakkında yardıma ihtiyacınız olursa kurumumuzun resmî web sitesinden bize ulaşabilirsiniz."],
   en: ["A charitable donation gift in your name\n\nWe are pleased to let you know that a donation gift has been made in your name. The donation details, the donor’s message and your gift certificate link are below.", "The donor’s personal message:", "Use this link to view and download your gift certificate:", "You may keep the certificate and share it with your loved ones. If you need help with this gift, please contact our team through the foundation’s official website."],

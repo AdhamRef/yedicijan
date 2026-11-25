@@ -2,7 +2,7 @@ import { SUPPORTED_LOCALES, type SupportedLocale } from "../locales";
 
 export type RecurringFrequency = "DAILY" | "FRIDAY" | "MONTHLY";
 // Adjectives/periods are localized independently of the donor's browser language.
-export const CADENCE_COPY: Record<SupportedLocale, readonly [string,string,string,string,string]> = {
+export const CADENCE_COPY: Record<string, readonly [string,string,string,string,string]> = {
   ar:["يومي","كل جمعة","شهري","دوري","دورية التبرع"],
   en:["daily","every Friday","monthly","recurring","Donation frequency"],
   tr:["günlük","her cuma","aylık","düzenli","Bağış sıklığı"],
@@ -23,7 +23,7 @@ export const CADENCE_COPY: Record<SupportedLocale, readonly [string,string,strin
   zh:["每日","每周五","每月","定期","捐赠频率"],
   hi:["दैनिक","हर शुक्रवार","मासिक","नियमित","दान की आवृत्ति"],
 };
-const MONTHLY: Record<SupportedLocale,RegExp> = {
+const MONTHLY: Record<string,RegExp> = {
   ar:/الشهري(?:ة)?|شهري(?:اً|ًا|ا|ة)?/gu,en:/\bmonthly\b|\bevery month\b/gi,
   tr:/aylık|her ay/giu,fr:/mensuell?e?s?|chaque mois/giu,de:/monatlich(?:e[nmrs]?)?|jeden Monat/giu,
   es:/mensual(?:es)?|cada mes/giu,id:/bulanan|setiap bulan/giu,pt:/mensais|mensal|todos os meses/giu,
