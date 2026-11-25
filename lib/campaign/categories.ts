@@ -81,7 +81,7 @@ export function resolveCampaignCategoryIds(c: {
 /**
  * Build a Prisma `where` clause matching campaigns that belong to a given
  * category. Uses the m2m array via `has`. Exposed for routes that filter
- * donations/subscriptions by a campaign's category.
+ * donations by a campaign's category.
  */
 export function campaignInCategoryWhere(
   categoryId: string,

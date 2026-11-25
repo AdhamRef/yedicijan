@@ -384,7 +384,7 @@ enum Role {
  * ===================== USER BADGES (GROUPS) =====================
  */
 // Badges are computed from criteria; no direct User-Badge relation stored.
-// Criteria types: TOTAL_LAST_N_MONTHS, ANY_SPAN_N_MONTHS, MONTHLY_ACTIVE_RANGE, TOTAL_LIFETIME, DONATION_COUNT_MIN
+// Criteria types: TOTAL_LAST_N_MONTHS, ANY_SPAN_N_MONTHS, TOTAL_LIFETIME, DONATION_COUNT_MIN
 
 model Badge {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -899,12 +899,13 @@ model Donation {
   referralId       String?   @db.ObjectId
   referral         Referral? @relation(fields: [referralId], references: [id])
 
+  /// Historical only — set on rows from the retired monthly donations.
   subscriptionId String?       @db.ObjectId
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
-  /// Stripe invoice `billing_reason` for subscription donations  the authoritative
-  /// "is this the signup charge or an automatic renewal?" marker.
+  /// Historical: billing reason recorded for the retired monthly (subscription) donations —
+  /// the "signup charge or automatic renewal?" marker.
   /// "subscription_create" = first charge, "subscription_cycle" = automatic renewal.
-  /// Null on one-time donations and on legacy rows created before this was recorded.
+  /// Null on one-time donations. No longer written.
   billingReason  String?
 
   comment       String?
@@ -947,6 +948,7 @@ model Donation {
   @@index([status, paidAt, donorId])
 }
 
+/// Historical only: monthly donations were retired. Kept so old rows still read; nothing writes it.
 model Subscription {
   id     String             @id @default(auto()) @map("_id") @db.ObjectId
   status SubscriptionStatus @default(ACTIVE)
@@ -959,7 +961,7 @@ model Subscription {
   paymentMethod PaymentMethod
   cardDetails   CardDetails?
 
-  // PayFor recurring support (requires bank-provided token/reference transaction model)
+  // Unused: monthly donations were retired
   payforToken     String?
   payforMaskedPan String?
   payforExpiry    String? // MMYY (if bank requires it alongside token)
@@ -1069,8 +1071,8 @@ model SubscriptionItem {
 
   amount     Float
   amountUSD  Float?
-  /// When set, line item was a سهوم (shares) purchase  mirrors DonationItem.shareCount.
-  /// Three creation paths (donations, stripe/intent, cart/payment) already spread this in
+  /// When set, line item was a سهوم (shares) purchase — mirrors DonationItem.shareCount.
+  /// The old creation paths spread this in
   /// conditionally; without the field Prisma threw PrismaClientValidationError inside the
   /// transaction, rolling back the whole thing  no subscription AND no donation, just a 500.
   shareCount Int?
@@ -2031,13 +2033,14 @@ model GlobalSettings {
   /// per locale: `{ thanks: { ar: { title, body, … } }, waqf: {…}, receipt: {…} }`.
   /// Shape and defaults in `lib/certificates/copy.ts`; null means "the i18n text".
   certificateCopy      Json?
-  /// Master switch for the PayFor (Ziraat Katılım) 3D Secure gateway. When false,
-  /// every donation is forced through the main gateway regardless of currency.
+  /// Master switch for the PayFor (Ziraat Katılım) 3D Secure gateway, which takes
+  /// one-time donations in Turkish lira. When false those move to Albaraka, which
+  /// charges in TL anyway. Routing is otherwise fixed — see lib/payment-gateway.ts.
   payforEnabled        Boolean  @default(true)
   payforSaudiRoutingEnabled Boolean @default(false)
-  /// Main card gateway: "STRIPE" or "ALBARAKA". Handles every case PayFor doesn't
-  /// take, except monthly subscriptions which always run on Stripe.
-  mainGateway          String   @default("STRIPE")
+  /// Legacy main-gateway switch. Routing is fixed (Albaraka + PayFor only, see
+  /// lib/payment-gateway.ts); kept only while code still reads it. Never "STRIPE".
+  mainGateway          String   @default("ALBARAKA")
   /// Donation amounts. Off (default): every donation line is worth at least
   /// one US dollar  the basket and checkout refuse less, and so does the
   /// order API. On: any positive amount in the donor's own currency is taken

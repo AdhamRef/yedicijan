@@ -50,8 +50,7 @@ export async function GET(request: NextRequest) {
     if (scope === 'donors') {
       const canListDonors =
         sessionHasDashboardPermission(session, 'donors') ||
-        sessionHasDashboardPermission(session, 'revenue') ||
-        sessionHasDashboardPermission(session, 'monthly');
+        sessionHasDashboardPermission(session, 'revenue');
       if (!canListDonors) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
@@ -63,8 +62,7 @@ export async function GET(request: NextRequest) {
         session.user.role === 'ADMIN' ||
         sessionHasDashboardPermission(session, 'donors') ||
         sessionHasDashboardPermission(session, 'team') ||
-        sessionHasDashboardPermission(session, 'revenue') ||
-        sessionHasDashboardPermission(session, 'monthly');
+        sessionHasDashboardPermission(session, 'revenue');
       if (!canListAll) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }

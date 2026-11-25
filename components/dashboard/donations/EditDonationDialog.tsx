@@ -38,10 +38,6 @@ interface DonationDetail {
   provider?: string | null;
   status: "PAID" | "FAILED";
   paidAt: string | null;
-  // null on one-time donations; set for recurring plan rows. A plan row with
-  // paidAt=null is as unconfirmed as a one-time one (e.g. a PayPal first
-  // instalment the donor never approved), so it gets the same قيد التأكيد.
-  subscriptionId?: string | null;
   donor?: { name: string | null; email: string | null } | null;
   items: { campaignId: string; amount: number; campaign: { title: string } }[];
   categoryItems: { categoryId: string; amount: number; category: { name: string } }[];
@@ -105,8 +101,8 @@ export function EditDonationDialog({ donationId, onClose, onSaved }: Props) {
         setCurrency(d.currency);
         setProvider(d.provider ?? "MANUAL");
         setTeamSupport(String(d.teamSupport ?? 0));
-        // Unconfirmed (paidAt=null) opens as قيد التأكيد for every donation,
-        // one-time or recurring: "PAID" is the admin saying the money arrived.
+        // Unconfirmed (paidAt=null) opens as قيد التأكيد for every donation:
+        // "PAID" is the admin saying the money arrived.
         setStatusChoice(
           d.status === "FAILED"
             ? "FAILED"

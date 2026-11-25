@@ -1,4 +1,3 @@
-import { frozenPaymentRoute } from "@/lib/donations/payment-routing";
 import { donationFieldEmpty, donationWhereAll } from "@/lib/donations/mongo-null";
 import { withDonationToken } from "@/lib/donations/access-token-link";
 import { NextRequest, NextResponse } from "next/server";
@@ -19,6 +18,7 @@ import {
 import { decryptCard } from "@/lib/card-crypto";
 import { paymentPublicOrigin } from "@/lib/payment-public-origin";
 import { isValidLocale } from "@/lib/locales";
+import { resolveGateway } from "@/lib/payment-gateway";
 
 /** Convert any amount to TRY using USD-base rates from the database (same as donations). */
 async function toTRY(amount: number, fromCurrency: string): Promise<number> {
@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
 
-    // Master kill-switch: if the admin disabled PayFor in GlobalSettings,
-    // every TRY donation must go through Stripe. Refuse to initiate a 3D
+    // Master kill-switch: if the admin disabled PayFor in GlobalSettings, every
+    // one-time donation goes through Albaraka instead. Refuse to initiate a 3D
     // Secure session regardless of what the client requested. The dialogs
     // already gate the UI on the same flag  this is the server-side belt.
     const settings = await prisma.globalSettings.findFirst({
@@ -65,8 +65,8 @@ export async function POST(req: NextRequest) {
     if (session?.user?.id && donation.donorId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    const frozenRoute = frozenPaymentRoute(donation.providerRaw);
-    if (donation.subscriptionId || frozenRoute && frozenRoute.gateway !== "PAYFOR") return NextResponse.json({ error: "This payment attempt belongs to another gateway", code: "PAYMENT_GATEWAY_LOCKED" }, { status: 409 });
+    // An attempt already started on another gateway (or a historical plan row) is not PayFor's to charge.
+    if (donation.subscriptionId || (donation.provider && donation.provider !== "PAYFOR")) return NextResponse.json({ error: "This payment attempt belongs to another gateway", code: "PAYMENT_GATEWAY_LOCKED" }, { status: 409 });
     const returnToResult = () => {
       const locale = isValidLocale(donation.locale ?? "") ? donation.locale! : "en";
       return NextResponse.json({ actionUrl: `${paymentPublicOrigin(req.url)}${withDonationToken(`/${locale}/success/${donation.id}`, donation.accessToken)}`, method: "GET", fields: {} });
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
     if (donation.paidAt || ["Processing", "Capturing3D", "PendingConfirmation"].includes(donation.providerTxnResult ?? "")) return returnToResult();
     if (settings && settings.payforEnabled === false) {
       return NextResponse.json(
-        { error: "PayFor gateway is disabled. Use the Stripe checkout instead." },
+        { error: "PayFor gateway is disabled. This donation routes to Albaraka." },
         { status: 403 }
       );
     }
@@ -83,6 +83,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: `Donation has already failed (status=${donation.status})` },
         { status: 400 }
+      );
+    }
+    // Enforce the same routing the dialogs use: PayFor takes every currency except
+    // lira, which belongs to Albaraka.
+    const resolved = resolveGateway({
+      payforEnabled: settings?.payforEnabled ?? true,
+      currency: donation.currency,
+    });
+    if (resolved !== "PAYFOR") {
+      return NextResponse.json(
+        { error: `This donation routes to ${resolved}, not PayFor.` },
+        { status: 403 }
       );
     }
     const gatewayUrl = process.env.PAYFOR_3DPAY_URL;

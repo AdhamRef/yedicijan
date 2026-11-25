@@ -19,10 +19,6 @@ import {
 } from "@/lib/albaraka";
 import { failAlbarakaDonation, settleAlbarakaDonation } from "@/lib/donations/albaraka-settlement";
 import { withDonationToken } from "@/lib/donations/access-token";
-import { completeSubscriptionCardVerification } from "@/lib/donations/subscription-card-verification";
-
-// Calls Albaraka's /Sale, which only accepts the project's Static IPs (sin1).
-export const preferredRegion = "sin1";
 
 /**
  * POST /api/albaraka/3d/callback
@@ -30,9 +26,10 @@ export const preferredRegion = "sin1";
  * Albaraka posts the 3D verification result back here (single return URL  there is
  * no separate ok/fail pair like PayFor's). Three gates before any money moves:
  *
- *   1. MacNew must match what we recompute over the returned parameters, proving the
- *      amount / order / verdict weren't rewritten in the browser round-trip.
- *   2. The order must be the one we started, for the amount we started it with.
+ *   1. The `Mac` must match what we recompute over the returned 3D authentication
+ *      result (ECI/CAVV/MdStatus/MdErrorMessage/MD/SecureTransactionId).
+ *   2. The order, merchant, currency and amount must be the ones we started with —
+ *      the MAC does not cover them, so this linkage check is what binds them.
  *   3. MdStatus must be 1 (full 3D). The bank explicitly recommends stopping otherwise,
  *      and "half 3D" (2/3/4) must never silently downgrade the donor's 3D choice.
  *
@@ -68,22 +65,6 @@ export async function POST(req: NextRequest) {
   const donationId = searchParams.get("donationId") || "";
   const requestedLocale = (searchParams.get("locale") || "en").toLowerCase();
   const locale = isValidLocale(requestedLocale) ? requestedLocale : "en";
-
-  // A distinct, nonce-bound authentication-only flow for future subscription
-  // cards. It never falls through to the donation Sale/capture branch below.
-  if (searchParams.has("cardVerificationId")) {
-    const verificationId = searchParams.get("cardVerificationId") || "", token = searchParams.get("token") || "";
-    const target = new URL(`/${locale}/profile?tab=subscriptions&cardUpdate=failed`, origin);
-    if (!/^[a-f0-9]{24}$/i.test(verificationId) || !/^[A-Za-z0-9_-]{43}$/.test(token)) return NextResponse.redirect(target, 303);
-    try {
-      const form = await req.formData(), raw = Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === "string").map(([k, v]) => [k, String(v)]));
-      const result = await completeSubscriptionCardVerification(prisma, verificationId, token, raw, albarakaConfig());
-      if (result.subscriptionId) target.searchParams.set("subscriptionId", result.subscriptionId);
-      target.searchParams.set("cardUpdate", result.ok ? "success" : "failed");
-      if (result.ok) target.searchParams.set("verificationId", verificationId);
-    } catch { /* No Sale call, and the old card remains the authority. */ }
-    return NextResponse.redirect(target, 303);
-  }
 
   const failUrl = donationId
     ? new URL(
@@ -154,8 +135,13 @@ export async function POST(req: NextRequest) {
 
 
     // ── 1. MAC verification ──────────────────────────────────────────────────
-    const expectedMac = albarakaResponseMac(raw, cfg.encKey);
-    const receivedMac = String(raw.MacNew ?? "");
+    // Signs the authentication result only (ECI/CAVV/MdStatus/MdErrorMessage/MD/
+    // SecureTransactionId) — amount, order, merchant and currency are checked in step 2.
+    const expectedMac = albarakaResponseMac(
+      { eci, cavv, mdStatus, mdErrorMessage, md, secureTransactionId },
+      cfg.encKey
+    );
+    const receivedMac = String(raw.Mac ?? raw.MacNew ?? "");
     if (!receivedMac || !macEquals(expectedMac, receivedMac)) {
       return redirect(failUrl);
     }

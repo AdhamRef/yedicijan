@@ -269,7 +269,7 @@ export function TriggerList() {
           <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
             <Clock className="w-3.5 h-3.5" /> {dt(" تذكير التبرّع مجددًا")}</p>
           <p className="text-[11px] text-amber-900 leading-relaxed">
-            {dt("يُفحص تلقائيًا كل يوم الساعة ٩ صباحًا (UTC). يُستثنى المشتركون شهريًا ومن ألغى الاشتراك في الرسائل، ولا يُرسل التذكير لنفس المتبرّع مرتين قبل انتهاء فترة الانتظار. لإيقافه: أزل علامة «مفعّل» من الجدول أعلاه.")}</p>
+            {dt("يُفحص تلقائيًا كل يوم الساعة ٩ صباحًا (UTC). يُستثنى من ألغى الاشتراك في الرسائل، ولا يُرسل التذكير لنفس المتبرّع مرتين قبل انتهاء فترة الانتظار. لإيقافه: أزل علامة «مفعّل» من الجدول أعلاه.")}</p>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"

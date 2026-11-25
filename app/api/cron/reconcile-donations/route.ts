@@ -11,8 +11,9 @@ export const maxDuration = 300;
  * Half-hour confirmation polling for online donations. Provider uncertainty
  * stays distinguishable from an authoritative unpaid result after 24 hours.
  *
- * The existing provider settlement owns paidAt, revenue and subscription
- * activation. This job asks the recorded provider and reuses that settlement;
+ * The existing provider settlement owns paidAt and revenue. Albaraka rows are asked
+ * of the bank and reuse that settlement; PayFor has no status lookup, so its abandoned
+ * carts are aged out after 48 hours. For Albaraka,
  * age by itself is never proof that an unknown bank response means unpaid.
  *
  * `?dryRun=1` reports the same summary without writing anything.
@@ -47,10 +48,9 @@ export async function GET(request: NextRequest) {
     await writeAuditLog({
       actorRole: "SYSTEM",
       action: "DONATIONS_RECONCILE_FAILED",
-        messageAr: "فشل تشغيل مطابقة التبرعات مع مزودي الدفع",
+      messageAr: "فشل تشغيل مطابقة التبرعات غير المؤكدة",
       messageEn: "Donation reconciliation cron run failed",
       entityType: "Donation",
-      metadata: { externalCall: true },
       stream: "TEAM",
     }).catch(() => {});
     return NextResponse.json({ ok: false, error: "Reconciliation failed" }, { status: 500 });

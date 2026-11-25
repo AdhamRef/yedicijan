@@ -33,7 +33,6 @@ async function loadDonationForConversion(donationId: string) {
   return prisma.donation.findUnique({
     where: { id: donationId },
     include: {
-      subscription: { select: { frequency: true } },
       donor: { select: { id: true, email: true, phone: true, name: true, countryCode: true, city: true, region: true, gender: true, birthdate: true } },
       items: { include: { campaign: { select: { id: true, title: true } } } },
       categoryItems: { include: { category: { select: { id: true, name: true } } } },
@@ -73,7 +72,6 @@ function buildUserDataFromDonation(row: LoadedDonation): MetaUserData {
     fbc: getStr(attribution, "fbc") ?? null,
     client_ip: getStr(attribution, "client_ip") ?? getStr(attribution, "client_ip_address") ?? null,
     user_agent: getStr(attribution, "user_agent") ?? null,
-    subscription_id: row.subscriptionId ?? null,
   };
 }
 
@@ -118,13 +116,13 @@ export async function sendDonationServerConversions(donationId: string, options:
 
     const creds = await getMetaCapiCredentials();
     const attribution = (row.attribution ?? undefined) as Attribution | undefined;
-    const eventSourceUrl = safeAcquisitionLandingPage(attribution ?? null) ?? "https://minberiaksa.org/";
+    const eventSourceUrl = safeAcquisitionLandingPage(attribution ?? null) ?? "https://yedicihan.org/";
     const eventTime = Math.floor((row.paidAt ?? new Date()).getTime() / 1000);
     const currency = (row.currency || "USD").toUpperCase();
     const contentName = primaryContentName(row);
     const { ids, contents } = buildContents(row);
     const eventId = metaDonationEventId(row.id, "success");
-    const custom_data: MetaCustomData = { value: amount, currency, content_type: "donation", content_name: contentName, content_category: row.subscriptionId ? (row.subscription?.frequency ?? "MONTHLY").toLowerCase() : "donation", content_ids: ids, contents, num_items: contents.reduce((s, c) => s + (c.quantity ?? 1), 0), order_id: row.id, transaction_id: row.id, status: "paid", success: true, payment_info_available: 1, donation_type: row.subscriptionId ? (row.subscription?.frequency ?? "MONTHLY") : "ONE_TIME", recurring: !!row.subscriptionId, payment_method: (row.paymentMethod ?? "CARD").toLowerCase() };
+    const custom_data: MetaCustomData = { value: amount, currency, content_type: "donation", content_name: contentName, content_category: "donation", content_ids: ids, contents, num_items: contents.reduce((s, c) => s + (c.quantity ?? 1), 0), order_id: row.id, transaction_id: row.id, status: "paid", success: true, payment_info_available: 1, donation_type: "ONE_TIME", payment_method: (row.paymentMethod ?? "CARD").toLowerCase() };
 
     const results: MetaCapiResult[] = [];
     for (const eventName of ["Donate", "Purchase"] as const) {
@@ -194,11 +192,11 @@ export async function sendDonationFailedConversions(donationId: string, options:
     }
 
     const attribution = (row.attribution ?? undefined) as Attribution | undefined;
-    const eventSourceUrl = safeAcquisitionLandingPage(attribution ?? null) ?? "https://minberiaksa.org/";
+    const eventSourceUrl = safeAcquisitionLandingPage(attribution ?? null) ?? "https://yedicihan.org/";
     const eventTime = Math.floor(((row as { updatedAt?: Date }).updatedAt ?? row.createdAt ?? new Date()).getTime() / 1000);
     const contentName = primaryContentName(row);
     const { ids, contents } = buildContents(row);
-    const custom_data: MetaCustomData = { value: amount, currency, content_type: "product", content_name: contentName, content_category: row.subscriptionId ? (row.subscription?.frequency ?? "MONTHLY").toLowerCase() : "donation", content_ids: ids, contents, num_items: contents.reduce((s, c) => s + (c.quantity ?? 1), 0), order_id: row.id, status: "failed", donation_type: row.subscriptionId ? (row.subscription?.frequency ?? "MONTHLY") : "ONE_TIME", recurring: !!row.subscriptionId, payment_info_available: 1, failure_reason: row.providerErrorMessage ?? row.providerTxnResult ?? undefined, provider: row.provider ?? undefined };
+    const custom_data: MetaCustomData = { value: amount, currency, content_type: "product", content_name: contentName, content_category: "donation", content_ids: ids, contents, num_items: contents.reduce((s, c) => s + (c.quantity ?? 1), 0), order_id: row.id, status: "failed", donation_type: "ONE_TIME", payment_info_available: 1, failure_reason: row.providerErrorMessage ?? row.providerTxnResult ?? undefined, provider: row.provider ?? undefined };
 
     const metaResult = await sendMetaCapiEvent({ event_name: "DonateFailed", event_id: failedEventId, event_time: eventTime, event_source_url: eventSourceUrl, user_data: buildUserDataFromDonation(row), custom_data }, creds);
     await recordConversionEvent({ donationId: row.id, eventId: failedEventId, eventName: "DonateFailed", platform: "META", channel: "server", status: metaStatus(metaResult), dedupKey: failedEventId, value: amount, currency, error: metaResult.error ?? metaResult.reason ?? null, request: { event_name: "DonateFailed", event_id: failedEventId, custom_data }, response: metaResult, sentAt: metaResult.ok ? new Date(eventTime * 1000) : null });

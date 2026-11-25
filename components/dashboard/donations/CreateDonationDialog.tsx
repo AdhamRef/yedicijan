@@ -68,9 +68,6 @@ const MANUAL_PROVIDER_OPTIONS: Array<{
   { value: "BANK", label: "حساب بنكي" },
   { value: "PAYFOR", label: "Ziraat Payfor" },
   { value: "ALBARAKA", label: "Albaraka Türk" },
-  { value: "STRIPE", label: "Stripe" },
-  { value: "PAYPAL", label: "PayPal", logo: "/paypal.webp" },
-  { value: "CHARITY_GIVING", label: "Charity Giving", logo: "/charity-giving.png" },
 ];
 
 /**

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { BrandGuideline, BrandGuidelineSection } from "./brand-types";
 
 const objectIdPattern = /^[a-f\d]{24}$/i;
-const organizationKeys = ["minber_aksa"];
+const organizationKeys = ["yedicihan"];
 const guidelineSections: BrandGuidelineSection[] = ["voice", "copy", "proof", "donor-dignity", "cta", "localization"];
 
 export type BrandGuidelineActor = {

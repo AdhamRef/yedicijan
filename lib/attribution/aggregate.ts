@@ -90,8 +90,6 @@ export interface BreakdownRow {
   revenueShare: number;
   /** Share of total paid count across all rows in the breakdown (0–1). */
   donationShare: number;
-  /** Revenue from monthly subscriptions specifically (subscriptionId != null). */
-  monthlyRevenueUSD: number;
   // ── dimension-specific extras (populated by aggregateBreakdownExtended)
   bestPlatform?: {
     key: AdPlatform;
@@ -213,7 +211,6 @@ interface MutableRow {
   paidCount: number;
   failedCount: number;
   totalAttempts: number;
-  monthlyRevenueUSD: number;
   donorSet: Set<string>;
   newDonorSet: Set<string>;
   returningDonorSet: Set<string>;
@@ -261,7 +258,6 @@ export function aggregateBreakdown(
       paidCount: 0,
       failedCount: 0,
       totalAttempts: 0,
-      monthlyRevenueUSD: 0,
       donorSet: new Set<string>(),
       newDonorSet: new Set<string>(),
       returningDonorSet: new Set<string>(),
@@ -447,7 +443,6 @@ export function aggregateBreakdown(
       paidCount: r.paidCount,
       failedCount: r.failedCount,
       totalAttempts: r.totalAttempts,
-      monthlyRevenueUSD: 0,
       avgDonationUSD: Math.round(avg * 100) / 100,
       paymentSuccessRate: Math.round(successRate * 10000) / 10000,
       trackingHealthPct: Math.round(trackingHealth * 10000) / 10000,

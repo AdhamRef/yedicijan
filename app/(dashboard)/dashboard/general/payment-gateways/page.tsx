@@ -2,70 +2,34 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import Link from "next/link";
 import { toast } from "react-hot-toast";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import {
   AlertTriangle,
-  Check,
-  CreditCard,
   Coins,
+  CreditCard,
   Landmark,
   Loader2,
   Settings,
-  ShieldCheck,
 } from "lucide-react";
-import { SaudiPayforReport } from "./SaudiPayforReport";
 import { PageHeader } from "@/components/dashboard/PageHeader";
-import { parseMainGateway, type MainGateway } from "@/lib/payment-gateway";
-import { dashDir, dt, dtx } from "@/lib/dashboard/i18n";
+import { dashDir, dt } from "@/lib/dashboard/i18n";
 
 type SettingsResponse = {
   payforEnabled?: boolean;
-  payforSaudiRoutingEnabled?: boolean;
-  mainGateway?: string;
   albarakaConfigured?: boolean;
-  albarakaRecurringReady?: boolean;
   albarakaUseOOS?: boolean;
   allowAnyAmount?: boolean;
 };
-
-const MAIN_GATEWAY_CARDS: {
-  value: MainGateway;
-  name: string;
-  description: string;
-  icon: typeof ShieldCheck;
-  tone: string;
-}[] = [
-  {
-    value: "STRIPE",
-    name: "Stripe",
-    get description() { return dt("البوابة العالمية. تقبل كل العملات وتدعم التبرعات الشهرية والبطاقات المحفوظة."); },
-    icon: ShieldCheck,
-    tone: "bg-indigo-50 text-indigo-700",
-  },
-  {
-    value: "ALBARAKA",
-    name: "Albaraka Türk",
-    get description() { return dt("بوابة بنك البركة التركي. تدعم الدفع المباشر 2D والتحقق البنكي 3D Secure بحسب إعدادات الدفع وتفويض البنك."); },
-    icon: Landmark,
-    tone: "bg-emerald-50 text-emerald-700",
-  },
-];
 
 export default function PaymentGatewaysPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [savingGateway, setSavingGateway] = useState(false);
-  const [savingPayfor, setSavingPayfor] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [payforEnabled, setPayforEnabled] = useState(true);
-  const [saudiEnabled, setSaudiEnabled] = useState(false);
-  const [savingSaudi, setSavingSaudi] = useState(false);
-  const [mainGateway, setMainGateway] = useState<MainGateway>("STRIPE");
   const [albarakaConfigured, setAlbarakaConfigured] = useState(true);
-  const [albarakaRecurringReady, setAlbarakaRecurringReady] = useState(false);
   const [albarakaUseOOS, setAlbarakaUseOOS] = useState(false);
   const [allowAnyAmount, setAllowAnyAmount] = useState(false);
   const [savingAnyAmount, setSavingAnyAmount] = useState(false);
@@ -74,15 +38,11 @@ export default function PaymentGatewaysPage() {
     let cancelled = false;
     setLoading(true); setLoadError(false);
     axios
-      .get<SettingsResponse>("/api/global-settings", {timeout: 20000})
+      .get<SettingsResponse>("/api/global-settings", { timeout: 20000 })
       .then((res) => {
         if (cancelled) return;
-        if (!["STRIPE", "ALBARAKA"].includes(res.data?.mainGateway || "")) throw new Error("INVALID_PAYMENT_SETTINGS");
         setPayforEnabled(res.data?.payforEnabled !== false);
-        setSaudiEnabled(res.data?.payforSaudiRoutingEnabled === true);
-        setMainGateway(parseMainGateway(res.data?.mainGateway));
-        setAlbarakaConfigured(res.data?.albarakaConfigured === true);
-        setAlbarakaRecurringReady(res.data?.albarakaRecurringReady === true);
+        setAlbarakaConfigured(res.data?.albarakaConfigured !== false);
         setAlbarakaUseOOS(res.data?.albarakaUseOOS === true);
         setAllowAnyAmount(res.data?.allowAnyAmount === true);
       })
@@ -111,68 +71,34 @@ export default function PaymentGatewaysPage() {
       ""
     );
 
-  const handleSelectGateway = async (next: MainGateway) => {
-    if (loading || loadError || next === mainGateway || savingGateway) return;
-    const nextName = MAIN_GATEWAY_CARDS.find((g) => g.value === next)?.name ?? next;
-    const currentName = MAIN_GATEWAY_CARDS.find((g) => g.value === mainGateway)?.name ?? mainGateway;
-    const reason = confirmPaymentChange(dt("البوابة الرئيسية: {0} ← {1}", [currentName, nextName]));
-    if (reason === null) return;
-    const prev = mainGateway;
-    setMainGateway(next);
-    setSavingGateway(true);
-    try {
-      await axios.put("/api/global-settings", { mainGateway: next, reason });
-      toast.success(
-        next === "ALBARAKA"
-          ? dt("أصبحت Albaraka هي البوابة الرئيسية")
-          : dt("أصبحت Stripe هي البوابة الرئيسية")
-      );
-    } catch (e) {
-      setMainGateway(prev);
-      toast.error(errorMessage(e, dt("تعذّر حفظ البوابة الرئيسية")));
-    } finally {
-      setSavingGateway(false);
-    }
-  };
-
   const handleTogglePayfor = async (next: boolean) => {
-    if (loading || loadError) return;
+    if (loading || loadError || saving) return;
     const reason = confirmPaymentChange(
       next
-        ? dt("تفعيل PayFor: ستمر تبرعات الليرة التركية لمرة واحدة عبر PayFor.")
-        : dt("إيقاف PayFor: ستمر تبرعات الليرة التركية عبر البوابة الرئيسية.")
+        ? dt("تفعيل PayFor: التبرعات بالعملات غير الليرة التركية تمر عبره.")
+        : dt("إيقاف PayFor: كل التبرعات ستمر عبر Albaraka.")
     );
     if (reason === null) return;
     const prev = payforEnabled;
     setPayforEnabled(next);
-    setSavingPayfor(true);
+    setSaving(true);
     try {
       await axios.put("/api/global-settings", { payforEnabled: next, reason });
       toast.success(
         next
-          ? dt("تم تفعيل بوابة PayFor")
-          : dt("تم إيقاف PayFor  ستمر تبرعات الليرة التركية عبر البوابة الرئيسية")
+          ? dt("تم تفعيل PayFor — التبرعات بالعملات غير الليرة التركية تمر عبره")
+          : dt("تم إيقاف PayFor — كل التبرعات ستمر عبر Albaraka")
       );
     } catch (e) {
       setPayforEnabled(prev);
       toast.error(errorMessage(e, dt("تعذّر حفظ الإعداد")));
     } finally {
-      setSavingPayfor(false);
+      setSaving(false);
     }
   };
 
-  const handleToggleSaudi = async (next: boolean) => {
-    if (loading || loadError || savingSaudi || !payforEnabled) return;
-    const reason = confirmPaymentChange(dt("توجيه محاولات البطاقة الجديدة لمرة واحدة من السعودية إلى PayFor 3D."));
-    if (reason === null) return;
-    setSavingSaudi(true);
-    try { const response = await axios.put("/api/global-settings", { payforSaudiRoutingEnabled: next, reason }); setSaudiEnabled(response.data.payforSaudiRoutingEnabled === true); toast.success(dt("تم حفظ الإعداد")); }
-    catch (cause) { toast.error(errorMessage(cause, dt("تعذّر حفظ الإعداد"))); }
-    finally { setSavingSaudi(false); }
-  };
-
   const handleToggleAnyAmount = async (next: boolean) => {
-    if (loading || loadError) return;
+    if (loading || loadError || savingAnyAmount) return;
     const reason = confirmPaymentChange(
       next
         ? dt("إلغاء حد الدولار الواحد في الموقع. قد تفرض البوابة أو البنك حدودًا مستقلة على مبلغ الدفع.")
@@ -193,14 +119,27 @@ export default function PaymentGatewaysPage() {
     }
   };
 
-  const mainGatewayName =
-    MAIN_GATEWAY_CARDS.find((g) => g.value === mainGateway)?.name ?? "Stripe";
+  /** The live routing table, derived from the one switch that still exists. */
+  const routes = [
+    {
+      when: dt("تبرع بالليرة التركية (TRY)"),
+      gateway: "Albaraka Türk",
+      note: "3D Secure",
+    },
+    {
+      when: dt("تبرع بأي عملة أخرى"),
+      gateway: payforEnabled ? dt("PayFor — زراعت كاتيليم") : "Albaraka Türk",
+      note: payforEnabled
+        ? dt("3D Secure — يُحوَّل المبلغ إلى الليرة التركية")
+        : dt("3D Secure — لأن PayFor موقوف"),
+    },
+  ];
 
   return (
     <div className="space-y-6" dir={dashDir()}>
       <PageHeader
         title={dt("بوابات الدفع")}
-        description={dt("اختر البوابة الرئيسية التي تمرّ عبرها التبرعات، وتحكّم في بوابة PayFor للّيرة التركية.")}
+        description={dt("توجيه التبرعات ثابت حسب العملة. الإعداد الوحيد المتاح هو تفعيل أو إيقاف PayFor.")}
         icon={Settings}
       />
 
@@ -214,96 +153,26 @@ export default function PaymentGatewaysPage() {
       ) : (
         <div className="space-y-6">
           <section className="space-y-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-gray-900">
-                {dt("البوابة الرئيسية")}</h2>
-              {savingGateway && (
-                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {dt("البوابة المختارة تتولّى كل حالات الدفع التي لا تمر عبر PayFor. يمكن اختيار واحدة فقط، وتعمل البوابتان في نفس الحالات تمامًا.")}</p>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              {MAIN_GATEWAY_CARDS.map((gateway) => {
-                const selected = mainGateway === gateway.value;
-                const disabled =
-                  savingGateway ||
-                  (gateway.value === "ALBARAKA" && !albarakaConfigured);
-                const Icon = gateway.icon;
-                return (
-                  <Card
-                    key={gateway.value}
-                    role="radio"
-                    aria-checked={selected}
-                    tabIndex={disabled ? -1 : 0}
-                    onClick={() => !disabled && handleSelectGateway(gateway.value)}
-                    onKeyDown={(e) => {
-                      if (disabled) return;
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        handleSelectGateway(gateway.value);
-                      }
-                    }}
-                    className={[
-                      "p-5 sm:p-6 transition-colors outline-none",
-                      disabled
-                        ? "opacity-60 cursor-not-allowed"
-                        : "cursor-pointer hover:border-gray-300",
-                      selected
-                        ? "border-emerald-400 ring-1 ring-emerald-200 bg-emerald-50/30"
-                        : "",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <div className={`rounded-full p-2 ${gateway.tone}`}>
-                          <Icon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-base font-semibold text-gray-900">
-                              {gateway.name}
-                            </h3>
-                            {selected && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-xs font-medium">
-                                <Check className="w-3 h-3" />
-                                {dt("البوابة الرئيسية")}</span>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {gateway.description}
-                          </p>
-                          {gateway.value === "ALBARAKA" && !albarakaConfigured && (
-                            <p className="text-xs text-amber-700 mt-2 flex items-start gap-1.5">
-                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-                              <span>
-                                {dt("غير مهيّأة على الخادم  أضف مفتاح التشفير")}<code className="mx-1 font-mono">ALBARAKA_ENC_KEY</code>
-                                {dt("من شاشة «Anahtar Yaratma» في البنك.")}</span>
-                            </p>
-                          )}
-                          {gateway.value === "ALBARAKA" &&
-                            albarakaConfigured &&
-                            albarakaUseOOS && (
-                              <p className="text-xs text-muted-foreground mt-2">
-                                {dt("يجمع البنك بيانات البطاقة على صفحته الخاصة (Ortak Ödeme Sayfası).")}</p>
-                            )}
-                        </div>
-                      </div>
-                      <div
-                        className={[
-                          "mt-1 h-4 w-4 shrink-0 rounded-full border-2 transition-colors",
-                          selected
-                            ? "border-emerald-500 bg-emerald-500"
-                            : "border-gray-300",
-                        ].join(" ")}
-                        aria-hidden
-                      />
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+            <h2 className="text-sm font-semibold text-gray-900">
+              {dt("مسار التبرعات الحالي")}</h2>
+            <Card className="divide-y divide-gray-100 overflow-hidden">
+              {routes.map((r) => (
+                <div
+                  key={r.when}
+                  className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                >
+                  <span className="text-sm text-gray-700">{r.when}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm font-semibold text-gray-900">
+                      {r.gateway}
+                    </span>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">
+                      {r.note}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </Card>
           </section>
 
           <section className="space-y-3">
@@ -341,7 +210,8 @@ export default function PaymentGatewaysPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-gray-900">{dt("بوابات إضافية")}</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{dt("الإعدادات")}</h2>
+
             <Card className="p-5 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -350,41 +220,52 @@ export default function PaymentGatewaysPage() {
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-gray-900">
-                      {dt("PayFor  زراعت كاتيليم (3D Secure للّيرة التركية)")}</h3>
+                      {dt("PayFor — زراعت كاتيليم")}</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {dtx("يُستخدم تلقائيًا للتبرعات الفردية بالليرة التركية (TRY) عبر تدفّق 3D Secure  وهي نفس حالاته السابقة تمامًا. عند الإيقاف تتحوّل هذه التبرعات إلى {0}.", [mainGatewayName])}</p>
+                      {dt("يتولّى التبرعات بكل العملات غير الليرة التركية عبر 3D Secure، ويحصّلها بالليرة بعد التحويل. عند الإيقاف تنتقل هذه التبرعات إلى Albaraka.")}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {savingPayfor && (
+                  {saving && (
                     <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                   )}
                   <Switch
                     checked={payforEnabled}
-                    disabled={savingPayfor}
+                    disabled={saving}
                     onCheckedChange={handleTogglePayfor}
                   />
                 </div>
               </div>
             </Card>
+
+            <Card className="p-5 sm:p-6">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-emerald-50 p-2 text-emerald-700">
+                  <Landmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">
+                    Albaraka Türk
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {dt("البوابة الأساسية للتبرعات بالليرة التركية، وتتولّى كل العملات عند إيقاف PayFor. مُهيّأة عبر متغيرات البيئة ولا تحتاج إعدادًا هنا.")}
+                    {albarakaUseOOS &&
+                      ` ${dt("يجمع البنك بيانات البطاقة على صفحته الخاصة.")}`}
+                  </p>
+                  {!albarakaConfigured && (
+                    <p className="text-xs text-amber-700 mt-2 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                      <span>
+                        {dt("غير مهيّأة — مفتاح التشفير")}
+                        <code className="mx-1 font-mono">ALBARAKA_ENC_KEY</code>
+                        {dt("مفقود، ولن تنجح أي عملية عبرها.")}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
           </section>
-
-          <section className="space-y-3 rounded-2xl border bg-white p-5"><div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold">{dt("توجيه المتبرعين من السعودية إلى PayFor")}</h2><p className="mt-2 text-sm leading-7 text-slate-600">{dt("للمحاولات الجديدة لمرة واحدة بالبطاقة: يكفي بلد IP سعودي أو رقم هاتف سعودي صحيح. تبقى الاشتراكات وPayPal والتحويل البنكي على مساراتها الحالية. تعطيل PayFor العام يمنع بدء عمليات جديدة عليه.")}</p></div><Switch aria-label={dt("توجيه المتبرعين من السعودية إلى PayFor")} checked={saudiEnabled} disabled={savingSaudi || !payforEnabled} onCheckedChange={handleToggleSaudi} /></div><SaudiPayforReport /></section>
-
-          <Card className="p-5 sm:p-6 space-y-3">
-            <h2 className="text-sm font-semibold">{dt("التكرار")}</h2>
-            <dl className="space-y-3 text-sm">
-              <div className="flex flex-wrap justify-between gap-2">
-                <dt>{dt("يومي")} / {dt("كل جمعة")}</dt>
-                <dd><span dir="ltr">Albaraka Türk</span> · {albarakaRecurringReady ? dt("إعداد التجديد مكتمل") : dt("غير متاح")}</dd>
-              </div>
-              <div className="flex flex-wrap justify-between gap-2">
-                <dt>{dt("شهري")}</dt>
-                <dd>{mainGatewayName}{mainGateway === "ALBARAKA" ? <> · {albarakaRecurringReady ? dt("إعداد التجديد مكتمل") : dt("غير متاح")}</> : null}</dd>
-              </div>
-            </dl>
-            <p className="text-xs leading-6 text-slate-500">{dt("اكتمال إعداد التجديد لا يثبت نجاح الخصم. راجع آخر تحصيل وأسباب الفشل في التبرعات المتكررة.")} <Link className="text-brand underline" href="/dashboard/monthly">{dt("التبرعات المتكررة")}</Link></p>
-          </Card>
         </div>
       )}
     </div>

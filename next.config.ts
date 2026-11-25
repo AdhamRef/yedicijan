@@ -62,6 +62,8 @@ const marketingRedirects = [
   // impossible to create a campaign.
   ["/dashboard/communication/campaigns/:id((?!new$)[^/]+)", "/dashboard/communication/campaigns"],
   ["/dashboard/messages", "/dashboard/inbox"],
+  // Monthly (recurring) donations are gone; every donation is one-time now.
+  ["/dashboard/monthly", "/dashboard/donations"],
   ["/dashboard/marketing", "/dashboard/marketing/attribution"],
   ["/dashboard/marketing/performance", "/dashboard/marketing/attribution"],
   ["/dashboard/marketing/recommendations", "/dashboard/marketing/attribution"],
@@ -231,17 +233,6 @@ const nextConfig: NextConfig = {
       { source: "/:file(.+\\.(?:png|jpe?g|webp|avif|svg|ico))", headers: [ASSET_CACHE] },
     ];
   },
-  async rewrites() {
-    return [
-      /* Large, immutable public PDFs live in the pinned Git commit CDN rather than
-         every Vercel build output. Public URLs stay unchanged for users, database
-         rows and search engines while previews no longer upload ~90 MB each time. */
-      { source: "/minbar/reports/:path*", destination: "https://cdn.jsdelivr.net/gh/saladin76/minberiaksa@c58f7414e55f964462a37aa0979ba5723311ed2b/public/minbar/reports/:path*" },
-      { source: "/minbar/assets/books/isharat-altanzil.pdf", destination: "https://cdn.jsdelivr.net/gh/saladin76/minberiaksa@c58f7414e55f964462a37aa0979ba5723311ed2b/public/minbar/assets/books/isharat-altanzil.pdf" },
-      { source: "/api/admin/subscriptions/chart", destination: "/api/admin/subscriptions/overview/chart" },
-      { source: "/api/admin/subscriptions/stats", destination: "/api/admin/subscriptions/overview/stats" },
-    ];
-  },
   async redirects() {
     return [
       { source: "/iletisim", destination: "/tr/contact-us", permanent: true },
@@ -249,8 +240,8 @@ const nextConfig: NextConfig = {
          existed twice for crawlers; canonicals name the bare domain (lib/seo.ts). */
       {
         source: "/:path*",
-        has: [{ type: "host" as const, value: "www.minberiaksa.org" }],
-        destination: "https://minberiaksa.org/:path*",
+        has: [{ type: "host" as const, value: "www.yedicihan.org" }],
+        destination: "https://yedicihan.org/:path*",
         permanent: true,
       },
       ...marketingRedirects.map(([source, destination]) => ({ source, destination, permanent: false })),
@@ -262,9 +253,6 @@ const nextConfig: NextConfig = {
       { source: "/page/biz-kimiz", destination: "/tr/about-us", permanent: true },
       { source: "/page/saglik", destination: "/tr", permanent: true },
       { source: "/page/yardim", destination: "/tr/contact-us", permanent: true },
-      { source: "/ar/mshrwa-twrya-alkhbr-wdam-almkhabr", destination: "/ar/bagislar/gaza-bread", permanent: true },
-      { source: "/ar/ghr", destination: "/ar/bagislar", permanent: true },
-      { source: "/ar/monthly-donate", destination: "/ar/recurring-donation", permanent: true },
       { source: "/ar/donates", destination: "/ar/campaigns", permanent: true },
       { source: "/donates", destination: "/en/campaigns", permanent: true },
     ];

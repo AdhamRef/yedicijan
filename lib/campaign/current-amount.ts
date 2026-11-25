@@ -14,9 +14,9 @@ import type { Prisma } from "@prisma/client";
  * baseline, editing a single unrelated donation silently reset the public total to the
  * donation-only figure and destroyed the baseline permanently.
  *
- * "Settled" is strict here  `status: PAID` AND `paidAt` set. Subscription rows that are
- * still unsettled show as ناجح on dashboards (see PAID_DONATION_FILTER) but must not move
- * campaign totals until the gateway confirms, or the webhook's own increment double-counts.
+ * "Settled" is strict here — `status: PAID` AND `paidAt` set. Rows that are still unsettled
+ * must not move campaign totals until the gateway confirms, or the gateway callback's own
+ * increment double-counts.
  */
 
 type Tx = Prisma.TransactionClient;

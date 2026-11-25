@@ -24,8 +24,9 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   await requestDashLocale();
   return {
-    title: dt("لوحة التحكم"),
+    title: `${dt("لوحة التحكم")} | يدي جيهان`,
     description: dt("إدارة المشاريع والتبرعات والمستخدمين"),
+    icons: { icon: "/logometayedi.avif" },
     robots: { index: false, follow: false },
   };
 }

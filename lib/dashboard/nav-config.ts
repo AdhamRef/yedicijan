@@ -45,8 +45,6 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
     get group() { return dt("الرئيسية"); },
     items: [
       { key: "revenue", get title() { return dt("اللوحة الرئيسية"); }, href: "/dashboard", icon: "layoutDashboard", keywords: ["home", "overview", "الرئيسية"] },
-      { key: "monthly", get title() { return dt("التبرعات المتكررة"); }, href: "/dashboard/monthly", icon: "repeat", keywords: ["monthly", "recurring", "daily", "weekly", "subscriptions", "اشتراكات", "شهري", "يومي", "جمعة"] },
-      { key: "monthly", get title() { return dt("طلبات إدارة التبرع"); }, href: "/dashboard/subscription-requests", icon: "listChecks", keywords: ["requests", "subscription", "طلبات", "إلغاء", "إيقاف", "تعديل"], badge: "subscriptionRequestsOpen" },
       { key: "bankTransfers", get title() { return dt("التحويلات البنكية"); }, href: "/dashboard/bank-transfers", icon: "landmark", keywords: ["bank", "transfers", "حوالات", "statement", "كشف"] },
       // Receipts donors upload after choosing bank transfer at checkout, waiting on a finance
       // decision. A different queue from the statement importer above: that one starts from the
@@ -141,7 +139,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
       { key: "siteContent", get title() { return dt("التبرع السريع"); }, href: "/dashboard/quick-donation", icon: "heartHandshake", keywords: ["quick", "donation", "donate", "amounts", "presets", "سريع", "مبالغ", "مقترحة", "dock"] },
       { key: "siteContent", get title() { return dt("الشهادات"); }, href: "/dashboard/certificates", icon: "award", keywords: ["certificate", "certificates", "receipt", "waqf", "thanks", "شهادة", "شهادات", "إهداء", "إيصال", "وقف", "شكر"] },
       { key: "team", get title() { return dt("الفريق"); }, href: "/dashboard/users/team", icon: "userCog", keywords: ["team", "staff", "permissions", "صلاحيات"] },
-      { key: "generalSettings", get title() { return dt("الإعدادات"); }, href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways", "stripe"] },
+      { key: "generalSettings", get title() { return dt("الإعدادات"); }, href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways"] },
       { key: "logs", get title() { return dt("الأمان وسجل الوصول"); }, href: "/dashboard/security", icon: "shield", adminOnly: true, keywords: ["security", "ip", "country", "block", "حظر", "أمان"] },
       { key: "logs", get title() { return dt("سجلات النظام"); }, href: "/dashboard/logs", icon: "scrollText", keywords: ["logs", "audit", "system"] },
     ],
@@ -185,7 +183,6 @@ export const DASHBOARD_PERMISSION_ROWS: {
   title: string;
 }[] = [
   { key: "revenue", get group() { return dt("الرئيسية"); }, get title() { return dt("اللوحة الرئيسية"); } },
-  { key: "monthly", get group() { return dt("الرئيسية"); }, get title() { return dt("التبرعات المتكررة"); } },
   // One grant for the whole finance desk: the statement importer and the donor-receipt queue.
   { key: "bankTransfers", get group() { return dt("الرئيسية"); }, get title() { return dt("التحويلات البنكية وإيصالات التحويل"); } },
   // Separate from siteContent: these rows are where donors send money (IBAN/SWIFT).

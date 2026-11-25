@@ -11,20 +11,13 @@ import {
   parseSuggestedTeamSupport,
   type SuggestedTeamSupportConfig,
 } from "./campaign/suggested-team-support";
-import { parseMainGateway, type MainGateway } from "./payment-gateway";
-import { parseCartUpsell, type CartUpsellConfig } from "./minbar/cart-upsell";
 
 export type GlobalSettings = {
   suggestedTeamSupport: SuggestedTeamSupportConfig;
   /** The basket's "support the team" step. Default true. */
   teamSupportEnabled: boolean;
-  /** The basket's cross-sell campaigns; empty means the built-in suggestions. */
-  cartUpsell: CartUpsellConfig;
   /** Master switch for the PayFor gateway. Default true. */
   payforEnabled: boolean;
-  payforSaudiRoutingEnabled?: boolean;
-  /** Gateway handling every case PayFor doesn't take. Default "STRIPE". */
-  mainGateway: MainGateway;
   /**
    * True when Albaraka is set up to collect the card on its own hosted page.
    * The checkout dialogs must then skip our card form entirely  Albaraka signs
@@ -34,7 +27,6 @@ export type GlobalSettings = {
   albarakaUseOOS: boolean;
   /** False when ALBARAKA_ENC_KEY is missing, i.e. the gateway can't sign anything. */
   albarakaConfigured: boolean;
-  albarakaRecurringReady?: boolean;
   /**
    * False (default): every donation line is worth at least $1. True: any
    * positive amount in the donor's currency, exactly as given.
@@ -71,30 +63,21 @@ export async function fetchGlobalSettings(
         | {
             suggestedTeamSupport?: unknown;
             teamSupportEnabled?: unknown;
-            cartUpsell?: unknown;
             payforEnabled?: unknown;
-            payforSaudiRoutingEnabled?: unknown;
-            mainGateway?: unknown;
             albarakaUseOOS?: unknown;
             albarakaConfigured?: unknown;
-            albarakaRecurringReady?: unknown;
             allowAnyAmount?: unknown;
           }
         | null;
       const parsed: GlobalSettings = {
         suggestedTeamSupport: parseSuggestedTeamSupport(data?.suggestedTeamSupport),
         teamSupportEnabled: data?.teamSupportEnabled !== false,
-        cartUpsell: parseCartUpsell(data?.cartUpsell),
         // Treat anything that isn't an explicit `false` as enabled. This keeps
         // the donation flow working before the first record is persisted and
         // when the API response shape is incomplete for any reason.
         payforEnabled: data?.payforEnabled !== false,
-        payforSaudiRoutingEnabled: data?.payforSaudiRoutingEnabled === true,
-        // Anything unrecognised falls back to Stripe  the rail that always works.
-        mainGateway: parseMainGateway(data?.mainGateway),
         albarakaUseOOS: data?.albarakaUseOOS === true,
         albarakaConfigured: data?.albarakaConfigured === true,
-        albarakaRecurringReady: data?.albarakaRecurringReady === true,
         allowAnyAmount: data?.allowAnyAmount === true,
       };
       cached = parsed;

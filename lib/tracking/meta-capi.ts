@@ -31,7 +31,6 @@ export interface MetaUserData {
   client_ip?: string | null;
   client_ip_address?: string | null;
   user_agent?: string | null;
-  subscription_id?: string | null;
 }
 
 export interface MetaContent {
@@ -145,7 +144,6 @@ export function buildMetaUserData(u: MetaUserData): Record<string, unknown> {
   if (u.user_agent) out.client_user_agent = String(u.user_agent).slice(0, 512);
   const ip = normalizeTrackingClientIp(u.client_ip_address ?? u.client_ip);
   if (ip) out.client_ip_address = ip;
-  if (u.subscription_id) out.subscription_id = u.subscription_id;
   return out;
 }
 

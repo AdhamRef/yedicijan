@@ -18,41 +18,22 @@
  * Everything that CAN import this module should, so the enabled set never drifts.
  */
 
-/**
- * Enabled / public locales. Order is significant (drives dropdowns + routing)
- * and is the order the locked Minbar design ships in `Header.dc.html`
- * → `Component.LANGS`, so the language picker reads as designed.
- */
+/** Enabled / public locales. Order is significant (drives dropdowns + routing). */
 export const SUPPORTED_LOCALES = [
   "ar",
-  "tr",
   "en",
   "fr",
-  "de",
-  "es",
+  "tr",
   "id",
   "pt",
-  "ur",
-  "sq",
-  "it",
-  "nl",
-  "sv",
-  "no",
-  "da",
-  "ms",
-  "ja",
-  "zh",
-  "hi",
+  "es",
+  "de",
 ] as const;
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
-/**
- * Registered but not yet publicly routed. Empty since the Minbar handoff landed
- * complete `i18n/<lang>/` bundles for all 19 languages (Core Website
- * Localization Pass) and every one of them is now routed.
- */
-export const FUTURE_LOCALES = [] as const;
+/** Registered but not yet publicly routed. Target expansion set. */
+export const FUTURE_LOCALES = ["sq", "it", "nl", "sv"] as const;
 
 /** Every locale the platform knows about (enabled + future). */
 export const ALL_LOCALES = [...SUPPORTED_LOCALES, ...FUTURE_LOCALES] as const;
@@ -88,19 +69,11 @@ export const LOCALES: Record<AnyLocale, LocaleMeta> = {
   pt: { code: "pt", label: "Português", nativeLabel: "Português", direction: "ltr", fallbackLocale: "en", enabled: true },
   es: { code: "es", label: "Español", nativeLabel: "Español", direction: "ltr", fallbackLocale: "en", enabled: true },
   de: { code: "de", label: "Deutsch", nativeLabel: "Deutsch", direction: "ltr", fallbackLocale: "en", enabled: true },
-  // Promoted with the Minbar handoff  `Component.BODY_TRANSLATED` lists all 19
-  // as body-translated, and `Minbar/i18n/<lang>/` ships complete bundles.
-  ur: { code: "ur", label: "Urdu", nativeLabel: "اردو", direction: "rtl", fallbackLocale: "en", enabled: true },
-  sq: { code: "sq", label: "Albanian", nativeLabel: "Shqip", direction: "ltr", fallbackLocale: "en", enabled: true },
-  it: { code: "it", label: "Italian", nativeLabel: "Italiano", direction: "ltr", fallbackLocale: "en", enabled: true },
-  nl: { code: "nl", label: "Dutch", nativeLabel: "Nederlands", direction: "ltr", fallbackLocale: "en", enabled: true },
-  sv: { code: "sv", label: "Swedish", nativeLabel: "Svenska", direction: "ltr", fallbackLocale: "en", enabled: true },
-  no: { code: "no", label: "Norwegian", nativeLabel: "Norsk", direction: "ltr", fallbackLocale: "en", enabled: true },
-  da: { code: "da", label: "Danish", nativeLabel: "Dansk", direction: "ltr", fallbackLocale: "en", enabled: true },
-  ms: { code: "ms", label: "Malay", nativeLabel: "Bahasa Melayu", direction: "ltr", fallbackLocale: "en", enabled: true },
-  ja: { code: "ja", label: "Japanese", nativeLabel: "日本語", direction: "ltr", fallbackLocale: "en", enabled: true },
-  zh: { code: "zh", label: "Chinese", nativeLabel: "中文", direction: "ltr", fallbackLocale: "en", enabled: true },
-  hi: { code: "hi", label: "Hindi", nativeLabel: "हिन्दी", direction: "ltr", fallbackLocale: "en", enabled: true },
+  // Registered, not yet publicly routed:
+  sq: { code: "sq", label: "Albanian", nativeLabel: "Shqip", direction: "ltr", fallbackLocale: "en", enabled: false },
+  it: { code: "it", label: "Italian", nativeLabel: "Italiano", direction: "ltr", fallbackLocale: "en", enabled: false },
+  nl: { code: "nl", label: "Dutch", nativeLabel: "Nederlands", direction: "ltr", fallbackLocale: "en", enabled: false },
+  sv: { code: "sv", label: "Swedish", nativeLabel: "Svenska", direction: "ltr", fallbackLocale: "en", enabled: false },
 };
 
 /** Historical export  label map for the enabled locales. Unchanged values. */

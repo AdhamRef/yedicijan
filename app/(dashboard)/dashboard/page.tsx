@@ -23,9 +23,8 @@ import {
   RefreshCw,
   Eye,
   Wallet,
-  Repeat,
   HandCoins,
-  Landmark,
+  Heart,
   Users,
   Calculator,
 } from "lucide-react";
@@ -99,16 +98,11 @@ import { useDonationActions } from "@/components/dashboard/donations/useDonation
 import { userCanEditDonations, userCanExportReports } from "@/lib/dashboard/permissions";
 import { useSession } from "next-auth/react";
 import { dashDir, dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
-import { donationCadenceLabel } from "@/lib/dashboard/donation-cadence-label";
 
 interface ChartDataPoint {
   date: string;
   amountUSD: number;
   count: number;
-  amountOneTime: number;
-  countOneTime: number;
-  amountMonthly: number;
-  countMonthly: number;
   amountFailed: number;
   countFailed: number;
   countPending?: number;
@@ -147,14 +141,6 @@ interface DonationRow {
   currency: string;
   teamSupport: number;
   fees: number;
-  type: string;
-  frequency?: string | null;
-  /** true when this row is an automatic renewal rather than the signup charge */
-  isRecurringCharge?: boolean;
-  /** 1-based position within its subscription (1 = signup charge) */
-  subscriptionCycle?: number | null;
-  renewalNumber?: number | null;
-  testCycle?: number | null;
   financialSummary?: DonationFinancialSummary | null;
   status: string;
   paidAt?: string | null;
@@ -184,23 +170,10 @@ interface DashboardStats {
   paidRevenueAllTimeUnfiltered?: number;
   /** All-time companions to the above  safe to show beside a figure labelled "كل الوقت". */
   paidCountAllTimeUnfiltered?: number;
-  activeMonthlyCountUnfiltered?: number;
-  monthlyRecurringRevenueUnfiltered?: number;
   paidCount?: number;
   failedCount?: number;
   failedTotalAmount?: number;
-  oneTimeCount: number;
-  monthlyCount: number;
-  oneTimeAllCount?: number;
-  monthlyAllCount?: number;
-  activeMonthlyCount: number;
-  monthlyStoppedCount?: number;
-  activeMonthlyAmountUSD?: number;
-  monthlyStoppedAmountUSD?: number;
-  monthlyRecurringRevenue: number;
   thisMonthRevenue: number;
-  oneTimeTotalAmount?: number;
-  monthlyTotalAmount?: number;
   campaignDonationsTotal: number;
   categoryDonationsTotal: number;
   campaignDonationsCount?: number;
@@ -212,7 +185,6 @@ interface DashboardStats {
     amount: number;
     currency: string;
     donorName: string;
-    type: string;
     status?: string;
     provider?: string | null;
     campaignTitle: string | null;
@@ -235,7 +207,7 @@ const PERIOD_LABELS: Record<ChartPeriod, string> = {
   get custom() { return dt("مخصص"); },
 };
 
-// Was a local block of raw hex duplicated verbatim in monthly/page.tsx and built on a generic
+// Was a local block of raw hex duplicated verbatim in another page and built on a generic
 // blue rather than the brand colour. Aliased so every existing CHART_COLORS.* reference in
 // this file keeps working while the values now come from one shared, brand-anchored palette.
 const CHART_COLORS = {
@@ -338,8 +310,6 @@ export default function DashboardPage() {
       chartData.map((d) => ({
         ...d,
         amountUSD: convertUsdToDisplay(d.amountUSD),
-        amountOneTime: convertUsdToDisplay(d.amountOneTime),
-        amountMonthly: convertUsdToDisplay(d.amountMonthly),
         amountFailed: convertUsdToDisplay(d.amountFailed),
         teamSupport: convertUsdToDisplay(d.teamSupport),
         fees: convertUsdToDisplay(d.fees),
@@ -365,7 +335,6 @@ export default function DashboardPage() {
   const [donationsStatusFilter, setDonationsStatusFilter] = useState<"all" | "RESOLVED" | "PAID" | "PENDING" | "FAILED">("RESOLVED");
   /** Applied donor search (name or email) for the أحدث التبرعات table  server-side, not a page filter. */
   const [donationsSearch, setDonationsSearch] = useState("");
-  const [donationsTypeFilter, setDonationsTypeFilter] = useState<"all" | "ONE_TIME" | "MONTHLY">("all");
   const [donationLocaleFilter, setDonationLocaleFilter] = useState<
     "all" | "ar" | "en" | "fr" | "tr" | "id" | "pt" | "es" | "de" | "__unset"
   >("all");
@@ -515,7 +484,7 @@ export default function DashboardPage() {
         userId: effectiveUserId, start, end,
         locale: donationLocaleFilter, country: donationCountryFilter,
         provider: donationProviderFilter, status: donationsStatusFilter,
-        donationType: donationsTypeFilter,
+        donationType: "all",
       });
       params.set("period", chartPeriod);
       const response = await axios.get(`/api/admin/donations/chart?${params}`);
@@ -530,7 +499,7 @@ export default function DashboardPage() {
     } finally {
       if (requestId === chartRequestId.current) setChartLoading(false);
     }
-  }, [selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationLocaleFilter, donationCountryFilter, donationProviderFilter, donationsStatusFilter, donationsTypeFilter]);
+  }, [selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationLocaleFilter, donationCountryFilter, donationProviderFilter, donationsStatusFilter]);
 
   useEffect(() => {
     fetchChartData();
@@ -612,7 +581,7 @@ export default function DashboardPage() {
           userId: selectedUserId, start, end,
           locale: donationLocaleFilter, country: donationCountryFilter,
           provider: donationProviderFilter, status: donationsStatusFilter,
-          donationType: donationsTypeFilter,
+          donationType: "all",
         });
         params.set("page", String(page));
         params.set("limit", String(PAGE_SIZE));
@@ -656,7 +625,6 @@ export default function DashboardPage() {
       donationsSortBy,
       donationsSortOrder,
       donationsStatusFilter,
-      donationsTypeFilter,
       donationLocaleFilter,
       donationCountryFilter,
       donationProviderFilter,
@@ -671,7 +639,7 @@ export default function DashboardPage() {
     if (loading) return;
     setDonationsPage(1);
     fetchDonations(1, false);
-  }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationsTypeFilter, donationLocaleFilter, donationCountryFilter, donationProviderFilter, donationsSearch, fetchDonations]);
+  }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationLocaleFilter, donationCountryFilter, donationProviderFilter, donationsSearch, fetchDonations]);
 
   const loadMoreDonations = () => {
     const next = donationsPage + 1;
@@ -729,7 +697,6 @@ export default function DashboardPage() {
       categoryId: selectedCategory,
       campaignId: selectedCampaign,
       status: donationsStatusFilter,
-      type: donationsTypeFilter,
       locale: donationLocaleFilter === "all" ? "all" : String(donationLocaleFilter),
       country: donationCountryFilter,
       provider: donationProviderFilter,
@@ -743,7 +710,6 @@ export default function DashboardPage() {
     selectedCategory,
     selectedCampaign,
     donationsStatusFilter,
-    donationsTypeFilter,
     donationLocaleFilter,
     donationCountryFilter,
     donationProviderFilter,
@@ -809,11 +775,8 @@ export default function DashboardPage() {
     donationCountryFilter !== "all" ? `${dt("الدولة")}: ${donationCountryFilter === "__unset" ? dt("غير محدد") : getCountryDisplayNameFromCode(donationCountryFilter, locale)}` : null,
     donationProviderFilter !== "all" ? `${dt("بوابة الدفع")}: ${donationProviderFilter}` : null,
     donationsStatusFilter !== "RESOLVED" ? `${dt("حالة التبرع")}: ${donationsStatusFilter === "PAID" ? dt("ناجح") : donationsStatusFilter === "FAILED" ? dt("فاشل") : donationsStatusFilter === "PENDING" ? dt("محاولات بحاجة لتحقق") : dt("كل الحالات (مع غير المحسومة)")}` : null,
-    donationsTypeFilter !== "all" ? `${dt("نوع التبرع")}: ${donationsTypeFilter === "ONE_TIME" ? dt("لمرة واحدة") : dt("شهري")}` : null,
   ].filter((value): value is string => Boolean(value));
 
-  const oneTimeTotal = stats?.oneTimeTotalAmount ?? 0;
-  const monthlyTotal = stats?.monthlyTotalAmount ?? 0;
   const revenueSplitData = [
     {
       name: dt("مشاريع"),
@@ -826,21 +789,6 @@ export default function DashboardPage() {
       value: stats?.categoryDonationsTotal ?? 0,
       count: stats?.categoryDonationsCount ?? 0,
       color: "#FA5D17",
-    },
-  ].filter((d) => d.value > 0 || d.count > 0);
-
-  const typeSplitData = [
-    {
-      name: dt("مرة واحدة"),
-      value: oneTimeTotal,
-      count: stats?.oneTimeCount ?? 0,
-      color: "#025EB8",
-    },
-    {
-      name: dt("شهرية"),
-      value: monthlyTotal,
-      count: stats?.monthlyCount ?? 0,
-      color: "#7C3AED",
     },
   ].filter((d) => d.value > 0 || d.count > 0);
 
@@ -909,8 +857,6 @@ export default function DashboardPage() {
               note={dt("المبالغ المؤكدة فقط. الإخفاقات والمحاولات قيد التأكيد ليست إيرادًا، والعملة المعروضة هي العملة المختارة في اللوحة.")}
               stats={[
                 { label: dt("تبرعات ناجحة"), value: chartLoading ? "…" : scoped.paidCount.toLocaleString("en-US"), icon: HandCoins },
-                { label: dt("لمرة واحدة"), value: chartLoading ? "…" : formatInSelectedCurrency(scoped.oneTimeAmountUSD), icon: Wallet },
-                { label: dt("دورية"), value: chartLoading ? "…" : formatInSelectedCurrency(scoped.recurringAmountUSD), icon: Repeat },
                 { label: dt("تبرعات فاشلة"), value: chartLoading ? "…" : donationsStatusFilter === "PAID" || donationsStatusFilter === "PENDING" ? "—" : scoped.failedCount.toLocaleString("en-US"), icon: RefreshCw },
                 { label: dt("قيد التأكيد"), value: chartLoading ? "…" : donationsStatusFilter === "all" || donationsStatusFilter === "PENDING" ? scoped.pendingCount.toLocaleString("en-US") : "—", icon: Calculator },
               ]}
@@ -926,9 +872,8 @@ export default function DashboardPage() {
             value={stats?.paidRevenueAllTimeUnfiltered != null ? formatInSelectedCurrency(stats.paidRevenueAllTimeUnfiltered) : "—"}
             note={dt("لا تتأثر هذه القيمة ولا البطاقات المجاورة بالفترة أو التصفية المختارة أدناه.")}
             stats={[
-              { label: dt("إيرادات شهرية متكررة (MRR)"), icon: Repeat, value: stats?.monthlyRecurringRevenueUnfiltered != null ? formatInSelectedCurrency(stats.monthlyRecurringRevenueUnfiltered) : "—" },
               { label: dt("عدد التبرعات الناجحة"), icon: HandCoins, value: stats?.paidCountAllTimeUnfiltered?.toLocaleString("en-US") ?? "—" },
-              { label: dt("اشتراكات نشطة"), icon: Landmark, value: stats?.activeMonthlyCountUnfiltered?.toLocaleString("en-US") ?? "—" },
+              { label: dt("المشاريع"), icon: Heart, value: stats?.totalCampaigns?.toLocaleString("en-US") ?? "—" },
               { label: dt("إجمالي المستخدمين"), icon: Users, value: stats?.totalUsers?.toLocaleString("en-US") ?? "—" },
               { label: dt("متوسط التبرع"), icon: Calculator, value: stats?.paidRevenueAllTimeUnfiltered != null && (stats.paidCountAllTimeUnfiltered ?? 0) > 0 ? formatInSelectedCurrency(stats.paidRevenueAllTimeUnfiltered / stats.paidCountAllTimeUnfiltered!) : "—" },
             ]}
@@ -991,15 +936,14 @@ export default function DashboardPage() {
                                 })
                               }
                               formatter={(value: number, name: string) => {
-                                if (name === "amountOneTime") return [formatInSelectedCurrency(Number(value), true), dt("مبلغ مرة واحدة")];
-                                if (name === "amountMonthly") return [formatInSelectedCurrency(Number(value), true), dt("مبلغ شهري")];
+                                if (name === "amountUSD") return [formatInSelectedCurrency(Number(value), true), dt("مبلغ ناجح")];
                                 if (name === "amountFailed") return [formatInSelectedCurrency(Number(value), true), dt("مبلغ فاشل")];
                                 return [formatInSelectedCurrency(Number(value), true), name];
                               }}
                               content={({ active, payload, label }) => {
                                 if (!active || !payload?.length) return null;
                                 const point = displayChartData.find((d) => d.date === label);
-                                const isAmount = (key: string) => key === "amountOneTime" || key === "amountMonthly" || key === "amountFailed" || key === "مبلغ مرة واحدة" || key === "مبلغ شهري" || key === "مبلغ فاشل";
+                                const isAmount = (key: string) => key === "amountUSD" || key === "amountFailed" || key === "مبلغ ناجح" || key === "مبلغ فاشل";
                                 return (
                                   <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
                                     <p className="text-sm font-medium text-slate-700 mb-1.5">
@@ -1030,18 +974,11 @@ export default function DashboardPage() {
                             />
                             <Legend />
                             <Bar
-                              dataKey="amountOneTime"
-                              fill="#025EB8"
+                              dataKey="amountUSD"
+                              fill="#3b82f6"
                               radius={[4, 4, 0, 0]}
                               maxBarSize={32}
-                              name={dt("مبلغ مرة واحدة")}
-                            />
-                            <Bar
-                              dataKey="amountMonthly"
-                              fill="#7C3AED"
-                              radius={[4, 4, 0, 0]}
-                              maxBarSize={32}
-                              name={dt("مبلغ شهري")}
+                              name={dt("مبلغ ناجح")}
                             />
                             {showFailed && (
                               <Bar
@@ -1324,11 +1261,6 @@ export default function DashboardPage() {
                       >
                         {dt("مشاريع vs فئات")}</TabsTrigger>
                       <TabsTrigger
-                        value="one-time-monthly"
-                        className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
-                      >
-                        {dt("مرة واحدة vs شهرية")}</TabsTrigger>
-                      <TabsTrigger
                         value="paid-failed"
                         className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
                       >
@@ -1351,43 +1283,6 @@ export default function DashboardPage() {
                                 label={false}
                               >
                                 {revenueSplitData.map((entry) => (
-                                  <Cell key={entry.name} fill={entry.color} />
-                                ))}
-                              </Pie>
-                              <Tooltip
-                                formatter={(value: number, _name: string, props: { payload?: { count?: number } }) => {
-                                  const count = props?.payload?.count ?? 0;
-                                  return [
-                                    dt("{0}  عدد: {1}", [formatMoney(Number(value), undefined, undefined, true), count]),
-                                    dt("المبلغ / العدد"),
-                                  ];
-                                }}
-                              />
-                              <Legend content={DashboardPieLegendByValue as never} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <p className="text-slate-500">{dt("لا توجد بيانات")}</p>
-                        )}
-                      </div>
-                    </TabsContent>
-                    <TabsContent value="one-time-monthly" className="mt-0" dir={dashDir()}>
-                      <div className="h-[340px] w-full flex items-center justify-center">
-                        {typeSplitData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={typeSplitData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={70}
-                                outerRadius={110}
-                                paddingAngle={2}
-                                dataKey="value"
-                                nameKey="name"
-                                label={false}
-                              >
-                                {typeSplitData.map((entry) => (
                                   <Cell key={entry.name} fill={entry.color} />
                                 ))}
                               </Pie>
@@ -1557,7 +1452,7 @@ export default function DashboardPage() {
                   userId: selectedUserId, period: chartPeriod, dateFrom, dateTo,
                   locale: donationLocaleFilter, country: donationCountryFilter,
                   provider: donationProviderFilter, status: donationsStatusFilter,
-                  donationType: donationsTypeFilter, donationSearch: donationsSearch,
+                  donationType: "all", donationSearch: donationsSearch,
                 })
                   ? () => {
                       setSelectedCategory("all");
@@ -1570,7 +1465,6 @@ export default function DashboardPage() {
                       setDonationCountryFilter("all");
                       setDonationProviderFilter("all");
                       setDonationsStatusFilter("RESOLVED");
-                      setDonationsTypeFilter("all");
                       setDonationsSearch("");
                       setUsersSearchInput("");
                       setUsersSearchCommitted("");
@@ -1822,22 +1716,6 @@ export default function DashboardPage() {
     </Select>
   </div>
 
-  {/* Donation Type Filter (ONE_TIME / MONTHLY) */}
-  <div className="space-y-1 text-start">
-    <label className="text-[11px] font-semibold text-slate-600">
-      {dt("نوع التبرع")}</label>
-    <Select value={donationsTypeFilter} onValueChange={(v) => setDonationsTypeFilter(v as typeof donationsTypeFilter)}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder={dt("النوع")} />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">{dt("كل الأنواع")}</SelectItem>
-        <SelectItem value="ONE_TIME" className="text-xs">{dt("لمرة واحدة")}</SelectItem>
-        <SelectItem value="MONTHLY" className="text-xs">{dt("شهري")}</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
-
 </div>
 
 </DashboardFilterPanel>
@@ -1903,8 +1781,6 @@ export default function DashboardPage() {
                         {dt("البوابة")}</th>
                       <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
                         {dt("دعم الفريق")}</th>
-                      <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                        {dt("النوع")}</th>
                       <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
                         {dt("مصدر التبرع")}</th>
                       <th className="text-start py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 max-w-[110px]">
@@ -1917,18 +1793,18 @@ export default function DashboardPage() {
                   <tbody>
                     {donationsLoading && donations.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="py-12 text-center">
+                        <td colSpan={11} className="py-12 text-center">
                           <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-400" />
                         </td>
                       </tr>
                     ) : !donationsFetchedOnce ? (
                       <tr>
-                        <td colSpan={12} className="py-12 text-center text-slate-500">
+                        <td colSpan={11} className="py-12 text-center text-slate-500">
                           {dt("جاري التحميل...")}</td>
                       </tr>
                     ) : donations.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="py-12 text-center text-slate-500">
+                        <td colSpan={11} className="py-12 text-center text-slate-500">
                           {dt("لا توجد تبرعات تطابق التصفية")}</td>
                       </tr>
                     ) : (
@@ -1978,29 +1854,6 @@ export default function DashboardPage() {
                             ) : (
                               <span className="text-slate-500">—</span>
                             )}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span
-                              className={cn(
-                                "inline-block w-max px-1.5 py-px rounded-full text-[11px]",
-                                d.type === "MONTHLY"
-                                  ? "bg-brand/10 text-brand"
-                                  : "bg-gray-100 text-gray-600"
-                              )}
-                              title={
-                                d.type === "MONTHLY"
-                                  ? d.isRecurringCharge
-                                    ? dt("خصم تلقائي متكرر  تم دون أي إجراء من المتبرع")
-                                    : dt("أول دفعة عند إنشاء الاشتراك")
-                                  : undefined
-                              }
-                            >
-                              {d.type === "MONTHLY"
-                                ? `${donationCadenceLabel(d)} · ${d.isRecurringCharge
-                                  ? d.testCycle ? dt("دورة اختبار #{0}", [d.testCycle]) : dt("تجديد تلقائي{0}", [d.renewalNumber ? ` #${d.renewalNumber}` : ""])
-                                  : dt("أول دفعة")}`
-                                : donationCadenceLabel(d)}
-                            </span>
                           </td>
                           <td className="py-2.5 px-3 align-middle">
                             <div className="flex flex-col items-start gap-1">
@@ -2155,7 +2008,6 @@ export default function DashboardPage() {
           category: true,
           campaign: true,
           status: true,
-          type: true,
           locale: true,
           country: true,
           sort: true,

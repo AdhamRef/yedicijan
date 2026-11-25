@@ -1,12 +1,8 @@
-import { subscriptionPaymentSequence } from "@/lib/dashboard/subscription-payment-sequence";
 import { loadDonationFinancialSummaries } from "@/lib/dashboard/donation-financial-summary";
 import type { Prisma } from "@prisma/client";
-import { resolveNewCardPaymentRoute } from "@/lib/donations/payment-routing-server";
 import { donorAccountStatus } from "@/lib/dashboard/donor-account";
 import { getTrackingClientIp } from "@/lib/tracking/client-ip";
 import { donationPaymentEvidence } from "@/lib/donations/payment-evidence";
-import { POST as createCartDonation } from "@/app/api/cart/payment/route";
-import { isOrderType, isRecurringFrequency } from "@/lib/donations/recurring-schedule";
 import { NextRequest, NextResponse } from "next/server";
 import { donationProviderWhere } from "@/lib/dashboard/donation-provider-filter";
 import { prisma } from "@/lib/prisma";
@@ -16,7 +12,6 @@ import { isValidLocale } from "@/lib/locales";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/options";
 import { resolveReferralId } from "@/lib/referral-server";
-import { userHasDashboardPermission } from "@/lib/dashboard/permissions";
 import { isRevenueDashboardUser } from "@/lib/dashboard/api-auth";
 import { writeAuditLog } from "@/lib/audit-log";
 import {
@@ -33,11 +28,6 @@ import { inferLocaleFromRequest } from "@/lib/preferred-lang";
 import { resolveGuestDonor } from "@/lib/users/resolve-guest-donor";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
 import { mintDonationAccessToken } from "@/lib/donations/access-token";
-import {
-  donationFrequencyWhere,
-  loadSubscriptionFrequencies,
-  parseFrequencyParam,
-} from "@/lib/dashboard/recurring-frequency-filter";
 import {
   campaignWhereForDonationSearch,
   campaignTranslationWhereForDonationSearch,
@@ -96,19 +86,9 @@ export async function GET(request: NextRequest) {
     }
 
     const isAdmin = isRevenueDashboardUser(session);
-    const recurringStaff = !isAdmin && userHasDashboardPermission(session.user, "monthly");
-    const dashboardReader = isAdmin || recurringStaff;
-    const subscriptionOnly =
-      dashboardReader &&
-      (searchParams.get("subscriptionOnly") === "true" || searchParams.get("subscriptionOnly") === "1");
-    if (recurringStaff && !subscriptionOnly) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const donationTypeFilter = isAdmin ? searchParams.get("donationType") : null;
-    const statusFilter = dashboardReader ? searchParams.get("status") : null;
-    const localeFilter = dashboardReader ? searchParams.get("locale")?.trim() : null;
-    const countryFilter = dashboardReader ? searchParams.get("country")?.trim() : null;
-    // Recurring cadence of the plan behind the charge (DAILY | FRIDAY | MONTHLY)  implies
-    // subscription-only, since a one-time gift has no plan.
-    const frequencyFilter = dashboardReader ? parseFrequencyParam(searchParams.get("frequency")) : null;
+    const statusFilter = isAdmin ? searchParams.get("status") : null;
+    const localeFilter = isAdmin ? searchParams.get("locale")?.trim() : null;
+    const countryFilter = isAdmin ? searchParams.get("country")?.trim() : null;
 
     // Explicit opt-in only: existing donor and admin listing clients still
     // filter by creation date. The dashboard's settled-date view follows the
@@ -130,9 +110,7 @@ export async function GET(request: NextRequest) {
     const baseWhere: Record<string, unknown> = {
       ...(userId && { donorId: userId }),
       ...(referralId && isAdmin && { referralId }),
-      ...(subscriptionOnly && { subscriptionId: { not: null } }),
-      ...(donationTypeFilter === "MONTHLY" && { subscriptionId: { not: null } }),
-      ...(!dashboardReader && { donorId: session.user.id }),
+      ...(!isAdmin && { donorId: session.user.id }),
       ...(!useAccountingDate && Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
     };
 
@@ -142,7 +120,7 @@ export async function GET(request: NextRequest) {
     const relatedFilters: Record<string, unknown>[] = [];
     const relationIds = await resolveDonationRelationFilterIds({
       campaignId,
-      categoryId: dashboardReader ? categoryId : null,
+      categoryId: isAdmin ? categoryId : null,
     });
     if (campaignId && campaignId !== "all") {
       const donationIds = relationIds.campaignDonationIds ?? [];
@@ -235,15 +213,6 @@ export async function GET(request: NextRequest) {
     const localeWhere = dashboardLocaleWhere(localeFilter);
     const countryWhere = dashboardCountryWhere(countryFilter);
 
-    // ONE_TIME means "no subscriptionId". MongoDB may store it as null or
-    // omit the field entirely; cover both with isSet:false || null.
-    const donationTypeWhere =
-      donationTypeFilter === "ONE_TIME"
-        ? { OR: [{ subscriptionId: null }, { subscriptionId: { isSet: false } }] }
-        : null;
-
-    const frequencyWhere = donationFrequencyWhere(frequencyFilter);
-
     // ناجح / قيد التأكيد / فاشل, as the tables show them.
     const statusWhere = donationStatusWhere(statusFilter);
 
@@ -254,7 +223,7 @@ export async function GET(request: NextRequest) {
     const recoveredViewWhere = hideRecoveredFailures
       ? { OR: [{ status: { not: "FAILED" } }, { overviewRecoveredByDonationId: null }, { overviewRecoveredByDonationId: { isSet: false } }] }
       : null;
-    const extraFilters = [...relatedFilters, searchWhere, localeWhere, countryWhere, donationTypeWhere, frequencyWhere, statusWhere, providerWhere, accountingWhere, recoveredViewWhere].filter(
+    const extraFilters = [...relatedFilters, searchWhere, localeWhere, countryWhere, statusWhere, providerWhere, accountingWhere, recoveredViewWhere].filter(
       (w) => w != null
     );
     const where: Record<string, unknown> =
@@ -303,24 +272,7 @@ export async function GET(request: NextRequest) {
       skip,
       take: limit,
     });
-    // Subscription payment sequence: is this row the signup charge or the Nth
-    // automatic renewal? Stripe's `billingReason` is authoritative when present;
-    // for legacy rows we fall back to the row's position within its subscription.
-    // Ranked over the whole subscription (not just this page) so paging can't
-    // change a donation's cycle number.
-    const pageSubscriptionIds = [
-      ...new Set(donations.map((d) => d.subscriptionId).filter(Boolean) as string[]),
-    ];
-    const siblings = pageSubscriptionIds.length ? await prisma.donation.findMany({
-      where: { subscriptionId: { in: pageSubscriptionIds } },
-      select: { id: true, subscriptionId: true, status: true, paidAt: true, createdAt: true, billingReason: true, providerTxnType: true },
-    }) : [];
-    const sequenceById = subscriptionPaymentSequence(siblings);
     const financialById = await loadDonationFinancialSummaries(prisma, donations.filter(row => ["ALBARAKA", "PAYFOR"].includes(row.provider || "")).map(row => row.id));
-
-    // `type` stays MONTHLY for every plan charge (older screens key off it); `frequency` is the
-    // plan's real cadence.
-    const frequencyOf = await loadSubscriptionFrequencies(prisma, pageSubscriptionIds);
 
     const formattedDonations = donations.map((donation) => ({
       // Compute derived gateway evidence from the complete server-side row,
@@ -329,11 +281,6 @@ export async function GET(request: NextRequest) {
       ...donationListSafeFields(donation, { revenueAuthorized: isAdmin }),
       securityMode: donationPaymentEvidence(donation).securityMode,
       type: donation.subscriptionId ? ("MONTHLY" as const) : ("ONE_TIME" as const),
-      frequency: donation.subscriptionId ? frequencyOf(donation.subscriptionId) : null,
-      subscriptionCycle: sequenceById.get(donation.id)?.subscriptionCycle ?? null,
-      renewalNumber: sequenceById.get(donation.id)?.renewalNumber ?? null,
-      testCycle: sequenceById.get(donation.id)?.testCycle ?? null,
-      isRecurringCharge: sequenceById.get(donation.id)?.isRecurringCharge ?? donationPaymentEvidence(donation).isRecurringCharge,
       financialSummary: financialById.get(donation.id) ?? null,
       fees: donation.fees,
       teamSupport: donation.teamSupport,
@@ -363,15 +310,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    if (!body || typeof body !== "object" || Array.isArray(body) || !isOrderType(body.type ?? "ONE_TIME")) {
-      return NextResponse.json({ error: "Unsupported donation type" }, { status: 400 });
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
-    // Legacy dialogs and the Minbar checkout must create the same provider-linked
-    // plan. The old monthly path omitted provider/card linkage and could never renew.
-    if (isRecurringFrequency(body.type)) {
-      return createCartDonation(new NextRequest(request.url, {
-        method: "POST", headers: request.headers, body: JSON.stringify(body),
-      }));
+    // Every donation is one-time; monthly/recurring plans were removed on purpose.
+    if ((body.type ?? "ONE_TIME") !== "ONE_TIME") {
+      return NextResponse.json({ error: "Only one-time donations are supported." }, { status: 400 });
     }
     const session = await getServerSession(authOptions);
     const clientIp = getTrackingClientIp(request.headers);
@@ -408,9 +352,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const paymentRoute = await resolveNewCardPaymentRoute(request.headers, { method: paymentMethod, type: "ONE_TIME", currency: normalizeDonationCurrencyCode(currency), phone: body.routingPhone ?? guest?.phone, userId: session?.user?.id });
-    if (paymentRoute && body.expectedGateway && body.expectedGateway !== paymentRoute.gateway) return NextResponse.json({ error: "Payment route changed. Please confirm the updated payment method.", code: "PAYMENT_ROUTING_CHANGED", gateway: paymentRoute.gateway }, { status: 409 });
 
     // Resolve donorId  authenticated user or guest upsert
     let donorId: string;
@@ -567,7 +508,7 @@ export async function POST(request: NextRequest) {
         ? String(donationLocale).toLowerCase()
         : null;
 
-    // One-time: create a single Donation (transaction) only
+    // Create the Donation (transaction).
     const donation = await prisma.$transaction(async (tx) => {
       const d = await tx.donation.create({
         data: {
@@ -587,7 +528,6 @@ export async function POST(request: NextRequest) {
           referralId: referralId ?? undefined,
           paymentMethod,
           cardDetails: null,
-          ...(paymentRoute ? { provider: paymentRoute.gateway, providerRaw: { paymentRouting: paymentRoute } as unknown as Prisma.InputJsonValue } : {}),
           items: hasCampaignItems
             ? {
                 create: campaignItemsResolved.map((item) => ({
@@ -642,7 +582,7 @@ export async function POST(request: NextRequest) {
       messageAr: `${donorName ?? "متبرع"} بدأ عملية دفع تبرع لمرة واحدة (≈ ${donationTotalUsd.toFixed(0)} USD)`,
       entityType: "Donation",
       entityId: donation.id,
-      metadata: { amountUSD: donationTotalUsd, status: "PENDING", provider: paymentRoute?.gateway ?? null },
+      metadata: { amountUSD: donationTotalUsd, status: "PENDING" },
       stream: "SITE",
     });
 

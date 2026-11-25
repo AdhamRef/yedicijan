@@ -15,13 +15,11 @@ export interface FormattableDonation {
   status: string;
   paidAt: Date | string | null;
   createdAt: Date | string;
-  subscriptionId: string | null;
   provider: string | null;
   providerOrderId: string | null;
   providerErrorMessage: string | null;
-  /** Gateway return code + raw payload  inputs to the Arabic failure-reason mapper. */
+  /** Gateway return code — input to the Arabic failure-reason mapper. */
   providerProcReturnCode?: string | null;
-  providerRaw?: unknown;
   paymentMethod: string | null;
   donorCountryCode: string | null;
   attribution: Record<string, unknown> | null;
@@ -122,14 +120,6 @@ function countryLine(code: string | null): string {
   return `${flag} ${htmlEscape(name)}`.trim();
 }
 
-function targetLine(d: FormattableDonation): string {
-  const campaigns = d.items.map((i) => i.campaign.title).filter(Boolean);
-  if (campaigns.length > 0) return htmlEscape(campaigns.join("، "));
-  const cats = d.categoryItems.map((i) => i.category.name).filter(Boolean);
-  if (cats.length > 0) return `فئة: ${htmlEscape(cats.join("، "))}`;
-  return "—";
-}
-
 function adCampaignLine(d: FormattableDonation): string | null {
   const attr = d.attribution ?? {};
   const u = typeof attr.utm_campaign === "string" ? attr.utm_campaign : "";
@@ -171,12 +161,8 @@ export function formatDonationNotification(
   // ⭐ = first-time donor. Inline on the donor line rather than a second message.
   lines.push(`👤 <b>المتبرع:</b> ${options.isNewDonor ? "⭐ " : ""}${donorLine(d.donor)}`);
   lines.push(`🌍 <b>الدولة:</b> ${countryLine(d.donorCountryCode)}`);
-  lines.push(`🎯 <b>الوجهة:</b> ${targetLine(d)}`);
-  lines.push(
-    `🏦 <b>البوابة:</b> ${htmlEscape(providerLabel(d))}${
-      d.subscriptionId ? " · 🔁 شهري" : ""
-    }`
-  );
+  // The donated campaign is deliberately left out of the automatic notification.
+  lines.push(`🏦 <b>البوابة:</b> ${htmlEscape(providerLabel(d))}`);
 
   if (d.referral) {
     const ref = d.referral.name ? `${d.referral.name} (${d.referral.code})` : d.referral.code;
@@ -219,8 +205,6 @@ export interface StatsSnapshot {
   paidTotalUSD: number;
   failedCount: number;
   pendingCount: number;
-  oneTimeCount: number;
-  monthlyCount: number;
   topCampaigns: Array<{ title: string; total: number; count: number }>;
 }
 
@@ -231,8 +215,6 @@ export function formatStatsSnapshot(s: StatsSnapshot): string {
   lines.push(`✅ <b>ناجح:</b> ${s.paidCount} تبرع · ${formatMoneyUSD(s.paidTotalUSD) || "$0"}`);
   if (s.failedCount > 0) lines.push(`❌ <b>فاشل:</b> ${s.failedCount}`);
   if (s.pendingCount > 0) lines.push(`⏳ <b>قيد التأكيد:</b> ${s.pendingCount}`);
-  lines.push("");
-  lines.push(`🔹 مرة واحدة: ${s.oneTimeCount} · 🔁 شهري: ${s.monthlyCount}`);
   if (s.topCampaigns.length > 0) {
     lines.push("");
     lines.push("<b>أعلى المشاريع:</b>");

@@ -19,7 +19,7 @@ const CONTENT: Record<string, Copy> = {
         body: [
           "نجمع البيانات التي تقدمها طوعاً عند التبرع أو التسجيل، بما في ذلك الاسم والبريد الإلكتروني ورقم الهاتف وبلد الإقامة.",
           "نجمع أيضاً بيانات تقنية محدودة (عنوان IP، نوع المتصفح، صفحات الزيارة) لتحسين الموقع ومنع الاحتيال.",
-          "لا نخزن أرقام البطاقات الائتمانية الكاملة على خوادمنا. تتم معالجة المدفوعات عبر مزودين معتمدين (Stripe / PayFor).",
+          "لا نخزن أرقام البطاقات الائتمانية الكاملة على خوادمنا. تتم معالجة المدفوعات عبر مزودين معتمدين (بنك البركة التركي / زراعات كاتيليم عبر PayFor).",
         ],
       },
       {
@@ -73,7 +73,7 @@ const CONTENT: Record<string, Copy> = {
         body: [
           "We collect data you voluntarily provide when donating or signing up, including name, email, phone number, and country.",
           "We also collect limited technical data (IP address, browser type, pages visited) to improve the site and prevent fraud.",
-          "We do not store full card numbers on our servers. Payments are processed through certified providers (Stripe / PayFor).",
+          "We do not store full card numbers on our servers. Payments are processed through certified providers (Albaraka Türk / Ziraat Katılım via PayFor).",
         ],
       },
       {

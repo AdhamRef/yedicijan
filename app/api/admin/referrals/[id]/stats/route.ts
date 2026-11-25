@@ -1,4 +1,3 @@
-import { subscriptionLifecycleWhere } from "@/lib/donations/subscription-lifecycle";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -9,11 +8,10 @@ import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import {
   PAID_DONATION_FILTER,
   donationRowUsdApprox,
-  donationUsdRevenueFallback,
   donationUsdSumFallback,
 } from "@/lib/dashboard/donation-usd-revenue";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
-import { donationFieldEmpty, donationWhereAll } from "@/lib/donations/mongo-null";
+import { donationWhereAll } from "@/lib/donations/mongo-null";
 
 function getDateRange(period: string, startParam?: string | null, endParam?: string | null) {
   let endDate: Date;
@@ -36,7 +34,7 @@ function getDateRange(period: string, startParam?: string | null, endParam?: str
   return { startDate, endDate };
 }
 
-/** GET /api/admin/referrals/[id]/stats - Stats for donations (transactions) and subscriptions attributed to this referral */
+/** GET /api/admin/referrals/[id]/stats - Stats for donations (transactions) attributed to this referral */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -99,27 +97,6 @@ export async function GET(
     // (campaign/category scoping vs PAID_DONATION_FILTER) and spreading drops one silently.
     const paidDonationWhere: Prisma.DonationWhereInput = donationWhereAll(donationWhere, PAID_DONATION_FILTER);
     const failedDonationWhere: Prisma.DonationWhereInput = donationWhereAll(donationWhere, { status: "FAILED" });
-    // `{ subscriptionId: null }` misses rows where the field is absent  the majority here.
-    const oneTimeWhere = donationWhereAll(paidDonationWhere, donationFieldEmpty("subscriptionId"));
-    const fromSubscriptionWhere = donationWhereAll(paidDonationWhere, { subscriptionId: { not: null } });
-    // All-status splits for the "breakdown" cards ("مرة واحدة (عدد)" / "شهرية (عدد)")
-    const oneTimeAllWhere: Prisma.DonationWhereInput = donationWhereAll(donationWhere, donationFieldEmpty("subscriptionId"));
-    const monthlyAllWhere: Prisma.DonationWhereInput = donationWhereAll(donationWhere, { subscriptionId: { not: null } });
-
-    const subscriptionWhere: Prisma.SubscriptionWhereInput = { referralId };
-    if (campaignId && campaignId !== "all") {
-      subscriptionWhere.items = { some: { campaignId } };
-    } else if (categoryId && categoryId !== "all") {
-      subscriptionWhere.OR = [
-        { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-        { categoryItems: { some: { categoryId } } },
-      ];
-    }
-    // ACTIVE subscription without any settled charge isn't really earning revenue 
-    // exclude it from MRR / "التبرعات الشهرية الناشطة" so a failed-only sub doesn't inflate the totals.
-    const activeMonthlyWhere: Prisma.SubscriptionWhereInput = {
-      AND: [subscriptionWhere, subscriptionLifecycleWhere("ACTIVE")],
-    };
 
     const { monthStart, monthEnd } = getCurrentCalendarMonthIstanbulRange();
     const thisMonthBaseWhere: Prisma.DonationWhereInput = {
@@ -142,16 +119,7 @@ export async function GET(
       totalDonations,
       paidDonationCount,
       failedDonationCount,
-      oneTimeCount,
-      fromSubscriptionCount,
-      oneTimeAllCount,
-      monthlyAllCount,
-      activeSubscriptionCount,
-      stoppedSubscriptionCount,
-      monthlyRecurringRevenueResult,
-      monthlyStoppedAmountResult,
-      oneTimeTotalResult,
-      fromSubscriptionTotalResult,
+      totalPaidResult,
       thisMonthTotalResult,
       allTimeRevenueResult,
       failedTotalResult,
@@ -162,29 +130,9 @@ export async function GET(
       prisma.donation.count({ where: donationWhere }),
       prisma.donation.count({ where: paidDonationWhere }),
       prisma.donation.count({ where: failedDonationWhere }),
-      prisma.donation.count({ where: oneTimeWhere }),
-      prisma.donation.count({ where: fromSubscriptionWhere }),
-      prisma.donation.count({ where: oneTimeAllWhere }),
-      prisma.donation.count({ where: monthlyAllWhere }),
-      prisma.subscription.count({ where: activeMonthlyWhere }),
-      prisma.subscription.count({
-        where: { ...subscriptionWhere, status: { in: ["PAUSED", "CANCELLED"] } },
-      }),
-      prisma.subscription.aggregate({
-        _sum: { amountUSD: true },
-        where: activeMonthlyWhere,
-      }),
-      prisma.subscription.aggregate({
-        _sum: { amountUSD: true },
-        where: { ...subscriptionWhere, status: { in: ["PAUSED", "CANCELLED"] } },
-      }),
       prisma.donation.aggregate({
         _sum: { amountUSD: true },
-        where: oneTimeWhere,
-      }),
-      prisma.donation.aggregate({
-        _sum: { amountUSD: true },
-        where: fromSubscriptionWhere,
+        where: paidDonationWhere,
       }),
       prisma.donation.aggregate({
         _sum: { amountUSD: true },
@@ -219,7 +167,6 @@ export async function GET(
           amountUSD: true,
           createdAt: true,
           currency: true,
-          subscriptionId: true,
           status: true,
           donor: { select: { name: true } },
           items: { select: { campaign: { select: { title: true } } } },
@@ -228,33 +175,12 @@ export async function GET(
       }),
     ]);
 
-    let oneTimeTotalAmount = oneTimeTotalResult._sum?.amountUSD ?? 0;
-    let fromSubscriptionTotalAmount = fromSubscriptionTotalResult._sum?.amountUSD ?? 0;
-    // Unified paid total  must match thisMonthRevenue / allTimeRevenue.
-    // The oneTime + monthly split misses rows where subscriptionId is *unset*
-    // on legacy Mongo records (Prisma's null filter doesn't match unset), so
-    // the hero card would report less than the actual paid revenue.
-    const totalPaidAgg = await prisma.donation.aggregate({
-      _sum: { amountUSD: true },
-      where: paidDonationWhere,
-    });
-    let totalAmount = totalPaidAgg._sum?.amountUSD ?? 0;
+    // Unified paid total — must match thisMonthRevenue / allTimeRevenue.
+    let totalAmount = totalPaidResult._sum?.amountUSD ?? 0;
     if (totalAmount === 0 && paidDonationCount > 0) {
-      const fb = await donationUsdRevenueFallback(paidDonationWhere);
-      oneTimeTotalAmount = fb.oneTime;
-      fromSubscriptionTotalAmount = fb.monthly;
-      totalAmount = fb.total;
-    }
-    // If unified total exceeds the split, attribute the gap to one-time so
-    // the pie still sums to totalAmount (legacy unset subscriptionId rows).
-    const splitSumRef = oneTimeTotalAmount + fromSubscriptionTotalAmount;
-    if (totalAmount > splitSumRef) {
-      oneTimeTotalAmount += totalAmount - splitSumRef;
+      totalAmount = await donationUsdSumFallback(paidDonationWhere);
     }
 
-    const monthlyRecurringRevenue = monthlyRecurringRevenueResult._sum?.amountUSD ?? 0;
-    const activeMonthlyAmountUSD = monthlyRecurringRevenue;
-    const monthlyStoppedAmountUSD = monthlyStoppedAmountResult._sum?.amountUSD ?? 0;
     let thisMonthRevenue = thisMonthTotalResult._sum?.amountUSD ?? 0;
     if (thisMonthRevenue === 0) {
       const paidThisMonth = await prisma.donation.count({ where: thisMonthPaidWhere });
@@ -311,7 +237,6 @@ export async function GET(
       amount: d.totalAmount ?? d.amount ?? 0,
       currency: d.currency ?? "USD",
       donorName: d.donor?.name ?? "—",
-      type: d.subscriptionId ? ("MONTHLY" as const) : ("ONE_TIME" as const),
       status: d.status,
       campaignTitle: d.items?.[0]?.campaign?.title ?? null,
       categoryName: d.categoryItems?.[0]?.category?.name ?? null,
@@ -342,18 +267,7 @@ export async function GET(
       totalAmount,
       allTimeRevenue,
       paidRevenueAllTimeUnfiltered,
-      oneTimeCount,
-      monthlyCount: fromSubscriptionCount,
-      oneTimeAllCount,
-      monthlyAllCount,
-      activeMonthlyCount: activeSubscriptionCount,
-      monthlyStoppedCount: stoppedSubscriptionCount,
-      monthlyRecurringRevenue,
-      activeMonthlyAmountUSD,
-      monthlyStoppedAmountUSD,
       thisMonthRevenue,
-      oneTimeTotalAmount,
-      monthlyTotalAmount: fromSubscriptionTotalAmount,
       campaignDonationsTotal,
       categoryDonationsTotal,
       campaignDonationsCount,

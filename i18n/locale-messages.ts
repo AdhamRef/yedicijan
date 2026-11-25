@@ -8,33 +8,20 @@ import msg_de from "./messages/de.json";
 import msg_es from "./messages/es.json";
 import msg_id from "./messages/id.json";
 import msg_pt from "./messages/pt.json";
-import msg_ur from "./messages/ur.json";
-import msg_sq from "./messages/sq.json";
-import msg_it from "./messages/it.json";
-import msg_nl from "./messages/nl.json";
-import msg_sv from "./messages/sv.json";
-import msg_no from "./messages/no.json";
-import msg_da from "./messages/da.json";
-import msg_ms from "./messages/ms.json";
-import msg_ja from "./messages/ja.json";
-import msg_zh from "./messages/zh.json";
-import msg_hi from "./messages/hi.json";
 
 /**
  * The normalized message catalog for every public locale.
  *
  * Extracted from `app/[locale]/layout.tsx` so the layout and the per-page
- * message providers read the same object  otherwise two copies of a 19-locale
- * bundle would end up in the server graph.
+ * message providers read the same object  otherwise two copies of the
+ * locale bundle would end up in the server graph. Yedicihan ships 8 locales.
  *
  * The map must stay statically imported (bundled JSON). When a locale is
  * promoted in `lib/locales.ts`, add its `import` above and an entry below.
  */
 const raw: LocaleMessages = {
   ar: msg_ar, tr: msg_tr, en: msg_en, fr: msg_fr, de: msg_de,
-  es: msg_es, id: msg_id, pt: msg_pt, ur: msg_ur, sq: msg_sq,
-  it: msg_it, nl: msg_nl, sv: msg_sv, no: msg_no, da: msg_da,
-  ms: msg_ms, ja: msg_ja, zh: msg_zh, hi: msg_hi,
+  es: msg_es, id: msg_id, pt: msg_pt,
 };
 
 /** Gaps are filled from English  the handoff's `code → en → ar` chain. */

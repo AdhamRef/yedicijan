@@ -420,8 +420,6 @@ type GatewayDetails = {
     providerHostRefNum: string | null;
     paypalOrderId: string | null;
     paypalCaptureId: string | null;
-    stripeSubscriptionId: string | null;
-    subscriptionId: string | null;
     cardLast4?: string | null;
     maskedPan: string | null;
   };
@@ -472,7 +470,6 @@ function gatewayReferences(d: GatewayDetails): RefRow[] {
   const add = (label: string, value: string | null, hint?: string, href?: string) => {
     if (value) rows.push({ label, value, hint, href });
   };
-  const stripeSearch = (id: string) => `https://dashboard.stripe.com/search?query=${encodeURIComponent(id)}`;
 
   switch (d.provider) {
     case "ALBARAKA":
@@ -493,11 +490,6 @@ function gatewayReferences(d: GatewayDetails): RefRow[] {
         dt("رقم المعاملة كما يظهر في حساب PayPal، ويُستخدم للبحث والاسترداد"),
         r.paypalCaptureId ? `https://www.paypal.com/activity/payment/${encodeURIComponent(r.paypalCaptureId)}` : undefined,
       );
-      break;
-    case "STRIPE":
-      add(dt("معرف العملية في Stripe"), r.providerOrderId, dt("جلسة الدفع أو الفاتورة أو عملية الدفع"), r.providerOrderId ? stripeSearch(r.providerOrderId) : undefined);
-      add(dt("معرف الدفع أو الاشتراك في Stripe"), r.providerAuthCode, undefined, r.providerAuthCode ? stripeSearch(r.providerAuthCode) : undefined);
-      add(dt("معرف الاشتراك في Stripe"), r.stripeSubscriptionId !== r.providerAuthCode ? r.stripeSubscriptionId : null, undefined, r.stripeSubscriptionId ? stripeSearch(r.stripeSubscriptionId) : undefined);
       break;
     default:
       add(dt("معرف الطلب لدى البوابة"), r.providerOrderId);

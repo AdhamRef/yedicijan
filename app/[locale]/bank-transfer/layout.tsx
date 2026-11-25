@@ -3,14 +3,7 @@ import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
 import type { Metadata } from "next";
 import { LOCALE_SEO, type Locale } from "@/lib/seo";
 
-/**
- * Partial by design: the lookup below already falls back to `en`, and the
- * locales added with the Minbar port have no hand-written copy for this page
- * yet. A full `Record` would force placeholder text into 11 languages, which is
- * worse for search than the English fallback.
- */
-type PageSeo = { title: string; description: string };
-const BANK_TRANSFER_SEO: { en: PageSeo } & Partial<Record<Locale, PageSeo>> = {
+const BANK_TRANSFER_SEO: Record<Locale, { title: string; description: string }> = {
   ar: {
     title: "التبرع عبر التحويل البنكي | مؤسسة منبر الأقصى الدولية",
     description: "اطّلع على حسابات مؤسسة منبر الأقصى الدولية البنكية وتبرع بأمان عبر التحويل البنكي لدعم المشاريع الإنسانية والطبية والتعليمية.",

@@ -27,18 +27,19 @@ import type { BadgeCriteriaType } from "@/lib/badge-criteria";
 import { dashDir, dt, dtx } from "@/lib/dashboard/i18n";
 import { DonorListsManager } from "./_components/DonorListsManager";
 
-const CRITERIA_TYPES: { value: BadgeCriteriaType; label: string }[] = [
+/** Criteria offered in this dashboard. The monthly-subscription criterion is not offered (no recurring donations). */
+type OfferedCriteriaType = Exclude<BadgeCriteriaType, "MONTHLY_ACTIVE_RANGE">;
+
+const CRITERIA_TYPES: { value: OfferedCriteriaType; label: string }[] = [
   { value: "TOTAL_LAST_N_MONTHS", get label() { return dt("مجموع التبرعات خلال آخر عدد أشهر"); } },
   { value: "ANY_SPAN_N_MONTHS", get label() { return dt("مجموع خلال أي أشهر متتالية"); } },
-  { value: "MONTHLY_ACTIVE_RANGE", get label() { return dt("إجمالي التزامات الاشتراك الشهري النشطة"); } },
   { value: "TOTAL_LIFETIME", get label() { return dt("إجمالي التبرعات"); } },
   { value: "DONATION_COUNT_MIN", get label() { return dt("عدد مرات التبرع"); } },
 ];
 
-const CRITERIA_EXPLANATIONS: Record<BadgeCriteriaType, string> = {
+const CRITERIA_EXPLANATIONS: Record<OfferedCriteriaType, string> = {
   get TOTAL_LAST_N_MONTHS() { return dt("تضم المجموعة من وصل مجموع تبرعاته المحصّلة في المدة المتحركة حتى اليوم إلى الحد الذي تحدده."); },
   get ANY_SPAN_N_MONTHS() { return dt("تضم المجموعة من وصل مجموع تبرعاته المحصّلة في أي أشهر تقويمية متتالية إلى الحد الذي تحدده."); },
-  get MONTHLY_ACTIVE_RANGE() { return dt("تضم المجموعة من يقع مجموع مبالغ خططه الشهرية النشطة ضمن هذا النطاق. يجب أن تكون القيمة بالدولار معروفة لكل خطة؛ هذا مجموع الالتزامات وليس ما دُفع تاريخيًا."); },
   get TOTAL_LIFETIME() { return dt("تضم المجموعة من بلغ مجموع تبرعاته المؤكدة منذ البداية الحد المحدد أو زاد عليه."); },
   get DONATION_COUNT_MIN() { return dt("تضم المجموعة من أتم الحد الأدنى من عمليات التبرع المؤكدة، بصرف النظر عن قيمتها."); },
 };
@@ -56,9 +57,8 @@ interface BadgeForm {
   name: string;
   color: string;
   criteria: {
-    type: BadgeCriteriaType;
+    type: OfferedCriteriaType;
     amountMinUSD?: number;
-    amountMaxUSD?: number;
     months?: number;
     count?: number;
   };
@@ -69,9 +69,8 @@ const defaultCriteria = (): BadgeForm["criteria"] => ({
   amountMinUSD: 100,
 });
 
-function criteriaForType(type: BadgeCriteriaType): BadgeForm["criteria"] {
+function criteriaForType(type: OfferedCriteriaType): BadgeForm["criteria"] {
   if (type === "TOTAL_LAST_N_MONTHS" || type === "ANY_SPAN_N_MONTHS") return { type, amountMinUSD: 100, months: 1 };
-  if (type === "MONTHLY_ACTIVE_RANGE") return { type, amountMinUSD: 0, amountMaxUSD: 1000 };
   if (type === "DONATION_COUNT_MIN") return { type, count: 1 };
   return { type, amountMinUSD: 100 };
 }
@@ -82,8 +81,6 @@ function criteriaSummary(c: BadgeForm["criteria"]): string {
       return dt("آخر {0} شهر من اليوم، مبلغ {1} دولار أو أكثر", [c.months ?? 0, c.amountMinUSD ?? 0]);
     case "ANY_SPAN_N_MONTHS":
       return dt("أي {0} شهر متتالية، مبلغ {1} دولار أو أكثر", [c.months ?? 0, c.amountMinUSD ?? 0]);
-    case "MONTHLY_ACTIVE_RANGE":
-      return dt("إجمالي الاشتراكات الشهرية النشطة بين {0} و {1} دولار", [c.amountMinUSD ?? 0, c.amountMaxUSD ?? "—"]);
     case "TOTAL_LIFETIME":
       return dt("إجمالي التبرعات مدى الحياة {0} دولار أو أكثر", [c.amountMinUSD ?? 0]);
     case "DONATION_COUNT_MIN":
@@ -145,9 +142,12 @@ export default function BadgesPage() {
         name: b.name ?? "",
         color: b.color ?? "#35708f",
         criteria: {
-          type: (b.criteria?.type as BadgeCriteriaType) ?? "TOTAL_LIFETIME",
+          // A stored type that is no longer offered (e.g. the removed monthly-subscription
+          // criterion) opens as the default so the form always shows a valid choice.
+          type: CRITERIA_TYPES.some((t) => t.value === b.criteria?.type)
+            ? (b.criteria.type as OfferedCriteriaType)
+            : "TOTAL_LIFETIME",
           amountMinUSD: b.criteria?.amountMinUSD,
-          amountMaxUSD: b.criteria?.amountMaxUSD,
           months: b.criteria?.months,
           count: b.criteria?.count,
         },
@@ -172,9 +172,7 @@ export default function BadgesPage() {
       ? Number.isFinite(c.amountMinUSD) && (c.amountMinUSD ?? 0) > 0
       : c.type === "TOTAL_LAST_N_MONTHS" || c.type === "ANY_SPAN_N_MONTHS"
         ? Number.isFinite(c.amountMinUSD) && (c.amountMinUSD ?? 0) > 0 && Number.isInteger(c.months) && (c.months ?? 0) >= 1 && (c.months ?? 0) <= 120
-        : c.type === "MONTHLY_ACTIVE_RANGE"
-          ? Number.isFinite(c.amountMinUSD) && Number.isFinite(c.amountMaxUSD) && (c.amountMinUSD ?? -1) >= 0 && (c.amountMaxUSD ?? -1) >= (c.amountMinUSD ?? 0)
-          : Number.isInteger(c.count) && (c.count ?? 0) >= 1;
+        : Number.isInteger(c.count) && (c.count ?? 0) >= 1;
     if (!validCriteria) {
       toast.error(dt("أكمل قيم المعيار بقيم صحيحة قبل الحفظ"));
       return;
@@ -187,7 +185,6 @@ export default function BadgesPage() {
         criteria: {
           type: form.criteria.type,
           amountMinUSD: form.criteria.amountMinUSD,
-          amountMaxUSD: form.criteria.amountMaxUSD,
           months: form.criteria.months,
           count: form.criteria.count,
         },
@@ -377,7 +374,7 @@ export default function BadgesPage() {
                 onValueChange={(v) =>
                   setForm((f) => ({
                     ...f,
-                    criteria: criteriaForType(v as BadgeCriteriaType),
+                    criteria: criteriaForType(v as OfferedCriteriaType),
                   }))
                 }
               >
@@ -438,50 +435,6 @@ export default function BadgesPage() {
                       }))
                     }
                     placeholder="2"
-                  />
-                </div>
-              </>
-            )}
-            {form.criteria.type === "MONTHLY_ACTIVE_RANGE" && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="badge-monthly-amount-min">{dt("الحد الأدنى للإجمالي الشهري (USD)")}</Label>
-                  <Input
-                    id="badge-monthly-amount-min"
-                    type="number"
-                    min={0}
-                    step="any"
-                    value={form.criteria.amountMinUSD ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        criteria: {
-                          ...f.criteria,
-                          amountMinUSD: e.target.value ? Number(e.target.value) : undefined,
-                        },
-                      }))
-                    }
-                    placeholder="500"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="badge-monthly-amount-max">{dt("الحد الأقصى للإجمالي الشهري (USD)")}</Label>
-                  <Input
-                    id="badge-monthly-amount-max"
-                    type="number"
-                    min={0}
-                    step="any"
-                    value={form.criteria.amountMaxUSD ?? ""}
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        criteria: {
-                          ...f.criteria,
-                          amountMaxUSD: e.target.value ? Number(e.target.value) : undefined,
-                        },
-                      }))
-                    }
-                    placeholder="800"
                   />
                 </div>
               </>

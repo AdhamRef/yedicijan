@@ -13,8 +13,8 @@ import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-lin
 import type { SuggestedDonationsConfig } from "@/lib/campaign/suggested-donations";
 import type { ShareLabelsConfig } from "@/lib/campaign/share-labels";
 
-// DonationDialog pulls in @stripe/stripe-js (~230KiB) plus the Stripe utility script.
-// Loading it lazily keeps Stripe out of the homepage critical path entirely.
+// DonationDialog is a large client chunk; loading it lazily keeps it out of the
+// homepage critical path entirely.
 const DonationDialog = dynamic(() => import("@/components/DonationDialog"), { ssr: false });
 
 interface CategoryOption {
@@ -55,7 +55,6 @@ const QUICK_DONATE_RESUME_KEY = "quickDonateResume";
 
 const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => {
   const t = useTranslations("QuickDonate");
-  const tDonation = useTranslations("DonationDialog");
   const locale = useLocale() as "ar" | "en" | "fr";
   const pathname = usePathname();
   const router = useRouter();
@@ -67,7 +66,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
     initialCategories[0]?.id ?? ""
   );
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
-  // Gate the actual mount so the Stripe / dialog chunk doesn't load on page paint.
+  // Gate the actual mount so the dialog chunk doesn't load on page paint.
   const [donationDialogMounted, setDonationDialogMounted] = useState(false);
   const [categoriesLoading, setCategoriesLoading] = useState(initialCategories.length === 0);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
@@ -81,24 +80,12 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
    *  springs open on a deliberate change and never on first paint. */
   const autoOpenCampaignsRef = useRef(false);
   const [currencyLabel, setCurrencyLabel] = useState<string>("USD");
-  const [stripeMinAmount, setStripeMinAmount] = useState(1);
   /** Campaign the visitor had picked before being sent to sign-in. */
   const pendingResumeCampaignRef = useRef<string>("");
   const [resumeRequested, setResumeRequested] = useState(false);
 
   useEffect(() => {
-    const cur = getCurrency();
-    setCurrencyLabel(cur);
-    if (cur !== "USD") {
-      try {
-        const cached = localStorage.getItem("cachedExchangeRates");
-        if (cached) {
-          const { rates } = JSON.parse(cached) as { rates: Record<string, number> };
-          const rate = rates?.[cur];
-          if (rate) setStripeMinAmount(Math.ceil(rate));
-        }
-      } catch { /* use default 1 */ }
-    }
+    setCurrencyLabel(getCurrency());
   }, []);
 
   // After sign-in redirect: restore the selection and re-open the dialog. The
@@ -218,9 +205,8 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const selectedCampaign = campaigns.find((c) => c.id === selectedCampaignId);
   const displayAmount = selectedAmount ?? (customAmount ? parseFloat(customAmount) || 0 : 0);
-  const belowMin = stripeMinAmount > 1 && displayAmount > 0 && displayAmount < stripeMinAmount;
   const canDonate =
-    Boolean(selectedCampaignId) && displayAmount > 0 && !belowMin && !campaignsLoading;
+    Boolean(selectedCampaignId) && displayAmount > 0 && !campaignsLoading;
 
   // Reopen checkout once the restored project is actually in hand.
   useEffect(() => {
@@ -460,12 +446,8 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
             </div>
           </div>
 
-          {/* Encouragement / Stripe minimum hint */}
-          {belowMin ? (
-            <p className="mt-3 animate-fade-in text-center text-xs font-medium text-amber-600">
-              {tDonation("stripeMinDonation", { amount: stripeMinAmount, currency: currencyLabel })}
-            </p>
-          ) : displayAmount > 0 ? (
+          {/* Encouragement */}
+          {displayAmount > 0 ? (
             <p className="mt-3 flex items-center gap-2 rounded-xl bg-burgundy/[0.06] px-3.5 py-2.5 text-xs font-medium leading-relaxed text-burgundy animate-fade-in">
               <Heart className="h-3.5 w-3.5 shrink-0" fill="currentColor" />
               {t("encourage", { amount: `${displayAmount} ${currencyLabel}` })}
@@ -511,9 +493,6 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         <DonationDialog
           isOpen={donationDialogOpen}
           onClose={() => setDonationDialogOpen(false)}
-          // No monthlyOnly: the dialog opens on its own first step so the visitor
-          // chooses one-time or monthly instead of being committed to a
-          // subscription they never asked for.
           campaignId={selectedCampaign?.id ?? ""}
           campaignTitle={selectedCampaign?.title ?? ""}
           campaignImage={selectedCampaign?.images?.[0] || undefined}

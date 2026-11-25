@@ -21,7 +21,7 @@ type DonateTrackingPayload = {
   contentCategory?: string;
   contents?: Array<{ id: string; quantity: number; item_price: number }>;
   numItems?: number;
-  donationType?: "ONE_TIME" | "DAILY" | "FRIDAY" | "MONTHLY";
+  donationType?: "ONE_TIME";
   paymentMethod?: string;
 };
 
@@ -75,7 +75,7 @@ function fireMetaBrowserDonate(payload: DonateTrackingPayload, eventName: "Donat
       currency: payload.currency,
       content_type: eventName === "Purchase" ? "product" : "donation",
       content_name: payload.contentName,
-      content_category: payload.contentCategory ?? (payload.donationType && payload.donationType !== "ONE_TIME" ? payload.donationType.toLowerCase() : "donation"),
+      content_category: payload.contentCategory ?? "donation",
       content_ids: payload.contentIds,
       contents: payload.contents,
       num_items: payload.numItems,
@@ -84,8 +84,7 @@ function fireMetaBrowserDonate(payload: DonateTrackingPayload, eventName: "Donat
       status: "paid",
       success: true,
       payment_info_available: true,
-      donation_type: (payload.donationType ?? "ONE_TIME").toLowerCase(),
-      recurring: !!payload.donationType && payload.donationType !== "ONE_TIME",
+      donation_type: "one_time",
       payment_method: (payload.paymentMethod ?? "card").toLowerCase(),
     }, { eventID: eventId });
     return { ok: true };

@@ -17,7 +17,6 @@ interface JourneyEntry {
   status: string;
   amountUSD: number;
   currency: string;
-  type: "MONTHLY" | "ONE_TIME";
   campaign: string | null;
   platform: AdPlatform;
   platformLabel: string;
@@ -183,10 +182,6 @@ export function DonorAttributionJourney({ donorId }: { donorId: string }) {
               <span className="text-[11px] text-slate-500 whitespace-nowrap">
                 {formatIstanbulShort(j.paidAt ?? j.createdAt)}
               </span>
-              {j.type === "MONTHLY" ? (
-                <span className="text-[10px] px-1.5 py-px rounded-full bg-brand/10 text-brand whitespace-nowrap">
-                  {dt("شهري")}</span>
-              ) : null}
               {j.status !== "PAID" ? (
                 <span className="text-[10px] px-1.5 py-px rounded-full bg-rose-50 text-rose-600 whitespace-nowrap">
                   {dt("فشل")}</span>

@@ -10,7 +10,6 @@ import {
   DollarSign,
   Heart,
   FolderTree,
-  Repeat,
   Calendar,
   Receipt,
   BarChart3,
@@ -54,16 +53,11 @@ import { DonationTableCountryColumn } from "@/components/dashboard/DonationTable
 import { DashboardPieLegendByValue } from "@/components/dashboard/DashboardPieLegend";
 import { useViewUserProfile } from "@/context/ViewUserProfileContext";
 import { dashDir, dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
-import { donationCadenceLabel } from "@/lib/dashboard/donation-cadence-label";
 
 interface ChartDataPoint {
   date: string;
   amountUSD: number;
   count: number;
-  amountOneTime: number;
-  countOneTime: number;
-  amountMonthly: number;
-  countMonthly: number;
   teamSupport: number;
   fees: number;
 }
@@ -95,8 +89,6 @@ interface DonationRow {
   currency: string;
   teamSupport: number;
   fees: number;
-  type: string;
-  frequency?: string | null;
   createdAt: string;
   donor: { id: string; name: string | null; email: string };
   donorCountryCode?: string | null;
@@ -111,18 +103,7 @@ interface DashboardStats {
   totalUsers: number;
   totalAmount: number;
   allTimeRevenue?: number;
-  oneTimeCount: number;
-  monthlyCount: number;
-  oneTimeAllCount?: number;
-  monthlyAllCount?: number;
-  activeMonthlyCount: number;
-  monthlyStoppedCount?: number;
-  activeMonthlyAmountUSD?: number;
-  monthlyStoppedAmountUSD?: number;
-  monthlyRecurringRevenue: number;
   thisMonthRevenue: number;
-  oneTimeTotalAmount?: number;
-  monthlyTotalAmount?: number;
   campaignDonationsTotal: number;
   categoryDonationsTotal: number;
   campaignDonationsCount?: number;
@@ -134,7 +115,6 @@ interface DashboardStats {
     amount: number;
     currency: string;
     donorName: string;
-    type: string;
     campaignTitle: string | null;
     categoryName: string | null;
     createdAt: string;
@@ -144,7 +124,7 @@ interface DashboardStats {
 type ChartViewType = "bar" | "line" | "area";
 type ChartPeriod = "day" | "week" | "month" | "all" | "custom";
 type ChartMetric = "amount" | "teamSupport" | "fees";
-type StatCardSet = "revenue" | "overview" | "breakdown";
+type StatCardSet = "revenue" | "overview";
 
 const PERIOD_LABELS: Record<ChartPeriod, string> = {
   get day() { return dt("يوم"); },
@@ -458,8 +438,6 @@ export default function DashboardPage() {
     return "$" + val.toLocaleString(undefined, decimals);
   };
 
-  const oneTimeTotal = stats?.oneTimeTotalAmount ?? 0;
-  const monthlyTotal = stats?.monthlyTotalAmount ?? 0;
   const revenueSplitData = [
     {
       name: dt("مشاريع"),
@@ -472,21 +450,6 @@ export default function DashboardPage() {
       value: stats?.categoryDonationsTotal ?? 0,
       count: stats?.categoryDonationsCount ?? 0,
       color: "#6e818b",
-    },
-  ].filter((d) => d.value > 0 || d.count > 0);
-
-  const typeSplitData = [
-    {
-      name: dt("مرة واحدة"),
-      value: oneTimeTotal,
-      count: stats?.oneTimeCount ?? 0,
-      color: "#35708f",
-    },
-    {
-      name: dt("شهرية"),
-      value: monthlyTotal,
-      count: stats?.monthlyCount ?? 0,
-      color: "#234a60",
     },
   ].filter((d) => d.value > 0 || d.count > 0);
 
@@ -536,11 +499,6 @@ export default function DashboardPage() {
                   className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
                 >
                   {dt("نظرة عامة")}</TabsTrigger>
-                <TabsTrigger
-                  value="breakdown"
-                  className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
-                >
-                  {dt("تفصيل التبرعات")}</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -558,13 +516,6 @@ export default function DashboardPage() {
                   title={dt("إيرادات هذا الشهر")}
                   value={stats?.thisMonthRevenue ?? 0}
                   icon={Calendar}
-                  accent="emerald"
-                  format="money"
-                />
-                <StatsCard
-                  title={dt("إيرادات شهرية متكررة")}
-                  value={stats?.monthlyRecurringRevenue ?? 0}
-                  icon={Repeat}
                   accent="emerald"
                   format="money"
                 />
@@ -609,40 +560,6 @@ export default function DashboardPage() {
                   value={stats?.totalDonations ?? 0}
                   icon={Receipt}
                   accent="violet"
-                />
-              </>
-            )}
-            {statCardSet === "breakdown" && (
-              <>
-                <StatsCard
-                  title={dt("مرة واحدة (عدد)")}
-                  value={stats?.oneTimeAllCount ?? 0}
-                  icon={Receipt}
-                  accent="slate"
-                  subtitle={dt("ناجح: {0}", [stats?.oneTimeCount ?? 0])}
-                />
-                <StatsCard
-                  title={dt("شهرية (عدد)")}
-                  value={stats?.monthlyAllCount ?? 0}
-                  icon={Repeat}
-                  accent="slate"
-                  subtitle={dt("ناجح: {0}", [stats?.monthlyCount ?? 0])}
-                />
-                <StatsCard
-                  title={dt("التبرعات الشهرية الناشطة")}
-                  value={stats?.activeMonthlyAmountUSD ?? 0}
-                  icon={Repeat}
-                  accent="teal"
-                  format="money"
-                  subtitle={dt("عدد: {0}", [stats?.activeMonthlyCount ?? 0])}
-                />
-                <StatsCard
-                  title={dt("التبرعات الشهرية المتوقفة")}
-                  value={stats?.monthlyStoppedAmountUSD ?? 0}
-                  icon={Repeat}
-                  accent="indigo"
-                  format="money"
-                  subtitle={dt("عدد: {0}", [stats?.monthlyStoppedCount ?? 0])}
                 />
               </>
             )}
@@ -707,14 +624,13 @@ export default function DashboardPage() {
                                 })
                               }
                               formatter={(value: number, name: string) => {
-                                if (name === "amountOneTime") return [formatMoney(Number(value), undefined, undefined, true), "مبلغ مرة واحدة"];
-                                if (name === "amountMonthly") return [formatMoney(Number(value), undefined, undefined, true), "مبلغ شهري"];
+                                if (name === "amountUSD") return [formatMoney(Number(value), undefined, undefined, true), "مبلغ ناجح"];
                                 return [formatMoney(Number(value), undefined, undefined, true), name];
                               }}
                               content={({ active, payload, label }) => {
                                 if (!active || !payload?.length) return null;
                                 const point = chartData.find((d) => d.date === label);
-                                const isAmount = (key: string) => key === "amountOneTime" || key === "amountMonthly" || key === "مبلغ مرة واحدة" || key === "مبلغ شهري";
+                                const isAmount = (key: string) => key === "amountUSD" || key === "مبلغ ناجح";
                                 return (
                                   <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
                                     <p className="text-sm font-medium text-slate-700 mb-1.5">
@@ -745,18 +661,11 @@ export default function DashboardPage() {
                             />
                             <Legend />
                             <Bar
-                              dataKey="amountOneTime"
-                              fill="#35708f"
+                              dataKey="amountUSD"
+                              fill="#3b82f6"
                               radius={[4, 4, 0, 0]}
                               maxBarSize={32}
-                              name="مبلغ مرة واحدة"
-                            />
-                            <Bar
-                              dataKey="amountMonthly"
-                              fill="#234a60"
-                              radius={[4, 4, 0, 0]}
-                              maxBarSize={32}
-                              name="مبلغ شهري"
+                              name="مبلغ ناجح"
                             />
                           </BarChart>
                         </ResponsiveContainer>
@@ -1022,18 +931,13 @@ export default function DashboardPage() {
                 </TabsContent>
 
                 <TabsContent value="split" className="mt-0" dir={dashDir()}>
-                  <Tabs defaultValue="one-time-monthly" className="w-full" dir={dashDir()}>
+                  <Tabs defaultValue="campaign-category" className="w-full" dir={dashDir()}>
                     <TabsList className="bg-slate-100 p-1 rounded-lg mb-4 inline-flex flex-row-reverse">
                       <TabsTrigger
                         value="campaign-category"
                         className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
                       >
                         {dt("مشاريع vs فئات")}</TabsTrigger>
-                      <TabsTrigger
-                        value="one-time-monthly"
-                        className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
-                      >
-                        {dt("مرة واحدة vs شهرية")}</TabsTrigger>
                     </TabsList>
                     <TabsContent value="campaign-category" className="mt-0">
                       <div className="h-[340px] w-full flex items-center justify-center">
@@ -1052,43 +956,6 @@ export default function DashboardPage() {
                                 label={false}
                               >
                                 {revenueSplitData.map((entry) => (
-                                  <Cell key={entry.name} fill={entry.color} />
-                                ))}
-                              </Pie>
-                              <Tooltip
-                                formatter={(value: number, _name: string, props: { payload?: { count?: number } }) => {
-                                  const count = props?.payload?.count ?? 0;
-                                  return [
-                                    dt("{0}  عدد: {1}", [formatMoney(Number(value), undefined, undefined, true), count]),
-                                    dt("المبلغ / العدد"),
-                                  ];
-                                }}
-                              />
-                              <Legend content={DashboardPieLegendByValue} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <p className="text-slate-500">{dt("لا توجد بيانات")}</p>
-                        )}
-                      </div>
-                    </TabsContent>
-                    <TabsContent value="one-time-monthly" className="mt-0" dir={dashDir()}>
-                      <div className="h-[340px] w-full flex items-center justify-center">
-                        {typeSplitData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={typeSplitData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={70}
-                                outerRadius={110}
-                                paddingAngle={2}
-                                dataKey="value"
-                                nameKey="name"
-                                label={false}
-                              >
-                                {typeSplitData.map((entry) => (
                                   <Cell key={entry.name} fill={entry.color} />
                                 ))}
                               </Pie>
@@ -1398,8 +1265,6 @@ export default function DashboardPage() {
                         {dt("دعم الفريق")}</th>
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
                       {dt("الرسوم")}</th>
-                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700">
-                        {dt("النوع")}</th>
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700 max-w-[160px]">
                         {dt("المشروع / الفئة")}</th>
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
@@ -1409,18 +1274,18 @@ export default function DashboardPage() {
                   <tbody>
                     {donationsLoading && donations.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center">
+                        <td colSpan={7} className="py-12 text-center">
                           <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-400" />
                         </td>
                       </tr>
                     ) : !donationsFetchedOnce ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-500">
+                        <td colSpan={7} className="py-12 text-center text-slate-500">
                           {dt("جاري التحميل...")}</td>
                       </tr>
                     ) : donations.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-500">
+                        <td colSpan={7} className="py-12 text-center text-slate-500">
                           {dt("لا توجد تبرعات تطابق التصفية")}</td>
                       </tr>
                     ) : (
@@ -1470,18 +1335,6 @@ export default function DashboardPage() {
                             ) : (
                               <span className="text-slate-500">—</span>
                             )}
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <span
-                              className={cn(
-                                "inline-block w-max px-1.5 py-px rounded-full text-[11px]",
-                                d.type === "MONTHLY"
-                                  ? "bg-brand/10 text-brand"
-                                  : "bg-slate-100 text-slate-600"
-                              )}
-                            >
-                              {donationCadenceLabel(d)}
-                            </span>
                           </td>
                           <td className="py-1.5 px-2 text-slate-600 max-w-[160px]">
                             {d.campaigns?.length > 0 ? (

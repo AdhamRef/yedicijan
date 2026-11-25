@@ -126,7 +126,6 @@ export async function GET(
         attribution: true,
         conversionEventsSentAt: true,
         conversionFailedEventsSentAt: true,
-        subscriptionId: true,
       },
     });
     if (!donation) {
@@ -250,7 +249,6 @@ export async function GET(
         donorCountryCode: donation.donorCountryCode,
         provider: donation.provider,
         paymentMethod: donation.paymentMethod,
-        subscriptionId: donation.subscriptionId,
       },
       attribution: {
         platform: resolved.platform,

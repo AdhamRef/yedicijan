@@ -1,47 +1,34 @@
 import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
-
-import { slugFor } from "@/lib/minbar/routes";
-import MinbarMessages from "@/components/minbar/MinbarMessages";
-import LegalPage, { type LegalSection } from "@/components/minbar/legal/LegalPage";
+import { LOCALE_SEO } from "@/lib/seo";
+import type { Locale } from "@/lib/seo";
+import TermsPage from "./TermsPage";
 
 interface Props {
   params: Promise<{ locale: string }>;
 }
 
-/** The page's own namespaces, on top of the shell bundle. */
-const NAMESPACES = ["legal"] as const;
-
-const SECTIONS: readonly LegalSection[] = [
-  { id: "usage", headingKey: "termsUsageH", bodyKey: "termsUsageP", icon: "document" },
-  { id: "donations", headingKey: "termsDonationsH", bodyKey: "termsDonationsP", icon: "heart" },
-  { id: "content", headingKey: "termsContentH", bodyKey: "termsContentP", icon: "file" },
-  { id: "changes", headingKey: "termsChangesH", bodyKey: "termsChangesP", icon: "refresh" },
-];
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: "legal" });
+  const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
+  const titles: Record<string, string> = {
+    ar: "شروط الاستخدام",
+    en: "Terms of Use",
+    fr: "Conditions d'Utilisation",
+    tr: "Kullanım Şartları",
+    id: "Syarat Penggunaan",
+    pt: "Termos de Uso",
+    es: "Términos de Uso",
+  };
   return buildManagedPageMetadata("terms", locale, {
-    title: t("termsTitle"),
-    description: t("termsUsageP"),
-    path: `/${slugFor("terms", locale)}`,
+    title: titles[locale] ?? titles.en,
+    description: seo.description,
+    path: "/terms",
+    keywords: seo.keywords,
   });
 }
 
-/**
- * Ported from `Minbar/الشروط والأحكام.dc.html`.
- *
- * `LEGAL_REVIEW_REQUIRED`: this text is under human legal review in every
- * language. A translation is not an approval.
- */
-export default async function Page({ params }: Props) {
+export default async function TermsRoute({ params }: Props) {
   const { locale } = await params;
-
-  return (
-    <MinbarMessages locale={locale} namespaces={NAMESPACES}>
-      <LegalPage titleKey="termsTitle" sections={SECTIONS} />
-    </MinbarMessages>
-  );
+  return <TermsPage locale={locale} />;
 }

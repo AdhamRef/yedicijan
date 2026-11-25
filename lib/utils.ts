@@ -39,7 +39,7 @@ export const toDateString = (date: Date) => {
 
 export function getUrl() {
   if (process.env.NODE_ENV === "development") {
-    return process.env.NEXT_PUBLIC_APP_URL || "https://minberiaksa.org";
+    return process.env.NEXT_PUBLIC_APP_URL || "https://yedicihan.org";
   } else {
     return process.env.NEXT_PUBLIC_WEB_URL || "https://ub.cafe";
   }

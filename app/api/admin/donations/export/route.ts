@@ -1,4 +1,3 @@
-import { loadReportSubscriptions } from "@/lib/dashboard/report-subscriptions";
 import { dt, withReportLanguage } from "@/lib/dashboard/report-i18n";
 import { donationProviderWhere } from "@/lib/dashboard/donation-provider-filter";
 /**
@@ -15,7 +14,6 @@ import { donationProviderWhere } from "@/lib/dashboard/donation-provider-filter"
  *   categoryId, campaignId, userId, referralId
  *   status           PAID (settled) | PENDING (قيد التأكيد) | FAILED | all
  *   locale, country
- *   subscriptionOnly true|false
  *   sortBy           date | amount
  *   sortOrder        asc | desc
  *   limit            max rows (default 20000, cap 50000)
@@ -36,7 +34,6 @@ import {
   type ExportFormat,
 } from "@/lib/dashboard/donation-export";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
-import { loadSubscriptionFrequencies } from "@/lib/dashboard/recurring-frequency-filter";
 import { DASH_LOCALE_COOKIE, parseDashLocale } from "@/lib/dashboard/i18n";
 
 async function localizedGET(request: NextRequest) {
@@ -61,8 +58,6 @@ async function localizedGET(request: NextRequest) {
     const status = sp.get("status");
     const locale = sp.get("locale")?.trim() ?? null;
     const country = sp.get("country")?.trim() ?? null;
-    const subscriptionOnly = sp.get("subscriptionOnly") === "true" || sp.get("subscriptionOnly") === "1";
-    const donationType = sp.get("donationType");
     const limit = Math.min(parseInt(sp.get("limit") || "20000", 10) || 20000, 50000);
 
     const dateFilter: { gte?: Date; lte?: Date } = {};
@@ -80,8 +75,6 @@ async function localizedGET(request: NextRequest) {
       ...(campaignId && campaignId !== "all" && { items: { some: { campaignId } } }),
       ...(userId && userId !== "all" && { donorId: userId }),
       ...(referralId && referralId !== "all" && { referralId }),
-      ...(subscriptionOnly && { subscriptionId: { not: null } }),
-      ...(donationType === "MONTHLY" && { subscriptionId: { not: null } }),
       ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
     };
     if (categoryId && categoryId !== "all") {
@@ -111,9 +104,6 @@ async function localizedGET(request: NextRequest) {
           : { donorCountryCode: country.toUpperCase() }
       );
     }
-    if (donationType === "ONE_TIME") {
-      filters.push({ OR: [{ subscriptionId: null }, { subscriptionId: { isSet: false } }] });
-    }
     const where: Prisma.DonationWhereInput = filters.length > 1 ? { AND: filters } : baseWhere;
 
     const orderBy: Prisma.DonationOrderByWithRelationInput =
@@ -131,7 +121,6 @@ async function localizedGET(request: NextRequest) {
       take: limit,
     });
 
-    const frequencyOf = await loadSubscriptionFrequencies(prisma, rows.map(d => d.subscriptionId).filter((id): id is string => Boolean(id)));
     const exportRows: DonationExportRow[] = rows.map((d) => {
       const teamSupport = Number(d.teamSupport ?? 0);
       const fees = Number(d.coverFees ? d.fees ?? 0 : 0);
@@ -142,8 +131,6 @@ async function localizedGET(request: NextRequest) {
       return {
         id: d.id,
         status: d.status,
-        type: d.subscriptionId ? "MONTHLY" : "ONE_TIME",
-        frequency: d.subscriptionId ? frequencyOf(d.subscriptionId) : null,
         createdAt: d.createdAt,
         paidAt: d.paidAt ?? null,
         donor: {
@@ -173,7 +160,6 @@ async function localizedGET(request: NextRequest) {
         provider: d.provider ?? null,
         providerOrderId: d.providerOrderId ?? null,
         providerErrorMessage: d.providerErrorMessage ?? null,
-        subscriptionId: d.subscriptionId ?? null,
         comment: d.comment ?? null,
         attribution: (d.attribution as Record<string, unknown> | null) ?? null,
       };
@@ -190,7 +176,6 @@ async function localizedGET(request: NextRequest) {
       locale,
       country,
       provider: sp.get("provider"),
-      subscriptionOnly,
       sortBy,
       sortOrder,
       total: rows.length,
@@ -203,8 +188,6 @@ async function localizedGET(request: NextRequest) {
       titleSubtitle = dt("الفترة: كل الوقت");
     }
 
-    const subscriptions = await loadReportSubscriptions(exportRows.map(r => r.subscriptionId).filter((id): id is string => Boolean(id)));
-    exportFilters.push({ label: dt("نطاق الاشتراكات"), value: dt("الاشتراكات المرتبطة بصفوف التبرعات المصدّرة؛ الحالات حالية والإجماليات طوال المدة") });
     exportFilters.push({ label: dt("أساس الفترة"), value: dt("تاريخ إنشاء التبرع؛ المبالغ المحصّلة تخص الدفعات المؤكدة ضمن النتائج المصدّرة") });
     exportFilters.push({ label: dt("حد صفوف التبرعات"), value: String(limit) });
     const out = await buildDonationExport({
@@ -214,7 +197,6 @@ async function localizedGET(request: NextRequest) {
       subtitle: titleSubtitle,
       filters: exportFilters,
       donations: exportRows,
-      subscriptions,
     });
 
     return new NextResponse(out.body as unknown as BodyInit, {
@@ -242,7 +224,6 @@ function collectFilterDescriptors(args: {
   locale: string | null;
   country: string | null;
   provider: string | null;
-  subscriptionOnly: boolean;
   sortBy: string;
   sortOrder: string;
   total: number;
@@ -261,7 +242,6 @@ function collectFilterDescriptors(args: {
   if (args.locale && args.locale !== "all") out.push({ label: dt("اللغة"), value: args.locale });
   if (args.country && args.country !== "all") out.push({ label: dt("الدولة"), value: args.country });
   if (args.provider && args.provider !== "all") out.push({ label: dt("بوابة الدفع"), value: args.provider === "__unset" ? dt("غير محدد") : args.provider });
-  if (args.subscriptionOnly) out.push({ label: dt("الاشتراكات فقط"), value: dt("نعم") });
   out.push({ label: dt("الفرز"), value: `${args.sortBy === "amount" ? dt("بالقيمة") : dt("بالتاريخ")} • ${args.sortOrder === "asc" ? dt("تصاعدي") : dt("تنازلي")}` });
   out.push({ label: dt("عدد العمليات"), value: String(args.total) });
   return out;

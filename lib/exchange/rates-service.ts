@@ -4,6 +4,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { normalizeCurrencyCode } from "./convert";
 
 export const EXCHANGE_SNAPSHOT_KEY = "usd_latest";
 
@@ -98,7 +99,7 @@ export async function loadRatesFromDatabase(): Promise<{
 }
 
 /**
- * Rates for server-side conversion (donations, Stripe, etc.).
+ * Rates for server-side conversion (donations, gateway charges, etc.).
  * Reads DB; 45s memory cache. If no row, refreshes from API once (bootstrap).
  */
 export async function getUsdBaseRatesForServer(): Promise<Record<string, number>> {
@@ -119,3 +120,21 @@ export async function getUsdBaseRatesForServer(): Promise<Record<string, number>
 /* Re-exported so every existing `from "@/lib/exchange/rates-service"` import keeps
    working. The implementations live in ./convert, which has no Prisma dependency. */
 export { convertAmountInCurrencyToTry, convertAmountInCurrencyToUsd } from "./convert";
+
+/** Same USD-base conversion as `convertAmountInCurrencyToTry`, to any target currency. */
+export function convertAmountBetweenCurrencies(
+  amount: number,
+  fromCurrency: string,
+  toCurrency: string,
+  rates: Record<string, number>
+): number {
+  const from = normalizeCurrencyCode(fromCurrency);
+  const to = normalizeCurrencyCode(toCurrency);
+  if (from === to) return amount;
+  const rFrom = from === "USD" ? 1 : rates[from];
+  const rTo = to === "USD" ? 1 : rates[to];
+  if (!rFrom || !rTo || rFrom <= 0 || rTo <= 0) {
+    throw new Error(`Missing USD-base rate for ${from} or ${to}`);
+  }
+  return Math.round((amount / rFrom) * rTo * 100) / 100;
+}

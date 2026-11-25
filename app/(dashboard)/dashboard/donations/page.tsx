@@ -44,7 +44,6 @@ import { Link, useRouter } from "@/i18n/routing";
 import { toast } from 'react-hot-toast';
 import DonationCountryFlag from '@/components/DonationCountryFlag';
 import { dt } from "@/lib/dashboard/i18n";
-import { donationCadenceLabel } from '@/lib/dashboard/donation-cadence-label';
 import DonationDetailsDialog, { type DonationDetailsTarget } from '@/components/dashboard/DonationDetailsDialog';
 
 /**
@@ -93,8 +92,6 @@ interface Donation {
     email: string;
     image: string;
   };
-  type: 'ONE_TIME' | 'MONTHLY';
-  frequency?: 'DAILY' | 'FRIDAY' | 'MONTHLY' | null;
   status: 'ACTIVE' | 'INACTIVE';
   paymentMethod: string | null;
   createdAt: string;
@@ -230,11 +227,10 @@ export default function DonationsPage() {
   const paginatedDonations = filteredDonations;
 
   const exportToCSV = () => {
-    const headers = ['Amount', 'Currency', 'Type', 'Status', 'Payment Method', 'Created At', 'Donor Name', 'Campaigns'];
+    const headers = ['Amount', 'Currency', 'Status', 'Payment Method', 'Created At', 'Donor Name', 'Campaigns'];
     const csvData = filteredDonations.map(donation => [
       donation.totalAmount,
       donation.currency,
-      donation.type,
       donation.status,
       donation.paymentMethod,
       format(new Date(donation.createdAt), 'PPP', { locale: dashDateLocale() }),
@@ -333,7 +329,6 @@ export default function DonationsPage() {
               </TableHead>
               {sortableHeader("المبلغ", "totalAmount")}
               <TableHead className="text-start">{dt("العملة")}</TableHead>
-              {sortableHeader("النوع", "type")}
               {sortableHeader("طريقة الدفع", "paymentMethod")}
               {sortableHeader("التاريخ", "createdAt")}
               <TableHead className="text-start">{dt("المشاريع")}</TableHead>
@@ -382,7 +377,6 @@ export default function DonationsPage() {
                 </TableCell>
                 <TableCell>{donation.totalAmount.toLocaleString()}</TableCell>
                 <TableCell>{donation.currency}</TableCell>
-                <TableCell>{donationCadenceLabel(donation)}</TableCell>
                 <TableCell>{donation.paymentMethod || '—'}</TableCell>
                 <TableCell>
                   {format(new Date(donation.createdAt), 'PPP', { locale: dashDateLocale() })}

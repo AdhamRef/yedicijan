@@ -1,4 +1,4 @@
-export type BrandOrganizationKey = "minber_aksa";
+export type BrandOrganizationKey = "yedicihan";
 
 export type BrandLocale = "ar" | "tr" | "en" | "fr" | "id" | "pt" | "es" | "de";
 

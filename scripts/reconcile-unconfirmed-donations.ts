@@ -22,17 +22,11 @@ async function main() {
 
   console.log(`${summary.dryRun ? "DRY RUN" : "APPLIED"}  scanned ${summary.scanned} unconfirmed donation(s)\n`);
 
-  console.log(`credited (paid at Stripe, webhook never arrived): ${summary.credited.length}`);
-  for (const c of summary.credited) {
-    console.log(`   ${c.donationId}  $${c.amountUSD.toFixed(2)}  paidAt=${c.paidAt.slice(0, 16)}`);
-  }
-  console.log(`   total recovered: $${summary.creditedTotalUSD.toFixed(2)}\n`);
-
   console.log(`marked FAILED (abandoned, older than ${staleAfterHours}h): ${summary.markedFailed.length}`);
   const failedUsd = summary.markedFailed.reduce((s, f) => s + f.amountUSD, 0);
   console.log(`   attempted value (never collected): $${failedUsd.toFixed(2)}\n`);
 
-  console.log(`left alone (too new, or still open at Stripe): ${summary.leftAlone}`);
+  console.log(`left alone (newer than ${staleAfterHours}h): ${summary.leftAlone}`);
 
   if (summary.errors.length) {
     console.log(`\nerrors: ${summary.errors.length}`);

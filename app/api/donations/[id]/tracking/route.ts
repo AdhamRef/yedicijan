@@ -18,7 +18,6 @@ export const dynamic = "force-dynamic";
  * an actually-missing include.
  */
 const donationTrackingInclude = {
-  subscription: { select: { frequency: true } },
   donor: {
     select: {
       id: true,
@@ -64,7 +63,7 @@ interface TrackingResponseOk {
   status: "paid";
   success: true;
   paymentInfoAvailable: true;
-  donationType: "ONE_TIME" | "DAILY" | "FRIDAY" | "MONTHLY";
+  donationType: "ONE_TIME";
   paymentMethod: string;
   browserAdvancedMatching?: Record<string, string>;
 }
@@ -179,8 +178,6 @@ export async function GET(
     contentIds.push("donation");
   }
 
-  const donationType = row.subscriptionId ? (row.subscription?.frequency ?? "MONTHLY") : "ONE_TIME";
-
   const purchaseId = metaPurchaseEventId(row.id);
   const purchaseState = await getServerConversionState("META", purchaseId);
   // Browser/server deduplication has a 48-hour window. Old receipts are not new conversions.
@@ -203,13 +200,13 @@ export async function GET(
     contentType: "donation",
     contentIds,
     contentName: primaryName ?? "Donation",
-    contentCategory: donationType === "ONE_TIME" ? "donation" : donationType.toLowerCase(),
+    contentCategory: "donation",
     contents,
     numItems: contents.reduce((s, c) => s + c.quantity, 0),
     status: "paid",
     success: true,
     paymentInfoAvailable: true,
-    donationType,
+    donationType: "ONE_TIME",
     paymentMethod: (row.paymentMethod ?? "CARD").toLowerCase(),
     browserAdvancedMatching: buildBrowserAdvancedMatching(row),
   };

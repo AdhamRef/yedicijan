@@ -78,10 +78,9 @@ Time stamps are in **Europe/Istanbul (TR)** to match the dashboard.
 
 Notifications fire from the existing `dispatchEvent` system in `lib/events/dispatch.ts`, which is already invoked by every payment webhook:
 
-- **Stripe** (`app/api/stripe/webhook/route.ts`)  paid + subscription invoices
+- **Albaraka Türk** (`app/api/albaraka/3d/callback/route.ts`)
 - **PayFor / Ziraat** (`app/api/payfor/3dpay/ok/route.ts`, `…/fail/route.ts`)
 - **Manual fail** (`app/api/donations/[id]/fail/route.ts`)
-- **Stripe Elements confirm** (`app/api/donations/[id]/route.ts`)
 
 So every donation that becomes PAID or FAILED produces a Telegram card automatically.
 

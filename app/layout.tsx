@@ -10,24 +10,17 @@ import { InboxPermissionsBoundary } from "@/components/dashboard/InboxPermission
 import "./[locale]/globals.css";
 import "@/styles/self-hosted-fonts.css";
 
-
 /**
- * Minbar identity type. The brand leans heavy  headings and CTAs are 800–900 
- * so those weights are loaded rather than synthesised, which is what makes a
- * faux-bold Arabic heading look wrong.
- *
- * `Cairo` is the Arabic/Urdu face, `Montserrat` the Latin/Turkish one, and
- * `Amiri` is reserved for Qur'anic verses and hadith, which the design always
- * renders in Arabic script regardless of the page language.
- * Non-Latin locales (ja/zh/hi) load their own faces in
- * `styles/minbar/locale-fonts.css`, on demand.
+ * Site type: Tajawal for Arabic (`font-arabic`) and Poppins for Latin, as in the
+ * Yedicihan design. Cairo, Montserrat and Amiri stay declared for the dashboard
+ * and Qur'anic text.
  *
  * The files are self-hosted (`public/fonts/`, declared in
  * `styles/self-hosted-fonts.css`, refreshed by `scripts/vendor-google-fonts.mjs`)
  * rather than loaded through `next/font/google`: that helper downloads every
  * face at build time, and one failed download under Turbopack fails the whole
- * production build. The `site-fonts` class below sets the same CSS variables
- * the `next/font` objects used to, so Tailwind's `font-*` families are unchanged.
+ * production build. The variables below are the same CSS variables the
+ * `next/font` objects used to set, so Tailwind's `font-*` families are unchanged.
  */
 const SITE_FONT_VARIABLES: React.CSSProperties = {
   ["--font-cairo" as string]: "'Cairo'",
@@ -40,26 +33,13 @@ const SITE_FONT_VARIABLES: React.CSSProperties = {
 const SITE = SITE_URL;
 
 /**
- * The root layout is deliberately thin on identity.
- *
- * It used to carry a second, independent SEO and identity stack: its own title,
- * description, keywords, OpenGraph, Twitter card, hreflang (8 locales, not 19),
- * plus Organization, WebSite, FAQPage and BreadcrumbList schemas. That copy
- * described a Turkish public-benefit association founded in 1961 working in
- * healthcare and earthquake relief, with an FAQ about Haydarpaşa Numune
- * Hospital  a different organisation's story, inherited with the codebase.
- * It shipped on every page, including the 19 locale pages whose own metadata
- * says what `Minbar/POSITIONING.md` says: an international foundation for
- * Al-Quds and Al-Aqsa. Two identities, one of them wrong, and the Organization
- * node even shared an `@id` with the homepage's  so a crawler had to pick.
- *
- * Now there is one source. Everything identity-shaped here derives from
- * `LOCALE_SEO` / `SUPPORTED_LOCALES`, and the structured data lives where
- * `Minbar/PRODUCTION_SEO_CONTRACT.md` § Structured Data puts it: Organization
- * and WebSite on the homepage, BreadcrumbList on inner pages, FAQPage only
- * where questions are actually rendered. What is left below is what genuinely
- * belongs to every route in the app  fonts, analytics, the indexing policy,
- * and a fallback title for the routes that sit outside `[locale]`.
+ * The root layout carries no per-page SEO of its own: title, description,
+ * OpenGraph, Twitter card and hreflang all derive from `LOCALE_SEO` /
+ * `SUPPORTED_LOCALES` (`lib/seo.ts`), the same source every locale page uses,
+ * and the values here are only the fallback for routes outside `[locale]`.
+ * The association's Organization and WebSite nodes are emitted once, below.
+ * FAQPage and BreadcrumbList are not: FAQPage belongs only where the questions
+ * are actually rendered, and BreadcrumbList only on inner pages with a real trail.
  */
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
@@ -78,7 +58,7 @@ export const metadata: Metadata = {
      browser's automatic `/favicon.ico` request from falling through to the
      `[locale]` segment. `icons` is left unset so Next uses it. */
 
-  /* All 19 locales, from the same helper every page uses  this list was eight. */
+  /* Every public locale, from the same helper every page uses. */
   alternates: buildHreflang("/", "ar"),
 
   openGraph: {
@@ -120,6 +100,73 @@ export const metadata: Metadata = {
   category: "charity",
 };
 
+
+const organizationSchema = {
+  "@context": "https://schema.org",
+  "@type": ["Organization", "NGO"],
+  "@id": `${SITE}/#organization`,
+  name: "Yedicihan",
+  alternateName: ["يدي جيهان", "Yedicihan Derneği", "يدي جيهان"],
+  url: SITE,
+  logo: {
+    "@type": "ImageObject",
+    url: "/yedicijan_logo.png",
+    width: 374,
+    height: 206,
+  },
+  image: OG_IMAGE,
+  description:
+    "Yedicihan International Solidarity Association is a Turkish public-benefit association founded in 1961, working in healthcare, emergency relief, disaster response and educational aid.",
+  foundingDate: "1961-11-09",
+  areaServed: ["Turkey", "Global"],
+  knowsLanguage: ["ar", "en", "fr", "tr", "id", "pt", "es", "de"],
+  contactPoint: [
+    {
+      "@type": "ContactPoint",
+      telephone: "+90-530-651-65-49",
+      email: "info@yedicihan.org",
+      contactType: "customer service",
+      availableLanguage: ["Turkish", "Arabic", "English"],
+    },
+  ],
+  email: "info@yedicihan.org",
+  telephone: "+90-530-651-65-49",
+  sameAs: [
+    "https://www.facebook.com/yedicihan",
+    "https://www.instagram.com/yedicihan61/",
+    "https://twitter.com/yedicihann",
+    "https://wa.me/905306516549",
+  ],
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: "Bağlar, Mimar Sinan Cd. No:38",
+    addressLocality: "Bağcılar",
+    addressRegion: "İstanbul",
+    postalCode: "34209",
+    addressCountry: "TR",
+  },
+};
+
+const websiteSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": `${SITE}/#website`,
+  url: SITE,
+  name: "Yedicihan | يدي جيهان",
+  description:
+    "Donate for Syrian medical aid, zakat, sadaqah, and orphan sponsorship. تبرع لعمليات طبية عاجلة وإغاثة إنسانية في سوريا.",
+  inLanguage: ["ar", "en", "fr", "tr", "id", "pt", "es", "de"],
+  publisher: { "@id": `${SITE}/#organization` },
+  potentialAction: {
+    "@type": "SearchAction",
+    target: {
+      "@type": "EntryPoint",
+      urlTemplate: `${SITE}/ar/campaigns?search={search_term_string}`,
+    },
+    "query-input": "required name=search_term_string",
+  },
+};
+
 export default async function RootLayout({
   children,
 }: {
@@ -150,8 +197,17 @@ export default async function RootLayout({
             legacy homepage that is no longer rendered, competing with each
             page's real LCP image for bandwidth. */}
 
+        <script src="https://t.contentsquare.net/uxa/e81365186c19c.js" async />
       </head>
       <body className="font-arabic antialiased" style={SITE_FONT_VARIABLES}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+        />
         <InboxPermissionsBoundary>{children}</InboxPermissionsBoundary>
         <Suspense fallback={null}>
           <MicrosoftClarity />

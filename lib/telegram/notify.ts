@@ -14,15 +14,12 @@ export const DONATION_NOTIFY_SELECT = {
   status: true,
   paidAt: true,
   createdAt: true,
-  subscriptionId: true,
   provider: true,
   providerOrderId: true,
   providerErrorMessage: true,
   // Both feed the Arabic failure-reason mapper: PayFor puts the only real signal
-  // in the return code (its message is always the useless "Payment failed"),
-  // and Stripe's stable decline_code lives inside the raw payload.
+  // in the return code (its message is always the useless "Payment failed").
   providerProcReturnCode: true,
-  providerRaw: true,
   paymentMethod: true,
   donorCountryCode: true,
   attribution: true,

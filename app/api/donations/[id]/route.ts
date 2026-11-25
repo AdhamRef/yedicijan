@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/options';
-import { Prisma, SubscriptionStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { userHasDashboardPermission } from '@/lib/dashboard/permissions';
 import { isRevenueDashboardUser } from '@/lib/dashboard/api-auth';
 import { donationListSafeFields } from "@/lib/dashboard/donation-list-privacy";
@@ -11,27 +11,14 @@ import { convertAmountInCurrencyToUsd, normalizeDonationCurrencyCode } from '@/l
 import {
   writeAuditLog,
   auditActorFromDashboardSession,
-  auditActorFromSiteSession,
-  auditStreamForRole,
 } from '@/lib/audit-log';
-import { reconcileStripeDonation } from "@/lib/donations/reconcile-stripe-donation";
-import { reconcilePayPalDonation } from "@/lib/donations/paypal-donation";
 import { DONATION_TOKEN_PARAM, donationTokenMatches } from "@/lib/donations/access-token";
-import {
-  applyPlanStatusAtProvider,
-  ProviderSyncError,
-  type PlanStatus,
-  type ProviderResult,
-} from "@/lib/donations/subscription-provider-control";
 import {
   recomputeCampaignCurrentAmount as sharedRecomputeCampaign,
   recomputeCategoryCurrentAmount as sharedRecomputeCategory,
 } from "@/lib/campaign/current-amount";
 
-/* `reconcileStripeDonation` moved to lib/donations/reconcile-stripe-donation.ts
-   so the success page can run the same self-heal before issuing documents. */
-
-// GET /api/donations/[id] - Get donation (transaction) by ID; include type/status from subscription when applicable
+// GET /api/donations/[id] - Get donation (transaction) by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -63,14 +50,6 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Authorized owner/staff or valid guest bearer only. Stripe's self-heal
-    // preserves the existing success-page semantics, but unknown IDs and
-    // unauthorized requests cannot cause gateway calls or financial writes.
-    await reconcileStripeDonation(id);
-    if (isRevenueDashboardUser(session)) {
-      await reconcilePayPalDonation(id).catch((err) => console.error("[donation GET] PayPal reconcile failed:", id, err));
-    }
-
     const donation = await prisma.donation.findUnique({
       where: { id },
       omit: {
@@ -89,14 +68,6 @@ export async function GET(
             countryCode: true,
             city: true,
             region: true,
-          },
-        },
-        subscription: {
-          select: {
-            status: true,
-            frequency: true,
-            nextBillingDate: true,
-            lastBillingDate: true,
           },
         },
         items: {
@@ -147,7 +118,6 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const sub = donation.subscription;
     // Access to the record may be granted by a guest bearer. That token is
     // needed only for the authorization check above, not in the response.
     // Do not send raw PSP or stored card payloads to guests/owners/staff.
@@ -159,206 +129,12 @@ export async function GET(
       // so this only kicks in for historical donations.
       paymentMethod: donation.paymentMethod ?? 'CARD',
       paymentStatus: donation.status,
-      subscriptionStatus: sub?.status ?? null,
-      /** DAILY | FRIDAY | MONTHLY on a plan; null on a one-time gift. */
-      frequency: sub?.frequency ?? null,
-      nextBillingDate: sub?.nextBillingDate ?? null,
-      lastBillingDate: sub?.lastBillingDate ?? null,
     };
     return NextResponse.json(response, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Error fetching donation:', error);
     return NextResponse.json(
       { error: 'Failed to fetch donation' },
-      { status: 500 }
-    );
-  }
-}
-
-// PUT /api/donations/[id] - Update the linked subscription's status. The billing
-// cadence is owned by Stripe (the donor can't pick a day), so only `status` is
-// writable here.
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const body = await request.json();
-    const { status } = body;
-
-    const currentDonation = await prisma.donation.findUnique({
-      where: { id },
-      include: {
-        items: true,
-        subscription: {
-          select: {
-            id: true,
-            status: true,
-            nextBillingDate: true,
-            lastBillingDate: true,
-            provider: true,
-            stripeSubscriptionId: true,
-            payforToken: true,
-          },
-        },
-      },
-    });
-
-    if (!currentDonation) {
-      return NextResponse.json(
-        { error: 'Donation not found' },
-        { status: 404 }
-      );
-    }
-
-    const isAdmin = isRevenueDashboardUser(session);
-    // Billing updates are institution-only, including the older donation-based endpoint.
-
-    if (!currentDonation.subscriptionId) {
-      return NextResponse.json(
-        { error: 'Only subscriptions can be updated; this donation is one-time' },
-        { status: 400 }
-      );
-    }
-
-    const sub = currentDonation.subscription;
-    if (!sub) {
-      return NextResponse.json(
-        { error: 'Subscription not found' },
-        { status: 404 }
-      );
-    }
-
-    const updates: { status?: SubscriptionStatus } = {};
-    if (status !== undefined) {
-      if (!['ACTIVE', 'PAUSED', 'CANCELLED'].includes(String(status))) {
-        return NextResponse.json(
-          { error: 'Invalid status; use ACTIVE, PAUSED or CANCELLED' },
-          { status: 400 }
-        );
-      }
-      updates.status = status as SubscriptionStatus;
-    }
-
-    if (Object.keys(updates).length === 0) {
-      const out = await prisma.donation.findUnique({
-        where: { id },
-        omit: { cardDetails: true, bankOperations: true, bankOperationLock: true, bankOperationsRevision: true, bankLastInquiry: true },
-        include: {
-          donor: { select: { name: true, email: true, image: true } },
-          subscription: { select: { status: true, frequency: true, nextBillingDate: true, lastBillingDate: true } },
-          items: { include: { campaign: { select: { title: true, images: true, translations: { select: { locale: true, title: true } } } } } },
-          categoryItems: { include: { category: { select: { name: true, image: true, translations: { select: { locale: true, name: true } } } } } },
-        },
-      });
-      if (!out) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-      const s = out.subscription;
-      return NextResponse.json({
-        ...out,
-        type: 'MONTHLY' as const,
-        status: s?.status ?? null,
-        nextBillingDate: s?.nextBillingDate ?? null,
-        lastBillingDate: s?.lastBillingDate ?? null,
-      });
-    }
-
-    if (!isAdmin) {
-      return NextResponse.json(
-        { error: 'Forbidden' },
-        { status: 403 }
-      );
-    }
-
-    if (sub.status === 'CANCELLED' && updates.status && updates.status !== 'CANCELLED') {
-      return NextResponse.json(
-        { error: 'A cancelled plan cannot be reactivated. Start a new plan instead.' },
-        { status: 409 }
-      );
-    }
-
-    // Change the plan at the payment provider first; only a confirmed change
-    // is written locally. See lib/donations/subscription-provider-control.ts.
-    let providerResult: ProviderResult | null = null;
-    if (updates.status) {
-      try {
-        providerResult = await applyPlanStatusAtProvider(sub, updates.status as PlanStatus);
-      } catch (err) {
-        if (err instanceof ProviderSyncError) {
-          return NextResponse.json(
-            { error: err.message, code: err.code, providerConfirmed: false },
-            { status: err.httpStatus }
-          );
-        }
-        throw err;
-      }
-    }
-
-    await prisma.subscription.update({
-      where: { id: currentDonation.subscriptionId },
-      data: updates,
-    });
-
-    const subActor = isAdmin
-      ? auditActorFromDashboardSession(session!)
-      : auditActorFromSiteSession(session!);
-    const subStream = isAdmin
-      ? ("TEAM" as const)
-      : auditStreamForRole(subActor.actorRole);
-    await writeAuditLog({
-      ...subActor,
-      action: "SUBSCRIPTION_UPDATE",
-      messageAr: `${subActor.actorName ?? "مستخدم"} عدّل الاشتراك الشهري المرتبط بالتبرع (${Object.keys(updates).join("، ")})`,
-      entityType: "Subscription",
-      entityId: currentDonation.subscriptionId!,
-      metadata: {
-        donationId: id,
-        ...(updates.status !== undefined && {
-          before: sub.status,
-          status: updates.status,
-          rail: providerResult?.rail,
-          providerStatus: providerResult?.providerStatus,
-          providerPaused: providerResult?.providerPaused,
-        }),
-      },
-      stream: subStream,
-    });
-
-    const updatedDonation = await prisma.donation.findUnique({
-      where: { id },
-      omit: { cardDetails: true, bankOperations: true, bankOperationLock: true, bankOperationsRevision: true, bankLastInquiry: true },
-      include: {
-        donor: { select: { name: true, email: true, image: true } },
-        subscription: { select: { status: true, nextBillingDate: true, lastBillingDate: true } },
-        items: { include: { campaign: { select: { title: true, images: true, translations: { select: { locale: true, title: true } } } } } },
-        categoryItems: { include: { category: { select: { name: true, image: true, translations: { select: { locale: true, name: true } } } } } },
-      },
-    });
-
-    if (!updatedDonation) {
-      return NextResponse.json({ error: 'Donation not found' }, { status: 404 });
-    }
-
-    const s = updatedDonation.subscription;
-    return NextResponse.json({
-      ...updatedDonation,
-      type: 'MONTHLY' as const,
-      status: s?.status ?? null,
-      nextBillingDate: s?.nextBillingDate ?? null,
-      lastBillingDate: s?.lastBillingDate ?? null,
-    });
-  } catch (error) {
-    console.error('Error updating donation:', error);
-    return NextResponse.json(
-      { error: 'Failed to update donation', details: (error as Error).message },
       { status: 500 }
     );
   }

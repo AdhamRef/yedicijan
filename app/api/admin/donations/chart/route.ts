@@ -77,7 +77,6 @@ export async function GET(request: NextRequest) {
       where: baseWhere,
       select: {
         createdAt: true,
-        subscriptionId: true,
         teamSupport: true,
         fees: true,
         amountUSD: true,
@@ -94,10 +93,8 @@ export async function GET(request: NextRequest) {
     });
 
     type Bucket = {
-      amountOneTime: number;
-      countOneTime: number;
-      amountMonthly: number;
-      countMonthly: number;
+      amountPaid: number;
+      countPaid: number;
       amountFailed: number;
       countFailed: number;
       countPending: number;
@@ -108,9 +105,7 @@ export async function GET(request: NextRequest) {
 
     for (const d of donations) {
       // status=PAID is set at creation, before the gateway confirms, so settlement
-      // (`paidAt`) is what makes a row revenue  for subscription rows too. Subscription
-      // rows used to be exempt from this; see the dateWindowOr comment above for why
-      // that exemption was wrong and what it cost.
+      // (`paidAt`) is what makes a row revenue.
       const isPaid = d.status === 'PAID' && d.paidAt != null;
       const isFailed = d.status === 'FAILED' && d.paidAt == null;
       const isPending = d.status === 'PAID' && d.paidAt == null;
@@ -119,10 +114,8 @@ export async function GET(request: NextRequest) {
       const bucketDate = isPaid ? ((d.paidAt as Date | null) ?? d.createdAt) : d.createdAt;
       const dateStr = formatIstanbulDateKey(bucketDate);
       const bucket = byDate.get(dateStr) ?? {
-        amountOneTime: 0,
-        countOneTime: 0,
-        amountMonthly: 0,
-        countMonthly: 0,
+        amountPaid: 0,
+        countPaid: 0,
         amountFailed: 0,
         countFailed: 0,
         countPending: 0,
@@ -137,13 +130,8 @@ export async function GET(request: NextRequest) {
       const amount = donationRowUsdApprox(d);
 
       if (isPaid) {
-        if (d.subscriptionId == null) {
-          bucket.amountOneTime += amount;
-          bucket.countOneTime += 1;
-        } else {
-          bucket.amountMonthly += amount;
-          bucket.countMonthly += 1;
-        }
+        bucket.amountPaid += amount;
+        bucket.countPaid += 1;
         // teamSupport/fees are stored in the local currency too. Prorate them against the
         // row's USD value exactly as /api/admin/stats does, instead of adding raw lira to a
         // dollar total.
@@ -166,10 +154,6 @@ export async function GET(request: NextRequest) {
       date: string;
       amountUSD: number;
       count: number;
-      amountOneTime: number;
-      countOneTime: number;
-      amountMonthly: number;
-      countMonthly: number;
       amountFailed: number;
       countFailed: number;
       countPending: number;
@@ -183,11 +167,7 @@ export async function GET(request: NextRequest) {
 
     for (const dateStr of eachIstanbulDateKey(axisStartKey, endDateKey)) {
       const b = byDate.get(dateStr);
-      const amountOneTime = b ? Number(Number(b.amountOneTime).toFixed(2)) : 0;
-      const amountMonthly = b ? Number(Number(b.amountMonthly).toFixed(2)) : 0;
       const amountFailed = b ? Number(Number(b.amountFailed).toFixed(2)) : 0;
-      const countOneTime = b?.countOneTime ?? 0;
-      const countMonthly = b?.countMonthly ?? 0;
       const countFailed = b?.countFailed ?? 0;
       const countPending = b?.countPending ?? 0;
       const teamSupport = b ? Number(Number(b.teamSupport).toFixed(2)) : 0;
@@ -195,12 +175,8 @@ export async function GET(request: NextRequest) {
 
       filledChartData.push({
         date: dateStr,
-        amountUSD: Number((amountOneTime + amountMonthly).toFixed(2)),
-        count: countOneTime + countMonthly,
-        amountOneTime,
-        countOneTime,
-        amountMonthly,
-        countMonthly,
+        amountUSD: b ? Number(Number(b.amountPaid).toFixed(2)) : 0,
+        count: b?.countPaid ?? 0,
         amountFailed,
         countFailed,
         countPending,

@@ -51,7 +51,6 @@ export interface DonationDetail {
     donorCountryCode: string | null;
     provider: string | null;
     paymentMethod: string | null;
-    subscriptionId: string | null;
   };
   attribution: {
     platform: AdPlatform;
@@ -288,10 +287,6 @@ export function DiagnosticsDrawer({ donationId, open, onOpenChange }: Props) {
               />
               <KV label={dt("مزود الدفع")} value={data.donation.provider} />
               <KV label={dt("طريقة الدفع")} value={data.donation.paymentMethod || '—'} />
-              <KV
-                label={dt("اشتراك شهري")}
-                value={data.donation.subscriptionId ? dt("نعم") : dt("لا")}
-              />
             </Section>
 
             <Section

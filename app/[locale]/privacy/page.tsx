@@ -1,49 +1,34 @@
 import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
-
-import { slugFor } from "@/lib/minbar/routes";
-import MinbarMessages from "@/components/minbar/MinbarMessages";
-import LegalPage, { type LegalSection } from "@/components/minbar/legal/LegalPage";
+import { LOCALE_SEO } from "@/lib/seo";
+import type { Locale } from "@/lib/seo";
+import PolicyPage from "./PolicyPage";
 
 interface Props {
   params: Promise<{ locale: string }>;
 }
 
-/** The page's own namespaces, on top of the shell bundle. */
-const NAMESPACES = ["legal"] as const;
-
-const SECTIONS: readonly LegalSection[] = [
-  { id: "collect", headingKey: "privCollectH", bodyKey: "privCollectP", icon: "database" },
-  { id: "use", headingKey: "privUseH", bodyKey: "privUseP", icon: "sliders" },
-  { id: "cookies", headingKey: "privCookiesH", bodyKey: "privCookiesP", icon: "cookie" },
-  { id: "security", headingKey: "privSecurityH", bodyKey: "privSecurityP", icon: "shield" },
-  { id: "rights", headingKey: "privRightsH", bodyKey: "privRightsP", icon: "accessibility" },
-  { id: "contact", headingKey: "privContactH", bodyKey: "privContactP", icon: "mail" },
-];
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
-  const t = await getTranslations({ locale, namespace: "legal" });
+  const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
+  const titles: Record<string, string> = {
+    ar: "سياسة الخصوصية",
+    en: "Privacy Policy",
+    fr: "Politique de Confidentialité",
+    tr: "Gizlilik Politikası",
+    id: "Kebijakan Privasi",
+    pt: "Política de Privacidade",
+    es: "Política de Privacidad",
+  };
   return buildManagedPageMetadata("privacy", locale, {
-    title: t("privacyTitle"),
-    description: t("privCollectP"),
-    path: `/${slugFor("privacy", locale)}`,
+    title: titles[locale] ?? titles.en,
+    description: seo.description,
+    path: "/privacy",
+    keywords: seo.keywords,
   });
 }
 
-/**
- * Ported from `Minbar/سياسة الخصوصية.dc.html`.
- *
- * `LEGAL_REVIEW_REQUIRED`: this text is under human legal review in every
- * language. A translation is not an approval.
- */
-export default async function Page({ params }: Props) {
+export default async function PrivacyRoute({ params }: Props) {
   const { locale } = await params;
-
-  return (
-    <MinbarMessages locale={locale} namespaces={NAMESPACES}>
-      <LegalPage titleKey="privacyTitle" sections={SECTIONS} />
-    </MinbarMessages>
-  );
+  return <PolicyPage locale={locale} />;
 }

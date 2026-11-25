@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { publicOrigin } from "@/lib/public-origin";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminSession } from "@/lib/dashboard/api-auth";
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ ok: true, bot: { name: result.result.first_name, username: result.result.username ?? null } });
   }
-  const origin = new URL(request.url).origin;
+  const origin = publicOrigin(request);
   let webhookUrl = origin + "/api/telegram/webhook";
   if (body.url?.trim()) {
     try {

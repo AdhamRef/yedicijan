@@ -19,7 +19,7 @@ type Props = {
 /**
  * One toolbar shape for search + filters + actions.
  *
- * Every list page built its own: `/campaigns` wrapped it in a `Card p-4`, `/monthly` used a
+ * Every list page built its own: `/campaigns` wrapped it in a `Card p-4`, the (since removed) monthly page used a
  * bare div with hand-positioned RTL icons, `/ads` had `AdsFiltersBar`. The RTL search-icon
  * offset in particular was re-derived (and got re-broken) on each page.
  */

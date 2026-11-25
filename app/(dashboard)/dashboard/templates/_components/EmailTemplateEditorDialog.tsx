@@ -187,7 +187,7 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={dt("مثال: شكر التبرع الشهري")}
+                placeholder={dt("مثال: شكر التبرع")}
                 className="h-8"
               />
             </div>

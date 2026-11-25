@@ -69,7 +69,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   get "marketing-intelligence"() { return dt("ذكاء التسويق"); },
   get "bank-transfers"() { return dt("التحويلات البنكية"); },
   get "transfer-receipts"() { return dt("إيصالات التحويل"); },
-  get monthly() { return dt("التبرعات الشهرية"); },
   get general() { return dt("عام"); },
   get "payment-gateways"() { return dt("بوابات الدفع"); },
 };

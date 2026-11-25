@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import {
   DollarSign,
   Calendar,
-  Repeat,
   Receipt,
   HandCoins,
   Loader2,
@@ -77,10 +76,6 @@ interface ChartDataPoint {
   date: string;
   amountUSD: number;
   count: number;
-  amountOneTime: number;
-  countOneTime: number;
-  amountMonthly: number;
-  countMonthly: number;
   teamSupport: number;
   fees: number;
 }
@@ -106,7 +101,6 @@ interface DonationRow {
   currency: string;
   teamSupport: number;
   fees: number;
-  type: string;
   status: string;
   paidAt?: string | null;
   provider?: string | null;
@@ -133,18 +127,7 @@ interface ReferralStats {
   allTimeRevenue?: number;
   /** All PAID for this referral (USD) - ignores category/campaign filters */
   paidRevenueAllTimeUnfiltered?: number;
-  oneTimeCount: number;
-  monthlyCount: number;
-  oneTimeAllCount?: number;
-  monthlyAllCount?: number;
-  activeMonthlyCount: number;
-  monthlyStoppedCount?: number;
-  monthlyRecurringRevenue: number;
-  activeMonthlyAmountUSD?: number;
-  monthlyStoppedAmountUSD?: number;
   thisMonthRevenue: number;
-  oneTimeTotalAmount?: number;
-  monthlyTotalAmount?: number;
   campaignDonationsTotal?: number;
   categoryDonationsTotal?: number;
   campaignDonationsCount?: number;
@@ -156,7 +139,6 @@ interface ReferralStats {
     amount: number;
     currency: string;
     donorName: string;
-    type: string;
     campaignTitle: string | null;
     categoryName: string | null;
     createdAt: string;
@@ -166,7 +148,7 @@ interface ReferralStats {
 type ChartViewType = "bar" | "line" | "area";
 type ChartPeriod = "day" | "yesterday" | "week" | "month" | "year" | "all" | "custom";
 type ChartMetric = "amount" | "teamSupport" | "fees";
-type StatCardSet = "revenue" | "overview" | "breakdown";
+type StatCardSet = "revenue" | "overview";
 
 const PERIOD_LABELS: Record<ChartPeriod, string> = {
   get day() { return dt("اليوم"); },
@@ -220,7 +202,6 @@ export default function ReferralAnalyticsPage() {
   const [donationsSortBy, setDonationsSortBy] = useState<"date" | "amount">("date");
   const [donationsSortOrder, setDonationsSortOrder] = useState<"asc" | "desc">("desc");
   const [donationsStatusFilter, setDonationsStatusFilter] = useState<"all" | "PAID" | "PENDING" | "FAILED">("all");
-  const [donationsTypeFilter, setDonationsTypeFilter] = useState<"all" | "ONE_TIME" | "MONTHLY">("all");
   const [donationCountryFilter, setDonationCountryFilter] = useState<string>("all");
   const [countryOptions, setCountryOptions] = useState<{ code: string; count: number }[]>([]);
   const [countryUnsetCount, setCountryUnsetCount] = useState(0);
@@ -382,7 +363,6 @@ export default function ReferralAnalyticsPage() {
         if (start) searchParams.set("start", start);
         if (end) searchParams.set("end", end);
         if (donationsStatusFilter !== "all") searchParams.set("status", donationsStatusFilter);
-        if (donationsTypeFilter !== "all") searchParams.set("donationType", donationsTypeFilter);
         if (donationCountryFilter !== "all") searchParams.set("country", donationCountryFilter);
         const res = await fetch(`/api/donations?${searchParams}`);
         const data = await res.json();
@@ -400,14 +380,14 @@ export default function ReferralAnalyticsPage() {
         setDonationsFetchedOnce(true);
       }
     },
-    [id, selectedCategory, selectedCampaign, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationsTypeFilter, donationCountryFilter]
+    [id, selectedCategory, selectedCampaign, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationCountryFilter]
   );
 
   useEffect(() => {
     if (!id || loading) return;
     setDonationsPage(1);
     fetchDonations(1, false);
-  }, [id, loading, selectedCategory, selectedCampaign, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationsTypeFilter, donationCountryFilter, fetchDonations]);
+  }, [id, loading, selectedCategory, selectedCampaign, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationCountryFilter, fetchDonations]);
 
   const loadMoreDonations = () => {
     const next = donationsPage + 1;
@@ -457,15 +437,9 @@ export default function ReferralAnalyticsPage() {
   if (!stats) return null;
 
   const { referral } = stats;
-  const oneTimeTotal = stats.oneTimeTotalAmount ?? 0;
-  const monthlyTotal = stats.monthlyTotalAmount ?? 0;
   const revenueSplitData = [
     { name: dt("مشاريع"), value: stats.campaignDonationsTotal ?? 0, count: stats.campaignDonationsCount ?? 0, color: "#295a75" },
     { name: dt("فئات"), value: stats.categoryDonationsTotal ?? 0, count: stats.categoryDonationsCount ?? 0, color: "#6e818b" },
-  ].filter((d) => d.value > 0 || d.count > 0);
-  const typeSplitData = [
-    { name: dt("مرة واحدة"), value: oneTimeTotal, count: stats.oneTimeCount ?? 0, color: "#35708f" },
-    { name: dt("شهرية"), value: monthlyTotal, count: stats.monthlyCount ?? 0, color: "#234a60" },
   ].filter((d) => d.value > 0 || d.count > 0);
 
   return (
@@ -494,7 +468,6 @@ export default function ReferralAnalyticsPage() {
               <TabsList className="bg-muted p-1 rounded-lg h-9" dir={dashDir()}>
                 <TabsTrigger value="revenue" className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm">{dt("الإيرادات")}</TabsTrigger>
                 <TabsTrigger value="overview" className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm">{dt("نظرة عامة")}</TabsTrigger>
-                <TabsTrigger value="breakdown" className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm">{dt("تفصيل التبرعات")}</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -530,7 +503,6 @@ export default function ReferralAnalyticsPage() {
                   format="money"
                   subtitle={dt("كل تبرعات الرابط الناجحة  دون تصفية الفئة أو المشروع")}
                 />
-                <StatsMetricCard compact title={dt("إيرادات شهرية متكررة")} value={stats.monthlyRecurringRevenue ?? 0} icon={Repeat} accent="emerald" format="money" subtitle={dt("اشتراكات نشطة")} />
                 <StatsMetricCard compact title={dt("دعم الفريق")} value={stats.teamSupportTotal ?? 0} icon={HandCoins} accent="amber" format="money" subtitle={dt("من التبرعات الناجحة")} />
                 {/* <StatsMetricCard compact title="الرسوم" value={stats.feesTotal ?? 0} icon={Percent} accent="orange" format="money" subtitle="من التبرعات الناجحة" /> */}
                 <StatsMetricCard compact title={dt("تبرعات ناجحة")} value={stats.paidCount ?? 0} icon={Receipt} accent="teal" subtitle={dt("إجمالي: {0}", [formatMoney(stats.totalAmount ?? 0, undefined, undefined, true)])} />
@@ -547,16 +519,7 @@ export default function ReferralAnalyticsPage() {
                   accent="violet"
                   subtitle={dt("ناجح + فاشل + معلق")}
                 />
-                <StatsMetricCard compact title={dt("مرة واحدة (ناجح)")} value={stats.oneTimeCount ?? 0} icon={Receipt} accent="slate" />
-                <StatsMetricCard compact title={dt("شهرية (ناجح)")} value={stats.monthlyCount ?? 0} icon={Repeat} accent="slate" />
-              </>
-            )}
-            {statCardSet === "breakdown" && (
-              <>
-                <StatsMetricCard compact title={dt("مرة واحدة (عدد)")} value={stats.oneTimeAllCount ?? 0} icon={Receipt} accent="slate" subtitle={dt("ناجح: {0}", [stats.oneTimeCount ?? 0])} />
-                <StatsMetricCard compact title={dt("شهرية (عدد)")} value={stats.monthlyAllCount ?? 0} icon={Repeat} accent="slate" subtitle={dt("ناجح: {0}", [stats.monthlyCount ?? 0])} />
-                <StatsMetricCard compact title={dt("التبرعات الشهرية الناشطة")} value={stats.activeMonthlyAmountUSD ?? 0} icon={Repeat} accent="teal" format="money" subtitle={dt("عدد: {0}", [stats.activeMonthlyCount ?? 0])} />
-                <StatsMetricCard compact title={dt("التبرعات الشهرية المتوقفة")} value={stats.monthlyStoppedAmountUSD ?? 0} icon={Repeat} accent="indigo" format="money" subtitle={dt("عدد: {0}", [stats.monthlyStoppedCount ?? 0])} />
+                <StatsMetricCard compact title={dt("تبرعات ناجحة")} value={stats.paidCount ?? 0} icon={Receipt} accent="slate" />
               </>
             )}
           </div>
@@ -585,8 +548,7 @@ export default function ReferralAnalyticsPage() {
                               contentStyle={{ backgroundColor: "#fff", border: "1px solid #dde4e8", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
                               labelFormatter={(v) => formatIstanbulDateKeyLabel(String(v), "en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
                               formatter={(value: number, name: string) => {
-                                if (name === "amountOneTime") return [formatMoney(Number(value), undefined, undefined, true), dt("مبلغ مرة واحدة")];
-                                if (name === "amountMonthly") return [formatMoney(Number(value), undefined, undefined, true), dt("مبلغ شهري")];
+                                if (name === "amountUSD") return [formatMoney(Number(value), undefined, undefined, true), dt("مبلغ ناجح")];
                                 return [formatMoney(Number(value), undefined, undefined, true), name];
                               }}
                               content={({ active, payload, label }) => {
@@ -611,8 +573,7 @@ export default function ReferralAnalyticsPage() {
                               }}
                             />
                             <Legend />
-                            <Bar dataKey="amountOneTime" fill="#35708f" radius={[4, 4, 0, 0]} maxBarSize={32} name="مبلغ مرة واحدة" />
-                            <Bar dataKey="amountMonthly" fill="#234a60" radius={[4, 4, 0, 0]} maxBarSize={32} name="مبلغ شهري" />
+                            <Bar dataKey="amountUSD" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={32} name="مبلغ ناجح" />
                           </BarChart>
                         </ResponsiveContainer>
                       ) : (
@@ -659,10 +620,9 @@ export default function ReferralAnalyticsPage() {
                   </div>
                 </TabsContent>
                 <TabsContent value="split" className="mt-0" dir={dashDir()}>
-                  <Tabs defaultValue="one-time-monthly" className="w-full" dir={dashDir()}>
+                  <Tabs defaultValue="campaign-category" className="w-full" dir={dashDir()}>
                     <TabsList className="bg-slate-100 p-1 rounded-lg mb-4 inline-flex flex-row-reverse">
                       <TabsTrigger value="campaign-category" className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm">{dt("مشاريع vs فئات")}</TabsTrigger>
-                      <TabsTrigger value="one-time-monthly" className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm">{dt("مرة واحدة vs شهرية")}</TabsTrigger>
                     </TabsList>
                     <TabsContent value="campaign-category" className="mt-0">
                       <div className="h-[340px] w-full flex items-center justify-center">
@@ -671,23 +631,6 @@ export default function ReferralAnalyticsPage() {
                             <PieChart>
                               <Pie data={revenueSplitData} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={2} dataKey="value" nameKey="name" label={false}>
                                 {revenueSplitData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
-                              </Pie>
-                              <Tooltip formatter={(value: number, _name: string, props: { payload?: { count?: number } }) => [dt("{0}  عدد: {1}", [formatMoney(Number(value), undefined, undefined, true), props?.payload?.count ?? 0]), dt("المبلغ / العدد")]} />
-                              <Legend content={DashboardPieLegendByValue} />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        ) : (
-                          <p className="text-slate-500">{dt("لا توجد بيانات")}</p>
-                        )}
-                      </div>
-                    </TabsContent>
-                    <TabsContent value="one-time-monthly" className="mt-0" dir={dashDir()}>
-                      <div className="h-[340px] w-full flex items-center justify-center">
-                        {typeSplitData.length > 0 ? (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie data={typeSplitData} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={2} dataKey="value" nameKey="name" label={false}>
-                                {typeSplitData.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
                               </Pie>
                               <Tooltip formatter={(value: number, _name: string, props: { payload?: { count?: number } }) => [dt("{0}  عدد: {1}", [formatMoney(Number(value), undefined, undefined, true), props?.payload?.count ?? 0]), dt("المبلغ / العدد")]} />
                               <Legend content={DashboardPieLegendByValue} />
@@ -837,19 +780,6 @@ export default function ReferralAnalyticsPage() {
                 </Select>
               </div>
               <div className="space-y-1 text-start">
-                <label className="text-[11px] font-medium text-slate-500">{dt("نوع التبرع")}</label>
-                <Select value={donationsTypeFilter} onValueChange={(v) => setDonationsTypeFilter(v as typeof donationsTypeFilter)}>
-                  <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50 hover:bg-slate-100 shadow-sm">
-                    <SelectValue placeholder={dt("النوع")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-xs">{dt("كل الأنواع")}</SelectItem>
-                    <SelectItem value="ONE_TIME" className="text-xs">{dt("لمرة واحدة")}</SelectItem>
-                    <SelectItem value="MONTHLY" className="text-xs">{dt("شهري")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1 text-start">
                 <label className="text-[11px] font-medium text-slate-500">{dt("الدولة")}</label>
                 <Select value={donationCountryFilter} onValueChange={(v) => setDonationCountryFilter(v)}>
                   <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50 hover:bg-slate-100 shadow-sm">
@@ -928,7 +858,6 @@ export default function ReferralAnalyticsPage() {
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700">{dt("الحالة")}</th>
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700">{dt("البوابة")}</th>
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">{dt("دعم الفريق")}</th>
-                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700">{dt("النوع")}</th>
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">{dt("مصدر التبرع")}</th>
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700 max-w-[110px]">{dt("المشروع / الفئة")}</th>
                       <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">{dt("التاريخ")}</th>
@@ -937,17 +866,17 @@ export default function ReferralAnalyticsPage() {
                   <tbody>
                     {donationsLoading && donations.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center">
+                        <td colSpan={9} className="py-12 text-center">
                           <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-400" />
                         </td>
                       </tr>
                     ) : !donationsFetchedOnce ? (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center text-slate-500">{dt("جاري التحميل...")}</td>
+                        <td colSpan={9} className="py-12 text-center text-slate-500">{dt("جاري التحميل...")}</td>
                       </tr>
                     ) : donations.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="py-12 text-center text-slate-500">{dt("لا توجد تبرعات تطابق التصفية")}</td>
+                        <td colSpan={9} className="py-12 text-center text-slate-500">{dt("لا توجد تبرعات تطابق التصفية")}</td>
                       </tr>
                     ) : (
                       donations.map((d) => (
@@ -1006,11 +935,6 @@ export default function ReferralAnalyticsPage() {
                           </td>
                           <td className="py-1.5 px-2 font-medium text-slate-800" dir="ltr">
                             {(d.teamSupport ?? 0) > 0 ? <span dir="ltr">{formatMoney(d.teamSupport ?? 0, d.currency, (d.totalAmount && (d.amountUSD != null)) ? ((d.teamSupport ?? 0) / d.totalAmount) * d.amountUSD : undefined)}</span> : <span className="text-slate-500">—</span>}
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <span className={cn("inline-block px-1.5 py-px rounded-full text-[11px]", d.type === "MONTHLY" ? "bg-brand text-white" : "bg-slate-100 text-slate-600")}>
-                              {d.type === "MONTHLY" ? dt("شهري") : dt("مرة واحدة")}
-                            </span>
                           </td>
                           <td className="py-1.5 px-2 align-middle">
                             <button
@@ -1098,8 +1022,8 @@ export default function ReferralAnalyticsPage() {
           open={exportOpen}
           onOpenChange={setExportOpen}
           endpoint={`/api/admin/referrals/${id}/export`}
-          title={dt("تصدير تقرير الإحالة{0}", [stats?.referral?.code ? `  ${stats.referral.code}` : ""])}
-          description={dt("يشمل التقرير كل التبرعات والاشتراكات المرتبطة بهذه الإحالة، مع ملخص شامل وتفصيل لكل حملة.")}
+          title={dt("تصدير تقرير الإحالة{0}", [stats?.referral?.code ? ` — ${stats.referral.code}` : ""])}
+          description={dt("يشمل التقرير كل التبرعات المرتبطة بهذه الإحالة، مع ملخص شامل وتفصيل لكل حملة.")}
           defaults={(() => {
             const { start, end } = getDonationsDateRange(chartPeriod, dateFrom, dateTo);
             return {
@@ -1110,7 +1034,6 @@ export default function ReferralAnalyticsPage() {
               categoryId: selectedCategory,
               campaignId: selectedCampaign,
               status: donationsStatusFilter,
-              type: donationsTypeFilter,
               country: donationCountryFilter,
               sortBy: donationsSortBy,
               sortOrder: donationsSortOrder,
@@ -1137,10 +1060,8 @@ export default function ReferralAnalyticsPage() {
             category: true,
             campaign: true,
             status: true,
-            type: true,
             locale: true,
             country: true,
-            subscriptionOnly: true,
             sort: true,
             limit: true,
           }}

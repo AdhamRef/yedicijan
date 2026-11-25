@@ -8,7 +8,6 @@
  * request MAC, so they're posted to our /api/albaraka/3d/initiate route to be signed
  *  unless ALBARAKA_USE_OOS=1, in which case this form isn't rendered at all and the
  * bank's own hosted page collects the card.
- * This component has NO connection to Stripe whatsoever.
  */
 
 import Cards from "react-credit-cards-2";
@@ -16,7 +15,18 @@ import "react-credit-cards-2/dist/es/styles-compiled.css";
 import { Input } from "@/components/ui/input";
 import { useTranslations } from "next-intl";
 import { useId } from "react";
-import { digitsOnly } from "@/lib/minbar/numeric-input";
+/**
+ * Digits only (card number, expiry, CVC). Donors type on Arabic and Persian/Urdu
+ * keyboards too, so Arabic-Indic digits are mapped to 0-9 instead of being dropped.
+ */
+function digitsOnly(raw: string, maxLength?: number): string {
+  const latin = String(raw ?? "").replace(/[٠-٩۰-۹]/g, (ch) => {
+    const code = ch.charCodeAt(0);
+    return String(code >= 0x06f0 ? code - 0x06f0 : code - 0x0660);
+  });
+  const out = latin.replace(/[^0-9]/g, "");
+  return maxLength ? out.slice(0, maxLength) : out;
+}
 
 export interface PayForCardState {
   cardNumber: string;
@@ -95,7 +105,7 @@ export function PayForCardForm({
             onChange={(e) =>
               setCardDetails({
                 ...cardDetails,
-                // Strip digits  prevents Stripe's "name contains card number" error on fallback
+                // Strip digits — a cardholder name never contains them
                 cardholderName: e.target.value.replace(/\d/g, "").toUpperCase(),
               })
             }

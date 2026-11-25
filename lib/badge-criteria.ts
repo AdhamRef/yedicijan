@@ -5,7 +5,6 @@ import {
   matchingBadgeUserIds,
   normalizeBadgeCriteria,
   type BadgeDonationRow,
-  type BadgeSubscriptionRow,
 } from "@/lib/badge-criteria-core";
 
 export { normalizeBadgeCriteria, type BadgeCriteria, type BadgeCriteriaType } from "@/lib/badge-criteria-core";
@@ -22,17 +21,10 @@ export async function getUserIdsMatchingBadge(criteriaInput: unknown, candidateU
     ? {}
     : { donorId: { in: candidateUserIds } };
 
+  // Monthly donations were removed, so MONTHLY_ACTIVE_RANGE (which may still be stored on
+  // old badge rows) never matches.
   if (criteria.type === "MONTHLY_ACTIVE_RANGE") {
-    const subscriptionWhere: Prisma.SubscriptionWhereInput = {
-      status: "ACTIVE",
-      frequency: "MONTHLY",
-      ...(candidateUserIds === undefined ? {} : { donorId: { in: candidateUserIds } }),
-    };
-    const subscriptions = await prisma.subscription.findMany({
-      where: subscriptionWhere,
-      select: { donorId: true, amountUSD: true, amount: true, currency: true, status: true, frequency: true },
-    });
-    return matchingBadgeUserIds(criteria, [], subscriptions as BadgeSubscriptionRow[]);
+    return [];
   }
 
   const donationBaseWhere: Prisma.DonationWhereInput = {

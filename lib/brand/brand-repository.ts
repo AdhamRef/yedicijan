@@ -22,7 +22,7 @@ import type {
   BrandProfileStatus,
 } from "./brand-types";
 
-const organizationKeys: BrandOrganizationKey[] = ["minber_aksa"];
+const organizationKeys: BrandOrganizationKey[] = ["yedicihan"];
 const locales: BrandLocale[] = ["ar", "tr", "en", "fr", "id", "pt", "es", "de"];
 const profileStatuses: BrandProfileStatus[] = ["ACTIVE", "FOUNDATION", "TO_VERIFY"];
 const assetTypes: BrandAsset["type"][] = ["LOGO", "ICON", "TEMPLATE", "CERTIFICATE", "WATERMARK", "VIDEO_INTRO", "VIDEO_OUTRO", "BRAND_GUIDE"];
@@ -253,18 +253,18 @@ export async function getBrandRepositorySnapshot(): Promise<BrandRepositorySnaps
       readAuditBackedBrandMessageFrameworks(),
     ]);
 
-    if (!profileRows.some(profile => profile.key === "minber_aksa")) {
+    if (!profileRows.some(profile => profile.key === "yedicihan")) {
       return fallback("BrandProfile collection is empty; using foundation brand data.");
     }
 
     const profileIdByDbId = new Map<string, string>();
-    const profiles = profileRows.filter(profile => profile.key === "minber_aksa").map((profile): BrandProfile => {
+    const profiles = profileRows.filter(profile => profile.key === "yedicihan").map((profile): BrandProfile => {
       const uiId = stableProfileId(profile.key, profile.id);
       profileIdByDbId.set(profile.id, uiId);
 
       return {
         id: uiId,
-        key: "minber_aksa",
+        key: isKnownOrganizationKey(profile.key) ? profile.key : "yedicihan",
         name: profile.name,
         description: profile.description ?? "to be verified",
         mission: profile.mission ?? "to be verified",

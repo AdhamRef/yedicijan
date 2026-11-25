@@ -11,8 +11,8 @@ import type { Prisma } from "@prisma/client";
  *
  * The failure mode is silent and expensive: `{ subscriptionId: null }` matched 41 of the
  * 1022 one-time paid donations on the revenue cards, and `{ paidAt: null }` failing to
- * find an unsettled row is what made the Stripe webhook create a duplicate donation for
- * an invoice it had already recorded.
+ * find an unsettled row once made a payment webhook create a duplicate donation for
+ * a charge it had already recorded.
  *
  * `{ field: { not: null } }` is NOT affected  it correctly excludes both absent and null.
  * Only the "is empty" direction needs this helper.

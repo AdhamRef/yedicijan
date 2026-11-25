@@ -47,8 +47,6 @@ next-env.d.ts
 
 # local scratch space (debug scripts, screenshots)
 /tmp/
-/gozbebekleri
-/Minbar
 
 # integration test build output
 /.integration-test-build/

@@ -49,7 +49,6 @@ function toVercelProps(event: CanonicalEvent): Record<string, string | number | 
   if (d?.cause_id)               props.cause_id       = truncate(d.cause_id);
   if (d?.cause_name)             props.cause_name     = truncate(d.cause_name);
   if (d?.donation_type)          props.donation_type  = d.donation_type;
-  if (d?.recurring != null)      props.recurring      = d.recurring;
   if (d?.status)                 props.status         = truncate(d.status);
 
   if (p?.gateway)                props.gateway        = p.gateway;
@@ -107,7 +106,7 @@ interface TrackInitiateCheckoutOptions {
   numItems: number;
   contentIds?: string[];
   items?: TrackingItem[];
-  donationType?: "ONE_TIME" | "MONTHLY";
+  donationType?: "ONE_TIME";
 }
 
 interface TrackViewContentOptions {
@@ -119,7 +118,7 @@ interface TrackViewContentOptions {
 }
 
 interface TrackCustomizeProductOptions {
-  donationType?: "ONE_TIME" | "MONTHLY";
+  donationType?: "ONE_TIME";
   amount?: number;
   currency?: string;
   causeId?: string;
@@ -139,7 +138,7 @@ interface TrackDonateOptions {
   currency?: string;
   causeId?: string;
   causeName?: string;
-  donationType?: "ONE_TIME" | "MONTHLY";
+  donationType?: "ONE_TIME";
   gateway?: string;
   is3ds?: boolean;
 }
@@ -175,9 +174,9 @@ interface TrackDonateSuccessOptions {
   contents?: Array<{ id: string; quantity?: number; item_price?: number }>;
   /** Human-readable cause for Events Manager. */
   contentName?: string;
-  /** "donation" | "monthly" | "qurbani" | … */
+  /** "donation" | "qurbani" | … */
   contentCategory?: string;
-  donationType?: "ONE_TIME" | "MONTHLY";
+  donationType?: "ONE_TIME";
   paymentMethod?: string;
 }
 
@@ -609,7 +608,6 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         if (u.external_id)      ga4.external_id      = u.external_id;
         if (u.fbp)              ga4.fbp              = u.fbp;
         if (u.fbc)              ga4.fbc              = u.fbc;
-        if (u.subscription_id)  ga4.subscription_id  = u.subscription_id;
         if (u.user_agent)       ga4.user_agent       = u.user_agent;
         if (event.custom) Object.assign(ga4, event.custom);
         window.gtag("event", ga4EventName, ga4);
@@ -757,7 +755,6 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         cause_id:      options.causeId,
         cause_name:    options.causeName,
         donation_type: options.donationType,
-        recurring:     options.donationType === "MONTHLY",
       },
       payment: {
         gateway: options.gateway as CanonicalPayment["gateway"],
@@ -856,16 +853,13 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       contents,
       num_items: contents.reduce((s, c) => s + (c.quantity ?? 1), 0),
       content_name: options.contentName,
-      content_category:
-        options.contentCategory ??
-        (options.donationType === "MONTHLY" ? "monthly" : "donation"),
+      content_category: options.contentCategory ?? "donation",
       order_id: options.donationId,
       transaction_id: options.donationId,
       status: "paid",
       success: true,
       payment_info_available: true,
-      donation_type:
-        options.donationType === "MONTHLY" ? "monthly" : "one_time",
+      donation_type: "one_time",
       payment_method: (options.paymentMethod ?? "card").toLowerCase(),
     };
 

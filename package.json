@@ -1,5 +1,5 @@
 {
-  "name": "minberiaksa",
+  "name": "yedicihan",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -33,7 +33,6 @@
     "seed:banners": "tsx prisma/seed/seed-banners.ts",
     "backfill:donation-countries": "tsx scripts/backfill-donation-donor-country.ts",
     "backfill:user-verified": "tsx scripts/backfill-user-verified-at.ts",
-    "backfill:monthly-paid": "tsx scripts/backfill-stripe-monthly-paid.ts",
     "exchange-rates:refresh": "tsx scripts/refresh-exchange-rates.ts",
     "cleanup:orphan-donation-items": "tsx scripts/cleanup-orphan-donation-items.ts",
     "migrate:integration-settings": "prisma generate --schema prisma/integration-settings.schema.prisma && tsx prisma/mongodb-migrations/20260714-integration-settings.ts",
