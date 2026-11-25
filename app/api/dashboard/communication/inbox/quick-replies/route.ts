@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * Team-shared quick replies for the WhatsApp conversations page (owner, 2026-11-19), per language
  * (ar / tr / fr / en, or "all"). Stored in InboxQuickReply; anyone who can open the inbox can use, add and remove them.
  */
-const LANGS = new Set(["ar", "tr", "fr", "en", "all"]);
+const LANGS = new Set(["ar", "tr", "en", "fr", "de", "es", "id", "pt", "all"]);
 const COLLECTION = "InboxQuickReply";
 type Raw = { _id: { $oid: string } | string; language: string; title: string; body: string; createdByName?: string | null };
 const id = (v: Raw["_id"]) => (typeof v === "string" ? v : v.$oid);
