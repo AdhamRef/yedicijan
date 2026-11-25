@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
+
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { prisma } from "@/lib/prisma";
 import { resolveAttribution } from "@/lib/tracking/attribution-resolver";
@@ -8,7 +9,10 @@ import {
   ATTRIBUTION_STATUS_LABEL_AR,
 } from "@/lib/tracking/tracking-event-contract";
 import { PLATFORM_LABEL_AR } from "@/lib/attribution/detect-source";
+import { getDonationConversionTimeline } from "@/lib/tracking/conversion-timeline-service";
 import { stableDonateEventId } from "@/lib/tracking/stable-event-id";
+
+export const dynamic = "force-dynamic";
 
 const UTM_FIELDS = [
   "utm_source",
@@ -122,6 +126,7 @@ export async function GET(
         attribution: true,
         conversionEventsSentAt: true,
         conversionFailedEventsSentAt: true,
+        subscriptionId: true,
       },
     });
     if (!donation) {
@@ -166,22 +171,23 @@ export async function GET(
       },
     });
 
-    // Heuristic: infer per-platform event success from the existing flags.
-    // We don't yet have a dedicated ConversionEvent table — when one is added
-    // by the Tracking Control Center phase, this block reads from it.
+    const timeline = await getDonationConversionTimeline(donation.id);
+    const sent = (platform: string, channel: string, eventName: string) => timeline.events.some(event => event.platform === platform && event.channel === channel && event.eventName === eventName && event.status === "SENT");
+    const legacyDonateSent = !timeline.events.some(event => event.platform === "META" && event.eventName === "Donate") && !!donation.conversionEventsSentAt;
     const trackingEvents = {
-      metaBrowserDonate: resolved.platform === "meta" ? null : null,
-      metaCapiDonate: !!donation.conversionEventsSentAt && resolved.platform === "meta",
-      metaCapiDonateFailed:
-        !!donation.conversionFailedEventsSentAt && resolved.platform === "meta",
-      ga4Purchase: !!donation.conversionEventsSentAt,
+      metaBrowserDonate: sent("META", "browser", "Donate"),
+      metaCapiDonate: sent("META", "server", "Donate") || legacyDonateSent,
+      metaBrowserPurchase: sent("META", "browser", "Purchase"),
+      metaCapiPurchase: sent("META", "server", "Purchase"),
+      metaCapiDonateFailed: sent("META", "server", "DonateFailed") || !!donation.conversionFailedEventsSentAt,
+      ga4Purchase: sent("GA4", "server", "purchase"),
       googleAdsConversion: resolved.platform === "google" ? null : null,
       tiktokEvent: resolved.platform === "tiktok" ? null : null,
       xEvent: resolved.platform === "x" ? null : null,
       eventId: stableDonateEventId(donation.id, "success"),
     };
 
-    // Build the "Diagnosis" section — missing data + likely reason + fix.
+    // Build the "Diagnosis" section  missing data + likely reason + fix.
     const missing: string[] = [];
     const fixes: string[] = [];
     for (const w of resolved.warnings) {
@@ -203,13 +209,13 @@ export async function GET(
           fixes.push("تأكد من تحميل Meta Pixel قبل بدء الـ checkout ليكتب fbp/fbc cookies.");
           break;
         case "capi_donate_missing":
-          fixes.push("راجع webhook الدفع — لم يستدعِ Meta CAPI Donate لهذا التبرع.");
+          fixes.push("راجع webhook الدفع  لم يستدعِ Meta CAPI Donate لهذا التبرع.");
           break;
         case "capi_donate_failed_only":
-          fixes.push("CAPI أرسل DonateFailed فقط — تأكد من أن webhook النجاح يعمل.");
+          fixes.push("CAPI أرسل DonateFailed فقط  تأكد من أن webhook النجاح يعمل.");
           break;
         case "dynamic_macro_unresolved":
-          fixes.push("راجع إعدادات الحملة في المنصة — قيمة macro لم يتم استبدالها.");
+          fixes.push("راجع إعدادات الحملة في المنصة  قيمة macro لم يتم استبدالها.");
           break;
         case "missing_campaign_id":
         case "missing_ad_id":
@@ -244,6 +250,7 @@ export async function GET(
         donorCountryCode: donation.donorCountryCode,
         provider: donation.provider,
         paymentMethod: donation.paymentMethod,
+        subscriptionId: donation.subscriptionId,
       },
       attribution: {
         platform: resolved.platform,

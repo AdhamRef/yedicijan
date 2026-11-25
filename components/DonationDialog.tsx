@@ -1,3 +1,14 @@
+import { usePaymentRouting } from "@/hooks/usePaymentRouting";
+import { PaymentCurrencyNotice } from "@/components/PaymentCurrencyNotice";
+import { SavedCardPicker } from "@/components/minbar/checkout/SavedCardPicker";
+import { Elements } from "@stripe/react-stripe-js";
+import { getStripePromise } from "@/lib/stripe-client";
+import { withDonationToken } from "@/lib/donations/access-token-link";
+import { rememberGuestDonationAccess } from "@/lib/donations/guest-access-client";
+import {
+  StripePaymentStep,
+  type StripePaymentHandle,
+} from "@/components/StripePaymentStep";
 import {
   PayForCardForm,
   type PayForCardState,
@@ -6,10 +17,12 @@ import { SignInPanel } from "@/components/SignInDialog";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, useId } from "react";
+import { dialogPaymentIssue, type DialogPaymentField } from "@/lib/minbar/dialog-payment-validation";
+// useCallback is used for stable onReadyChange callback passed to StripePaymentStep
 import {
+  Calendar,
   Heart,
   CreditCard as CardIcon,
   ShoppingCart,
@@ -22,11 +35,11 @@ import {
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "react-hot-toast";
-import { useConfettiStore } from "@/hooks/use-confetti-store";
 import { getCurrency } from "@/hooks/useCampaignValue";
 import {
   DEFAULT_SUGGESTED_DONATION_AMOUNTS,
   parseSuggestedDonations,
+  resolveDefaultDonationAmountForCurrency,
   resolveSuggestedAmountsForCurrency,
   type SuggestedDonationsConfig,
 } from "@/lib/campaign/suggested-donations";
@@ -62,14 +75,14 @@ import {
   getCurrencyCodeForLinks,
 } from "@/lib/currency-link";
 import { getDonationAttributionPayload } from "@/lib/attribution/client-payload";
-import { shouldSkipPopup } from "@/lib/in-app-browser";
+import { submitGatewayForm, type GatewayForm } from "@/lib/minbar/checkout";
 import { gatewayAnalyticsName, resolveGateway } from "@/lib/payment-gateway";
 import { useTranslations, useLocale } from "next-intl";
 import { useSession } from "next-auth/react";
-import { PhoneInput } from "react-international-phone";
-import "react-international-phone/style.css";
+import SearchablePhoneInput from "@/components/SearchablePhoneInput";
 import { useIpCountry } from "@/hooks/useIpCountry";
 
+type DonationType = "ONE_TIME" | "MONTHLY";
 type PaymentMethod = "CARD" | "PAYPAL" | null;
 const DONATION_CHECKOUT_RESUME_KEY = "alafiya:donation-checkout-resume:v1";
 const CHECKOUT_RESUME_TTL_MS = 30 * 60 * 1000;
@@ -87,7 +100,9 @@ interface DonationDialogProps {
   campaignImage?: string;
   targetAmount?: number;
   amountRaised?: number;
-  /** Add to Cart flow: the amount step only adds to the cart, with no checkout steps */
+  /** When true, skip one-time/monthly choice and use monthly only */
+  monthlyOnly?: boolean;
+  /** When true, skip one-time/monthly choice and use one-time only (e.g. Add to Cart flow) */
   oneTimeOnly?: boolean;
   /** Category donation: donate to a category instead of a campaign */
   categoryId?: string;
@@ -108,7 +123,7 @@ interface DonationDialogProps {
   } | null;
   /** Per-campaign custom unit names ("sheep"/"meal"/"hijab" etc.) keyed by locale. */
   shareLabels?: ShareLabelsConfig | null;
-  /** When true, user skipped sign-in — collect contact info inline */
+  /** When true, user skipped sign-in  collect contact info inline */
   guestMode?: boolean;
   /** URL used by OAuth/email verification to reopen this checkout. */
   authCallbackUrl?: string;
@@ -124,6 +139,7 @@ const DonationDialog = ({
   campaignImage = "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg",
   targetAmount = 0,
   amountRaised = 0,
+  monthlyOnly = false,
   oneTimeOnly = false,
   categoryId = "",
   categoryName = "",
@@ -160,6 +176,10 @@ const DonationDialog = ({
   }, []);
   const t = useTranslations("DonationDialog");
   const tAuth = useTranslations("SignInDialog");
+  const tValidation = useTranslations("validation");
+  const [paymentIssue, setPaymentIssue] = useState<{ field: DialogPaymentField; text: string } | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const paymentErrorId = useId();
   const locale = useLocale();
   const isRTL = locale === "ar";
   const dir = isRTL ? "rtl" : "ltr";
@@ -200,18 +220,13 @@ const DonationDialog = ({
   );
   const getReferralCode = useReferralCode();
 
-  // Helper function to get locale-specific property
-  const getLocalizedProperty = (obj: any, key: string) => {
-    const localeKey = `${key}${locale.charAt(0).toUpperCase() + locale.slice(1)}`;
-    return obj[localeKey] || obj[key] || "";
-  };
-
   const [globalSettings, setGlobalSettings] = useState<GlobalSettings | null>(
     () => getCachedGlobalSettings(),
   );
   const globalTeamSupport: SuggestedTeamSupportConfig | null =
     globalSettings?.suggestedTeamSupport ?? null;
   const payforEnabled = globalSettings ? globalSettings.payforEnabled : true;
+  const mainGateway = globalSettings ? globalSettings.mainGateway : "STRIPE";
   // With the bank's hosted card page on, Albaraka collects the card itself and we
   // must not render our own form (the card fields are signed into its request MAC).
   const albarakaUseOOS = globalSettings ? globalSettings.albarakaUseOOS : false;
@@ -226,22 +241,39 @@ const DonationDialog = ({
       { label: t("noThanks"), value: 0 },
       ...amounts.map((v) => ({ label: String(v), value: v })),
     ];
-    // getCurrency() is read from a cookie at render time — refresh when the
+    // getCurrency() is read from a cookie at render time  refresh when the
     // dialog reopens (matches the suggestedDonations pattern below).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestedTeamSupport, globalTeamSupport, isOpen, t]);
 
   // Trimmed flow for higher conversion: cover-fees folded into teamSupport,
   // sign-in step removed entirely (guests skip auth, authed users keep going).
-  const DONATION_STEPS: DonationStep[] = [
-    { title: t("donationAmount"), subtitle: t("donationAmountDesc") },
-    { title: t("teamSupport"), subtitle: t("teamSupportDesc") },
-    { title: t("confirmation"), subtitle: t("confirmationDesc") },
-    { title: t("paymentInfo"), subtitle: t("paymentInfoDesc") },
-  ];
+  // The team-support step follows the admin switch at /dashboard/cart-settings;
+  // off, it is skipped and nothing is added to the order.
+  const teamSupportStep: DonationStep[] =
+    globalSettings && !globalSettings.teamSupportEnabled ? [] : [{ title: t("teamSupport"), subtitle: t("teamSupportDesc") }];
+  const DONATION_STEPS: Record<DonationType, DonationStep[]> = {
+    ONE_TIME: [
+      { title: t("donationAmount"), subtitle: t("donationAmountDesc") },
+      ...teamSupportStep,
+      { title: t("confirmation"), subtitle: t("confirmationDesc") },
+      { title: t("paymentInfo"), subtitle: t("paymentInfoDesc") },
+    ],
+    MONTHLY: [
+      {
+        title: t("monthlyDonationAmount"),
+        subtitle: t("monthlyDonationAmountDesc"),
+      },
+      ...teamSupportStep,
+      { title: t("confirmation"), subtitle: t("confirmationDesc") },
+      { title: t("paymentInfo"), subtitle: t("paymentInfoDesc") },
+    ],
+  };
 
   const [currentStep, setCurrentStep] = useState(0);
+  const [donationType, setDonationType] = useState<DonationType | null>(null);
   const [donationAmount, setDonationAmount] = useState<number>(0);
+  const [donationAmountTouched, setDonationAmountTouched] = useState(false);
   const [teamSupport, setTeamSupport] = useState<number | null>(null);
   const [coverFees, setCoverFees] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
@@ -253,24 +285,51 @@ const DonationDialog = ({
     cardholderName: "",
   });
   const [cardFocus, setCardFocus] = useState("");
-  // Which 3D Secure rail this donation runs on: lira to Albaraka, everything else to
-  // PayFor while the admin leaves it on.
-  const gateway = resolveGateway({ payforEnabled, currency: getCurrency() });
+  // Stripe Elements  ready state tracked here, confirmation done via ref
+  const [stripeReady, setStripeReady] = useState(false);
+  const stripeFormRef = useRef<StripePaymentHandle | null>(null);
+  // Stable callback  prevents useEffect loop inside StripePaymentStep
+  const onStripeReadyChange = useCallback(
+    (ready: boolean) => setStripeReady(ready),
+    [],
+  );
+  // Auto-select PayFor when ONE_TIME + TL, Stripe otherwise. Fallback secret forces Stripe.
+  const [fallbackClientSecret, setFallbackClientSecret] = useState<
+    string | null
+  >(null);
+  // Which rail this donation runs on. PayFor keeps its original case (one-time TRY,
+  // admin switch on); everything else goes to whichever main gateway the admin picked,
+  // except monthly which is Stripe-only. A fallback secret means a 3D attempt already
+  // failed and the donor was handed a Stripe intent, so Stripe wins from then on.
+  const [phoneValue, setPhoneValue] = useState("");
+  const fallbackGateway = resolveGateway({
+    mainGateway,
+    payforEnabled,
+    currency: getCurrency(),
+    donationType,
+    forceStripe: Boolean(fallbackClientSecret),
+  });
+  const { gateway, acceptServerRoute } = usePaymentRouting({ enabled: globalSettings?.payforSaudiRoutingEnabled === true && donationType === "ONE_TIME" && !fallbackClientSecret, currency: getCurrency(), phone: phoneValue, fallback: fallbackGateway });
+
   const use3D = gateway === "PAYFOR";
   const useAlbaraka = gateway === "ALBARAKA";
-  /** Card inputs we render ourselves — Albaraka's hosted page replaces them. */
+  /** Both 3D rails post an HTML form to the bank instead of confirming via stripe.js. */
+  const useBank3D = use3D || useAlbaraka;
+  /** Card inputs we render ourselves  Albaraka's hosted page replaces them. */
   const useOwnCardForm = use3D || (useAlbaraka && !albarakaUseOOS);
-  // Guard so the failure redirect fires once even if the poll ticks again.
-  const hasFailedRef = useRef(false);
+  /** Stripe Elements are mounted only when Stripe is actually charging. */
+  const useStripeElements = gateway === "STRIPE";
+  const [fallbackDonationId, setFallbackDonationId] = useState<string | null>(
+    null,
+  );
+  // Guard against duplicate fallback execution
+  const hasFallenBackRef = useRef(false);
   // Guards to prevent funnel events firing more than once per dialog session
   const checkoutTrackedRef = useRef(false);
   const paymentInfoTrackedRef = useRef(false);
   const [loading, setLoading] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
-  const payforPopupRef = useRef<Window | null>(null);
-  const payforPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [phoneValue, setPhoneValue] = useState("");
   const [guestFirstName, setGuestFirstName] = useState("");
   const [guestLastName, setGuestLastName] = useState("");
   const [birthdateValue, setBirthdateValue] = useState("");
@@ -305,7 +364,7 @@ const DonationDialog = ({
   const [hasSkippedAuth, setHasSkippedAuth] = useState(false);
   const useGuestCheckout = (guestMode || hasSkippedAuth) && !session?.user?.id;
   // While /api/users/[id] is still in flight we don't yet know which profile fields
-  // the user is missing — treat them all as present so the donate button isn't
+  // the user is missing  treat them all as present so the donate button isn't
   // pre-disabled (previous behavior locked Google-sign-in users out of payment
   // until the slow profile fetch resolved and birthdate/gender were re-entered).
   const profileLoaded = !!currentUser;
@@ -315,10 +374,9 @@ const DonationDialog = ({
     !!session?.user?.id && profileLoaded && !currentUser?.birthdate;
   const needsGender =
     !!session?.user?.id && profileLoaded && !currentUser?.gender;
-  const needsProfileCompletion = needsPhone || needsBirthdate || needsGender;
   const { convertToCurrency, exchangeRates } = useCurrency();
   const [shareCount, setShareCount] = useState(1);
-  const { addItem, setItems } = useCart();
+  const { addItem } = useCart();
   const tracking = useTracking();
   const router = useRouter();
 
@@ -352,7 +410,7 @@ const DonationDialog = ({
       .catch(() => setCurrentUser(null));
   }, [isOpen, session?.user?.id]);
 
-  // Push user PII into tracking ref as soon as profile loads — so it's present for AddPaymentInfo
+  // Push user PII into tracking ref as soon as profile loads  so it's present for AddPaymentInfo
   useEffect(() => {
     if (!currentUser || !session?.user?.id) return;
     const nameParts = (currentUser.name ?? "").trim().split(/\s+/);
@@ -374,6 +432,7 @@ const DonationDialog = ({
   // Reset guest fields and saved card selection on close
   useEffect(() => {
     if (!isOpen) {
+      setPaymentIssue(null);
       setGuestFirstName("");
       setGuestLastName("");
       setGuestEmail("");
@@ -409,7 +468,9 @@ const DonationDialog = ({
   // Reset state when dialog opens + fire view_donation_page
   useEffect(() => {
     if (isOpen) {
-      hasFailedRef.current = false;
+      setFallbackClientSecret(null);
+      setFallbackDonationId(null);
+      hasFallenBackRef.current = false;
       checkoutTrackedRef.current = false;
       paymentInfoTrackedRef.current = false;
       // Auto-skip the (now-removed) sign-in step: guests proceed straight to
@@ -430,6 +491,14 @@ const DonationDialog = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // When monthlyOnly (e.g. QuickDonate category), pre-select monthly and skip type step
+  useEffect(() => {
+    if (isOpen && monthlyOnly && !donationType) {
+      setDonationType("MONTHLY");
+      setCurrentStep(0);
+    }
+  }, [isOpen, monthlyOnly, donationType]);
+
   // Fetch global team-support defaults when the dialog opens. The cache is
   // shared module-wide, so subsequent opens are instant.
   useEffect(() => {
@@ -443,8 +512,17 @@ const DonationDialog = ({
     };
   }, [isOpen]);
 
+  // When oneTimeOnly (e.g. Add to Cart flow), pre-select one-time and skip type step
+  useEffect(() => {
+    if (isOpen && oneTimeOnly && !donationType) {
+      setDonationType("ONE_TIME");
+      setCurrentStep(0);
+    }
+  }, [isOpen, oneTimeOnly, donationType]);
+
   useEffect(() => {
     if (isOpen && shareMode) {
+      setDonationType("ONE_TIME");
       setCurrentStep(0);
       setShareCount(1);
     }
@@ -470,7 +548,7 @@ const DonationDialog = ({
     const cur = payCurrencyCode();
     const override = resolveSharePriceOverride(parsedShareCounts, cur);
     if (override == null) return sharePriceUSD;
-    // Override is the absolute price in the donor's currency — convert back to USD via cached rate.
+    // Override is the absolute price in the donor's currency  convert back to USD via cached rate.
     if (cur === "USD") return override;
     const rate = exchangeRates?.[cur];
     if (!rate || !Number.isFinite(rate) || rate <= 0) return sharePriceUSD;
@@ -497,6 +575,7 @@ const DonationDialog = ({
   useEffect(() => {
     if (isOpen && initialDonationAmount != null && initialDonationAmount > 0) {
       setDonationAmount(initialDonationAmount);
+      setDonationAmountTouched(true);
       setCurrentStep(1); // skip first step (donation amount)
     }
   }, [isOpen, initialDonationAmount]);
@@ -512,6 +591,7 @@ const DonationDialog = ({
         createdAt?: number;
         campaignId?: string;
         categoryId?: string;
+        donationType?: DonationType | null;
         donationAmount?: number;
         teamSupport?: number;
         coverFees?: boolean;
@@ -530,8 +610,15 @@ const DonationDialog = ({
       if ((resume.campaignId || "") !== (campaignId || "")) return;
       if ((resume.categoryId || "") !== (categoryId || "")) return;
 
-      if (typeof resume.donationAmount === "number")
+      const restoredType =
+        resume.donationType === "ONE_TIME" || resume.donationType === "MONTHLY"
+          ? resume.donationType
+          : donationType;
+      if (restoredType) setDonationType(restoredType);
+      if (typeof resume.donationAmount === "number") {
         setDonationAmount(resume.donationAmount);
+        setDonationAmountTouched(true);
+      }
       if (typeof resume.teamSupport === "number")
         setTeamSupport(resume.teamSupport);
       if (typeof resume.coverFees === "boolean") setCoverFees(resume.coverFees);
@@ -539,7 +626,7 @@ const DonationDialog = ({
       if (typeof resume.shareCount === "number" && resume.shareCount > 0)
         setShareCount(resume.shareCount);
 
-      const steps = DONATION_STEPS;
+      const steps = restoredType ? DONATION_STEPS[restoredType] : [];
       const paymentStep = steps.findIndex(
         (step) => step.title === t("paymentInfo"),
       );
@@ -573,15 +660,45 @@ const DonationDialog = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, currentStep, session?.user?.id]);
 
-  const confetti = useConfettiStore();
-
   const presetDonationAmounts = useMemo(() => {
     if (!campaignId || isCategoryMode) {
       return DEFAULT_SUGGESTED_DONATION_AMOUNTS;
     }
     const cfg = parseSuggestedDonations(suggestedDonations);
-    return resolveSuggestedAmountsForCurrency(cfg, getCurrency());
-  }, [campaignId, isCategoryMode, suggestedDonations, isOpen]);
+    return resolveSuggestedAmountsForCurrency(cfg, getCurrency(), exchangeRates);
+  }, [campaignId, isCategoryMode, suggestedDonations, isOpen, exchangeRates]);
+
+  const defaultDonationAmount = useMemo(() => {
+    if (!campaignId || isCategoryMode || shareMode) return null;
+    return resolveDefaultDonationAmountForCurrency(
+      parseSuggestedDonations(suggestedDonations),
+      getCurrency(),
+      exchangeRates,
+    );
+  }, [campaignId, isCategoryMode, shareMode, suggestedDonations, exchangeRates]);
+
+  useEffect(() => {
+    if (!isOpen || !donationType || donationAmountTouched || initialDonationAmount != null || defaultDonationAmount == null) return;
+    setDonationAmount(defaultDonationAmount);
+  }, [isOpen, donationType, donationAmountTouched, initialDonationAmount, defaultDonationAmount]);
+
+  // Minimum Stripe charge = 1 USD converted to the selected currency, rounded up.
+  const stripeMinAmount = (() => {
+    const cur = payCurrencyCode();
+    if (cur === "USD") return 1;
+    try {
+      const cached =
+        typeof window !== "undefined"
+          ? localStorage.getItem("cachedExchangeRates")
+          : null;
+      if (!cached) return 1;
+      const { rates } = JSON.parse(cached) as { rates: Record<string, number> };
+      const rate = rates?.[cur];
+      return rate ? Math.ceil(rate + 1) : 1;
+    } catch {
+      return 1;
+    }
+  })();
 
   const progress =
     openGoal ||
@@ -599,14 +716,33 @@ const DonationDialog = ({
   const totalAmount =
     donationAmount + (teamSupport ?? 0) + (coverFees ? fees : 0);
 
+  const handleTypeSelect = (type: DonationType) => {
+    setDonationType(type);
+    setDonationAmountTouched(false);
+    setDonationAmount(defaultDonationAmount ?? 0);
+    setPaymentMethod("CARD");
+    setCardDetails({
+      cardNumber: "",
+      expiryDate: "",
+      cvv: "",
+      cardholderName: "",
+    });
+    setCurrentStep(0);
+    tracking?.trackCustomizeProduct({
+      donationType: type,
+      causeId: campaignId || categoryId || undefined,
+      causeName: campaignTitle || categoryName || undefined,
+    });
+  };
+
   const isPhoneValid = () => {
-    // Authenticated user who already has a phone on file — nothing to validate
+    // Authenticated user who already has a phone on file  nothing to validate
     if (session?.user?.id && !needsPhone) return true;
     const p = phoneValue.trim().replace(/\s/g, "");
     return p.length >= 10;
   };
 
-  // Alias: useConvetToUSD is a plain utility (not a React hook) — alias to avoid rules-of-hooks lint errors
+  // Alias: useConvetToUSD is a plain utility (not a React hook)  alias to avoid rules-of-hooks lint errors
   const convertToUSD = useConvetToUSD;
 
   const getPaymentInfoStepIndex = (steps = getSteps()) =>
@@ -638,6 +774,7 @@ const DonationDialog = ({
           categoryId,
           categoryName,
           categoryImage,
+          donationType,
           donationAmount,
           teamSupport,
           coverFees,
@@ -711,7 +848,7 @@ const DonationDialog = ({
             : categoryId
               ? [categoryId]
               : undefined,
-          donationType: "ONE_TIME",
+          donationType: donationType ?? undefined,
         });
       }
 
@@ -721,9 +858,12 @@ const DonationDialog = ({
       }
 
       // Amount step → CustomizeProduct with amount
-      if (steps[currentStep]?.title === t("donationAmount")) {
+      if (
+        steps[currentStep]?.title === t("donationAmount") ||
+        steps[currentStep]?.title === t("monthlyDonationAmount")
+      ) {
         tracking?.trackCustomizeProduct({
-          donationType: "ONE_TIME",
+          donationType: donationType ?? undefined,
           amount: donationAmount,
           currency,
           causeId: campaignId || categoryId || undefined,
@@ -741,8 +881,13 @@ const DonationDialog = ({
     }
   };
 
-  /** Donation Value step: return to the previous step, or close the dialog. */
+  /** Donation Value step: return to type choice, previous step, or close dialog. */
   const handleBackFromDonationValueStep = () => {
+    if (!monthlyOnly && !oneTimeOnly && !shareMode && donationType) {
+      setDonationType(null);
+      setCurrentStep(0);
+      return;
+    }
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
       return;
@@ -750,35 +895,26 @@ const DonationDialog = ({
     onClose();
   };
 
-  const getSteps = () => DONATION_STEPS;
+  const getSteps = () => {
+    return donationType ? DONATION_STEPS[donationType] : [];
+  };
 
   const renderStepIndicator = () => {
     const steps = getSteps();
-    const stepIndex = Math.min(currentStep, steps.length - 1);
     return (
-      <div className="shrink-0 border-b border-gray-100 bg-white px-5 pt-4 pb-3.5 sm:px-7">
-        <div className="mb-2.5 flex items-center justify-between gap-3">
-          <span className="truncate text-xs font-bold text-deep sm:text-[13px]">
-            {steps[stepIndex]?.title}
-          </span>
-          <span dir="ltr" className="shrink-0 text-xs font-semibold tabular-nums text-gray-400">
-            {stepIndex + 1} / {steps.length}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {steps.map((step, index) => (
-            <div
-              key={index}
-              className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
-                index < currentStep
-                  ? "bg-burgundy"
-                  : index === currentStep
-                    ? "bg-gold"
-                    : "bg-gray-200"
-              }`}
-            />
-          ))}
-        </div>
+      <div className="flex items-center gap-1.5 mb-3 px-5 pt-4 sm:mb-4 sm:px-6">
+        {steps.map((step, index) => (
+          <div
+            key={index}
+            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+              index < currentStep
+                ? "bg-burgundy"
+                : index === currentStep
+                  ? "bg-gold"
+                  : "bg-gray-200"
+            }`}
+          />
+        ))}
       </div>
     );
   };
@@ -786,15 +922,63 @@ const DonationDialog = ({
   const getStepContent = () => {
     if (!mounted) return null;
 
+    if (!donationType && !monthlyOnly && !oneTimeOnly && !shareMode) {
+      return (
+        <div className="space-y-6">
+          <div className="text-center mb-8 flex flex-col items-center">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-deep mb-2">
+              {t("chooseDonationType")}
+            </h2>
+            <p className="text-gray-500">{t("chooseDonationTypeDesc")}</p>
+            <div className="gold-mark-sm mt-4" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[
+              {
+                type: "ONE_TIME" as const,
+                Icon: Heart,
+                title: t("oneTimeDonation"),
+                desc: t("oneTimeDonationDesc"),
+              },
+              {
+                type: "MONTHLY" as const,
+                Icon: Calendar,
+                title: t("monthlyDonation"),
+                desc: t("monthlyDonationDesc"),
+              },
+            ].map(({ type, Icon, title, desc }) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => handleTypeSelect(type)}
+                className="group shape-card h-auto border border-gray-200 bg-white p-5 sm:p-6 text-center transition-all duration-300 hover:-translate-y-0.5 hover:border-burgundy hover:shadow-lift"
+              >
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-burgundy to-burgundyDark text-white shadow-soft transition-transform duration-300 group-hover:scale-105 sm:h-14 sm:w-14">
+                  <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
+                </div>
+                <h3 className="font-bold text-deep">{title}</h3>
+                <p className="mt-1 text-sm text-gray-500 whitespace-normal break-words">
+                  {desc}
+                </p>
+                <div className="gold-mark-sm mx-auto mt-3 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     const steps = getSteps();
 
-    // Safety check: ensure currentStep is valid
-    if (!steps[currentStep]) {
+    // Safety check: ensure steps array is populated and currentStep is valid
+    if (!steps.length || !steps[currentStep]) {
       return null;
     }
 
     switch (steps[currentStep].title) {
       case t("donationAmount"):
+      case t("monthlyDonationAmount"):
         return (
           <div className="space-y-6">
             <div className="flex justify-between items-center space-y-2">
@@ -807,7 +991,7 @@ const DonationDialog = ({
                     </h3>
             )}
             </div>
-            {campaignId && !openGoal && (
+            {donationType === "ONE_TIME" && campaignId && !openGoal && (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">
@@ -929,6 +1113,26 @@ const DonationDialog = ({
                 })()
               ) : (
                 <>
+                  <AnimatePresence>
+                    {useStripeElements &&
+                      stripeMinAmount > 1 &&
+                      donationAmount > 0 &&
+                      donationAmount < stripeMinAmount && (
+                        <motion.p
+                          key="stripe-min"
+                          className="text-[13px] text-amber-600 font-medium"
+                          initial={{ opacity: 0, y: -6, height: 0 }}
+                          animate={{ opacity: 1, y: 0, height: "auto" }}
+                          exit={{ opacity: 0, y: -6, height: 0 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                        >
+                          {t("stripeMinDonation", {
+                            amount: stripeMinAmount,
+                            currency: getCurrency(),
+                          })}
+                        </motion.p>
+                      )}
+                  </AnimatePresence>
                   <Input
                     type="number"
                     inputMode="numeric"
@@ -937,6 +1141,7 @@ const DonationDialog = ({
                     value={donationAmount || ""}
                     onChange={(e) => {
                       const val = e.target.value.replace(/[^0-9]/g, "");
+                      setDonationAmountTouched(true);
                       setDonationAmount(val ? parseInt(val, 10) : 0);
                     }}
                     onKeyDown={(e) => {
@@ -950,7 +1155,10 @@ const DonationDialog = ({
                       <Button
                         key={amount}
                         variant="outline"
-                        onClick={() => setDonationAmount(amount)}
+                        onClick={() => {
+                          setDonationAmountTouched(true);
+                          setDonationAmount(amount);
+                        }}
                         className={`${
                           donationAmount === amount
                             ? "border-burgundy bg-burgundy/[0.06] text-burgundy font-semibold"
@@ -976,7 +1184,7 @@ const DonationDialog = ({
               >
                 {backLabel}
               </Button>
-              {!isCategoryMode && campaignId && (
+              {!isCategoryMode && campaignId && donationType !== "MONTHLY" && (
                 <Button
                   variant={oneTimeOnly ? "default" : "outline"}
                   disabled={
@@ -990,7 +1198,7 @@ const DonationDialog = ({
                           ? shareCount * getSharePriceUSDEffective()
                           : convertToUSD(donationAmount, payCurrencyCode());
                       if (!session?.user?.id) {
-                        // Guest: add to Zustand only (no DB call — not authenticated).
+                        // Guest: add to Zustand only (no DB call  not authenticated).
                         // Embed the campaign's shareLabels so the cart can resolve
                         // the unit name client-side for any language.
                         addItem({
@@ -1045,7 +1253,10 @@ const DonationDialog = ({
               {!oneTimeOnly && (
                 <Button
                   onClick={handleNext}
-                  disabled={!donationAmount}
+                  disabled={
+                    !donationAmount ||
+                    (useStripeElements && donationAmount < stripeMinAmount)
+                  }
                   className="flex-1 min-w-[6rem] shape-button bg-burgundy hover:bg-burgundyDark text-white shadow-soft inline-flex items-center justify-center gap-2"
                 >
                   {nextLabel}
@@ -1267,6 +1478,12 @@ const DonationDialog = ({
             {/* Donation Details Section */}
             <div className="bg-gray-50 p-6 rounded-lg space-y-4">
               <div className="flex items-center justify-between">
+                <span className="text-gray-600">{t("donationType")}</span>
+                <span className="font-medium text-gray-900">
+                  {donationType === "ONE_TIME" ? t("oneTime") : t("monthly")}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
                 <span className="text-gray-600">{t("amount")}</span>
                 <span className="font-medium text-gray-900" dir="ltr">
                   {formatNumber(donationAmount)} {getCurrency()}
@@ -1372,140 +1589,20 @@ const DonationDialog = ({
       case t("paymentInfo"):
         return (
           <div className="space-y-6 overflow-visible">
-            {/* ── Saved cards picker — shown when user has any saved card ──
+            {/* ── Saved cards picker  shown when user has any saved card ──
                 Hidden when Albaraka's hosted page owns the card step: the donor
                 enters the card at the bank, so a stored PAN has nowhere to go. */}
             {savedCards.length > 0 && !(useAlbaraka && albarakaUseOOS) && (
-              <div className="space-y-3">
-                <p className="text-sm font-semibold text-gray-700">
-                  {t("savedCards")}
-                </p>
-                <div className="space-y-2">
-                  {savedCards.map((card) => {
-                    const selected = selectedCardId === card.id;
-                    const brandBadge: Record<string, string> = {
-                      visa: "VISA",
-                      mastercard: "MC",
-                      amex: "AMEX",
-                      troy: "TROY",
-                    };
-                    return (
-                      <button
-                        key={card.id}
-                        type="button"
-                        onClick={() => {
-                          if (selected) {
-                            setSelectedCardId(null);
-                            setCardDetails({
-                              cardNumber: "",
-                              expiryDate: "",
-                              cvv: "",
-                              cardholderName: "",
-                            });
-                          } else {
-                            setSelectedCardId(card.id);
-                            setCardDetails({
-                              cardNumber: `**** **** **** ${card.last4}`,
-                              expiryDate: card.expiryDate,
-                              cvv: "",
-                              cardholderName: card.cardholderName ?? "",
-                            });
-                          }
-                        }}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm transition-all duration-200 ${selected ? "border-burgundy bg-burgundy/5 shadow-sm" : "border-gray-200 hover:border-gray-300 bg-white hover:shadow-sm"}`}
-                      >
-                        <span
-                          className={`w-10 h-7 rounded-md flex items-center justify-center text-[10px] font-bold text-white shrink-0 ${card.cardType === "visa" ? "bg-blue-600" : card.cardType === "mastercard" ? "bg-orange-500" : card.cardType === "amex" ? "bg-green-600" : card.cardType === "troy" ? "bg-red-600" : "bg-gray-500"}`}
-                        >
-                          {brandBadge[card.cardType] ?? "💳"}
-                        </span>
-                        <div className="flex-1 text-start min-w-0">
-                          <p className="font-semibold text-gray-800 text-sm truncate">
-                            {card.nickname ||
-                              `${card.cardType.charAt(0).toUpperCase() + card.cardType.slice(1)} •••• ${card.last4}`}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {t("expires")} {card.expiryDate}
-                          </p>
-                        </div>
-                        {selected ? (
-                          <span className="w-5 h-5 rounded-full bg-burgundy flex items-center justify-center shrink-0">
-                            <svg
-                              className="w-3 h-3 text-white"
-                              fill="none"
-                              viewBox="0 0 12 12"
-                            >
-                              <path
-                                d="M2 6l3 3 5-5"
-                                stroke="white"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                          </span>
-                        ) : (
-                          <span className="w-5 h-5 rounded-full border-2 border-gray-300 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedCardId(null);
-                      setCardDetails({
-                        cardNumber: "",
-                        expiryDate: "",
-                        cvv: "",
-                        cardholderName: "",
-                      });
-                    }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm transition-all duration-200 ${!selectedCardId ? "border-burgundy bg-burgundy/5 shadow-sm" : "border-dashed border-gray-300 hover:border-gray-400 bg-white hover:shadow-sm"}`}
-                  >
-                    <span className="w-10 h-7 rounded-md border-2 border-dashed border-gray-300 flex items-center justify-center shrink-0">
-                      <svg
-                        className="w-4 h-4 text-gray-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 4v16m8-8H4"
-                        />
-                      </svg>
-                    </span>
-                    <span className="font-medium text-gray-700">
-                      {t("useNewCard")}
-                    </span>
-                    {!selectedCardId && (
-                      <span className="w-5 h-5 rounded-full bg-burgundy flex items-center justify-center shrink-0">
-                        <svg
-                          className="w-3 h-3 text-white"
-                          fill="none"
-                          viewBox="0 0 12 12"
-                        >
-                          <path
-                            d="M2 6l3 3 5-5"
-                            stroke="white"
-                            strokeWidth="1.8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
+              <SavedCardPicker cards={savedCards} value={selectedCardId} onChange={id => {
+                const card = savedCards.find(item => item.id === id);
+                setSelectedCardId(card?.id ?? null);
+                setCardDetails({ cardNumber: card ? `**** **** **** ${card.last4}` : "", expiryDate: card?.expiryDate ?? "", cvv: "", cardholderName: card?.cardholderName ?? "" });
+              }} />
             )}
 
             {/* CVC-only when a saved card is selected */}
             {selectedCardId && (
-              <div className="space-y-2" dir="ltr">
+              <div className="space-y-2" dir="ltr" data-clarity-mask="True" data-hj-suppress="" data-private="">
                 <label className="block text-sm font-medium text-gray-700 text-start">
                   {t("cvc")}
                 </label>
@@ -1513,6 +1610,7 @@ const DonationDialog = ({
                   type="password"
                   inputMode="numeric"
                   maxLength={4}
+                  data-donation-field="cvv" aria-label={t("securityCode")} aria-invalid={paymentIssue?.field === "cvv" || undefined} aria-describedby={paymentIssue?.field === "cvv" ? paymentErrorId : undefined}
                   value={cardDetails.cvv}
                   onChange={(e) =>
                     setCardDetails((d) => ({
@@ -1536,13 +1634,25 @@ const DonationDialog = ({
               </div>
             )}
 
-            {/* Manual card form — shared by the PayFor and Albaraka 3D rails */}
+            {/* Stripe Elements  only when no saved card + Stripe is charging */}
+            {paymentMethod === "CARD" && useStripeElements && !selectedCardId && (
+              <Elements stripe={getStripePromise()}>
+                <StripePaymentStep
+                  ref={stripeFormRef}
+                  onReadyChange={onStripeReadyChange}
+                />
+              </Elements>
+            )}
+
+            {/* Manual card form  shared by the PayFor and Albaraka 3D rails */}
             {paymentMethod === "CARD" && useOwnCardForm && !selectedCardId && (
               <PayForCardForm
                 cardDetails={cardDetails}
                 setCardDetails={setCardDetails}
                 cardFocus={cardFocus}
                 setCardFocus={setCardFocus}
+                invalidField={paymentIssue?.field as keyof PayForCardState | undefined}
+                errorId={paymentErrorId}
               />
             )}
 
@@ -1555,6 +1665,7 @@ const DonationDialog = ({
                     </label>
                     <input
                       type="text"
+                      data-donation-field="firstName" aria-label={t("firstName")} aria-invalid={paymentIssue?.field === "firstName" || undefined} aria-describedby={paymentIssue?.field === "firstName" ? paymentErrorId : undefined}
                       value={guestFirstName}
                       onChange={(e) => setGuestFirstName(e.target.value)}
                       placeholder={t("firstName")}
@@ -1567,6 +1678,7 @@ const DonationDialog = ({
                     </label>
                     <input
                       type="text"
+                      data-donation-field="lastName" aria-label={t("lastName")} aria-invalid={paymentIssue?.field === "lastName" || undefined} aria-describedby={paymentIssue?.field === "lastName" ? paymentErrorId : undefined}
                       value={guestLastName}
                       onChange={(e) => setGuestLastName(e.target.value)}
                       placeholder={t("lastName")}
@@ -1580,6 +1692,7 @@ const DonationDialog = ({
                   </label>
                   <input
                     type="email"
+                    data-donation-field="email" aria-label={t("email")} aria-invalid={paymentIssue?.field === "email" || undefined} aria-describedby={paymentIssue?.field === "email" ? paymentErrorId : undefined}
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
                     placeholder={t("email")}
@@ -1618,8 +1731,9 @@ const DonationDialog = ({
                   {t("contactPhone")}
                 </label>
                 <div className="overflow-visible phone-input-wrapper">
-                  <PhoneInput
+                  <SearchablePhoneInput locale={locale}
                     defaultCountry={ipCountry}
+                    inputProps={{ ...{ "data-donation-field": "phone" }, "aria-label": t("contactPhone"), "aria-invalid": paymentIssue?.field === "phone" || undefined, "aria-describedby": paymentIssue?.field === "phone" ? paymentErrorId : undefined }}
                     value={phoneValue}
                     onChange={(phone) => setPhoneValue(phone)}
                     className="w-full overflow-visible"
@@ -1630,7 +1744,7 @@ const DonationDialog = ({
               </div>
             )}
 
-            {/* Inline profile completion — shown only for signed-in users who
+            {/* Inline profile completion  shown only for signed-in users who
                 are missing birthdate / gender so we don't bounce them to a
                 separate page. Only the missing fields render. */}
             {(needsBirthdate || needsGender) && (
@@ -1686,6 +1800,9 @@ const DonationDialog = ({
               </div>
             )}
 
+            <PaymentCurrencyNotice gateway={gateway} currency={getCurrency()} amount={totalAmount} phone={phoneValue} />
+              {paymentIssue ? <p id={paymentErrorId} role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{paymentIssue.text}</p> : null}
+
             <div dir={dir} className="flex justify-between gap-4">
               <Button
                 variant="outline"
@@ -1696,24 +1813,7 @@ const DonationDialog = ({
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={
-                  loading ||
-                  !isPhoneValid() ||
-                  (useGuestCheckout &&
-                    (!guestFirstName.trim() ||
-                      !guestLastName.trim() ||
-                      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim()))) ||
-                  (paymentMethod === "CARD" &&
-                    selectedCardId &&
-                    cardDetails.cvv.length < 3) ||
-                  (paymentMethod === "CARD" &&
-                    useOwnCardForm &&
-                    !selectedCardId &&
-                    (cardDetails.cardNumber.length < 13 ||
-                      cardDetails.expiryDate.length < 5 ||
-                      cardDetails.cvv.length < 3 ||
-                      !cardDetails.cardholderName.trim()))
-                }
+                disabled={loading || (paymentMethod === "CARD" && useStripeElements && !selectedCardId && !stripeReady)}
                 className="flex-1 shape-button bg-burgundy hover:bg-burgundyDark text-white shadow-soft inline-flex items-center justify-center gap-2"
               >
                 {loading ? (
@@ -1748,6 +1848,17 @@ const DonationDialog = ({
   };
 
   const handleSubmit = async () => {
+    if (loading) return;
+    if (session?.user?.id || useGuestCheckout) {
+      const issue = dialogPaymentIssue({ guest: useGuestCheckout, firstName: guestFirstName, lastName: guestLastName, email: guestEmail, phoneValid: isPhoneValid(), cardRequired: paymentMethod === "CARD" && (useOwnCardForm || Boolean(selectedCardId)), savedCard: Boolean(selectedCardId), card: cardDetails });
+      if (issue) {
+        const labels = { firstName: t("firstName"), lastName: t("lastName"), email: t("email"), phone: t("contactPhone"), cardNumber: t("cardNumber"), expiryDate: t("expiryDate"), cvv: t("securityCode"), cardholderName: t("cardholderName") };
+        setPaymentIssue({ field: issue.field, text: `${labels[issue.field]}: ${tValidation(issue.message)}` });
+        requestAnimationFrame(() => { const field = dialogRef.current?.querySelector<HTMLInputElement>(`[data-donation-field="${issue.field}"]`); field?.focus(); field?.scrollIntoView({ behavior: "smooth", block: "center" }); });
+        return;
+      }
+    }
+    setPaymentIssue(null);
     let isRedirecting = false;
     try {
       if (!session?.user?.id && !useGuestCheckout) {
@@ -1770,7 +1881,7 @@ const DonationDialog = ({
           try {
             await axios.put(`/api/users/${session.user.id}`, profileUpdate);
           } catch {
-            // Non-blocking — donation can still proceed; profile prompt
+            // Non-blocking  donation can still proceed; profile prompt
             // will reappear on next visit.
           }
         }
@@ -1788,7 +1899,7 @@ const DonationDialog = ({
         try {
           const cached =
             typeof window !== "undefined"
-              ? localStorage.getItem("ipapi_cache")
+              ? localStorage.getItem("ipapi_cache_v2")
               : null;
           const cacheData = cached
             ? (JSON.parse(cached) as {
@@ -1801,7 +1912,7 @@ const DonationDialog = ({
               })
             : null;
           const isValid =
-            cacheData && cacheData.ts && Date.now() - cacheData.ts < 86400000;
+            cacheData && cacheData.ts && Date.now() - cacheData.ts < 21600000;
           if (isValid && cacheData.data) {
             geoCountryCode = cacheData.data.country_code?.toLowerCase();
             geoCity = cacheData.data.city;
@@ -1834,7 +1945,7 @@ const DonationDialog = ({
             geoRegion = geo.region;
             if (typeof window !== "undefined" && geo.country_code) {
               localStorage.setItem(
-                "ipapi_cache",
+                "ipapi_cache_v2",
                 JSON.stringify({ data: geo, ts: Date.now() }),
               );
             }
@@ -1877,14 +1988,16 @@ const DonationDialog = ({
         currency: getCurrency(),
         causeId: campaignId || categoryId || undefined,
         causeName: campaignTitle || categoryName || undefined,
-        donationType: "ONE_TIME",
+        donationType: donationType ?? undefined,
         gateway: gatewayAnalyticsName(gateway),
-        is3ds: true,
+        is3ds: useBank3D,
       });
       const donationData: Record<string, unknown> = {
         currency: getCurrency(),
+        routingPhone: phoneValue, expectedGateway: paymentMethod === "CARD" ? gateway : undefined,
         teamSupport: teamSupport ?? 0,
         coverFees,
+        type: donationType,
         paymentMethod,
         cardDetails: null,
         locale,
@@ -1918,6 +2031,95 @@ const DonationDialog = ({
         ];
       }
 
+      // ── Stripe Elements direct-charge path (non-3D card / monthly) ───────
+      // stripeFormRef.current.confirmPayment() calls stripe.confirmCardPayment()
+      // with the CardNumberElement  card data goes browser → Stripe, never our server.
+      if (paymentMethod === "CARD" && useStripeElements) {
+        if (selectedCardId) {
+          toast.error(t("useNewCard"));
+          setLoading(false);
+          return;
+        }
+        if (!stripeFormRef.current) throw new Error("Stripe form not ready");
+
+        let targetDonationId: string;
+        let clientSecret: string;
+        /* The guest's key to the success page (`?t=`); null on the fallback
+           path, where a signed-in session opens it instead. */
+        let targetToken: string | null = null;
+
+        // Re-use fallback intent if PayFor previously failed
+        if (fallbackClientSecret && fallbackDonationId) {
+          targetDonationId = fallbackDonationId;
+          clientSecret = fallbackClientSecret;
+        } else {
+          const response = await axios.post("/api/donations", donationData);
+          if (!response.data.success) {
+            onClose();
+            return;
+          }
+          targetDonationId = response.data.donation.id as string;
+          targetToken = (response.data.donation.accessToken as string | null | undefined) ?? null;
+          rememberGuestDonationAccess(targetDonationId, targetToken);
+
+          const endpoint =
+            donationType === "MONTHLY"
+              ? "/api/stripe/subscribe"
+              : "/api/stripe/charge";
+          const intentRes = await axios.post(endpoint, {
+            donationId: targetDonationId,
+            locale,
+          });
+          if (intentRes.data.error) {
+            toast.error(intentRes.data.error ?? t("donationFailed"));
+            setLoading(false);
+            return;
+          }
+          clientSecret = intentRes.data.clientSecret as string;
+        }
+
+        isRedirecting = true;
+        setRedirecting(true);
+
+        const { error: confirmError } =
+          await stripeFormRef.current.confirmPayment(clientSecret);
+        if (confirmError) {
+          // Mark the preemptively-created donation as FAILED so we keep an audit trail and
+          // prevent the row from incorrectly counting as PAID. Fire-and-forget  the
+          // donation-failed page works even if this PATCH fails.
+          axios
+            .patch(`/api/donations/${targetDonationId}/fail`, {
+              reason: confirmError.message ?? "stripe_confirm_failed",
+            })
+            .catch(() => {});
+          tracking?.trackPaymentFailed({
+            value: donationAmount,
+            currency: getCurrency(),
+            causeId: campaignId || categoryId || undefined,
+            reason: confirmError.message ?? "stripe_confirm_failed",
+            gateway: "stripe",
+            donationId: targetDonationId,
+          });
+          // Redirect to /donation-failed so the user lands on the explanatory page
+          // with the bank-transfer fallback  toast alone disappears too quickly.
+          router.push(
+            appendCurrencyQuery(
+              `/donation-failed?donationId=${encodeURIComponent(targetDonationId)}`,
+              getCurrencyCodeForLinks(),
+            ),
+          );
+          return;
+        }
+
+        router.push(
+          appendCurrencyQuery(
+            withDonationToken(`/success/${targetDonationId}`, targetToken),
+            getCurrencyCodeForLinks(),
+          ),
+        );
+        return;
+      }
+
       // ── Bank 3D Secure path (PayFor or Albaraka) ──────────────────────────
       // Both rails work the same way: ask the server for a signed hidden-input set,
       // POST it to the bank as an HTML form, then poll the donation until the bank's
@@ -1926,8 +2128,10 @@ const DonationDialog = ({
 
       if (response.data.success) {
         const donationId = response.data.donation.id as string;
+        const donationToken = (response.data.donation.accessToken as string | null | undefined) ?? null;
+        rememberGuestDonationAccess(donationId, donationToken);
 
-        if (paymentMethod === "CARD") {
+        if (paymentMethod === "CARD" && useBank3D) {
           const newPan = cardDetails.cardNumber.replace(/\s/g, "");
 
           // Save new card (fire-and-forget, non-blocking)
@@ -1958,6 +2162,7 @@ const DonationDialog = ({
               donationId,
               locale,
               savedCardId: selectedCardId ?? undefined,
+              cardLast4: newPan.length >= 4 ? newPan.slice(-4) : undefined,
               ...(useAlbaraka && useOwnCardForm
                 ? {
                     card: {
@@ -1972,23 +2177,9 @@ const DonationDialog = ({
                 : {}),
             },
           );
-          const { actionUrl, fields } = init.data as {
-            actionUrl: string;
-            fields: Record<string, string>;
-          };
+          const bankForm = init.data as GatewayForm;
 
-          const form = document.createElement("form");
-          form.method = "POST";
-          form.action = actionUrl;
-          Object.entries(fields).forEach(([name, value]) => {
-            const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = name;
-            input.value = String(value ?? "");
-            form.appendChild(input);
-          });
-
-          // Card fields the browser still has to add — PayFor only. Albaraka's
+          // Card fields the browser still has to add  PayFor only. Albaraka's
           // fields are already signed into `fields` server-side (or collected on
           // the bank's own page), so appending anything here would break its MAC.
           const browserCardFields: Record<string, string> = {};
@@ -2004,109 +2195,11 @@ const DonationDialog = ({
               browserCardFields.CardHolderName = cardDetails.cardholderName;
             }
           }
-          Object.entries(browserCardFields).forEach(([name, value]) => {
-            const input = document.createElement("input");
-            input.type = "hidden";
-            input.name = name;
-            input.value = value;
-            form.appendChild(input);
-          });
-
-          // Skip the popup attempt entirely on mobile / in-app browsers (FB, IG, TikTok,
-          // etc.). In those WebViews window.open often returns a truthy-but-invisible
-          // Window object — the form would silently submit to a hidden frame and the
-          // user would see nothing happen. Going straight to a full-page redirect
-          // (target=_self) lets the bank's 3DS page own the screen and redirect back
-          // to the gateway's callback → /success on completion. Desktop keeps the popup
-          // so the dialog can poll and show the success state in-place.
-          const skipPopup = shouldSkipPopup();
-          const popupName = useAlbaraka ? "albaraka3d" : "payfor3d";
-          const pw = 600,
-            ph = 700;
-          const pl = Math.round((screen.width - pw) / 2);
-          const pt = Math.round((screen.height - ph) / 2);
-          const popup = skipPopup
-            ? null
-            : window.open(
-                "about:blank",
-                popupName,
-                `width=${pw},height=${ph},left=${pl},top=${pt},scrollbars=yes,resizable=yes`,
-              );
-
-          form.target = popup ? popupName : "_self";
-          document.body.appendChild(form);
-          form.submit();
-          document.body.removeChild(form);
-
-          if (!popup) return;
-
-          payforPopupRef.current = popup;
+          // A bank or a local result page must own this tab. A hidden or
+          // blocked popup must never leave the donor waiting on a spinner.
           isRedirecting = true;
           setRedirecting(true);
-
-          let polls = 0;
-          // 60 polls × 2s = 120s. Mobile users routinely need >50s for the SMS-OTP step
-          // of 3D Secure; the previous 25-poll ceiling was firing the failure redirect
-          // while the bank popup was still authenticating.
-          const FALLBACK_AFTER_POLLS = 60;
-
-          payforPollRef.current = setInterval(async () => {
-            polls++;
-            try {
-              const res = await fetch(`/api/donations/${donationId}`);
-              if (!res.ok) return;
-              const data = await res.json();
-
-              if (data.status === "PAID" && data.paidAt) {
-                clearInterval(payforPollRef.current!);
-                payforPollRef.current = null;
-                if (payforPopupRef.current && !payforPopupRef.current.closed) {
-                  payforPopupRef.current.close();
-                }
-                router.push(
-                  appendCurrencyQuery(
-                    `/success/${donationId}`,
-                    getCurrencyCodeForLinks(),
-                  ),
-                );
-                return;
-              }
-              if (
-                data.status === "FAILED" ||
-                payforPopupRef.current?.closed ||
-                polls >= FALLBACK_AFTER_POLLS
-              ) {
-                clearInterval(payforPollRef.current!);
-                payforPollRef.current = null;
-                if (payforPopupRef.current && !payforPopupRef.current.closed) {
-                  payforPopupRef.current.close();
-                }
-                // Browser-side DonateFailed pixel — server CAPI fires the
-                // matching hit from /api/payfor/3dpay/fail; same event_id
-                // (`${donationId}_failed`) lets Meta dedup the pair.
-                tracking?.trackPaymentFailed({
-                  value: donationAmount,
-                  currency: getCurrency(),
-                  causeId: campaignId || categoryId || undefined,
-                  reason:
-                    data.providerErrorMessage ??
-                    data.status ??
-                    `${gatewayAnalyticsName(gateway)}_failed`,
-                  gateway: gatewayAnalyticsName(gateway),
-                  donationId,
-                });
-                router.push(
-                  appendCurrencyQuery(
-                    `/donation-failed?donationId=${encodeURIComponent(donationId)}`,
-                    getCurrencyCodeForLinks(),
-                  ),
-                );
-              }
-            } catch {
-              // Ignore transient errors
-            }
-          }, 2000);
-
+          submitGatewayForm(bankForm, browserCardFields);
           return;
         }
 
@@ -2114,7 +2207,7 @@ const DonationDialog = ({
         setRedirecting(true);
         router.push(
           appendCurrencyQuery(
-            `/success/${donationId}`,
+            withDonationToken(`/success/${donationId}`, donationToken),
             getCurrencyCodeForLinks(),
           ),
         );
@@ -2122,7 +2215,12 @@ const DonationDialog = ({
       }
       onClose();
     } catch (error) {
-      console.error("Payment failed:", error);
+      if (axios.isAxiosError(error) && error.response?.data?.code === "PAYMENT_ROUTING_CHANGED") {
+        acceptServerRoute(error.response.data.gateway);
+        toast.error(t("paymentRoutingChanged"));
+        return;
+      }
+      console.error("Payment failed: request did not complete");
       tracking?.trackPaymentFailed({
         value: donationAmount,
         currency: getCurrency(),
@@ -2132,7 +2230,7 @@ const DonationDialog = ({
       });
       // Land on the explanatory failure page (with bank-transfer fallback) instead of
       // a toast that disappears in 3s. We may not have a donationId yet (e.g. /api/donations
-      // itself threw) — the page handles a missing query param gracefully.
+      // itself threw)  the page handles a missing query param gracefully.
       isRedirecting = true;
       setRedirecting(true);
       router.push(
@@ -2148,31 +2246,22 @@ const DonationDialog = ({
       <Dialog
         open={isOpen}
         onOpenChange={() => {
-          // Clean up PayFor polling if dialog is closed mid-flow
-          if (payforPollRef.current) {
-            clearInterval(payforPollRef.current);
-            payforPollRef.current = null;
-          }
-          if (payforPopupRef.current && !payforPopupRef.current.closed) {
-            payforPopupRef.current.close();
-          }
           onClose();
         }}
       >
         <DialogContent
+          ref={dialogRef}
+          onChangeCapture={() => setPaymentIssue(null)}
           dir={isRTL ? "rtl" : "ltr"}
-          // Flex column, not the base grid: as a grid, the full-height phone layout
-          // stretched every row and the base gap-4 left white strips between the
-          // header, the step bar and the form, so the content never started at the top.
-          className="flex flex-col gap-0 border-0 bg-white w-full h-[100dvh] max-h-[100dvh] sm:h-auto sm:max-w-xl sm:max-h-[90vh] overflow-y-auto overflow-x-hidden p-0 rounded-none sm:rounded-[28px_8px_28px_8px] rtl:sm:rounded-[8px_28px_8px_28px] sm:shadow-lift sm:ring-1 sm:ring-deep/5 top-0 sm:top-[50%] translate-y-0 sm:translate-y-[-50%]"
-          closeClassName="z-20 rounded-full bg-black/25 p-1.5 text-white opacity-100 backdrop-blur-sm hover:bg-black/40 hover:text-white rtl:right-auto rtl:left-4"
+          className="w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] max-h-screen overflow-y-auto overflow-x-hidden p-0 rounded-none sm:rounded-[28px_8px_28px_8px] rtl:sm:rounded-[8px_28px_8px_28px] sm:shadow-lift sm:ring-1 sm:ring-deep/5 top-0 sm:top-[50%] translate-y-0 sm:translate-y-[-50%]"
+          closeClassName="text-white hover:text-white/80"
           aria-describedby={undefined}
         >
           <DialogTitle className="sr-only">{t("donationAmount")}</DialogTitle>
           {mounted && (
             <>
               {/* Branded header */}
-              <div className="relative h-40 shrink-0 overflow-hidden sm:h-48">
+              <div className="relative h-24 sm:h-32 overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={
@@ -2186,22 +2275,24 @@ const DonationDialog = ({
                   className="w-full h-full object-cover object-center"
                 />
                 {/* Deep brand wash + subtle dotted texture (matches the site hero). */}
-                <div className="absolute inset-0 bg-gradient-to-t from-deep via-deep/70 to-deep/25" />
+                <div className="absolute inset-0 bg-gradient-to-t from-deep via-deep/85 to-deep/55" />
                 <div className="absolute inset-0 opacity-[0.08] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-                <div className="absolute inset-x-0 bottom-0 flex flex-col items-start gap-2.5 px-5 pb-5 text-start sm:px-7 sm:pb-6">
-                  <span className="shape-chip inline-flex items-center gap-1.5 bg-burgundy px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-soft">
+                <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center sm:px-6">
+                  <span className="shape-chip mb-2 inline-flex items-center gap-1.5 bg-burgundy px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-soft">
                     <Heart className="h-3 w-3" fill="currentColor" />
-                    {t("oneTimeDonation")}
+                    {donationType === "MONTHLY"
+                      ? t("monthlyDonation")
+                      : t("oneTimeDonation")}
                   </span>
-                  <h2 className="line-clamp-2 text-lg font-extrabold leading-snug text-white drop-shadow-sm sm:text-xl">
+                  <h2 className="text-white font-extrabold text-sm sm:text-base line-clamp-2 leading-snug drop-shadow-sm">
                     {isCategoryMode ? categoryName : campaignTitle}
                   </h2>
-                  <div className="gold-mark-sm" />
+                  <div className="gold-mark-sm mt-2" />
                 </div>
               </div>
               {/* Step progress bar */}
-              {renderStepIndicator()}
-              <div className="relative z-10 flex-1 bg-white px-5 pt-5 pb-6 overflow-visible sm:px-7 sm:pt-6 sm:pb-7">
+              {donationType && renderStepIndicator()}
+              <div className="relative z-10 px-4 pb-5 sm:px-6 sm:pb-6 bg-white overflow-visible">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={redirecting ? "redirecting" : currentStep}
@@ -2214,8 +2305,12 @@ const DonationDialog = ({
                     {redirecting ? (
                       <div className="flex flex-col items-center justify-center py-8 gap-4 sm:py-10 sm:gap-5 text-center">
                         <div className="relative">
-                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center bg-burgundy/8">
-                            <CardIcon className="h-7 w-7 sm:h-9 sm:w-9 text-burgundy" />
+                          <div
+                            className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center transition-colors ${false ? "bg-[#635bff]/10" : "bg-burgundy/8"}`}
+                          >
+                            <CardIcon
+                              className={`h-7 w-7 sm:h-9 sm:w-9 transition-colors ${false ? "text-[#635bff]" : "text-burgundy"}`}
+                            />
                           </div>
                           <span className="absolute -bottom-1 -right-1 w-6 h-6 bg-white border-2 border-burgundy/20 rounded-full flex items-center justify-center">
                             <ExternalLink className="h-3 w-3 text-burgundy" />
@@ -2223,15 +2318,25 @@ const DonationDialog = ({
                         </div>
                         <div>
                           <p className="text-[15px] sm:text-base font-semibold text-gray-900">
-                            {t("successRedirecting")}
+                            {false
+                              ? t("paymentSwitching")
+                              : t("successRedirecting")}
                           </p>
                           <p className="text-sm text-gray-400 mt-1 max-w-xs mx-auto">
-                            {t("successRedirectingDesc")}
+                            {false
+                              ? t("paymentSwitchingDesc")
+                              : t("successRedirectingDesc")}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 text-xs px-4 py-2 rounded-full text-burgundy bg-burgundy/6">
+                        <div
+                          className={`flex items-center gap-2 text-xs px-4 py-2 rounded-full transition-colors ${false ? "text-[#635bff] bg-[#635bff]/8" : "text-burgundy bg-burgundy/6"}`}
+                        >
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          <span>{t("successRedirectingDesc")}</span>
+                          <span>
+                            {false
+                              ? t("paymentSwitching")
+                              : t("successRedirectingDesc")}
+                          </span>
                         </div>
                       </div>
                     ) : (

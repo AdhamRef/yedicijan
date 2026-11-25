@@ -80,7 +80,7 @@ function decodePart(value: string): Buffer {
 
 function associatedData(context: string): Buffer {
   return Buffer.from(
-    `yedicihan:integration-setting:${ENVELOPE_VERSION}:${context}`,
+    `gozbebekleri:integration-setting:${ENVELOPE_VERSION}:${context}`,
     "utf8"
   );
 }

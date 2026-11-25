@@ -3,37 +3,56 @@
  * public pages, dashboard CRUD, messaging, audiences, templates).
  *
  * Two tiers:
- *  - ENABLED / PUBLIC locales (`SUPPORTED_LOCALES`) — fully translated, routed on
+ *  - ENABLED / PUBLIC locales (`SUPPORTED_LOCALES`)  fully translated, routed on
  *    the public site, valid for `User.preferredLang`. This is the exact set the
  *    public router and message loader use.
- *  - REGISTERED but disabled locales (`FUTURE_LOCALES`) — known to the
+ *  - REGISTERED but disabled locales (`FUTURE_LOCALES`)  known to the
  *    messaging / audience / template layers so those systems are multilingual
  *    aware, but NOT publicly routed yet (no `messages/<code>.json`, so enabling
  *    them in the router would 500 / break the build). Flip `enabled: true` in
  *    `LOCALES` and add the message file + static import in `app/[locale]/layout.tsx`
  *    to promote one to public.
  *
- * To add a PUBLIC locale you still touch a few non-importable sources — the
+ * To add a PUBLIC locale you still touch a few non-importable sources  the
  * canonical checklist lives in `docs/implementation-packages/locale-foundation.md`.
  * Everything that CAN import this module should, so the enabled set never drifts.
  */
 
-/** Enabled / public locales. Order is significant (drives dropdowns + routing). */
+/**
+ * Enabled / public locales. Order is significant (drives dropdowns + routing)
+ * and is the order the locked Minbar design ships in `Header.dc.html`
+ * → `Component.LANGS`, so the language picker reads as designed.
+ */
 export const SUPPORTED_LOCALES = [
   "ar",
+  "tr",
   "en",
   "fr",
-  "tr",
+  "de",
+  "es",
   "id",
   "pt",
-  "es",
-  "de",
+  "ur",
+  "sq",
+  "it",
+  "nl",
+  "sv",
+  "no",
+  "da",
+  "ms",
+  "ja",
+  "zh",
+  "hi",
 ] as const;
 
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
-/** Registered but not yet publicly routed. Target expansion set. */
-export const FUTURE_LOCALES = ["sq", "it", "nl", "sv"] as const;
+/**
+ * Registered but not yet publicly routed. Empty since the Minbar handoff landed
+ * complete `i18n/<lang>/` bundles for all 19 languages (Core Website
+ * Localization Pass) and every one of them is now routed.
+ */
+export const FUTURE_LOCALES = [] as const;
 
 /** Every locale the platform knows about (enabled + future). */
 export const ALL_LOCALES = [...SUPPORTED_LOCALES, ...FUTURE_LOCALES] as const;
@@ -47,7 +66,7 @@ export interface LocaleMeta {
   code: AnyLocale;
   /** Latin / dashboard-facing label (kept identical to the historical labels). */
   label: string;
-  /** Endonym — the language's own name, for public language pickers. */
+  /** Endonym  the language's own name, for public language pickers. */
   nativeLabel: string;
   direction: LocaleDirection;
   /** Locale to fall back to when a translation/variant is missing. */
@@ -69,14 +88,22 @@ export const LOCALES: Record<AnyLocale, LocaleMeta> = {
   pt: { code: "pt", label: "Português", nativeLabel: "Português", direction: "ltr", fallbackLocale: "en", enabled: true },
   es: { code: "es", label: "Español", nativeLabel: "Español", direction: "ltr", fallbackLocale: "en", enabled: true },
   de: { code: "de", label: "Deutsch", nativeLabel: "Deutsch", direction: "ltr", fallbackLocale: "en", enabled: true },
-  // Registered, not yet publicly routed:
-  sq: { code: "sq", label: "Albanian", nativeLabel: "Shqip", direction: "ltr", fallbackLocale: "en", enabled: false },
-  it: { code: "it", label: "Italian", nativeLabel: "Italiano", direction: "ltr", fallbackLocale: "en", enabled: false },
-  nl: { code: "nl", label: "Dutch", nativeLabel: "Nederlands", direction: "ltr", fallbackLocale: "en", enabled: false },
-  sv: { code: "sv", label: "Swedish", nativeLabel: "Svenska", direction: "ltr", fallbackLocale: "en", enabled: false },
+  // Promoted with the Minbar handoff  `Component.BODY_TRANSLATED` lists all 19
+  // as body-translated, and `Minbar/i18n/<lang>/` ships complete bundles.
+  ur: { code: "ur", label: "Urdu", nativeLabel: "اردو", direction: "rtl", fallbackLocale: "en", enabled: true },
+  sq: { code: "sq", label: "Albanian", nativeLabel: "Shqip", direction: "ltr", fallbackLocale: "en", enabled: true },
+  it: { code: "it", label: "Italian", nativeLabel: "Italiano", direction: "ltr", fallbackLocale: "en", enabled: true },
+  nl: { code: "nl", label: "Dutch", nativeLabel: "Nederlands", direction: "ltr", fallbackLocale: "en", enabled: true },
+  sv: { code: "sv", label: "Swedish", nativeLabel: "Svenska", direction: "ltr", fallbackLocale: "en", enabled: true },
+  no: { code: "no", label: "Norwegian", nativeLabel: "Norsk", direction: "ltr", fallbackLocale: "en", enabled: true },
+  da: { code: "da", label: "Danish", nativeLabel: "Dansk", direction: "ltr", fallbackLocale: "en", enabled: true },
+  ms: { code: "ms", label: "Malay", nativeLabel: "Bahasa Melayu", direction: "ltr", fallbackLocale: "en", enabled: true },
+  ja: { code: "ja", label: "Japanese", nativeLabel: "日本語", direction: "ltr", fallbackLocale: "en", enabled: true },
+  zh: { code: "zh", label: "Chinese", nativeLabel: "中文", direction: "ltr", fallbackLocale: "en", enabled: true },
+  hi: { code: "hi", label: "Hindi", nativeLabel: "हिन्दी", direction: "ltr", fallbackLocale: "en", enabled: true },
 };
 
-/** Historical export — label map for the enabled locales. Unchanged values. */
+/** Historical export  label map for the enabled locales. Unchanged values. */
 export const LOCALE_LABELS: Record<SupportedLocale, string> = SUPPORTED_LOCALES.reduce(
   (acc, code) => {
     acc[code] = LOCALES[code].label;

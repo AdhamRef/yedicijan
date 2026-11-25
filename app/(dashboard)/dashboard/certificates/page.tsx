@@ -1,0 +1,243 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { useSession } from "next-auth/react";
+import { Award, ExternalLink, Loader2, RefreshCw, Save } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { errorMessage } from "@/lib/dashboard/client-error-message";
+import { LOCALES, SUPPORTED_LOCALES } from "@/lib/locales";
+import {
+  RECEIPT_FIELDS,
+  RECEIPT_ORG_DEFAULTS,
+  THANKS_FIELDS,
+  WAQF_FIELDS,
+  type CertificateCopyOverrides,
+  type CertificateTemplateId,
+  type ReceiptOrgData,
+} from "@/lib/certificates/copy-defaults";
+import { dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
+import { ManualCertificatePanel } from "@/components/dashboard/certificates/ManualCertificatePanel";
+import { userHasDashboardPermission } from "@/lib/dashboard/permissions";
+
+/**
+ * The wording on the three documents  thank-you certificate, waqf
+ * certificate, donation receipt  per template and per locale
+ * (`CERTIFICATES_DOWNLOADS_HANDOFF §4`).
+ *
+ * Every field shows its i18n default as the placeholder; typing over it stores
+ * an override for that locale only, and clearing the box returns the field to
+ * the default. Nothing here touches the Qur'anic verses  those are locked.
+ * The foundation's registration data on the receipt is one set for every
+ * language, in Latin script as the Turkish register has it.
+ */
+
+type FieldDef = { name: string; label: string; i18nKey: string | null; multiline?: boolean };
+
+const TEMPLATES: ReadonlyArray<{ id: CertificateTemplateId; title: string; hint: string; fields: readonly FieldDef[] }> = [
+  { id: "thanks", get title() { return dt("شهادة الشكر"); }, get hint() { return dt("تُصدر لكل تبرع مؤكد  النسخة العرضية هي المعتمدة وتُرسل بالبريد."); }, fields: THANKS_FIELDS },
+  { id: "waqf", get title() { return dt("شهادة الوقف"); }, get hint() { return dt("تُصدر لكل سهم/متر وقفي في الطلب. نصوص الإنجليزية والتركية معتمدة حرفيًا من الشهادات المطبوعة  لا تُعاد صياغتها."); }, fields: WAQF_FIELDS },
+  { id: "receipt", get title() { return dt("إيصال التبرع"); }, get hint() { return dt("المستند المحاسبي: بلا شعارات ولا عبارات وجدانية. يُصدر بلغة المتبرع وبنسخة تركية."); }, fields: RECEIPT_FIELDS },
+];
+
+type Defaults = Record<string, Record<string, Record<string, string>>>;
+
+export default function CertificateCopyPage() {
+  // The legal identity block is admin-only on the server too (PUT /api/certificates/copy).
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [overrides, setOverrides] = useState<CertificateCopyOverrides>({});
+  const [defaults, setDefaults] = useState<Defaults>({});
+  const [template, setTemplate] = useState<CertificateTemplateId>("thanks");
+  const [locale, setLocale] = useState<string>("ar");
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [section, setSection] = useState("send");
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get("/api/certificates/copy");
+      setOverrides(res.data.overrides ?? {});
+      setDefaults(res.data.defaults ?? {});
+      setUpdatedAt(res.data.updatedAt ?? null);
+    } catch (e) {
+      toast({ title: dt("خطأ"), description: errorMessage(e, dt("تعذّر تحميل نصوص الشهادات")), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await axios.put("/api/certificates/copy", { overrides });
+      setOverrides(res.data.overrides ?? {});
+      setUpdatedAt(res.data.updatedAt ?? null);
+      toast({ title: dt("تم الحفظ"), description: dt("نصوص الشهادات محفوظة وتُطبَّق على كل مستند يُصدر من الآن.") });
+    } catch (e) {
+      toast({ title: dt("خطأ"), description: errorMessage(e, dt("تعذّر الحفظ")), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const valueOf = (tpl: CertificateTemplateId, loc: string, field: string): string =>
+    (overrides[tpl] as Record<string, Record<string, string>> | undefined)?.[loc]?.[field] ?? "";
+
+  const setValue = (tpl: CertificateTemplateId, loc: string, field: string, value: string) =>
+    setOverrides((prev) => {
+      const section = { ...((prev[tpl] as Record<string, Record<string, string>> | undefined) ?? {}) };
+      const row = { ...(section[loc] ?? {}) };
+      if (value.trim()) row[field] = value;
+      else delete row[field];
+      if (Object.keys(row).length) section[loc] = row;
+      else delete section[loc];
+      return { ...prev, [tpl]: section };
+    });
+
+  const org: ReceiptOrgData = useMemo(() => ({ ...RECEIPT_ORG_DEFAULTS, ...(overrides.receiptOrg ?? {}) }), [overrides.receiptOrg]);
+  const setOrg = (key: keyof ReceiptOrgData, value: string) =>
+    setOverrides((prev) => {
+      const next = { ...(prev.receiptOrg ?? {}) };
+      if (value.trim() && value.trim() !== RECEIPT_ORG_DEFAULTS[key]) next[key] = value;
+      else delete next[key];
+      return { ...prev, receiptOrg: Object.keys(next).length ? next : undefined };
+    });
+
+  const overriddenCount = (tpl: CertificateTemplateId, loc: string) =>
+    Object.keys((overrides[tpl] as Record<string, Record<string, string>> | undefined)?.[loc] ?? {}).length;
+
+  const current = TEMPLATES.find((t) => t.id === template)!;
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        title={dt("الشهادات")}
+        description={dt("إدارة نصوص الشهادات وإصدار وإرسال شهادات التبرع والوقف والإهداءات والإيصالات بلغات الموقع.")}
+        icon={Award}
+        actions={
+          section === "copy" ? <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className="me-1 h-4 w-4" /> {dt(" تحديث")}</Button>
+            <Button size="sm" onClick={() => void save()} disabled={saving || loading}>
+              {saving ? <Loader2 className="me-1 h-4 w-4 animate-spin" /> : <Save className="me-1 h-4 w-4" />} {dt(" حفظ")}</Button>
+          </div> : undefined
+        }
+      />
+      <Tabs value={section} onValueChange={setSection}><TabsList className="h-auto flex-wrap gap-1"><TabsTrigger value="copy">{dt("نصوص الشهادات")}</TabsTrigger><TabsTrigger value="send">{dt("إرسال الشهادات والإهداءات")}</TabsTrigger></TabsList>
+      <TabsContent value="send" forceMount hidden={section !== "send"}><ManualCertificatePanel canSendEmail={userHasDashboardPermission(session?.user, "templates")} canSendWhatsapp={userHasDashboardPermission(session?.user, "messages")} /></TabsContent>
+      <TabsContent value="copy">
+
+      {updatedAt ? <p className="text-xs text-muted-foreground">{dtx("آخر حفظ: {0}", [new Date(updatedAt).toLocaleString(dashIntl("ar-EG"))])}</p> : null}
+
+      <Tabs value={template} onValueChange={(v) => setTemplate(v as CertificateTemplateId)}>
+        <TabsList>
+          {TEMPLATES.map((t) => (
+            <TabsTrigger key={t.id} value={t.id}>{t.title}</TabsTrigger>
+          ))}
+        </TabsList>
+        {TEMPLATES.map((t) => (
+          <TabsContent key={t.id} value={t.id}>
+            <p className="mb-3 text-sm text-muted-foreground">{t.hint}</p>
+          </TabsContent>
+        ))}
+      </Tabs>
+
+      {template === "receipt" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{dt("بيانات المؤسسة الرسمية")}</CardTitle>
+            <CardDescription>
+              {dt("تُطبع بالحروف اللاتينية كما في السجل التركي، في كل اللغات  لا تُترجم.")}{!isAdmin && dt(" هذه بيانات إيصال مالي رسمي ولا يعدّلها إلا المدير.")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            {(
+              [
+                ["orgLegalName", dt("الاسم القانوني")],
+                ["taxNo", dt("الرقم الضريبي")],
+                ["orgAddress", dt("العنوان")],
+                ["orgContact", dt("البريد / التواصل")],
+              ] as Array<[keyof ReceiptOrgData, string]>
+            ).map(([key, label]) => (
+              <div key={key} className="space-y-1">
+                <Label htmlFor={`receipt-org-${key}`}>{label}</Label>
+                <Input id={`receipt-org-${key}`} dir="ltr" value={org[key]} disabled={!isAdmin} onChange={(e) => setOrg(key, e.target.value)} placeholder={RECEIPT_ORG_DEFAULTS[key]} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{dtx("{0}  حسب اللغة", [current.title])}</CardTitle>
+          <CardDescription>{dt("اختر اللغة ثم عدّل الحقول. يظهر النص الافتراضي كتلميح داخل كل حقل.")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> {dt(" جارٍ التحميل…")}</div>
+          ) : (
+            <Tabs value={locale} onValueChange={setLocale}>
+              <TabsList className="flex h-auto flex-wrap justify-start">
+                {SUPPORTED_LOCALES.map((loc) => {
+                  const n = overriddenCount(template, loc);
+                  return (
+                    <TabsTrigger key={loc} value={loc} className="gap-1">
+                      {LOCALES[loc]?.label ?? loc}
+                      {n ? <Badge variant="secondary" className="px-1 text-[10px]">{n}</Badge> : null}
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+              {SUPPORTED_LOCALES.map((loc) => (
+                <TabsContent key={loc} value={loc} className="mt-4 grid gap-4" dir={LOCALES[loc]?.direction ?? "ltr"}>
+                  {current.fields.map((field) => {
+                    const placeholder = defaults[loc]?.[template]?.[field.name] ?? "";
+                    const value = valueOf(template, loc, field.name);
+                    return (
+                      <div key={field.name} className="space-y-1">
+                        <Label htmlFor={`certificate-${template}-${loc}-${field.name}`} className="flex items-center justify-between gap-2">
+                          <span>{dt(field.label)}</span>
+                          {value ? <span aria-hidden="true" className="text-[11px] font-normal text-amber-700">{dt("معدّل")}</span> : <span aria-hidden="true" className="text-[11px] font-normal text-muted-foreground">{dt("الافتراضي")}</span>}
+                        </Label>
+                        {field.multiline ? (
+                          <Textarea aria-label={dt(field.label)} id={`certificate-${template}-${loc}-${field.name}`} rows={4} value={value} onChange={(e) => setValue(template, loc, field.name, e.target.value)} placeholder={placeholder} />
+                        ) : (
+                          <Input aria-label={dt(field.label)} id={`certificate-${template}-${loc}-${field.name}`} value={value} onChange={(e) => setValue(template, loc, field.name, e.target.value)} placeholder={placeholder} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted-foreground">
+        {dt("الآيات القرآنية على شهادة الشكر ثابتة من حزمة ")}<code>quran</code> {dt(" ولا تُعدَّل من هنا. تخطيط شهادة الشكر الطولي متاح للمشرف من صفحة الشهادة بإضافة ")}<code>?layout=portrait</code>{" "}
+        <ExternalLink className="inline h-3 w-3" />
+      </p>
+      </TabsContent>
+      </Tabs>
+    </div>
+  );
+}

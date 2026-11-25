@@ -1,8 +1,8 @@
+import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
 import type { Metadata } from "next";
-import { LOCALE_SEO, buildPageMetadata } from "@/lib/seo";
+import { LOCALE_SEO } from "@/lib/seo";
 import type { Locale } from "@/lib/seo";
 import CampaignsPageContent from "../_components/CampaignsPageContent";
-import { prisma } from "@/lib/prisma";
 import {
   getInitialCampaignsForPage,
   getCategoriesForPage,
@@ -17,7 +17,7 @@ export const revalidate = 60; // cache initial HTML for 60s
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
-  return buildPageMetadata(locale, {
+  return buildManagedPageMetadata("legacyCampaigns", locale, {
     title: seo.campaigns.title,
     description: seo.campaigns.description,
     path: "/campaigns",
@@ -25,26 +25,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   });
 }
 
-/** First active homepage slider image — the /campaigns hero reuses it as its backdrop. */
-async function getHeroImage(): Promise<string | null> {
-  try {
-    const slide = await prisma.slide.findFirst({
-      where: { isActive: true, image: { not: null } },
-      orderBy: { order: "asc" },
-      select: { image: true },
-    });
-    return slide?.image || null;
-  } catch {
-    return null;
-  }
-}
-
 export default async function CampaignsPage({ params }: Props) {
   const { locale } = await params;
-  const [initial, categories, heroImage] = await Promise.all([
+  const [initial, categories] = await Promise.all([
     getInitialCampaignsForPage(locale),
     getCategoriesForPage(locale),
-    getHeroImage(),
   ]);
   return (
     <CampaignsPageContent
@@ -53,7 +38,6 @@ export default async function CampaignsPage({ params }: Props) {
       initialHasMore={initial.hasMore}
       initialTotal={initial.total}
       initialCategories={categories}
-      heroImage={heroImage}
     />
   );
 }

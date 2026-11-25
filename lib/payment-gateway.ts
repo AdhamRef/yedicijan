@@ -1,33 +1,80 @@
 /**
- * Which gateway a given donation is charged through.
+ * Which gateway a given donation should be charged through.
  *
- * Every donation is one-time. Routing is fixed, not configurable:
+ * Three rails exist:
+ *   - PAYFOR    Ziraat Katılım 3D Secure. Unchanged, opt-out only: it keeps
+ *                exactly the case it always had (one-time TRY donations) as long
+ *                as the admin leaves its switch on.
+ *   - STRIPE    the original main gateway.
+ *   - ALBARAKA  Albaraka Türk EPOS 3D Secure, an alternative main gateway.
  *
- *   - **ALBARAKA** (Albaraka Türk 3D Secure)  — donations in Turkish lira.
- *   - **PAYFOR**   (Ziraat Katılım 3D Secure) — every other currency
- *                  (converted to TRY and charged in lira).
- *
- * `payforEnabled` is the one remaining switch. Turning PayFor off moves every
- * donation to Albaraka, which charges in TL anyway.
+ * New recurring baskets use Albaraka 2D only. PayFor handles one-time TRY only.
  */
 
+
+/** Gateway an admin can nominate as the main one in the dashboard. */
+export type MainGateway = "STRIPE" | "ALBARAKA";
+
 /** Gateway actually used to charge a specific donation. */
-export type ResolvedGateway = "ALBARAKA" | "PAYFOR";
+export type ResolvedGateway = "STRIPE" | "ALBARAKA" | "PAYFOR";
+
+export const MAIN_GATEWAYS: readonly MainGateway[] = ["STRIPE", "ALBARAKA"] as const;
+
+export function isMainGateway(value: unknown): value is MainGateway {
+  return value === "STRIPE" || value === "ALBARAKA";
+}
+
+/** Normalises anything stored/received into a valid main gateway, defaulting to Stripe. */
+export function parseMainGateway(value: unknown): MainGateway {
+  return isMainGateway(value) ? value : "STRIPE";
+}
 
 export type GatewayResolutionInput = {
-  /** Admin switch for the PayFor rail. When off, every donation goes to Albaraka. */
+  mainGateway: MainGateway;
   payforEnabled: boolean;
   /** ISO currency the donor is giving in, e.g. "TRY". */
   currency: string;
+  /**
+   * New recurring donations create an Albaraka plan.
+   * `ONE_TIME` is the only cadence eligible for PayFor.
+   */
+  donationType?: "ONE_TIME" | "DAILY" | "FRIDAY" | "MONTHLY" | null;
+  /**
+   * Set once a gateway has already failed and the donor was handed a Stripe
+   * PaymentIntent to retry with  that forces Stripe for the rest of the attempt.
+   */
+  forceStripe?: boolean;
 };
 
-export function resolveGateway({ payforEnabled, currency }: GatewayResolutionInput): ResolvedGateway {
-  const c = String(currency || "").toUpperCase();
-  if (c === "TRY" || c === "TL") return "ALBARAKA";
-  return payforEnabled ? "PAYFOR" : "ALBARAKA";
+export function resolveGateway({
+  mainGateway,
+  payforEnabled,
+  currency,
+  donationType = "ONE_TIME",
+  forceStripe = false,
+}: GatewayResolutionInput): ResolvedGateway {
+  if (donationType && donationType !== "ONE_TIME") return "ALBARAKA";
+  if (forceStripe) return "STRIPE";
+  // PayFor's case is unchanged from before Albaraka existed: an explicitly
+  // one-time TRY donation, with the admin switch on.
+  if (
+    payforEnabled &&
+    donationType === "ONE_TIME" &&
+    String(currency || "").toUpperCase() === "TRY"
+  ) {
+    return "PAYFOR";
+  }
+  return mainGateway;
 }
 
 /** Lower-case name used by the analytics/pixel layer. */
-export function gatewayAnalyticsName(gateway: ResolvedGateway): "albaraka" | "payfor" {
-  return gateway.toLowerCase() as "albaraka" | "payfor";
+export function gatewayAnalyticsName(
+  gateway: ResolvedGateway
+): "stripe" | "albaraka" | "payfor" {
+  return gateway.toLowerCase() as "stripe" | "albaraka" | "payfor";
+}
+
+/** True when the gateway needs raw card inputs rendered on our own checkout step. */
+export function gatewayUsesOwnCardForm(gateway: ResolvedGateway): boolean {
+  return gateway === "PAYFOR" || gateway === "ALBARAKA";
 }

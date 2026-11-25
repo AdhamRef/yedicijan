@@ -2,19 +2,19 @@
  * Friendly explanations for failed donations.
  *
  * We see two error shapes:
- *  - **Bank codes** (PayFor / Albaraka): a numeric `ProcReturnCode` (e.g. "05",
+ *  - **PayFor** (Turkish bank gateway): a numeric `ProcReturnCode` (e.g. "05",
  *    "51", "12") plus the raw bank `ErrorMessage`. The codes follow ISO 8583
  *    response codes that Turkish banks commonly emit.
- *  - **Free text**: a `providerErrorMessage` like
- *    "Your card was declined" or "Your card has expired" (including older
- *    rows from the retired card processor).
+ *  - **Stripe**: usually a free-form `providerErrorMessage` like
+ *    "Your card was declined" or "Your card has expired". Sometimes a
+ *    `decline_code` string we mirror into providerErrorMessage.
  *
  * `resolvePaymentError` collapses both into a single `ResolvedPaymentError`
  * keyed by a stable `key` (e.g. `"insufficientFunds"`). The page then renders
- * `Profile.paymentErrors.<key>.{title,reason,fix}` translations — letting us
+ * `Profile.paymentErrors.<key>.{title,reason,fix}` translations  letting us
  * localize without re-running this matcher.
  *
- * IMPORTANT: the matcher must be conservative — when we can't classify the
+ * IMPORTANT: the matcher must be conservative  when we can't classify the
  * error, fall back to `"generic"` (which has a friendly catch-all). NEVER
  * misclassify (e.g. "expired card" → "wrong CVV") because the wrong fix
  * advice is worse than no advice.
@@ -38,7 +38,7 @@ export type PaymentErrorKey =
   | "generic";
 
 export interface ResolvedPaymentError {
-  /** Stable key — used to look up Profile.paymentErrors.<key>.* translations. */
+  /** Stable key  used to look up Profile.paymentErrors.<key>.* translations. */
   key: PaymentErrorKey;
   /** Severity drives the page accent color. "soft" = card-issue (likely to succeed on retry).
    *  "hard" = blocked by the bank (donor needs to act before retrying). */
@@ -57,10 +57,13 @@ export interface ResolvedPaymentError {
  * same providerProcReturnCode column, so this map covers both gateways.
  */
 const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
-  "00": "generic", // success — shouldn't land here, but keep mapping safe
+  "00": "generic", // success  shouldn't land here, but keep mapping safe
   "01": "doNotHonor", // refer to card issuer
   "02": "doNotHonor",
-  "03": "processingError", // invalid merchant
+  /* "Invalid merchant" / İşyeri-Terminal hatası. The same terminal settles other cards in
+     the same currency, so in practice this is the issuer refusing this merchant for this
+     card (often a cross-border block): a different card, not a retry, is the fix. */
+  "03": "doNotHonor",
   "04": "lostOrStolen", // pick-up card
   "05": "cardDeclined", // do not honor
   "06": "processingError",
@@ -83,7 +86,7 @@ const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
   "54": "expiredCard", // expired card
   "55": "authenticationFailed", // incorrect PIN
   "57": "doNotHonor", // transaction not permitted to cardholder
-  "58": "processingError", // transaction not permitted to terminal — merchant setup, not the card
+  "58": "doNotHonor", // transaction not permitted to terminal
   "59": "fraudSuspected", // suspected fraud
   "61": "limitExceeded", // exceeds withdrawal amount limit
   "62": "doNotHonor", // restricted card
@@ -93,7 +96,10 @@ const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
   "76": "processingError",
   "77": "processingError",
   "78": "doNotHonor",
-  "82": "invalidCvc", // CVV failure
+  /* ISO allows "CVV failure", but Albaraka sends 82 as "Politika Gereği Reddedildi"
+     (declined by policy). Telling the donor their CVV was wrong would be wrong advice. */
+  "82": "doNotHonor",
+  "83": "fraudSuspected", // Fraud/Güvenlik
   "84": "expiredCard",
   "85": "doNotHonor",
   "88": "issuerUnavailable",
@@ -103,8 +109,12 @@ const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
   "93": "doNotHonor", // transaction cannot be completed - violation of law
   "94": "processingError", // duplicate transaction
   "96": "processingError", // system malfunction
-  V001: "processingError", // PayFor: merchant not found (Üye işyeri bulma hatası) — bank-side setup
   "B1": "authenticationFailed", // surcharge amount not permitted
+  "1A": "authenticationFailed", // Ek Müşteri Doğrulaması Gerekli  issuer wants strong customer authentication
+  "5C": "doNotHonor", // transaction not supported / blocked by issuer
+  /* PayFor MPI-stage codes, returned before the bank authorises anything. */
+  V034: "authenticationFailed", // 3D User Enrollment Step Fail  card not enrolled in 3-D Secure
+  V036: "processingError", // System Error
   "N7": "invalidCvc",
   "R0": "authenticationFailed",
   "R1": "authenticationFailed",
@@ -113,7 +123,13 @@ const PAYFOR_CODE_MAP: Record<string, PaymentErrorKey> = {
 
 /** Substring patterns matched (case-insensitive) against any free-text error message. */
 const TEXT_PATTERNS: Array<{ pattern: RegExp; key: PaymentErrorKey }> = [
-  // Common decline codes and their prose forms
+  // Turkish bank wording (PayFor ErrMsg, Albaraka ResponseMessage) when no code survived
+  { pattern: /limit\s*yetersiz|yetersiz\s*bakiye|bakiye\s*yetersiz/i, key: "insufficientFunds" },
+  { pattern: /para\s*[çc]ekme\s*limiti|limit\s*a[şs][ıi]ld[ıi]/i, key: "limitExceeded" },
+  { pattern: /s[ıi]n[ıi]rl[ıi]\s*kart|politika\s*gere/i, key: "doNotHonor" },
+  { pattern: /fraud|doland[ıi]r[ıi]c[ıi]l[ıi]k\s*[şs][üu]phesi/i, key: "fraudSuspected" },
+  { pattern: /cvv2?\s*do[ğg]rulama/i, key: "invalidCvc" },
+  // Stripe decline codes (and the prose Stripe shows for each)
   { pattern: /insufficient[_\s]*funds|insufficient[_\s]*balance|رصيد\s*غير\s*كاف/i, key: "insufficientFunds" },
   { pattern: /expired[_\s]*card|card[_\s]*expired|carte\s+expirée|بطاقة\s*منتهية/i, key: "expiredCard" },
   { pattern: /incorrect[_\s]*cvc|invalid[_\s]*cvc|cvc[_\s]*check[_\s]*failed|cvv\s*incorrect|رمز\s*التحقق/i, key: "invalidCvc" },
@@ -123,9 +139,9 @@ const TEXT_PATTERNS: Array<{ pattern: RegExp; key: PaymentErrorKey }> = [
   { pattern: /withdrawal[_\s]*count[_\s]*exceeded|amount[_\s]*limit[_\s]*exceeded|spending[_\s]*limit/i, key: "limitExceeded" },
   { pattern: /currency[_\s]*not[_\s]*supported|currency.*not[_\s]*allowed/i, key: "currencyNotSupported" },
   // 3-D Secure / SCA authentication failures
-  { pattern: /authentication[_\s]*(required|failed)|3d[_\s_]?secure|sca[_\s]*failed|impossible.*authentifier/i, key: "authenticationFailed" },
+  { pattern: /authentication[_\s]*(required|failed|attempt)|3d[_\s_]?secure|sca[_\s]*failed|impossible.*authentifier/i, key: "authenticationFailed" },
   { pattern: /processing[_\s]*error|try[_\s]*again|temporary[_\s]*error/i, key: "processingError" },
-  { pattern: /network[_\s]*error|connection[_\s]*error|timeout/i, key: "networkError" },
+  { pattern: /network[_\s]*error|connection[_\s]*(error|failed)|timeout/i, key: "networkError" },
   { pattern: /issuer[_\s]*not[_\s]*available|issuer[_\s]*unavailable|issuer[_\s]*declined/i, key: "issuerUnavailable" },
   { pattern: /fraudulent|fraud[_\s]*suspected|suspected[_\s]*fraud|stolen[_\s]*card/i, key: "fraudSuspected" },
   // Generic decline catch-all
@@ -161,7 +177,7 @@ export interface DonationErrorInputs {
 }
 
 export function resolvePaymentError(input: DonationErrorInputs): ResolvedPaymentError {
-  // 1. Try the bank's numeric code first (PayFor / Albaraka) — most reliable signal.
+  // 1. Try the bank's numeric code first (PayFor / Albaraka)  most reliable signal.
   const rawCode = (input.providerProcReturnCode ?? "").toString().trim();
   if (rawCode && PAYFOR_CODE_MAP[rawCode]) {
     const key = PAYFOR_CODE_MAP[rawCode];

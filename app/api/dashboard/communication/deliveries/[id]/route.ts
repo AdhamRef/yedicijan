@@ -4,12 +4,13 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { RETRYABLE_STATUSES, NON_RETRYABLE_TERMINAL } from "@/lib/communication/communication-runtime-types";
+import { retryPayloadBlockReason } from "@/lib/communication/retry-readiness";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * One delivery, in full — what the معاينة sheet reads.
+ * One delivery, in full  what the معاينة sheet reads.
  *
  * Deliberately its own endpoint rather than extra columns on the channel list: `renderedBody` holds
  * a complete email HTML document, so folding it into the paged table would multiply that page's
@@ -26,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (!row) return NextResponse.json({ ok: false, error: "لم يُعثر على الرسالة" }, { status: 404 });
 
     // The retry that superseded this attempt, when there is one. Showing it turns a stale-looking
-    // FAILED row into "failed, then re-sent successfully" — otherwise the reader has to guess.
+    // FAILED row into "failed, then re-sent successfully"  otherwise the reader has to guess.
     const retry = row.retriedAt
       ? await prisma.communicationDelivery.findFirst({
           where: { retryOfDeliveryId: id },
@@ -35,8 +36,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         })
       : null;
 
-    const retryable =
+    const retryableStatus =
       (RETRYABLE_STATUSES as readonly string[]).includes(row.status) && !row.retriedAt;
+    const payloadBlockReason = retryPayloadBlockReason(row);
+    const hasArchivedContent = payloadBlockReason === null;
+    const retryable = retryableStatus && hasArchivedContent;
 
     return NextResponse.json({
       ok: true,
@@ -46,8 +50,10 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       /** Why the retry button is unavailable, when it is. Null when the row can be re-sent. */
       retryBlockedReason: retryable
         ? null
+        : retryableStatus && payloadBlockReason
+          ? "لا توجد نسخة محتوى أو متغيرات محفوظة تكفي لإعادة تشغيل هذه المحاولة بأمان."
         : (NON_RETRYABLE_TERMINAL as readonly string[]).includes(row.status)
-          ? "العنوان مرتدّ — إعادة الإرسال إليه تضرّ بسمعة النطاق."
+          ? "العنوان مرتدّ  إعادة الإرسال إليه تضرّ بسمعة النطاق."
           : row.retriedAt
             ? "أُعيد إرسال هذه الرسالة من قبل."
             : "هذه الرسالة ليست في حالة فشل أو تخطٍّ.",

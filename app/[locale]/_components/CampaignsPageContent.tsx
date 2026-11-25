@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
-import { HandHeart, ArrowRight, X, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { Search, HandHeart, ArrowRight, X, ChevronDown, ChevronRight, Check } from "lucide-react";
 import CampaignCard from "@/app/[locale]/_components/CampaignCard";
 import { useDebounce } from "use-debounce";
 import { useLocale, useTranslations } from "next-intl";
@@ -61,8 +62,6 @@ interface CampaignsPageContentProps {
   initialCursor?: string | null;
   initialHasMore?: boolean;
   initialTotal?: number;
-  /** First homepage slider image, shown behind the hero. */
-  heroImage?: string | null;
 }
 
 const CampaignsPage = ({
@@ -70,18 +69,17 @@ const CampaignsPage = ({
   initialCategories = [],
   initialHasMore = false,
   initialTotal = initialCampaigns.length,
-  heroImage = null,
 }: CampaignsPageContentProps = {}) => {
   const t = useTranslations("CampaignsPage");
+  const urlSearchParams = useSearchParams();
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [loading, setLoading] = useState(initialCampaigns.length === 0);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => urlSearchParams.get("search")?.trim() ?? "");
   const [debouncedSearch] = useDebounce(searchQuery, 300);
   const [selectedCategory, setSelectedCategory] = useState("all");
-  // No filter UI any more; the defaults still feed the API query and the client-side ordering.
-  const [filters] = useState<FilterState>({ sortBy: "newest", minAmount: 0, maxAmount: 100000000 });
+  const [filters, setFilters] = useState<FilterState>({ sortBy: "newest", minAmount: 0, maxAmount: 100000000 });
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isRefreshingList, setIsRefreshingList] = useState(false);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -93,6 +91,11 @@ const CampaignsPage = ({
   const ITEMS_PER_PAGE = 6;
   const locale = useLocale() as string;
   const isRTL = locale === "ar";
+
+  useEffect(() => {
+    const incoming = urlSearchParams.get("search")?.trim() ?? "";
+    setSearchQuery((current) => (current === incoming ? current : incoming));
+  }, [urlSearchParams]);
 
   const fetchData = useCallback(async (pageToLoad = 1) => {
     const requestId = ++requestSeqRef.current;
@@ -122,7 +125,7 @@ const CampaignsPage = ({
       const campaignsItems = campaignsRes.data.items || campaignsRes.data;
       const newCampaigns = (campaignsItems as Campaign[]).map((campaign) => {
         // Many-to-many: collect all category ids the campaign belongs to.
-        // Old API responses may only have `categoryId` / `category` — preserve
+        // Old API responses may only have `categoryId` / `category`  preserve
         // both shapes so the in-memory filter below works either way.
         const ids = Array.isArray(campaign.categoryIds) && campaign.categoryIds.length > 0
           ? campaign.categoryIds
@@ -246,11 +249,19 @@ const CampaignsPage = ({
     }
   }), [filteredCampaigns, filters.sortBy, isRefreshingList, selectedCategory]);
 
+  const handleFilterChange = (key: keyof FilterState, value: number | string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
   const handleCategoryChange = (categoryId: string) => {
     if (categoryId === selectedCategory) return;
     setSelectedCategory(categoryId);
   };
 
+  const hasActiveFilters = filters.sortBy !== "newest" || filters.minAmount !== 0 || filters.maxAmount !== 100000000;
+  const resultCountLabel = totalCount > sortedCampaigns.length
+    ? `${sortedCampaigns.length} / ${totalCount}`
+    : String(sortedCampaigns.length);
   const showEmptyState = sortedCampaigns.length === 0 && !isLoadingMore && !isRefreshingList;
 
   if (loading) return <LoadingSkeleton />;
@@ -279,21 +290,7 @@ const CampaignsPage = ({
     <main className="min-h-screen bg-offwhite" dir={isRTL ? "rtl" : "ltr"}>
       {/* ── Hero Header ── */}
       <section className="relative hero-pattern text-white overflow-hidden">
-        {heroImage && (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- slider images can live on any host the admin uploads to */}
-            <img
-              src={heroImage}
-              alt=""
-              aria-hidden="true"
-              fetchPriority="high"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            {/* Keeps the white headline readable over any photo. */}
-            <div className="absolute inset-0 bg-gradient-to-b from-deep/85 via-deep/75 to-deep/90" />
-          </>
-        )}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-8 pt-12 pb-20 md:pt-16 md:pb-24 grid gap-10 md:grid-cols-[1fr_420px] md:items-center">
+        <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-8 pt-10 pb-16 grid gap-10 md:grid-cols-[1fr_420px] md:items-center">
           <div>
             {/* Breadcrumb */}
             <div className="flex items-center gap-1.5 text-ice/70 text-xs mb-8">
@@ -311,7 +308,7 @@ const CampaignsPage = ({
             </p>
           </div>
 
-          {/* Info aside card — desktop only. On phones it pushed the categories bar
+          {/* Info aside card  desktop only. On phones it pushed the categories bar
               a full screen down without adding anything the hero doesn't already say. */}
           <aside className="hidden md:block shape-card border border-white/15 bg-white/10 p-8 backdrop-blur">
             <div className="gold-mark" />
@@ -338,7 +335,7 @@ const CampaignsPage = ({
 
           {/* Phones get a dropdown instead of the chip row. The row scrolled
               horizontally with no affordance, so most categories were simply never
-              discovered — a closed control that names the current filter is honest
+              discovered  a closed control that names the current filter is honest
               about there being more behind it. */}
           <div className="min-w-0 flex-1 md:hidden">
             <CategorySelect
@@ -386,11 +383,108 @@ const CampaignsPage = ({
         </div>
       </section>
 
-      {/* ── Grid ── */}
-      <section className="max-w-7xl mx-auto px-4 lg:px-8 py-10 md:py-12">
+      {/* ── Sidebar + Grid ── */}
+      <section className="max-w-7xl mx-auto px-4 lg:px-8 py-10 grid gap-8 lg:gap-10 md:grid-cols-[260px_1fr]">
+        {/* Filter sidebar */}
+        <aside className="h-fit md:sticky md:top-24">
+          <div className="shape-card bg-white p-6 shadow-soft">
+            <div className="shape-chip w-fit bg-burgundy px-6 py-3 text-sm font-extrabold text-white">
+              {t("filterTitle")}
+            </div>
+
+            <div className="mt-6 space-y-7">
+              {/* Search */}
+              <div>
+                <label className="mb-3 block text-sm font-extrabold text-deep">{t("searchLabel")}</label>
+                <div className="relative">
+                  <Search className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 ${isRTL ? "right-3" : "left-3"}`} />
+                  <input
+                    type="search"
+                    placeholder={t("searchPlaceholder") || "Search campaigns..."}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className={`h-11 w-full ${isRTL ? "pr-9 pl-3" : "pl-9 pr-3"} rounded-lg border border-gray-200 text-sm text-ink outline-none transition focus:border-burgundy focus:ring-2 focus:ring-burgundy/10`}
+                  />
+                </div>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <p className="mb-3 text-sm font-extrabold text-deep">{t("sortBy") || "Sort by"}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: "newest", label: t("newest") || "Newest" },
+                    { value: "amount-high", label: t("amountHigh") || "Highest" },
+                    { value: "amount-low", label: t("amountLow") || "Lowest" },
+                    { value: "progress", label: t("progress") || "Progress" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleFilterChange("sortBy", opt.value)}
+                      className={`shape-chip px-3 py-2 text-xs font-semibold border transition-colors ${filters.sortBy === opt.value ? "bg-burgundy text-white border-burgundy" : "bg-white text-gray-600 border-gray-200 hover:border-burgundy/50"}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Amount range */}
+              <div>
+                <p className="mb-3 text-sm font-extrabold text-deep">{t("targetAmountRange") || "Target amount"}</p>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 mb-1 block">{t("minAmount") || "Min"}</label>
+                    <input
+                      type="number"
+                      value={filters.minAmount}
+                      onChange={(e) => handleFilterChange("minAmount", Number(e.target.value))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 mb-1 block">{t("maxAmount") || "Max"}</label>
+                    <input
+                      type="number"
+                      value={filters.maxAmount}
+                      onChange={(e) => handleFilterChange("maxAmount", Number(e.target.value))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => { setFilters({ sortBy: "newest", minAmount: 0, maxAmount: 100000000 }); setSearchQuery(""); }}
+                className="shape-chip w-full bg-offwhite py-3 text-sm font-extrabold text-deep border border-gray-200 transition-colors hover:bg-gray-50"
+              >
+                {hasActiveFilters || searchQuery ? (t("resetFilters") || "Reset") : (t("applyFilters") || "Apply filters")}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Results column */}
         <div>
-          <div className="mb-8">
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-deep">{t("allCampaigns") || "All projects"}</h2>
+          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-deep">{t("allCampaigns") || "All projects"}</h2>
+              <p className="mt-2 text-sm font-medium text-gray-500">
+                <span className="font-semibold text-gray-800">{isRefreshingList ? "..." : resultCountLabel}</span>{" "}
+                {t("resultsFound") || "projects found"}
+              </p>
+            </div>
+
+            <select
+              value={filters.sortBy}
+              onChange={(e) => handleFilterChange("sortBy", e.target.value)}
+              className="shape-chip h-11 w-full border border-gray-200 bg-white px-4 text-sm font-semibold text-deep outline-none sm:w-[200px]"
+            >
+              <option value="newest">{t("newest") || "Newest"}</option>
+              <option value="amount-high">{t("amountHigh") || "Highest"}</option>
+              <option value="amount-low">{t("amountLow") || "Lowest"}</option>
+              <option value="progress">{t("progress") || "Progress"}</option>
+            </select>
           </div>
 
           {error && sortedCampaigns.length > 0 && (
@@ -427,16 +521,16 @@ const CampaignsPage = ({
             </div>
           ) : (
             <div className="relative">
-              <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-7 transition-opacity ${isRefreshingList ? "opacity-50" : "opacity-100"}`}>
+              <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 transition-opacity ${isRefreshingList ? "opacity-50" : "opacity-100"}`}>
                 {sortedCampaigns.map((campaign) => (
-                  <CampaignCard key={campaign.id} campaign={campaign} tall />
+                  <CampaignCard key={campaign.id} campaign={campaign} />
                 ))}
                 {isLoadingMore && sortedCampaigns.length > 0 && Array.from({ length: 3 }).map((_, i) => (
                   <CardSkeleton key={`more-${i}`} />
                 ))}
               </div>
               {isRefreshingList && sortedCampaigns.length === 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-7">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                   {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={`refresh-${i}`} />)}
                 </div>
               )}
@@ -460,7 +554,7 @@ const CampaignsPage = ({
           )}
 
           {isLoadingMore && sortedCampaigns.length === 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-7">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
             </div>
           )}

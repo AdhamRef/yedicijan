@@ -1,25 +1,23 @@
+import type { Editor } from "@tiptap/core";
 import Moveable from "react-moveable";
 
-export const ImageResizer = ({ editor }) => {
+export const ImageResizer = ({ editor }: { editor: Editor }) => {
   const updateMediaSize = () => {
-    const imageInfo = document.querySelector(
+    const imageInfo = editor.view.dom.querySelector(
       ".ProseMirror-selectednode",
     ) as HTMLImageElement;
     if (imageInfo) {
-      const selection = editor.state.selection;
-      editor.commands.setImage({
-        src: imageInfo.src,
+      editor.commands.updateAttributes("image", {
         width: Number(imageInfo.style.width.replace("px", "")),
         height: Number(imageInfo.style.height.replace("px", "")),
       });
-      editor.commands.setNodeSelection(selection.from);
     }
   };
 
   return (
     <>
       <Moveable
-        target={document.querySelector(".ProseMirror-selectednode") as any}
+        target={editor.view.dom.querySelector(".ProseMirror-selectednode") as HTMLElement | null}
         container={null}
         origin={false}
         /* Resize event edges */
@@ -31,18 +29,9 @@ export const ImageResizer = ({ editor }) => {
         /* Only one of resizable, scalable, warpable can be used. */
         resizable={true}
         throttleResize={0}
-        onResize={({
-          target,
-          width,
-          height,
-          // dist,
-          delta,
-        }: // direction,
-        // clientX,
-        // clientY,
-        any) => {
-          delta[0] && (target!.style.width = `${width}px`);
-          delta[1] && (target!.style.height = `${height}px`);
+        onResize={({ target, width, height, delta }) => {
+          if (delta[0]) target.style.width = `${width}px`;
+          if (delta[1]) target.style.height = `${height}px`;
         }}
         // { target, isDrag, clientX, clientY }: any
         onResizeEnd={() => {
@@ -54,16 +43,8 @@ export const ImageResizer = ({ editor }) => {
         throttleScale={0}
         /* Set the direction of resizable */
         renderDirections={["w", "e"]}
-        onScale={({
-          target,
-          // scale,
-          // dist,
-          // delta,
-          transform,
-        }: // clientX,
-        // clientY,
-        any) => {
-          target!.style.transform = transform;
+        onScale={({ target, transform }) => {
+          target.style.transform = transform;
         }}
       />
     </>

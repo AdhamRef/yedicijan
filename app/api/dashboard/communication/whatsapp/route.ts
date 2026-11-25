@@ -1,3 +1,4 @@
+import { whatsappDeliveryProgress } from "@/lib/communication/whatsapp-delivery-progress";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
@@ -5,7 +6,11 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { getActiveMetaWhatsappRuntimeConfig } from "@/lib/communication/runtime-config";
-import { RETRYABLE_STATUSES } from "@/lib/communication/communication-runtime-types";
+import { retryPreflight } from "@/lib/communication/delivery-retry-service";
+import { resolveVariantForLocale } from "@/lib/communication/whatsapp-template-sync";
+import { templateSyncTimestamps, templateSyncCoverage } from "@/lib/communication/template-sync-timestamps";
+import { templateSyncResult, WHATSAPP_CATALOGUE_SYNC_ACTION } from "@/lib/communication/template-sync-result";
+import { communicationPurposeWhere, parseCommunicationPurposeGroup } from "@/lib/communication/purpose-group";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +22,7 @@ export const dynamic = "force-dynamic";
  *
  *  1. The engagement ladder ends in READ (the blue ticks) and REPLIED, not opened/clicked. A read
  *     receipt is a genuine provider-confirmed event, so it is trustworthy in a way an email open
- *     pixel is not — but it is also suppressible by the recipient, so absence still is not proof.
+ *     pixel is not  but it is also suppressible by the recipient, so absence still is not proof.
  *  2. Business-initiated sends require a Meta-APPROVED template. A perfectly configured account
  *     with no approved template can send exactly nothing, and that is the single most common
  *     reason this channel sits at zero. Reporting "0 sent" without reporting *why* would make the
@@ -42,17 +47,19 @@ export async function GET(request: NextRequest) {
     const from = sp.get("from") ? new Date(sp.get("from")!) : new Date(to.getTime() - days * 86_400_000);
 
     const status = sp.get("status") || "all";
+    const purposeGroup = parseCommunicationPurposeGroup(sp.get("purposeGroup"));
     const search = sp.get("search")?.trim() || "";
     const page = Math.max(1, parseInt(sp.get("page") || "1"));
     const limit = Math.min(100, Math.max(1, parseInt(sp.get("limit") || "25")));
 
-    // A campaign deep-link scopes the entire page — summary, chart and list — to that campaign,
+    // A campaign deep-link scopes the entire page  summary, chart and list  to that campaign,
     // and drops the date window while doing it. The campaign IS the range; keeping the default
     // 30 days would report zeros for any campaign sent earlier than that.
     const campaignId = sp.get("campaign")?.trim() || "";
+    const purposeWhere = communicationPurposeWhere(purposeGroup);
     const rangeWhere: Prisma.CommunicationDeliveryWhereInput = campaignId
-      ? { channel: CHANNEL, campaignId }
-      : { channel: CHANNEL, createdAt: { gte: from, lte: to } };
+      ? { channel: CHANNEL, campaignId, ...purposeWhere }
+      : { channel: CHANNEL, createdAt: { gte: from, lte: to }, ...purposeWhere };
 
     const listWhere: Prisma.CommunicationDeliveryWhereInput = { ...rangeWhere };
     if (status !== "all") {
@@ -71,16 +78,12 @@ export async function GET(request: NextRequest) {
     }
 
     const [
-      total, byStatus, deliveredCount, readCount, repliedCount, failedCount,
-      allTimeTotal, rows, listTotal, bucketRows, templates, metaConfig, retryableCount,
+      total, byStatus,
+      allTimeTotal, rows, listTotal, bucketRows, templates, metaConfig, retryPreflightResult, activeSenders, lastTemplateSync,
     ] = await Promise.all([
       prisma.communicationDelivery.count({ where: rangeWhere }),
       prisma.communicationDelivery.groupBy({ by: ["status"], where: rangeWhere, _count: { _all: true } }),
-      prisma.communicationDelivery.count({ where: { ...rangeWhere, deliveredAt: { not: null } } }),
-      prisma.communicationDelivery.count({ where: { ...rangeWhere, readAt: { not: null } } }),
-      prisma.communicationDelivery.count({ where: { ...rangeWhere, repliedAt: { not: null } } }),
-      prisma.communicationDelivery.count({ where: { ...rangeWhere, status: { in: [...FAILED_STATUSES] } } }),
-      prisma.communicationDelivery.count({ where: { channel: CHANNEL } }),
+      prisma.communicationDelivery.count({ where: { channel: CHANNEL, ...purposeWhere } }),
       prisma.communicationDelivery.findMany({
         where: listWhere,
         orderBy: { createdAt: "desc" },
@@ -96,61 +99,130 @@ export async function GET(request: NextRequest) {
       prisma.communicationDelivery.count({ where: listWhere }),
       prisma.communicationDelivery.findMany({
         where: rangeWhere,
-        select: { createdAt: true, status: true, deliveredAt: true, readAt: true },
+        select: { createdAt: true, status: true, deliveredAt: true, readAt: true, repliedAt:true, providerMessageId:true, sentAt:true },
         orderBy: { createdAt: "asc" },
       }),
-      // Template readiness is the usual reason this channel is silent — see the note above.
+      // Template readiness is the usual reason this channel is silent  see the note above.
       prisma.whatsappTemplate.findMany({
-        select: { id: true, name: true, approvalStatus: true, category: true, language: true, externalTemplateId: true, updatedAt: true },
+        select: {
+          id: true, name: true, category: true, status: true, updatedAt: true,
+          /* Meta's own answer, per language  the single readiness contract. The local
+             `approvalStatus`/`externalTemplateId` fields are deliberately not read here. */
+          wabaVariants: { select: { businessAccountId: true, languageCode: true, locale: true, approvalStatus: true, category: true, providerTemplateName: true, componentsSchema: true, rejectionReason: true, lastSyncedAt: true } },
+        },
         orderBy: { updatedAt: "desc" },
       }),
       getActiveMetaWhatsappRuntimeConfig(),
-      // Re-sendable backlog — see the identical note on the email route for the `isSet` arm.
-      prisma.communicationDelivery.count({
+      // Re-sendable backlog  see the identical note on the email route for the `isSet` arm.
+      retryPreflight({ channel: "WHATSAPP", purposeGroup, campaignId: campaignId || undefined, ...(campaignId ? {} : { from, to }) }),
+      prisma.communicationSender.findMany({
         where: {
-          ...rangeWhere,
-          status: { in: [...RETRYABLE_STATUSES] },
-          OR: [{ retriedAt: null }, { retriedAt: { isSet: false } }],
+          channel: "WHATSAPP",
+          isDefault: true,
+          enabled: true,
+          status: "ACTIVE",
+          businessAccountId: { not: null },
         },
+        select: { businessAccountId: true, isDefault: true },
       }),
+      prisma.auditLog.findFirst({
+        where: { action: WHATSAPP_CATALOGUE_SYNC_ACTION, entityType: "WhatsappTemplate" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true, metadata: true },
+      }).catch(() => null),
     ]);
 
     const statusCounts: Record<string, number> = {};
     for (const row of byStatus) statusCounts[row.status] = row._count._all;
 
-    const sentCount =
-      (statusCounts.SENT ?? 0) + (statusCounts.SENT_TO_PROVIDER ?? 0) + (statusCounts.DELIVERED ?? 0) +
-      (statusCounts.READ ?? 0) + (statusCounts.REPLIED ?? 0) + failedCount;
-    const attempted = Math.max(sentCount, 0);
-    const rate = (part: number) => (attempted > 0 ? Math.round((part / attempted) * 1000) / 10 : 0);
+    let deliveredCount=0,readCount=0,repliedCount=0,failedCount=0,attempted=0,observedAttempts=0;
+    const rate=(part:number)=>attempted>0?Math.round(part/attempted*1000)/10:0;
 
     const buckets = new Map<string, Bucket>();
     for (const row of bucketRows) {
       const key = row.createdAt.toISOString().slice(0, 10);
       const bucket = buckets.get(key) ?? { date: key, sent: 0, delivered: 0, read: 0, failed: 0 };
-      if ((FAILED_STATUSES as readonly string[]).includes(row.status)) bucket.failed++;
-      else if (!["SKIPPED", "RENDERED", "DRAFT"].includes(row.status)) bucket.sent++;
-      if (row.deliveredAt) bucket.delivered++;
-      if (row.readAt) bucket.read++;
+      const progress=whatsappDeliveryProgress(row);
+      if(progress.accepted){attempted++;bucket.sent++;}
+      if(progress.attempted)observedAttempts++;
+      if(progress.failed){failedCount++;bucket.failed++;}
+      if(progress.delivered){deliveredCount++;bucket.delivered++;}
+      if(progress.read){readCount++;bucket.read++;}
+      if(progress.replied)repliedCount++;
       buckets.set(key, bucket);
     }
 
-    // A template can only carry a business-initiated send once Meta has approved it AND we hold
-    // its external id. Anything else is a draft as far as sending is concerned, however complete
-    // it looks in our own editor.
-    const templateRows = templates.map((t) => {
-      const approval = (t.approvalStatus ?? "").toUpperCase();
-      const registered = Boolean(t.externalTemplateId);
-      const ready = registered && approval === "APPROVED";
+    /* Readiness comes from `resolveVariantForLocale`  the same function the campaign builder, the
+       trigger preflight and the runtime sender all call. It used to be computed here from the local
+       row's hand-set `approvalStatus` and `externalTemplateId`, which is how this page could report
+       a template READY while every send of it failed with META_TEMPLATE_REQUIRED. Two functions
+       cannot agree; one cannot disagree with itself. */
+    // Automated templates use the default account. Another account's approval
+    // cannot establish readiness here; multiple different defaults are ambiguous.
+    const defaultWabaIds = [...new Set(activeSenders.filter(sender => sender.isDefault).map((sender) => sender.businessAccountId).filter((id): id is string => Boolean(id)))];
+    const activeWabaIds = defaultWabaIds.length === 1 ? defaultWabaIds : [];
+    const templateRows = templates.filter(t => t.status !== "ARCHIVED").map((t) => {
+      const defaultVariants = t.wabaVariants.filter(variant => activeWabaIds.includes(variant.businessAccountId));
+      const byWaba = new Map<string, typeof t.wabaVariants>();
+      for (const variant of defaultVariants) {
+        const bucket = byWaba.get(variant.businessAccountId) ?? [];
+        bucket.push(variant);
+        byWaba.set(variant.businessAccountId, bucket);
+      }
+
+      const readinessByWaba = activeWabaIds.map((wabaId) => {
+        const variants = byWaba.get(wabaId) ?? [];
+        // Readiness here is channel-level, not Arabic-only. A template approved
+        // for Turkish/English must not be reported unusable merely because it has
+        // no Arabic variant. Try every locale/language Meta actually returned.
+        const candidates = [...new Set(
+          variants.flatMap((variant) => [variant.locale, variant.languageCode]).filter((value): value is string => Boolean(value)),
+        )];
+        const readiness =
+          candidates.map((candidate) => resolveVariantForLocale(variants, candidate)).find((item) => item.ready)
+          ?? resolveVariantForLocale(variants, candidates[0] ?? "ar");
+        return { wabaId, readiness };
+      });
+      const readyWabas = readinessByWaba.filter((item) => item.readiness.ready).length;
+      const anyReady = readyWabas > 0;
+      const allReady = activeWabaIds.length > 0 && readyWabas === activeWabaIds.length;
+      const partiallyReady = anyReady && !allReady;
+      const canonical = readinessByWaba.find((item) => item.readiness.ready)?.readiness
+        ?? readinessByWaba[0]?.readiness
+        ?? resolveVariantForLocale([], "ar");
+
+      const approvedLanguages = [...new Set(
+        defaultVariants.filter((v) => v.approvalStatus === "APPROVED").map((v) => v.languageCode),
+      )];
+      const synced = templateSyncTimestamps(defaultVariants.map((v) => v.lastSyncedAt));
+
       return {
         id: t.id,
         name: t.name,
-        approvalStatus: t.approvalStatus,
+        approvalStatus: canonical.approvalStatus,
         category: t.category,
-        language: t.language,
-        registered,
-        ready,
-        state: ready ? "READY" : registered ? (approval || "PENDING") : "NOT_REGISTERED",
+        language: canonical.languageCode,
+        registered: defaultVariants.length > 0,
+        ready: anyReady,
+        partiallyReady,
+        wabaCoverage: { ready: readyWabas, total: activeWabaIds.length },
+        approvedLanguages,
+        approvedLocales: [...new Set(
+          defaultVariants.filter((v) => v.approvalStatus === "APPROVED" && v.locale).map((v) => v.locale as string),
+        )],
+        rejectionReason: canonical.rejectionReason,
+        // Preserve the existing complete-coverage contract; report the most
+        // recent successful sync separately instead of labelling the oldest as latest.
+        lastSyncedAt: synced.complete ? synced.oldestAt : null,
+        latestSyncedAt: synced.latestAt,
+        oldestSyncedAt: synced.oldestAt,
+        state: allReady
+          ? "READY"
+          : partiallyReady
+            ? "PARTIAL"
+            : t.wabaVariants.length === 0
+              ? "NOT_REGISTERED"
+              : canonical.approvalStatus ?? "PENDING",
         updatedAt: t.updatedAt.toISOString(),
       };
     });
@@ -167,16 +239,17 @@ export async function GET(request: NextRequest) {
         delivered: deliveredCount, read: readCount, replied: repliedCount,
         failed: failedCount, skipped: statusCounts.SKIPPED ?? 0,
         deliveredRate: rate(deliveredCount), readRate: rate(readCount),
-        repliedRate: rate(repliedCount), failedRate: rate(failedCount),
+        repliedRate: rate(repliedCount), failedRate: observedAttempts>0 ? Math.round(failedCount/observedAttempts*1000)/10 : 0,
       },
       trackingLive,
-      retryableCount,
+      retryableCount: retryPreflightResult.eligible,
       provider: {
         configured: metaConfig.configured,
         reason: metaConfig.configured ? null : metaConfig.reason,
         missingFields: metaConfig.configured ? [] : metaConfig.missingFields,
       },
-      templates: { total: templateRows.length, ready: readyTemplates, rows: templateRows.slice(0, 8) },
+      templates: { total: templateRows.length, ready: readyTemplates, rows: templateRows.slice(0, 8), syncFreshness: templateSyncCoverage(templateRows) },
+      templateSync: templateSyncResult(lastTemplateSync),
       statusCounts,
       timeseries: [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date)),
       rows,

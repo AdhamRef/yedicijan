@@ -10,6 +10,7 @@ import {
   ColumnFiltersState,
   getFilteredRowModel,
   FilterFn,
+  getFacetedRowModel,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -21,10 +22,11 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Download, Search, Calendar, X, Filter, File, FileEdit, Database } from "lucide-react";
+import { PlusCircle, Search, Calendar, X, Filter, Database } from "lucide-react";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { dt } from "@/lib/dashboard/i18n";
 
 interface DateRange {
   from: string;
@@ -50,8 +52,11 @@ const dateRangeFilter: FilterFn<any> = (row, columnId, filterValue: DateRange) =
   // If no date range is provided, return true (no filtering)
   if (!from && !to) return true;
 
+  /* `getValue` is untyped by design, so the cell has to be narrowed before `new Date` will take it.
+     A row whose cell holds something else is excluded, rather than turned into an Invalid Date that
+     compares false against every bound. */
   const cellValue = row.getValue(columnId);
-  if (!cellValue) return false; // If the cell value is empty, exclude it
+  if (typeof cellValue !== "string" && typeof cellValue !== "number" && !(cellValue instanceof Date)) return false;
 
   const cellDate = new Date(cellValue);
   const fromDate = from ? new Date(from) : null;
@@ -82,12 +87,12 @@ export function DataTable<TData, TValue>({
   createLink = "#",
   noResultsLabel = "No results found",
   hasEndDate = false,
-  searchColumn = "title",
   showCreateButton = true,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [searchValue, setSearchValue] = useState("");
+  const [globalFilter, setGlobalFilter] = useState("");
   const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
   const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -100,22 +105,33 @@ export function DataTable<TData, TValue>({
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
     getFilteredRowModel: getFilteredRowModel(),
+    getFacetedRowModel: getFacetedRowModel(),
+    globalFilterFn: (row, _columnId, filterValue) => {
+      const needle = String(filterValue ?? "").trim().toLocaleLowerCase("ar");
+      if (!needle) return true;
+      const seen = new Set<unknown>();
+      const flatten = (value: unknown): string => {
+        if (value == null) return "";
+        if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+        if (value instanceof Date) return value.toISOString();
+        if (typeof value !== "object" || seen.has(value)) return "";
+        seen.add(value);
+        if (Array.isArray(value)) return value.map(flatten).join(" ");
+        return Object.values(value as Record<string, unknown>).map(flatten).join(" ");
+      };
+      return flatten(row.original).toLocaleLowerCase("ar").includes(needle);
+    },
     state: {
       sorting,
       columnFilters,
+      globalFilter,
     },
     filterFns: {
       dateRange: dateRangeFilter,
     },
   });
-
-  const handleSearch = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setSearchValue(value);
-    table.getColumn(searchColumn)?.setFilterValue(value);
-    updateActiveFilters("بحث", value);
-  }, [searchColumn, table]);
 
   const handleDateChange = useCallback((key: keyof DateRange, value: string) => {
     setDateRange(prev => ({ ...prev, [key]: value }));
@@ -128,15 +144,25 @@ export function DataTable<TData, TValue>({
         if (type === "تاريخ") {
           const { from, to } = value as DateRange;
           if (from || to) {
-            newFilters.push(`تاريخ: ${from}${to ? ` الي ${to}` : ""}`);
+            newFilters.push(dt("تاريخ: {0}{1}", [from, to ? dt(" الي {0}", [to]) : ""]));
           }
         } else if (type === "بحث" && value.trim()) {
-          newFilters.push(`بحث: ${value}`);
+          newFilters.push(dt("بحث: {0}", [value]));
         }
       }
       return newFilters;
     });
   }, []);
+
+  const handleSearch = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setSearchValue(value);
+    // Search the whole row, including nested relations (campaign/category/donor),
+    // instead of silently doing nothing when a page does not expose the default "title" column.
+    setGlobalFilter(value);
+    updateActiveFilters("بحث", value);
+    table.setPageIndex(0);
+  }, [table, updateActiveFilters]);
 
   const applyDateFilter = useCallback(() => {
     const dateColumn = table.getColumn("endDate");
@@ -154,19 +180,20 @@ export function DataTable<TData, TValue>({
     setDateRange({ from: "", to: "" });
     setActiveFilters([]);
     table.resetColumnFilters();
+    setGlobalFilter("");
   }, [table]);
 
   const clearSingleFilter = useCallback((filter: string) => {
     const [type] = filter.split(":");
     if (type === "بحث") {
       setSearchValue("");
-      table.getColumn(searchColumn)?.setFilterValue("");
+      setGlobalFilter("");
     } else if (type === "تاريخ") {
       setDateRange({ from: "", to: "" });
       table.getColumn("endDate")?.setFilterValue({ from: "", to: "" });
     }
     setActiveFilters(prev => prev.filter(f => f !== filter));
-  }, [searchColumn, table]);
+  }, [table]);
 
   // Function to export table data as CSV
   const exportToCSV = useCallback(() => {
@@ -176,7 +203,11 @@ export function DataTable<TData, TValue>({
       headers.join(","),
       ...filteredData.map(row =>
         columns.map(column => {
-          const value = row[column.accessorKey as keyof typeof row];
+          /* `accessorKey` exists only on the accessor variant of ColumnDef, so it is read through a
+             narrowed view rather than off the union. A column without one contributes an empty cell
+             instead of indexing the row with `undefined`. */
+          const accessorKey = (column as { accessorKey?: unknown }).accessorKey;
+          const value = typeof accessorKey === "string" ? row[accessorKey as keyof typeof row] : undefined;
           return typeof value === "string" || typeof value === "number" ? value : "";
         }).join(",")
       ),
@@ -194,12 +225,12 @@ export function DataTable<TData, TValue>({
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-[240px]">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+            <Search className="absolute end-2 top-2.5 h-4 w-4 text-gray-500" />
             <Input
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={handleSearch}
-              className="pl-8"
+              className="pe-8"
             />
           </div>
 
@@ -211,14 +242,13 @@ export function DataTable<TData, TValue>({
                   className="flex items-center gap-2 hover:bg-brand/8 transition-colors"
                 >
                   <Calendar className="h-4 w-4 text-black" />
-                  <span className="text-black font-medium">فلتر تاريخ</span>
+                  <span className="text-black font-medium">{dt("فلتر تاريخ")}</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="rounded-lg shadow-lg max-w-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">
-                    حدد نطاق التاريخ
-                  </h3>
+                    {dt("حدد نطاق التاريخ")}</h3>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -235,8 +265,7 @@ export function DataTable<TData, TValue>({
                 <div className="flex items-center gap-3">
                   <div className="space-y-2 flex-1">
                     <label className="text-sm font-medium text-gray-700">
-                      من تاريخ
-                    </label>
+                      {dt("من تاريخ")}</label>
                     <Input
                       type="date"
                       value={dateRange.from}
@@ -246,8 +275,7 @@ export function DataTable<TData, TValue>({
                   </div>
                   <div className="space-y-2 flex-1">
                     <label className="text-sm font-medium text-gray-700">
-                      إلى تاريخ
-                    </label>
+                      {dt("إلى تاريخ")}</label>
                     <Input
                       type="date"
                       value={dateRange.to}
@@ -263,14 +291,12 @@ export function DataTable<TData, TValue>({
                     onClick={() => setIsDateFilterOpen(false)}
                     className="flex-1 hover:bg-gray-100 transition-colors"
                   >
-                    إلغاء
-                  </Button>
+                    {dt("إلغاء")}</Button>
                   <Button
                     onClick={applyDateFilter}
                     className="flex-1 bg-black hover:bg-brand-dark text-white transition-colors"
                   >
-                    تأكيد الفلتر
-                  </Button>
+                    {dt("تأكيد الفلتر")}</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -293,8 +319,7 @@ export function DataTable<TData, TValue>({
           className="flex items-center gap-2"
         >
           <Database className="h-4 w-4" />
-          استخراج بيانات
-        </Button>
+          {dt("استخراج بيانات")}</Button>
 </div>
       </div>
 
@@ -302,7 +327,7 @@ export function DataTable<TData, TValue>({
         <div className="flex flex-wrap items-center gap-2 pt-2">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-500" />
-            <span className="text-sm text-gray-700">التصفيات المفعلة</span>
+            <span className="text-sm text-gray-700">{dt("التصفيات المفعلة")}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {activeFilters.map((filter) => (
@@ -342,7 +367,7 @@ export function DataTable<TData, TValue>({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className="text-right font-semibold"
+                    className="text-start font-semibold"
                   >
                     {header.isPlaceholder
                       ? null
@@ -390,16 +415,14 @@ export function DataTable<TData, TValue>({
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
         >
-          السابق
-        </Button>
+          {dt("السابق")}</Button>
         <Button
           variant="outline"
           size="sm"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
         >
-          التالي
-        </Button>
+          {dt("التالي")}</Button>
       </div>
     </div>
   );

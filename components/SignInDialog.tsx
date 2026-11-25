@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { Link, usePathname } from "@/i18n/routing";
 import { useTranslations, useLocale } from "next-intl";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import DonorCodeLogin from "@/components/auth/DonorCodeLogin";
 import {
   X,
   Heart,
@@ -24,18 +25,14 @@ import {
   Inbox,
   Calendar,
   Zap,
-  UserRoundCheck,
-  UserX,
-  UserCheck,
   UserCheck2,
 } from "lucide-react";
 import { useState, useRef, useCallback, useEffect } from "react";
-import { PhoneInput } from "react-international-phone";
-import "react-international-phone/style.css";
+import SearchablePhoneInput from "@/components/SearchablePhoneInput";
 import { useIpCountry } from "@/hooks/useIpCountry";
 import { track } from "@vercel/analytics";
 
-// ── Module-level component — stable identity, no focus-loss on re-render ────
+// ── Module-level component  stable identity, no focus-loss on re-render ────
 interface AuthFieldProps {
   icon: React.ElementType;
   type?: string;
@@ -193,6 +190,13 @@ export function SignInPanel({
         try { track("signin_success", { method: "credentials", locale }); } catch {}
         onAuthenticated?.();
         onClose();
+      } else if (res?.error === "NO_PASSWORD") {
+        // An account imported from the old site, or one made with Google:
+        // signing up with this email sets its password once the email is
+        // confirmed, and keeps the donor's history.
+        try { track("signin_blocked", { method: "credentials", reason: "no_password", locale }); } catch {}
+        setAuthMode("signup");
+        setError(t("noPasswordYet"));
       } else if (res?.error === "EMAIL_NOT_VERIFIED") {
         try { track("signin_blocked", { method: "credentials", reason: "email_not_verified", locale }); } catch {}
         // Resend verification link and go to inbox screen
@@ -310,7 +314,7 @@ export function SignInPanel({
           <div className="flex justify-center mb-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/yedicijan_logo.png"
+              src="/logometaminber.avif"
               alt="Logo"
               className="h-12 w-auto object-contain brightness-0 invert"
             />
@@ -369,7 +373,8 @@ export function SignInPanel({
           {/* ── OPTIONS screen ─────────────────────────────────────────── */}
           {screen === "options" && (
             <>
-              {/* Google — same footprint as email + gradient frame */}
+              {/* Google  same footprint as email + gradient frame */}
+              <DonorCodeLogin callbackUrl={googleCallbackUrl} onDone={onAuthenticated ? () => { onAuthenticated(); onClose(); } : undefined} />
               <div className="relative pt-2">
                 <div
                   className={`pointer-events-none absolute -top-1 z-10 flex max-w-[calc(100%-2rem)] items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 px-2 py-1 text-[10px] font-bold leading-none text-white shadow-md ring-2 ring-white sm:text-[11px] ${
@@ -416,7 +421,7 @@ export function SignInPanel({
                 {t("signInWithEmail")}
               </button> */}
 
-              {/* Donate-as-guest — same gradient-border treatment as Google,
+              {/* Donate-as-guest  same gradient-border treatment as Google,
                   but blue-only to differentiate from the multi-color CTA */}
               {onSkip && (
                 <div className="relative pt-2">
@@ -516,7 +521,7 @@ export function SignInPanel({
 
               {authMode === "signup" && (
                 <div className="phone-input-wrapper overflow-visible">
-                  <PhoneInput
+                  <SearchablePhoneInput locale={locale}
                     defaultCountry={ipCountry}
                     value={form.phone}
                     onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
@@ -713,3 +718,4 @@ export default function SignInDialog({
     </Dialog>
   );
 }
+

@@ -1,10 +1,11 @@
+import { getOpenAiRuntime } from "@/lib/ai/core/connection-settings";
 import { prisma } from "@/lib/prisma";
 import { jsonNoStore, requireArchiveApiAccess } from "../../../_auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Params = { params: Promise<{ id: string }> | { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 type FileAnalysis = {
   summary: string;
@@ -27,7 +28,7 @@ export async function POST(_request: Request, context: Params) {
 
   const metadata = metadataObject(row.metadata);
   const fallback = fallbackAnalysis(metadata);
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = (await getOpenAiRuntime("content")).apiKey;
   let analysis = fallback;
 
   if (apiKey) {

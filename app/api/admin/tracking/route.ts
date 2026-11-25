@@ -2,12 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
+import { rawCommand } from "@/lib/prisma-raw-command";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
+import { getRawTrackingSettings, TRACKING_SETTINGS_COLLECTION } from "@/lib/tracking/tracking-settings";
 import { writeAuditLog, auditActorFromDashboardSession } from "@/lib/audit-log";
+import { encryptIntegrationSecret, integrationEncryptionKeyIsConfigured } from "@/lib/integration-settings/crypto";
+import { googleTagManagerId } from "@/lib/tracking/google-script-policy";
+import { normalizeClarityProjectId, resolveClarityConnection } from "@/lib/tracking/clarity-config";
+import { parseGa4ServiceAccountJson } from "@/lib/marketing/ga4-reporting";
 
-const COLLECTION = "TrackingSettings";
 
 const PLAIN_FIELDS = [
+  "clarityProjectId",
+  "clarityEnabled",
+  "googleTagManagerId",
+  "googleTagManagerEnabled",
   "facebookPixelId",
   "facebookTestEventCode",
   "metaDatasetId",
@@ -43,9 +52,12 @@ type SecretField = (typeof SECRET_FIELDS)[number];
 type AnyTrackingField = PlainField | SecretField;
 
 type TrackingRaw = Partial<Record<AnyTrackingField | "id" | "_id" | "updatedBy", unknown>> & {
+  gaServiceAccountEncrypted?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
 };
+
+const GA4_REPORT_CREDENTIAL_CONTEXT = "tracking-settings:ga4-service-account";
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -87,18 +99,6 @@ function sanitizeScalar(value: unknown): string | boolean | null {
   return null;
 }
 
-async function getRawTrackingSettings(): Promise<TrackingRaw | null> {
-  const result = await prisma.$runCommandRaw({
-    find: COLLECTION,
-    limit: 1,
-    sort: { createdAt: 1 },
-  });
-  const batch = isPlainObject(result) && isPlainObject(result.cursor) && Array.isArray(result.cursor.firstBatch)
-    ? result.cursor.firstBatch
-    : [];
-  return (batch[0] as TrackingRaw | undefined) ?? null;
-}
-
 function serializeSettings(raw: TrackingRaw | null) {
   const output: Record<string, unknown> = {
     id: raw ? normalizeMongoId(raw._id) ?? normalizeMongoId(raw.id) : null,
@@ -121,6 +121,12 @@ function serializeSettings(raw: TrackingRaw | null) {
     output[`${field}Present`] = typeof secret === "string" && secret.trim().length > 0;
     output[`${field}Masked`] = maskSecret(secret);
   }
+
+  Object.assign(output, resolveClarityConnection(raw));
+  // A saved project ID is not evidence of an externally verified recording.
+  output.clarityExternalVerifiedAt = null;
+  output.gaServiceAccountJsonPresent = typeof raw?.gaServiceAccountEncrypted === "string"
+    && raw.gaServiceAccountEncrypted.trim().length > 0;
 
   output.createdAt = normalizeDate(raw?.createdAt);
   output.updatedAt = normalizeDate(raw?.updatedAt);
@@ -186,7 +192,7 @@ async function persistRawSettings(update: { $set: Record<string, unknown>; $unse
 
   if (id) {
     const command: Record<string, unknown> = {
-      update: COLLECTION,
+      update: TRACKING_SETTINGS_COLLECTION,
       updates: [
         {
           q: { _id: { $oid: id } },
@@ -198,7 +204,7 @@ async function persistRawSettings(update: { $set: Record<string, unknown>; $unse
         },
       ],
     };
-    await prisma.$runCommandRaw(command);
+    await prisma.$runCommandRaw(rawCommand(command));
     return getRawTrackingSettings();
   }
 
@@ -208,14 +214,14 @@ async function persistRawSettings(update: { $set: Record<string, unknown>; $unse
     updatedAt: now,
     metaDonateEventName: update.$set.metaDonateEventName ?? "Donate",
   };
-  await prisma.$runCommandRaw({ insert: COLLECTION, documents: [insertDoc] });
+  await prisma.$runCommandRaw({ insert: TRACKING_SETTINGS_COLLECTION, documents: [insertDoc] });
   return getRawTrackingSettings();
 }
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    const denied = requireAdminOrDashboardPermission(session, "pixels");
+    const denied = requireAdminOrDashboardPermission(session, "platformConnections");
     if (denied) return denied;
 
     const settings = await getRawTrackingSettings();
@@ -229,7 +235,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    const denied = requireAdminOrDashboardPermission(session, "pixels");
+    const denied = requireAdminOrDashboardPermission(session, "platformConnectionsManage");
     if (denied) return denied;
 
     const bodyRaw = await request.json().catch(() => null);
@@ -238,6 +244,34 @@ export async function PUT(request: NextRequest) {
     }
 
     const existing = await getRawTrackingSettings();
+    if (Object.hasOwn(bodyRaw, "clarityEnabled") && typeof bodyRaw.clarityEnabled !== "boolean") {
+      return NextResponse.json({ error: "INVALID_CLARITY_ENABLED" }, { status: 400 });
+    }
+    if (Object.hasOwn(bodyRaw, "clarityProjectId")) {
+      const rawId = bodyRaw.clarityProjectId;
+      if (rawId !== null && rawId !== "" && !normalizeClarityProjectId(rawId)) {
+        return NextResponse.json({ error: "INVALID_CLARITY_PROJECT_ID" }, { status: 400 });
+      }
+      bodyRaw.clarityProjectId = normalizeClarityProjectId(rawId);
+    }
+    if (bodyRaw.clarityEnabled === true && Object.hasOwn(bodyRaw, "clarityProjectId") && !bodyRaw.clarityProjectId) {
+      return NextResponse.json({ error: "CLARITY_PROJECT_ID_REQUIRED" }, { status: 400 });
+    }
+    if (Object.hasOwn(bodyRaw, "googleTagManagerEnabled") && typeof bodyRaw.googleTagManagerEnabled !== "boolean") {
+      return NextResponse.json({ error: "INVALID_GTM_SETTING" }, { status: 400 });
+    }
+    if (Object.hasOwn(bodyRaw, "googleTagManagerId")) {
+      const value = bodyRaw.googleTagManagerId;
+      if (value !== null && value !== "" && !googleTagManagerId(value)) {
+        return NextResponse.json({ error: "INVALID_GTM_CONTAINER_ID" }, { status: 400 });
+      }
+      bodyRaw.googleTagManagerId = googleTagManagerId(value);
+    }
+    const nextGtmEnabled = bodyRaw.googleTagManagerEnabled ?? existing?.googleTagManagerEnabled;
+    const nextGtmId = Object.hasOwn(bodyRaw, "googleTagManagerId") ? bodyRaw.googleTagManagerId : existing?.googleTagManagerId;
+    if (nextGtmEnabled === true && !googleTagManagerId(nextGtmId)) {
+      return NextResponse.json({ error: "GTM_CONTAINER_ID_REQUIRED" }, { status: 400 });
+    }
     const actor = auditActorFromDashboardSession(session!);
     const update = buildUpdateFromBody(
       {
@@ -246,6 +280,30 @@ export async function PUT(request: NextRequest) {
       },
       existing
     );
+
+    if (bodyRaw.clearGaServiceAccountJson === true) {
+      update.$unset.gaServiceAccountEncrypted = "";
+      update.changedFields.push("gaServiceAccountEncrypted");
+      update.secretFieldsChanged.gaServiceAccountJson = true;
+    } else if (typeof bodyRaw.gaServiceAccountJson === "string" && bodyRaw.gaServiceAccountJson.trim()) {
+      const rawServiceAccountJson = bodyRaw.gaServiceAccountJson.trim();
+      if (rawServiceAccountJson.length > 50_000) {
+        return NextResponse.json({ error: "INVALID_SERVICE_ACCOUNT_JSON" }, { status: 400 });
+      }
+      const serviceAccount = parseGa4ServiceAccountJson(rawServiceAccountJson);
+      if (!serviceAccount) {
+        return NextResponse.json({ error: "INVALID_SERVICE_ACCOUNT_JSON" }, { status: 400 });
+      }
+      if (!integrationEncryptionKeyIsConfigured()) {
+        return NextResponse.json({ error: "ENCRYPTION_KEY_NOT_CONFIGURED" }, { status: 503 });
+      }
+      update.$set.gaServiceAccountEncrypted = encryptIntegrationSecret(
+        JSON.stringify(serviceAccount),
+        GA4_REPORT_CREDENTIAL_CONTEXT,
+      );
+      update.changedFields.push("gaServiceAccountEncrypted");
+      update.secretFieldsChanged.gaServiceAccountJson = true;
+    }
     update.$set.updatedBy = actor.actorId;
 
     const saved = await persistRawSettings(update, existing);
@@ -260,6 +318,19 @@ export async function PUT(request: NextRequest) {
       metadata: {
         changedFields: update.changedFields,
         secretFieldsChanged: update.secretFieldsChanged,
+        // Before/after for the non-secret fields (pixel ids, tag ids, event names), so a
+        // wrong pixel can be traced and reverted. Secrets are never written to the log.
+        plainChanges: Object.fromEntries(
+          update.changedFields
+            .filter((f) => (PLAIN_FIELDS as readonly string[]).includes(f))
+            .map((f) => [
+              f,
+              {
+                before: (existing as Record<string, unknown> | null)?.[f] ?? null,
+                after: (saved as Record<string, unknown> | null)?.[f] ?? null,
+              },
+            ])
+        ),
       },
     });
 

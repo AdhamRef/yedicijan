@@ -19,12 +19,15 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
 import {
+  DEFAULT_CARD_SHARE_COUNTS,
   DEFAULT_SUGGESTED_SHARE_COUNTS,
+  MAX_CARD_SHARE_COUNTS,
   parseSuggestedShareCounts,
   type SuggestedShareCountsConfig,
 } from "@/lib/campaign/campaign-modes";
 import { parseAmountsInput } from "@/lib/campaign/suggested-donations";
 import { SUPPORTED_CURRENCY_OPTIONS } from "@/lib/supported-currencies";
+import { dashDir, dt, dtx } from "@/lib/dashboard/i18n";
 
 type PriceRow = { id: string; currency: string; priceStr: string };
 
@@ -39,6 +42,8 @@ function makePriceRow(currency = "USD", priceStr = ""): PriceRow {
 export type SuggestedShareCountsPayload = {
   counts: number[];
   priceByCurrency: Record<string, number>;
+  /** Up to three of `counts` for the campaign card; empty = 1 / 2 / 5. */
+  cardCounts: number[];
 };
 
 export type SuggestedShareCountsSectionRef = {
@@ -46,17 +51,28 @@ export type SuggestedShareCountsSectionRef = {
 };
 
 type Props = {
+  onDirty?: () => void;
   initialConfig?: SuggestedShareCountsConfig | null;
 };
 
 export const SuggestedShareCountsSection = forwardRef<
   SuggestedShareCountsSectionRef,
   Props
->(function SuggestedShareCountsSection({ initialConfig }, ref) {
+>(function SuggestedShareCountsSection({ initialConfig, onDirty }, ref) {
   const [countsStr, setCountsStr] = useState(
     () => DEFAULT_SUGGESTED_SHARE_COUNTS.join(", ")
   );
   const [priceRows, setPriceRows] = useState<PriceRow[]>([]);
+  const [cardCounts, setCardCounts] = useState<number[]>([]);
+  /* The counts as typed, whole and ascending, for picking the card's three. */
+  const listed = useMemo(
+    () => [...new Set(parseAmountsInput(countsStr.replace(/،/g, ",")).map((n) => Math.floor(n)).filter((n) => n >= 1))].sort((a, b) => a - b),
+    [countsStr]
+  );
+  const toggleCard = (value: number) =>
+    setCardCounts((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : prev.length >= MAX_CARD_SHARE_COUNTS ? prev : [...prev, value].sort((a, b) => a - b)
+    );
 
   const stableKey = useMemo(
     () => JSON.stringify(initialConfig ?? null),
@@ -66,6 +82,7 @@ export const SuggestedShareCountsSection = forwardRef<
   useEffect(() => {
     const p = parseSuggestedShareCounts(initialConfig);
     setCountsStr(p.counts.join(", "));
+    setCardCounts(p.cardCounts ?? []);
     const byCurrency = p.priceByCurrency ?? {};
     setPriceRows(
       Object.entries(byCurrency).map(([currency, price]) =>
@@ -89,7 +106,7 @@ export const SuggestedShareCountsSection = forwardRef<
         const n = Number(row.priceStr);
         if (Number.isFinite(n) && n > 0) priceByCurrency[code] = n;
       }
-      return { counts, priceByCurrency };
+      return { counts, priceByCurrency, cardCounts: cardCounts.filter((v) => counts.includes(v)).slice(0, MAX_CARD_SHARE_COUNTS) };
     },
   }));
 
@@ -109,43 +126,68 @@ export const SuggestedShareCountsSection = forwardRef<
   };
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-4" dir={dashDir()}>
       <div className="space-y-2 rounded-lg border border-border p-4 bg-muted/30">
         <Label className="text-sm font-medium">
-          أعداد الأسهم المقترحة
-        </Label>
+          {dt("أعداد الأسهم المقترحة")}</Label>
         <Input
           value={countsStr}
-          onChange={(e) => setCountsStr(e.target.value)}
+          onChange={(e) => {onDirty?.(); return (setCountsStr(e.target.value));}}
           placeholder="1, 5, 10, 25, 50"
           dir="ltr"
           className="font-mono text-sm"
         />
         <p className="text-xs text-muted-foreground">
-          تُعرض كأزرار سريعة عند اختيار التبرع بعدد الأسهم. الافتراضي:{" "}
-          {DEFAULT_SUGGESTED_SHARE_COUNTS.join(", ")}
+          {dtx("تُعرض كلها كأزرار سريعة في صفحة المشروع. الافتراضي: {0}", [DEFAULT_SUGGESTED_SHARE_COUNTS.join(", ")])}
+        </p>
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-border p-4 bg-muted/30">
+        <Label className="text-sm font-medium">{dtx("الأعداد الظاهرة على بطاقة المشروع (حتى {0})", [MAX_CARD_SHARE_COUNTS])}</Label>
+        <div className="flex flex-wrap gap-2" dir="ltr">
+          {listed.map((value) => {
+            const on = cardCounts.includes(value);
+            const full = !on && cardCounts.filter((v) => listed.includes(v)).length >= MAX_CARD_SHARE_COUNTS;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {onDirty?.(); return (toggleCard(value));}}
+                disabled={full}
+                aria-pressed={on}
+                className={[
+                  "h-9 min-w-12 rounded-full border px-3 font-mono text-sm transition-colors",
+                  on ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-semibold" : "border-border bg-white",
+                  full ? "opacity-40 cursor-not-allowed" : "hover:border-gray-400",
+                ].join(" ")}
+              >
+                {on ? "✓ " : ""}
+                {value}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {dtx("اختر حتى {0} أعداد لتظهر على البطاقة بجانب خانة العدد المخصص، وتبقى البقية في صفحة المشروع. بدون اختيار تُعرض ", [MAX_CARD_SHARE_COUNTS])}{DEFAULT_CARD_SHARE_COUNTS.join(dt("، "))}.
         </p>
       </div>
 
       <div className="space-y-2 rounded-lg border border-border p-4 bg-muted/30">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <Label>استثناءات سعر السهم حسب العملة (اختياري)</Label>
+          <Label>{dt("استثناءات سعر السهم حسب العملة (اختياري)")}</Label>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={addPriceRow}
+            onClick={() => { onDirty?.(); addPriceRow(); }}
             className="gap-1"
           >
             <Plus className="w-4 h-4" />
-            إضافة عملة
-          </Button>
+            {dt("إضافة عملة")}</Button>
         </div>
         {priceRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            بدون استثناءات، يُحوَّل سعر السهم بالدولار تلقائيًا لعملة المتبرع.
-            أضف استثناءً لتحديد سعر ثابت لعملة بعينها.
-          </p>
+            {dt("بدون استثناءات، يُحوَّل سعر السهم بالدولار تلقائيًا لعملة المتبرع. أضف استثناءً لتحديد سعر ثابت لعملة بعينها.")}</p>
         ) : (
           <div className="space-y-3">
             {priceRows.map((row) => (
@@ -154,11 +196,11 @@ export const SuggestedShareCountsSection = forwardRef<
                 className="flex flex-col sm:flex-row gap-2 sm:items-end border rounded-lg p-3 bg-white"
               >
                 <div className="flex-1 min-w-[140px]">
-                  <Label className="text-xs text-muted-foreground">العملة</Label>
+                  <Label className="text-xs text-muted-foreground">{dt("العملة")}</Label>
                   <Select
                     value={row.currency}
                     onValueChange={(v) =>
-                      updatePriceRow(row.id, { currency: v })
+                      {onDirty?.(); return (updatePriceRow(row.id, { currency: v }));}
                     }
                   >
                     <SelectTrigger className="mt-1" dir="ltr">
@@ -167,7 +209,7 @@ export const SuggestedShareCountsSection = forwardRef<
                     <SelectContent>
                       {SUPPORTED_CURRENCY_OPTIONS.map((c) => (
                         <SelectItem key={c.code} value={c.code}>
-                          {c.code} — {c.name}
+                          {c.code}  {c.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -175,8 +217,7 @@ export const SuggestedShareCountsSection = forwardRef<
                 </div>
                 <div className="flex-[2]">
                   <Label className="text-xs text-muted-foreground">
-                    سعر السهم الواحد بهذه العملة
-                  </Label>
+                    {dt("سعر السهم الواحد بهذه العملة")}</Label>
                   <Input
                     type="number"
                     min={0}
@@ -185,9 +226,9 @@ export const SuggestedShareCountsSection = forwardRef<
                     dir="ltr"
                     value={row.priceStr}
                     onChange={(e) =>
-                      updatePriceRow(row.id, { priceStr: e.target.value })
+                      {onDirty?.(); return (updatePriceRow(row.id, { priceStr: e.target.value }));}
                     }
-                    placeholder="مثال: 100"
+                    placeholder={dt("مثال: 100")}
                   />
                 </div>
                 <Button
@@ -195,8 +236,8 @@ export const SuggestedShareCountsSection = forwardRef<
                   variant="ghost"
                   size="icon"
                   className="shrink-0 text-destructive"
-                  onClick={() => removePriceRow(row.id)}
-                  aria-label="حذف الصف"
+                  onClick={() => {onDirty?.(); return (removePriceRow(row.id));}}
+                  aria-label={dt("حذف الصف")}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { donationFieldEmpty } from "@/lib/donations/mongo-null";
 import { tgSendMessage } from "./client";
 import { getTelegramConfig } from "./config";
 import {
@@ -27,32 +28,44 @@ function daysAgoRange(days: number): { start: Date; end: Date } {
 }
 
 async function loadStatsSnapshot(periodLabel: string, range: { start: Date | null; end: Date | null }): Promise<StatsSnapshot> {
-  const dateFilter =
+  // Income belongs to the day funds were actually confirmed; failed and
+  // pending attempts belong to their creation day, since neither has a paidAt.
+  const attemptDateFilter =
     range.start && range.end ? { createdAt: { gte: range.start, lt: range.end } } : {};
+  const settledDateFilter =
+    range.start && range.end ? { paidAt: { gte: range.start, lt: range.end } } : {};
 
   const PAID = { status: "PAID", paidAt: { not: null } } as const;
   const FAILED = { status: "FAILED" } as const;
   // status=PAID + paidAt null = checkout started but gateway never confirmed (abandoned/in-flight).
-  const PENDING_PAID = { status: "PAID", paidAt: null } as const;
+  const PENDING_PAID = { status: "PAID", ...donationFieldEmpty("paidAt") } as const;
 
-  const [paidCount, paidSum, failedCount, pendingCount, topItems] =
+  // One-time donations are stored with subscriptionId completely absent (Prisma's
+  // MongoDB connector doesn't always match {subscriptionId: null} against rows
+  // where the field was never written). To avoid that footgun, only filter the
+  // side that definitely matches  `subscriptionId: { not: null }` for monthly 
+  // and derive one-time by subtraction.
+  const [paidCount, paidSum, failedCount, pendingCount, monthlyCount, topItems] =
     await Promise.all([
-      prisma.donation.count({ where: { ...dateFilter, ...PAID } }),
+      prisma.donation.count({ where: { ...PAID, ...settledDateFilter } }),
       prisma.donation.aggregate({
         _sum: { amountUSD: true },
-        where: { ...dateFilter, ...PAID },
+        where: { ...PAID, ...settledDateFilter },
       }),
-      prisma.donation.count({ where: { ...dateFilter, ...FAILED } }),
-      prisma.donation.count({ where: { ...dateFilter, ...PENDING_PAID } }),
+      prisma.donation.count({ where: { ...attemptDateFilter, ...FAILED } }),
+      prisma.donation.count({ where: { ...attemptDateFilter, ...PENDING_PAID } }),
+      prisma.donation.count({ where: { ...PAID, ...settledDateFilter, subscriptionId: { not: null } } }),
       prisma.donationItem.groupBy({
         by: ["campaignId"],
-        where: { donation: { ...dateFilter, ...PAID } },
+        where: { donation: { ...PAID, ...settledDateFilter } },
         _sum: { amountUSD: true },
         _count: { id: true },
         orderBy: { _sum: { amountUSD: "desc" } },
         take: 5,
       }),
     ]);
+
+  const oneTimeCount = Math.max(0, paidCount - monthlyCount);
 
   let topCampaigns: StatsSnapshot["topCampaigns"] = [];
   if (topItems.length > 0) {
@@ -74,6 +87,8 @@ async function loadStatsSnapshot(periodLabel: string, range: { start: Date | nul
     paidTotalUSD: paidSum._sum.amountUSD ?? 0,
     failedCount,
     pendingCount,
+    oneTimeCount,
+    monthlyCount,
     topCampaigns,
   };
 }
@@ -246,7 +261,7 @@ async function handleCampaign(ctx: CommandContext, query: string) {
       `🎯 <b>${escape(campaign.title)}</b>`,
       `<code>${campaign.id}</code>`,
       "",
-      `✅ ${sum._count.id ?? 0} تبرع ناجح — ${formatMoneyUSD(sum._sum.amountUSD ?? 0) || "$0"}`,
+      `✅ ${sum._count.id ?? 0} تبرع ناجح  ${formatMoneyUSD(sum._sum.amountUSD ?? 0) || "$0"}`,
     ].join("\n")
   );
 }
@@ -267,7 +282,7 @@ function parseCommand(
 ): ParsedCommand | null {
   // 1) Trust Telegram. When the client recognises a `/foo` it tags it as a
   //    bot_command entity, with offset/length pointing at the slash + name in
-  //    the raw text. Use that first — it's authoritative and immune to weird
+  //    the raw text. Use that first  it's authoritative and immune to weird
   //    invisible characters the user's keyboard might have injected.
   if (entities && entities.length > 0) {
     const cmdEntity = entities.find((e) => e.type === "bot_command");
@@ -285,7 +300,7 @@ function parseCommand(
     }
   }
 
-  // 2) Fallback to text parsing — strip invisible chars before checking.
+  // 2) Fallback to text parsing  strip invisible chars before checking.
   const cleaned = text.replace(INVISIBLE_CHARS_RE, "").trim();
   if (!cleaned.startsWith("/")) return null;
   const m = cleaned.match(/^\/(\w+)(?:@\w+)?(?:\s+([\s\S]+))?$/);
@@ -304,7 +319,7 @@ export async function dispatchTelegramCommand(input: {
   entities?: Array<{ type?: string; offset?: number; length?: number }> | null;
   messageId?: number;
 }): Promise<void> {
-  const cfg = getTelegramConfig();
+  const cfg = await getTelegramConfig();
   if (!cfg) return;
 
   // Allowlist: only respond in approved chats. Otherwise stay silent.
@@ -349,7 +364,7 @@ export async function dispatchTelegramCommand(input: {
         await reply(
           ctx,
           await recentDonationsList(
-            { status: "PAID", paidAt: null },
+            { status: "PAID", ...donationFieldEmpty("paidAt") },
             "⏳ تبرعات قيد التأكيد"
           )
         );

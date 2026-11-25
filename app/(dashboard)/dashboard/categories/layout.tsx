@@ -8,5 +8,5 @@ export default async function CategoriesLayout({
   children: React.ReactNode;
 }) {
   await requireDashboardPagePermission("categories");
-  return children;
+  return <>{children}</>;
 }

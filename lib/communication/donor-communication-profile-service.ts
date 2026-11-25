@@ -7,15 +7,15 @@ import type { DonorCommunicationProfile } from "@prisma/client";
 type Actor = { actorId?: string | null; actorName?: string | null; actorRole?: string | null } | null;
 
 /**
- * DonorCommunicationProfileService — the unified per-donor communication profile.
+ * DonorCommunicationProfileService  the unified per-donor communication profile.
  *
  * Compatibility, not replacement: consent is derived from the existing User fields
  * (`preferredLang`, `emailNotifications`, `smsNotifications`) plus donation signals.
- * WhatsApp has no explicit consent field on User, so `whatsappOptIn` stays false until a
- * human confirms it — donors are never silently marketing-eligible on WhatsApp.
+ * WhatsApp's legacy `whatsappOptIn` preference is retained for reporting and admin
+ * records. It is not a send gate; WhatsApp sends are suppressed for explicit STOP requests.
  *
  * This package provides the profile upsert only. It does NOT auto-run on paid donation
- * (that wiring into the donation flow is a later, separate step) — the donation flow is
+ * (that wiring into the donation flow is a later, separate step)  the donation flow is
  * untouched here.
  */
 
@@ -38,6 +38,52 @@ export async function getProfile(userId: string): Promise<DonorCommunicationProf
   } catch (error) {
     console.error("getProfile failed", error);
     return null;
+  }
+}
+
+/** Create only MISSING profiles from legacy flags. Existing profile consent is never overwritten. */
+export async function ensureProfilesForUsers(userIds: string[]): Promise<void> {
+  if (!process.env.DATABASE_URL) return;
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (!ids.length) return;
+  const existing = await prisma.donorCommunicationProfile.findMany({ where: { userId: { in: ids } }, select: { userId: true } }).catch(() => []);
+  const have = new Set(existing.map((row) => row.userId));
+  const missing = ids.filter((id) => !have.has(id));
+  if (!missing.length) return;
+  const users = await prisma.user.findMany({
+    where: { id: { in: missing }, role: "DONOR" },
+    select: { id: true, email: true, phone: true, countryCode: true, preferredLang: true, emailNotifications: true, smsNotifications: true },
+  }).catch(() => []);
+  const now = new Date();
+  const rows = users.map((user) => ({
+    userId: user.id,
+    preferredLocale: resolvePreferredLocale(user.preferredLang, null, user.countryCode),
+    countryCode: user.countryCode ?? null,
+    phone: user.phone ?? null,
+    email: user.email ?? null,
+    emailOptIn: Boolean(user.email) && user.emailNotifications !== false,
+    smsOptIn: Boolean(user.phone) && user.smsNotifications !== false,
+    whatsappOptIn: false,
+    consentSource: "legacy-profile-bootstrap",
+    lastConsentAt: now,
+  }));
+
+  // Read paths can request thousands of candidates at once. Creating profiles one-by-one made
+  // audience selection scale linearly with network round trips and could hit Vercel's 300s limit.
+  // Use bounded createMany batches; if a concurrent request wins a unique userId race, fall back
+  // only for that batch so existing consent is never overwritten.
+  const BATCH = 250;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const batch = rows.slice(i, i + BATCH);
+    try {
+      await prisma.donorCommunicationProfile.createMany({ data: batch });
+    } catch {
+      await Promise.all(
+        batch.map((data) =>
+          prisma.donorCommunicationProfile.create({ data }).catch(() => undefined)
+        ),
+      );
+    }
   }
 }
 
@@ -79,27 +125,34 @@ export async function upsertProfileForUser(
     ]);
 
     const preferredLocale = resolvePreferredLocale(user.preferredLang, opts?.donationLocale ?? null, user.countryCode);
-    const existing = await prisma.donorCommunicationProfile.findUnique({ where: { userId }, select: { whatsappOptIn: true } });
+    const existing = await prisma.donorCommunicationProfile.findUnique({
+      where: { userId },
+      select: { id: true, whatsappOptIn: true, emailOptIn: true, smsOptIn: true, doNotContact: true },
+    });
 
-    const data = {
+    const profileData = {
       preferredLocale,
       countryCode: user.countryCode ?? null,
       phone: user.phone ?? null,
       email: user.email ?? null,
-      // Email/SMS opt-in mirror the existing notification flags (marketing gate).
-      emailOptIn: user.email ? user.emailNotifications !== false : false,
-      smsOptIn: user.phone ? user.smsNotifications !== false : false,
-      // WhatsApp consent is never assumed — keep any existing explicit value, else false.
-      whatsappOptIn: existing?.whatsappOptIn ?? false,
       lastDonationAt: lastPaid?.paidAt ?? null,
       totalDonations: paidCount,
     };
 
-    const row = await prisma.donorCommunicationProfile.upsert({
-      where: { userId },
-      create: { userId, ...data },
-      update: data,
-    });
+    const row = existing
+      ? await prisma.donorCommunicationProfile.update({
+          where: { userId },
+          data: profileData,
+        })
+      : await prisma.donorCommunicationProfile.create({
+          data: {
+            userId,
+            ...profileData,
+            emailOptIn: user.email ? user.emailNotifications !== false : false,
+            smsOptIn: user.phone ? user.smsNotifications !== false : false,
+            whatsappOptIn: false,
+          },
+        });
     return { ok: true, data: row };
   } catch (error) {
     console.error("upsertProfileForUser failed", error);

@@ -1,18 +1,28 @@
+import { categoryProjectCounts } from "@/lib/campaign/category-project-counts";
+import { deleteEmptyCategory } from "@/lib/campaign/delete-empty-category";
+import { revalidatePath } from "next/cache";
+import { contentWriteWhere, contentVersionPatch, isContentWriteConflict } from "@/lib/content-editor/legacy-write";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
+import {
+  CATEGORY_PAGE_SELECT,
+  buildCategoryPagePatch,
+  categoryChildrenWrite,
+  categoryPageTranslation,
+  pageTemplate,
+  releasePageTemplateFromOthers,
+} from "@/lib/content/category-page-write";
 import { getServerSession } from 'next-auth';
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { writeAuditLog, auditActorFromDashboardSession } from "@/lib/audit-log";
 import { pickTranslation, translationLocaleWhere } from "@/lib/i18n/translation-fallback";
 import {
-  generateUniqueSlug,
   generateUniqueLocaleSlug,
   normalizeUserSlug,
   whereByIdOrAnyLocaleSlug,
   whereByIdOrSlug,
 } from "@/lib/slug";
-import { NOT_SOFT_DELETED } from "@/lib/campaign/soft-delete-filter";
 
 // GET: return a single category (localized) with optional counts
 export async function GET(
@@ -32,6 +42,7 @@ export async function GET(
       // selects which translation is returned, not which slugs are addressable.
       where: whereByIdOrAnyLocaleSlug(id),
       select: {
+        ...CATEGORY_PAGE_SELECT,
         id: true,
         slug: true,
         name: true,
@@ -41,13 +52,13 @@ export async function GET(
         order: true,
         isActive: true,
         translations: allTranslations
-          ? { select: { locale: true, name: true, description: true, slug: true } }
+          ? { select: { locale: true, name: true, description: true, slug: true, heroLead: true, ctaLabel: true, statDoneLabel: true, statGoalLabel: true, projectsTitle: true, donateTitle: true, donateNote: true, achievementsTitle: true } }
           : {
               where: translationLocaleWhere(locale),
               take: 2,
               select: { locale: true, name: true, description: true, slug: true },
             },
-        ...(includeCounts ? { _count: { select: { campaigns: true } } } : {})
+
       }
     });
 
@@ -57,11 +68,14 @@ export async function GET(
 
     const isActive = category.isActive ?? true;
 
+    const counts = includeCounts ? (await categoryProjectCounts(prisma, [category.id])).get(category.id) : null;
     if (allTranslations) {
       return NextResponse.json({
         ...category,
         isActive,
-        campaignCount: (category as any)._count?.campaigns ?? undefined
+        campaignCount: counts?.published,
+        archivedCampaignCount: counts?.archived,
+        linkedCampaignCount: counts?.total
       });
     }
 
@@ -76,7 +90,9 @@ export async function GET(
       icon: category.icon,
       order: category.order,
       isActive,
-      campaignCount: (category as any)._count?.campaigns ?? undefined
+      campaignCount: counts?.published,
+        archivedCampaignCount: counts?.archived,
+        linkedCampaignCount: counts?.total
     });
   } catch (error) {
     console.error('Error fetching category:', error);
@@ -85,8 +101,7 @@ export async function GET(
 }
 
 // PUT: admin-only; supports updating base fields and upserting translations.
-// Important: this intentionally avoids prisma.$transaction because some MongoDB
-// deployments used by the app do not support replica-set transactions.
+// The settings form and its locale writes share an atomic version-checked transaction.
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -97,6 +112,7 @@ export async function PUT(
     const denied = requireAdminOrDashboardPermission(session, 'categories');
     if (denied) return denied;
 
+    return await prisma.$transaction(async (tx) => {
     const body = await request.json();
     const { name, description, image, icon, order, translations } = body;
 
@@ -104,45 +120,40 @@ export async function PUT(
       return NextResponse.json({ error: 'Category name is required' }, { status: 400 });
     }
 
-    const existing = await prisma.category.findFirst({
+    const existing = await tx.category.findFirst({
       where: whereByIdOrSlug(idOrSlug),
-      select: { id: true, name: true },
+      select: { id: true, name: true, slug: true },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 });
     }
     const id = existing.id;
 
-    let nextSlug: string | undefined;
-    if (body.slug !== undefined) {
-      const cleaned = normalizeUserSlug(body.slug);
-      let base = cleaned ?? '';
-      if (!base) {
-        const newEnName = typeof body?.translations?.en?.name === 'string' ? body.translations.en.name.trim() : '';
-        if (newEnName) {
-          base = newEnName;
-        } else {
-          const existingEn = await prisma.categoryTranslation.findFirst({
-            where: { categoryId: id, locale: 'en' },
-            select: { name: true },
-          });
-          base = existingEn?.name?.trim() || name || existing.name;
-        }
-      }
-      nextSlug = await generateUniqueSlug(prisma.category as any, base, { fallbackPrefix: 'category', currentId: id });
+    const nextSlug: string | undefined = undefined;
+    if (body.slug !== undefined && normalizeUserSlug(body.slug) !== (existing.slug || undefined)) {
+      return NextResponse.json({ error: 'غيّر الرابط من محرر المحتوى لتأكيده وحفظ سجله' }, { status: 409 });
     }
 
-    const updatedCat = await prisma.category.update({
-      where: { id },
+    const updatedCat = await tx.category.update({
+      where: contentWriteWhere({ id: id }, body),
       data: {
+        ...contentVersionPatch(),
         name: String(name).trim(),
         description: description || '',
         image: image || '',
         icon: icon || '',
         order: order ?? 0,
         ...(nextSlug !== undefined ? { slug: nextSlug } : {}),
+        /* The landing page this category owns. Only keys the request actually
+           carried are touched, so a caller that knows nothing about the page 
+           the archive toggle, a bulk tool  leaves it exactly as it was. */
+        ...buildCategoryPagePatch(body),
+        ...categoryChildrenWrite(body),
       }
     });
+
+    /* A site page carries one category at most. */
+    await releasePageTemplateFromOthers(tx, id, pageTemplate(body.pageTemplate));
 
     if (translations && typeof translations === 'object') {
       for (const [locale, t] of Object.entries(translations)) {
@@ -156,7 +167,7 @@ export async function PUT(
         if (!translatedName && !translatedDescription && !tt.slug) continue;
         if (!translatedName) continue;
 
-        const existingTrans = await prisma.categoryTranslation.findUnique({
+        const existingTrans = await tx.categoryTranslation.findUnique({
           where: { categoryId_locale: { categoryId: id, locale } as any },
           select: { id: true, slug: true },
         });
@@ -165,26 +176,29 @@ export async function PUT(
         let localeSlug: string | null = existingTrans?.slug ?? null;
         if (Object.prototype.hasOwnProperty.call(tt, 'slug')) {
           localeSlug = requestedSlug
-            ? await generateUniqueLocaleSlug(prisma.categoryTranslation as any, requestedSlug, {
+            ? await generateUniqueLocaleSlug(tx.categoryTranslation as any, requestedSlug, {
                 locale,
                 fallbackPrefix: 'category',
                 currentTranslationId: existingTrans?.id,
               })
             : null;
         } else if (!existingTrans?.slug && translatedName) {
-          localeSlug = await generateUniqueLocaleSlug(prisma.categoryTranslation as any, translatedName, {
+          localeSlug = await generateUniqueLocaleSlug(tx.categoryTranslation as any, translatedName, {
             locale,
             fallbackPrefix: 'category',
             currentTranslationId: existingTrans?.id,
           });
         }
 
-        await prisma.categoryTranslation.upsert({
+        const pageCopy = categoryPageTranslation(tt);
+
+        await tx.categoryTranslation.upsert({
           where: { categoryId_locale: { categoryId: id, locale } as any },
           update: {
             name: translatedName,
             description: translatedDescription,
             slug: localeSlug,
+            ...pageCopy,
           },
           create: {
             categoryId: id,
@@ -192,12 +206,13 @@ export async function PUT(
             name: translatedName,
             description: translatedDescription,
             slug: localeSlug,
+            ...pageCopy,
           },
         });
       }
     }
 
-    const full = await prisma.category.findUnique({
+    const full = await tx.category.findUnique({
       where: { id: updatedCat.id },
       select: {
         id: true,
@@ -221,7 +236,9 @@ export async function PUT(
     });
 
     return NextResponse.json(full);
+    }, { maxWait: 10000, timeout: 30000 });
   } catch (error: any) {
+    if (isContentWriteConflict(error)) return NextResponse.json({ error: "تغير المحتوى لدى زميل. أعد تحميل الصفحة قبل الحفظ." }, { status: 409 });
     console.error('Error updating category:', error);
     const code = error?.code || '';
     const message = String(error?.message || '');
@@ -236,7 +253,7 @@ export async function PUT(
 }
 
 // PATCH: admin-only; toggle the category's archive state. When isActive flips,
-// cascade the same value to every campaign in the category — archiving the
+// cascade the same value to every campaign in the category  archiving the
 // category archives every campaign, re-activating brings them all back.
 export async function PATCH(
   request: NextRequest,
@@ -268,25 +285,11 @@ export async function PATCH(
       data: { isActive: nextActive },
     });
 
-    // Cascade to every non-deleted member campaign. updateMany on the m2m
-    // mirror is safe — categoryIds is just an ObjectId[] on the Campaign side.
-    // Soft-deleted campaigns are skipped so re-activating a category doesn't
-    // resurrect them.
-    const cascade = await prisma.campaign.updateMany({
-      where: {
-        AND: [
-          { categoryIds: { has: id } },
-          NOT_SOFT_DELETED,
-        ],
-      },
-      data: { isActive: nextActive },
-    });
-
     const actor = auditActorFromDashboardSession(session!);
     await writeAuditLog({
       ...actor,
       action: nextActive ? 'CATEGORY_ACTIVATE' : 'CATEGORY_ARCHIVE',
-      messageAr: `${actor.actorName ?? 'مسؤول'} ${nextActive ? 'فعّل' : 'أرشف'} الحملة "${existing.name}" (${cascade.count} مشروع تابع)`,
+      messageAr: `${actor.actorName ?? 'مسؤول'} ${nextActive ? 'فعّل' : 'أرشف'} التصنيف "${existing.name}" دون تغيير حالة المشاريع التابعة`,
       entityType: 'Category',
       entityId: id,
     });
@@ -294,7 +297,7 @@ export async function PATCH(
     return NextResponse.json({
       id,
       isActive: nextActive,
-      cascadedCampaigns: cascade.count,
+      affectedCampaigns: 0,
     });
   } catch (error) {
     console.error('Error toggling category isActive:', error);
@@ -302,7 +305,7 @@ export async function PATCH(
   }
 }
 
-// DELETE: admin-only; refuse to delete if campaigns exist
+// Existing project/history records must survive removal of an empty category.
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -313,33 +316,18 @@ export async function DELETE(
     const denied = requireAdminOrDashboardPermission(session, 'categories');
     if (denied) return denied;
 
-    const cat = await prisma.category.findFirst({
-      where: whereByIdOrSlug(idOrSlug),
-      select: { id: true, name: true },
-    });
-    if (!cat) {
+    const result = await deleteEmptyCategory(prisma, whereByIdOrSlug(idOrSlug), auditActorFromDashboardSession(session!));
+    if (result.state === 'not_found') {
       return NextResponse.json({ error: 'Category not found' }, { status: 404 });
     }
-    const id = cat.id;
-
-    const campaignCount = await prisma.campaign.count({ where: { categoryIds: { has: id } } });
-    if (campaignCount > 0) {
-      return NextResponse.json({ error: 'Category has campaigns. Delete or move campaigns before deleting the category.' }, { status: 400 });
+    if (result.state === 'blocked') {
+      return NextResponse.json({ error: 'CATEGORY_HAS_REFERENCES', code: 'CATEGORY_HAS_REFERENCES', references: result.references }, { status: 409 });
     }
 
-    await prisma.category.delete({ where: { id } });
-
-    const actor = auditActorFromDashboardSession(session!);
-    await writeAuditLog({
-      ...actor,
-      action: 'CATEGORY_DELETE',
-      messageAr: `${actor.actorName ?? 'مسؤول'} حذف الحملة: ${cat?.name ?? id}`,
-      entityType: 'Category',
-      entityId: id,
-    });
-
-    return NextResponse.json({ message: 'Category deleted successfully' }, { status: 200 });
+    revalidatePath('/', 'layout');
+    return NextResponse.json({ message: 'Category deleted successfully', ...result }, { status: 200 });
   } catch (error) {
+    if (isContentWriteConflict(error)) return NextResponse.json({ error: 'CATEGORY_CHANGED_RELOAD', code: 'CATEGORY_CHANGED_RELOAD' }, { status: 409 });
     console.error('Error deleting category:', error);
     return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
   }

@@ -1,12 +1,18 @@
+import { checkoutLineFrequencies, recurringCheckoutLines } from "@/lib/donations/mixed-cart";
+import { resolveNewCardPaymentRoute } from "@/lib/donations/payment-routing-server";
+import { getTrackingClientIp } from "@/lib/tracking/client-ip";
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isValidLocale } from "@/lib/locales";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { resolveReferralId } from "@/lib/referral-server";
 import { userHasDashboardPermission } from "@/lib/dashboard/permissions";
+import { donationListSafeFields } from "@/lib/dashboard/donation-list-privacy";
 import { inferLocaleFromRequest } from "@/lib/preferred-lang";
-import { writeAuditLog, auditStreamForRole } from "@/lib/audit-log";
+import { sanitizeDonationAttribution } from "@/lib/attribution/sanitize";
+import { writeAuditLog } from "@/lib/audit-log";
 import {
   convertAmountInCurrencyToUsd,
   normalizeDonationCurrencyCode,
@@ -17,6 +23,59 @@ import {
   normalizeDonorCountryCode,
 } from "@/lib/donations/donor-country-code";
 import { resolveGuestDonor } from "@/lib/users/resolve-guest-donor";
+import { completionData } from "@/lib/users/account-claim";
+import { createBankTransferClaim } from "@/lib/donations/bank-transfer-claims";
+import { BANK_TRANSFER_PROVIDER } from "@/lib/donations/bank-transfer-shared";
+import { listBankAccounts } from "@/lib/minbar/cms";
+import { getUsdBaseRatesForServer } from "@/lib/exchange/rates-service";
+import { WAQF_MAX_COUNT, WAQF_UNIT_PRICE_USD, isWaqfUnitKey } from "@/lib/minbar/waqf";
+import { MIN_DONATION_USD, MIN_DONATION_USD_TOLERANCE, parseLocalAmount } from "@/lib/minbar/donation-amount";
+import {
+  consentSnapshotFor,
+  firstChargeAfterCheckout,
+  frequencyOfOrderType,
+  isOrderType,
+  normalizeTimezone,
+  parseScheduleChoice,
+  scheduleRuleFor,
+} from "@/lib/donations/recurring-schedule";
+import { isAlbarakaRecurringCheckoutReady } from "@/lib/albaraka";
+import { isPayPalConfigured, isPayPalRecurringEnabled } from "@/lib/paypal";
+import { mintDonationAccessToken } from "@/lib/donations/access-token";
+import { giftLineData, parseGiftOrder, type GiftOrderInput } from "@/lib/donations/gift-order";
+import { recordConciergeEvents } from "@/lib/ai/concierge/events";
+
+/**
+ * Analytics-only marker sent by the checkout when the basket went through the
+ * donation concierge (`lib/ai/concierge/client.ts`). Stored under
+ * `Donation.attribution.ai_concierge` so paid orders can be counted per
+ * concierge session; it never changes what is charged.
+ */
+function parseConciergeMarker(raw: unknown): { sessionId: string; intent: string | null; campaignId: string | null } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const sessionId = typeof o.sessionId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(o.sessionId) ? o.sessionId : null;
+  if (!sessionId) return null;
+  const intent = typeof o.intent === "string" ? o.intent.slice(0, 40) : null;
+  const campaignId = typeof o.campaignId === "string" && /^[0-9a-fA-F]{24}$/.test(o.campaignId) ? o.campaignId : null;
+  return { sessionId, intent, campaignId };
+}
+
+/**
+ * Analytics-only: the browser had talked to the concierge (`markConciergeTouched`)
+ * before this order, whether or not this basket came from it. Stored under
+ * `Donation.attribution.ai_concierge_touch`; the dashboard counts it as an
+ * indirect donation when `at` falls inside its attribution window.
+ */
+function parseConciergeTouch(raw: unknown): { sessionId: string; at: string } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const sessionId = typeof o.sessionId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(o.sessionId) ? o.sessionId : null;
+  const at = typeof o.at === "number" && Number.isFinite(o.at) && o.at > 0 && o.at <= Date.now() + 60_000 ? new Date(o.at) : null;
+  return sessionId && at ? { sessionId, at: at.toISOString() } : null;
+}
+
+const PAYMENT_METHODS = new Set(["CARD", "PAYPAL", "BANK_TRANSFER"]);
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,8 +87,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const campaignId = searchParams.get("campaignId");
     const userId = searchParams.get("userId");
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "10");
+    const requestedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+    const requestedLimit = Number.parseInt(searchParams.get("limit") || "10", 10);
+    const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 10;
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0
+      && Number.isSafeInteger((requestedPage - 1) * limit) ? requestedPage : 1;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = {
@@ -46,6 +108,17 @@ export async function GET(request: NextRequest) {
     // Get donations with pagination
     const donations = await prisma.donation.findMany({
       where,
+      // This GET is callable by donors: do not fetch receipt access tokens,
+      // card details, raw PSP records or bank reconciliation state.
+      omit: {
+        accessToken: true, cardDetails: true, providerRaw: true,
+        originalDonorId: true, providerAuthCode: true, providerHostRefNum: true,
+        paypalOrderId: true, paypalCaptureId: true,
+        bankOperations: true, bankOperationLock: true, bankOperationsRevision: true,
+        bankLastInquiry: true, reconciliationLeaseToken: true,
+        reconciliationLeaseUntil: true, reconciliationNextAt: true,
+        reconciliationCheckedAt: true,
+      },
       include: {
         donor: {
           select: {
@@ -77,7 +150,9 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      donations,
+      donations: donations.map(row => donationListSafeFields(row, {
+        revenueAuthorized: userHasDashboardPermission(session.user, "revenue"),
+      })),
       pagination: {
         total,
         pages: Math.ceil(total / limit),
@@ -99,28 +174,256 @@ export async function POST(request: NextRequest) {
     const session = await getServerSession(authOptions);
 
     const body = await request.json();
+    let lineFrequencies: ReturnType<typeof checkoutLineFrequencies>;
+    try {
+      const count = [body.items, body.categoryItems, body.waqfItems].reduce((sum, rows) => sum + (Array.isArray(rows) ? rows.length : 0), 0);
+      lineFrequencies = checkoutLineFrequencies(body.type || "ONE_TIME", body.lineFrequencies, count);
+    } catch {
+      return NextResponse.json({ error: "Invalid donation line frequencies", code: "MIXED_DONATION_FREQUENCIES" }, { status: 400 });
+    }
     const {
-      items,
-      currency,
-      teamSupport = 0,
+      items: itemsIn,
+      categoryItems: categoryItemsIn,
+      waqfItems: waqfItemsIn,
+      currency: requestedCurrency,
+      /* "USD" when the line and team-support amounts are USD figures to be
+         converted into the charge currency (the Minbar checkout). */
+      amountsIn,
+      teamSupport: teamSupportIn = 0,
+      teamSupportLocal: teamSupportLocalIn,
+      /* Recurring basket: false charges the team support once, with the
+         first payment, instead of with every instalment (the default). */
+      teamSupportRecurring: teamSupportRecurringIn = true,
       coverFees = false,
       type = "ONE_TIME",
+      /* The donor's IANA zone, so "Friday" and "the 15th" are their Friday
+         and their 15th. Validated below; UTC when absent or invalid. */
+      timezone: timezoneIn,
+      /* Recurring only: the day (monthly) and local time the donor chose on
+         the recurring page, plus their note. Validated below; absent means
+         the plan is scheduled from its creation time. */
+      schedule: scheduleIn,
       paymentMethod,
       referralCode,
       locale: donationLocale,
       guest,
+      /* Bank transfer only: which published account the donor was shown, and
+         the currency of the IBAN they picked. Snapshotted onto the claim so
+         the finance review knows where to look. */
+      bankSlug,
+      bankCurrency,
+      concierge: conciergeIn,
+      conciergeTouch: conciergeTouchIn,
     } = body;
+    const concierge = parseConciergeMarker(conciergeIn);
+    const conciergeTouch = parseConciergeTouch(conciergeTouchIn);
+    /* Where the donor came from (UTM, click ids, landing page) as the browser
+       recorded it, whitelisted the same way as `POST /api/donations`. The
+       dashboard's "مصدر التبرع" column and the ad conversion events read it. */
+    const clientIp = getTrackingClientIp(request.headers);
+    const userAgent = request.headers.get("user-agent")?.slice(0, 500) || undefined;
+    const adAttribution = sanitizeDonationAttribution({
+      ...(body.attribution && typeof body.attribution === "object" && !Array.isArray(body.attribution)
+        ? (body.attribution as Record<string, unknown>)
+        : {}),
+      user_agent: userAgent,
+      client_ip: clientIp,
+      client_ip_address: undefined,
+    }) as Record<string, unknown> | undefined;
+    const donationAttribution = concierge || conciergeTouch || adAttribution
+      ? ({
+          ...(adAttribution ?? {}),
+          ...(concierge ? { ai_concierge: { ...concierge, source: "ai_concierge", at: new Date().toISOString() } } : {}),
+          ...(conciergeTouch ? { ai_concierge_touch: conciergeTouch } : {}),
+        } as Prisma.InputJsonValue)
+      : undefined;
+
+    type CartItemIn = {
+      campaignId: string;
+      amount: number;
+      amountUSD?: number;
+      /** The figure as the donor gave it, in their currency (`amountsIn: "USD"`). */
+      local?: unknown;
+      shareCount?: number;
+      /** Given in someone else's name; validated into `giftsByIndex` below. */
+      gift?: unknown;
+    };
+    type CategoryItemIn = { categoryId: string; amount: number; local?: unknown };
+    type WaqfItemIn = { unit: "share" | "meter"; count: number; donorName: string; onBehalf: string };
+
+    /* A line gives either to a campaign, to a category as a whole (a category
+       page's donation box may target the category itself), or buys waqf units.
+       The lists are independent; an order needs at least one line of any kind. */
+    const items: CartItemIn[] = Array.isArray(itemsIn) ? itemsIn : [];
+    const categoryItems: CategoryItemIn[] = Array.isArray(categoryItemsIn) ? categoryItemsIn : [];
+    const waqfItemsRaw: unknown[] = Array.isArray(waqfItemsIn) ? waqfItemsIn : [];
+
+    /* Waqf lines arrive without a price: the unit price is the server's, and
+       both names are required because both go on the certificate. */
+    const waqfItems: WaqfItemIn[] = [];
+    for (const raw of waqfItemsRaw) {
+      const line = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+      const count = line && typeof line.count === "number" && Number.isInteger(line.count) ? line.count : NaN;
+      const donorName = line && typeof line.donorName === "string" ? line.donorName.trim().slice(0, 120) : "";
+      const onBehalf = line && typeof line.onBehalf === "string" ? line.onBehalf.trim().slice(0, 120) : "";
+      if (!line || !isWaqfUnitKey(line.unit) || !(count >= 1 && count <= WAQF_MAX_COUNT) || !donorName || !onBehalf) {
+        return NextResponse.json({ error: "Every waqf line needs a unit, a count and both names" }, { status: 400 });
+      }
+      waqfItems.push({ unit: line.unit, count, donorName, onBehalf });
+    }
 
     // Validate required fields
-    if (!items?.length || !currency || !paymentMethod) {
+    if ((!items.length && !categoryItems.length && !waqfItems.length) || !requestedCurrency || !paymentMethod) {
       return NextResponse.json(
         { error: "Items, currency, and payment method are required" },
         { status: 400 }
       );
     }
-    if (type !== "ONE_TIME") {
-      return NextResponse.json({ error: "Only one-time donations are supported." }, { status: 400 });
+    if (!PAYMENT_METHODS.has(String(paymentMethod))) {
+      return NextResponse.json({ error: "Unsupported payment method" }, { status: 400 });
     }
+    /* One type for the whole order: `ONE_TIME`, or the plan's cadence 
+       `DAILY | FRIDAY | MONTHLY`, exactly as the donor chose it. Anything else
+       is refused rather than coerced; the old code turned every recurring
+       choice into MONTHLY (`DEPLOYED_VS_DESIGN_AUDIT.md` § P0.2). */
+    if (!isOrderType(type)) {
+      return NextResponse.json({ error: "Unsupported donation type" }, { status: 400 });
+    }
+    const frequency = frequencyOfOrderType(type);
+    if (frequency && paymentMethod !== "CARD") {
+      return NextResponse.json({ error: "Recurring baskets require Albaraka card payment", code: "RECURRING_CARD_ONLY" }, { status: 400 });
+    }
+    const timezone = normalizeTimezone(timezoneIn);
+    /* Never let a malformed schedule fall back to a different one silently:
+       the donor would be charged on a day they did not pick. */
+    const scheduleChoice = parseScheduleChoice(frequency ? scheduleIn : null);
+    if (!scheduleChoice.ok) {
+      return NextResponse.json({ error: scheduleChoice.error }, { status: 400 });
+    }
+    const cadences = [...new Set(lineFrequencies.filter(value => value !== "once"))];
+    const scheduleChoices = new Map<string, ReturnType<typeof parseScheduleChoice>>();
+    for (const cadence of cadences) {
+      const choice = parseScheduleChoice(body.schedules?.[cadence] ?? (cadence === frequency?.toLowerCase() ? scheduleIn : null));
+      if (!choice.ok) return NextResponse.json({ error: choice.error }, { status: 400 });
+      scheduleChoices.set(cadence, choice);
+    }
+    const isBankTransfer = paymentMethod === "BANK_TRANSFER";
+    /* A transfer is a one-off act by the donor; nothing can be charged again
+       tomorrow, on Friday or next month. The checkout hides the option for a
+       recurring basket, and this is the server's half of that rule. */
+    if (isBankTransfer && frequency) {
+      return NextResponse.json({ error: "Bank transfer cannot be used for a recurring donation" }, { status: 400 });
+    }
+    /* PayPal is refused before an order exists when the server cannot take
+       it: a PENDING row the donor can never pay helps nobody. */
+    const isPayPal = paymentMethod === "PAYPAL";
+    if (isPayPal && !(frequency ? isPayPalRecurringEnabled() : isPayPalConfigured())) {
+      return NextResponse.json(
+        { error: frequency ? "Recurring donations with PayPal are not available at the moment" : "PayPal is not available at the moment" },
+        { status: 400 }
+      );
+    }
+    const lineOk = (line: { amount: unknown }) =>
+      typeof line?.amount === "number" && Number.isFinite(line.amount) && line.amount > 0;
+    if (!items.every(lineOk) || !categoryItems.every(lineOk)) {
+      return NextResponse.json({ error: "Every line needs a positive amount" }, { status: 400 });
+    }
+
+    /* A campaign line may be a gift: the recipient is named and, per channel
+       chosen, reachable. Refused as a whole rather than silently dropped 
+       the donor was promised the recipient would be told. */
+    const giftsByIndex: Array<GiftOrderInput | null> = [];
+    for (const item of items) {
+      const parsed = parseGiftOrder(item.gift);
+      if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+      giftsByIndex.push(parsed.gift);
+    }
+
+    /* "Support the team" belongs to the order, asked once in the basket. The
+       amount is the browser's choice but the switch is the admin's: with the
+       step turned off nothing is added whatever the request says. */
+    const teamSupportSettings = await prisma.globalSettings.findFirst({
+      orderBy: { createdAt: "asc" },
+      select: { teamSupportEnabled: true, allowAnyAmount: true },
+    });
+    const teamSupportAllowed = teamSupportSettings?.teamSupportEnabled !== false;
+
+    /* The Minbar checkout sends its basket as it stores it (`amountsIn: "USD"`):
+       each line's USD value, plus `local`  the figure exactly as the donor
+       gave it in their currency, when they did. The order is charged in the
+       donor's currency: a line given in that currency is charged as given (so
+       1 TL is 1 TL), any other is converted from USD at the server's rate. The
+       lines used to be sent as raw USD figures labelled with the donor's
+       currency, so a $1 row shown as ≈49 TL was charged 1 TL. Callers that
+       send amounts already in `currency` (no `amountsIn`) are taken as they
+       are. */
+    const amountsInUsd = amountsIn === "USD";
+    // Stored on the donation as given here; `DEFAULT` (no currency chosen) is USD,
+    // and a stored `DEFAULT` broke the card gateways that convert it later.
+    const currency: string = normalizeDonationCurrencyCode(requestedCurrency);
+    const chargeCode = normalizeDonationCurrencyCode(currency);
+    let usdToCharge = 1;
+    let rates: Record<string, number> = {};
+    const needsRates =
+      amountsInUsd &&
+      (chargeCode !== "USD" || parseLocalAmount(teamSupportLocalIn) || [...items, ...categoryItems].some((line) => parseLocalAmount(line.local)));
+    if (needsRates) {
+      try {
+        rates = await getUsdBaseRatesForServer();
+        const rate = chargeCode === "USD" ? 1 : rates[chargeCode];
+        if (!(typeof rate === "number" && rate > 0)) throw new Error(`no rate for ${chargeCode}`);
+        usdToCharge = rate;
+      } catch (e) {
+        console.error("[cart/payment] charge currency rate:", e);
+        return NextResponse.json(
+          { error: "Exchange rate unavailable. Please try again in a moment." },
+          { status: 503 }
+        );
+      }
+    }
+    const toCharge = (usd: number) => Math.round(usd * usdToCharge * 100) / 100;
+    if (amountsInUsd) {
+      /* Off (the default), every donation line is worth at least a dollar;
+         the basket and checkout say so first, this is the server's half. */
+      const allowAnyAmount = teamSupportSettings?.allowAnyAmount === true;
+      for (const line of [...items, ...categoryItems]) {
+        /* Given in the charge currency: charged as given. Given in another one
+           (the donor switched currency since): that figure, converted. */
+        const local = parseLocalAmount(line.local);
+        const localRate = local ? rates[local.currency] : undefined;
+        line.amount =
+          local && local.currency === chargeCode
+            ? local.amount
+            : local && typeof localRate === "number" && localRate > 0
+              ? toCharge(local.amount / localRate)
+              : toCharge(line.amount);
+        const usdValue = line.amount / usdToCharge;
+        if (!allowAnyAmount && usdValue < MIN_DONATION_USD * MIN_DONATION_USD_TOLERANCE) {
+          return NextResponse.json(
+            { error: "Each donation must be at least 1 USD or its equivalent", code: "BELOW_MINIMUM" },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    const supportLocal = parseLocalAmount(teamSupportLocalIn);
+    if (teamSupportLocalIn != null && !supportLocal)
+      return NextResponse.json({ error: "Invalid support currency amount" }, { status: 400 });
+    const supportRate = supportLocal ? (supportLocal.currency === "USD" ? 1 : rates[supportLocal.currency]) : undefined;
+    if (amountsInUsd && supportLocal && supportLocal.currency !== chargeCode && !(supportRate && supportRate > 0))
+      return NextResponse.json({ error: "Exchange rate unavailable for support currency" }, { status: 503 });
+    const teamSupport = teamSupportAllowed && typeof teamSupportIn === "number" && Number.isFinite(teamSupportIn) && teamSupportIn > 0
+      ? amountsInUsd && supportLocal
+        ? supportLocal.currency === chargeCode ? Math.round(supportLocal.amount * 100) / 100 : toCharge(supportLocal.amount / (supportRate as number))
+        : toCharge(teamSupportIn)
+      : 0;
+    /* What each later instalment carries. The first payment (the donation
+       created below) always includes the full amount. */
+    const planTeamSupport = teamSupportRecurringIn === false ? 0 : teamSupport;
+
+    const paymentRoute = await resolveNewCardPaymentRoute(request.headers, { method: paymentMethod, type: type, currency: currency, phone: body.routingPhone ?? guest?.phone, userId: session?.user?.id });
+    if (paymentRoute && body.expectedGateway && body.expectedGateway !== paymentRoute.gateway) return NextResponse.json({ error: "Payment route changed. Please confirm the updated payment method.", code: "PAYMENT_ROUTING_CHANGED", gateway: paymentRoute.gateway }, { status: 409 });
 
     // Resolve donor
     let donorId: string;
@@ -129,6 +432,27 @@ export async function POST(request: NextRequest) {
     if (session?.user?.id) {
       donorId = session.user.id;
       donorName = session.user.name ?? null;
+      /* The form also carries what a signed-in donor typed. It completes their
+         own record  most were imported from the old site with gaps, a phone
+         or a surname missing  and never replaces a field already filled. The
+         account's email is theirs and is not touched. */
+      if (guest) {
+        const me = await prisma.user.findUnique({
+          where: { id: donorId },
+          select: { name: true, phone: true, countryCode: true, verifiedAt: true },
+        });
+        if (me) {
+          const typedName = [guest.firstName, guest.lastName].filter(Boolean).join(" ").trim();
+          const typedPhone = typeof guest.phone === "string" && guest.phone.replace(/\D/g, "").length >= 7 ? guest.phone : null;
+          const data = completionData(me, {
+            name: typedName || null,
+            phone: typedPhone,
+            countryCode: normalizeDonorCountryCode(guest.countryCode) ?? countryCodeFromPhone(typedPhone ?? undefined) ?? null,
+          });
+          if (Object.keys(data).length) await prisma.user.update({ where: { id: donorId }, data });
+          donorName = donorName ?? (me.name || typedName || null);
+        }
+      }
     } else if (guest) {
       const guestPhone = guest.phone || undefined;
       const guestCountry =
@@ -161,14 +485,47 @@ export async function POST(request: NextRequest) {
 
     // Card payments are handled via PayFor 3D Secure redirect flow (we do not store PAN/CVV).
 
+    /* Waqf lines priced in the order's currency from the USD unit price. The
+       rate is the same USD-base table the rest of the site converts with. */
+    const currencyForWaqf = normalizeDonationCurrencyCode(currency);
+    let waqfResolved: Array<WaqfItemIn & { unitPrice: number; amount: number; amountUSD: number }> = [];
+    if (waqfItems.length) {
+      let usdRate = 1;
+      if (currencyForWaqf !== "USD") {
+        try {
+          const rates = await getUsdBaseRatesForServer();
+          const rate = rates[currencyForWaqf];
+          if (!(typeof rate === "number" && rate > 0)) throw new Error(`no rate for ${currencyForWaqf}`);
+          usdRate = rate;
+        } catch (e) {
+          console.error("[cart/payment] waqf pricing rate:", e);
+          return NextResponse.json(
+            { error: "Exchange rate unavailable. Please try again in a moment." },
+            { status: 503 }
+          );
+        }
+      }
+      waqfResolved = waqfItems.map((line) => {
+        const unitPrice = WAQF_UNIT_PRICE_USD[line.unit];
+        const amountUSD = unitPrice * line.count;
+        return { ...line, unitPrice, amountUSD, amount: Math.round(amountUSD * usdRate * 100) / 100 };
+      });
+    }
+
     // Calculate totals
-    const totalAmount = (items as { amount: number }[]).reduce(
+    const totalAmount = [...items, ...categoryItems, ...waqfResolved].reduce(
       (sum: number, item: { amount: number }) => sum + item.amount,
       0
     );
     const fees = (totalAmount + teamSupport) * 0.03;
     const finalTotalAmount = totalAmount + teamSupport + (coverFees ? fees : 0);
 
+    if (body.expectedTotal !== undefined && (typeof body.expectedTotal !== "number" || !Number.isFinite(body.expectedTotal) || body.expectedTotal < 0 || Math.abs(body.expectedTotal - finalTotalAmount) > 0.02)) {
+      const error = donationLocale === "tr" ? "Toplam tutar değişti. Ödeme yapmadan önce sepete dönüp tutarı kontrol edin."
+        : donationLocale === "ar" ? "تغير الإجمالي. ارجع إلى السلة وراجع المبلغ قبل تأكيد الدفع."
+        : "The total changed. Return to the basket and review the amount before paying.";
+      return NextResponse.json({ error, code: "CHECKOUT_TOTAL_CHANGED" }, { status: 409 });
+    }
     const currencyNorm = normalizeDonationCurrencyCode(currency);
     let donationTotalUsd: number;
     try {
@@ -181,31 +538,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    type CartItemIn = {
-      campaignId: string;
-      amount: number;
-      amountUSD?: number;
-      shareCount?: number;
-    };
-
     let itemsResolved: Array<{
       campaignId: string;
       amount: number;
       amountUSD: number;
       shareCount?: number;
+      gift: GiftOrderInput | null;
     }>;
+    let categoryItemsResolved: Array<{ categoryId: string; amount: number; amountUSD: number }>;
 
     try {
-      itemsResolved = await Promise.all(
-        (items as CartItemIn[]).map(async (item) => ({
-          campaignId: item.campaignId,
-          amount: item.amount,
-          amountUSD: await convertAmountInCurrencyToUsd(item.amount, currencyNorm),
-          ...(item.shareCount != null && item.shareCount > 0
-            ? { shareCount: Math.floor(item.shareCount) }
-            : {}),
-        }))
-      );
+      [itemsResolved, categoryItemsResolved] = await Promise.all([
+        Promise.all(
+          items.map(async (item, index) => ({
+            campaignId: item.campaignId,
+            amount: item.amount,
+            amountUSD: await convertAmountInCurrencyToUsd(item.amount, currencyNorm),
+            ...(item.shareCount != null && item.shareCount > 0
+              ? { shareCount: Math.floor(item.shareCount) }
+              : {}),
+            gift: giftsByIndex[index] ?? null,
+          }))
+        ),
+        Promise.all(
+          categoryItems.map(async (item) => ({
+            categoryId: item.categoryId,
+            amount: item.amount,
+            amountUSD: await convertAmountInCurrencyToUsd(item.amount, currencyNorm),
+          }))
+        ),
+      ]);
     } catch (e) {
       console.error("[cart/payment] convert lines to USD:", e);
       return NextResponse.json(
@@ -215,24 +577,114 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify all campaigns exist and are active
-    const campaignIds = (items as { campaignId: string }[]).map((item) => item.campaignId);
-    const campaigns = await prisma.campaign.findMany({
-      where: { id: { in: campaignIds } },
-    });
+    if (items.length) {
+      const campaignIds = items.map((item) => item.campaignId);
+      const campaigns = await prisma.campaign.findMany({
+        where: { id: { in: campaignIds } },
+      });
 
-    if (campaigns.length !== items.length) {
-      return NextResponse.json(
-        { error: "One or more campaigns not found" },
-        { status: 404 }
-      );
+      /* Against DISTINCT ids: two basket rows for the same project are one
+         campaign row, and comparing with `items.length` refused that whole
+         order as "not found". */
+      if (campaigns.length !== new Set(campaignIds).size) {
+        return NextResponse.json(
+          { error: "One or more campaigns not found" },
+          { status: 404 }
+        );
+      }
+
+      if (campaigns.some((campaign) => !campaign.isActive)) {
+        return NextResponse.json(
+          { error: "One or more campaigns are not active" },
+          { status: 400 }
+        );
+      }
     }
 
-    if (campaigns.some((campaign) => !campaign.isActive)) {
-      return NextResponse.json(
-        { error: "One or more campaigns are not active" },
-        { status: 400 }
-      );
+    // Verify all categories exist and are not archived (unset isActive is active)
+    if (categoryItems.length) {
+      const categoryIds = categoryItems.map((item) => item.categoryId);
+      if (categoryIds.some((id) => !/^[0-9a-fA-F]{24}$/.test(String(id)))) {
+        return NextResponse.json({ error: "One or more categories not found" }, { status: 404 });
+      }
+      const categories = await prisma.category.findMany({
+        where: { id: { in: categoryIds } },
+        select: { id: true, isActive: true },
+      });
+
+      // Distinct ids, as for campaigns: the same category twice is one row.
+      if (categories.length !== new Set(categoryIds).size) {
+        return NextResponse.json({ error: "One or more categories not found" }, { status: 404 });
+      }
+
+      if (categories.some((category) => category.isActive === false)) {
+        return NextResponse.json({ error: "One or more categories are not active" }, { status: 400 });
+      }
     }
+
+    /* The nested writes for both kinds of line, shared by the three creates
+       below; a kind with no lines is left out of the write altogether. */
+    const campaignLines = itemsResolved.length
+      ? {
+          items: {
+            create: itemsResolved.map((item) => ({
+              campaignId: item.campaignId,
+              amount: item.amount,
+              amountUSD: item.amountUSD,
+              ...(item.shareCount != null && item.shareCount > 0 ? { shareCount: item.shareCount } : {}),
+              ...giftLineData(item.gift),
+            })),
+          },
+        }
+      : {};
+    /* The plan's copy of the lines carries no gift: the recipient is told
+       once, off the first (paid) donation, and later instalments are plain. */
+    const planLines = recurringCheckoutLines({ items: itemsResolved, categoryItems: categoryItemsResolved, waqfItems: waqfResolved }, lineFrequencies);
+    const planCampaignLines = planLines.items.length
+      ? {
+          items: {
+            create: planLines.items.map((item) => ({
+              campaignId: item.campaignId,
+              amount: item.amount,
+              amountUSD: item.amountUSD,
+              ...(item.shareCount != null && item.shareCount > 0 ? { shareCount: item.shareCount } : {}),
+            })),
+          },
+        }
+      : {};
+    const categoryLines = categoryItemsResolved.length
+      ? {
+          categoryItems: {
+            create: categoryItemsResolved.map((item) => ({
+              categoryId: item.categoryId,
+              amount: item.amount,
+              amountUSD: item.amountUSD,
+            })),
+          },
+        }
+      : {};
+
+    const planCategoryLines = planLines.categoryItems.length
+      ? { categoryItems: { create: planLines.categoryItems.map(item => ({ categoryId: item.categoryId, amount: item.amount, amountUSD: item.amountUSD })) } }
+      : {};
+
+    /* Waqf lines on the donation only: they are what the certificates are
+       issued for. A recurring waqf plan's later charges are plain donations. */
+    const waqfLines = waqfResolved.length
+      ? {
+          waqfItems: {
+            create: waqfResolved.map((line) => ({
+              unit: line.unit === "meter" ? ("METER" as const) : ("SHARE" as const),
+              count: line.count,
+              unitPrice: line.unitPrice,
+              amount: line.amount,
+              amountUSD: line.amountUSD,
+              donorName: line.donorName,
+              onBehalf: line.onBehalf,
+            })),
+          },
+        }
+      : {};
 
     const referralId = await resolveReferralId(referralCode);
 
@@ -241,9 +693,254 @@ export async function POST(request: NextRequest) {
         ? String(donationLocale).toLowerCase()
         : null;
 
+    if (frequency && cadences.length > 1) {
+      if (!isAlbarakaRecurringCheckoutReady()) return NextResponse.json({ error: "Recurring donations are unavailable", code: "RECURRING_UNAVAILABLE" }, { status: 400 });
+      const keys = [...cadences, ...(lineFrequencies.includes("once") ? ["once" as const] : [])];
+      const round = (value: number) => Math.round(value * 100) / 100;
+      const now = new Date();
+      const groups = keys.map(key => {
+        const selected = {
+          items: itemsResolved.filter((_, i) => lineFrequencies[i] === key),
+          categoryItems: categoryItemsResolved.filter((_, i) => lineFrequencies[itemsResolved.length + i] === key),
+          waqfItems: waqfResolved.filter((_, i) => lineFrequencies[itemsResolved.length + categoryItemsResolved.length + i] === key),
+        };
+        return { key, ...selected, principal: [...selected.items, ...selected.categoryItems, ...selected.waqfItems].reduce((sum, row) => sum + row.amount, 0) };
+      });
+      let remainingSupport = planTeamSupport;
+      const recurringPrincipal = groups.filter(group => group.key !== "once").reduce((sum, group) => sum + group.principal, 0);
+      let remainingTotal = finalTotalAmount;
+      const priced = await Promise.all(groups.map(async (group, index) => {
+        const periodicSupport = group.key === "once" ? 0 : index === cadences.length - 1 ? remainingSupport : round(planTeamSupport * group.principal / recurringPrincipal);
+        if (group.key !== "once") remainingSupport = round(remainingSupport - periodicSupport);
+        const firstSupport = periodicSupport + (teamSupportRecurringIn === false && (group.key === "once" || (!keys.includes("once") && index === 0)) ? teamSupport : 0);
+        const total = index === groups.length - 1 ? round(remainingTotal) : round((group.principal + firstSupport) * (coverFees ? 1.03 : 1));
+        remainingTotal -= total;
+        const periodicTotal = round((group.principal + periodicSupport) * (coverFees ? 1.03 : 1));
+        const choice = scheduleChoices.get(group.key);
+        const cadence = group.key === "daily" ? "DAILY" as const : group.key === "friday" ? "FRIDAY" as const : "MONTHLY" as const;
+        const rule = group.key !== "once" ? scheduleRuleFor(cadence, now, timezone, choice?.ok ? choice.value : null) : null;
+        return { ...group, periodicSupport, firstSupport, total, cadence, rule, periodicTotal,
+          amountUSD: await convertAmountInCurrencyToUsd(total, currencyNorm),
+          periodicUSD: await convertAmountInCurrencyToUsd(periodicTotal, currencyNorm) };
+      }));
+      const result = await prisma.$transaction(async tx => {
+        const donations: Array<Awaited<ReturnType<typeof tx.donation.create>>> = [];
+        const subscriptions: Array<Awaited<ReturnType<typeof tx.subscription.create>>> = [];
+        for (const group of priced) {
+          const campaignWrites = group.items.map(item => ({ campaignId: item.campaignId, amount: item.amount, amountUSD: item.amountUSD, ...(item.shareCount ? { shareCount: item.shareCount } : {}) }));
+          const categoryWrites = group.categoryItems.map(item => ({ categoryId: item.categoryId, amount: item.amount, amountUSD: item.amountUSD }));
+          const sub = group.key !== "once" && group.rule ? await tx.subscription.create({ data: {
+            status: "ACTIVE", amount: group.principal, amountUSD: group.periodicUSD, currency, teamSupport: group.periodicSupport, coverFees,
+            paymentMethod: "CARD", cardDetails: null, donorId, referralId: referralId ?? undefined, frequency: group.cadence, timezone,
+            provider: "ALBARAKA", scheduleRule: group.rule as unknown as Prisma.InputJsonValue,
+            consentSnapshot: consentSnapshotFor({ frequency: group.cadence, amount: group.periodicTotal, currency, timezone, rail: "ALBARAKA", locale: validLocale, now, rule: group.rule, notes: null }) as unknown as Prisma.InputJsonValue,
+            nextBillingDate: firstChargeAfterCheckout(group.rule, now, timezone), lastBillingDate: null,
+            ...(campaignWrites.length ? { items: { create: campaignWrites } } : {}),
+            ...(categoryWrites.length ? { categoryItems: { create: categoryWrites } } : {}),
+          } }) : null;
+          if (sub) subscriptions.push(sub);
+          const donation = await tx.donation.create({ data: {
+            accessToken: mintDonationAccessToken(), amount: group.principal, amountUSD: group.amountUSD, teamSupport: group.firstSupport,
+            coverFees, fees: round(group.total - group.principal - group.firstSupport), totalAmount: group.total, currency,
+            status: "PAID", locale: validLocale ?? undefined, donorCountryCode: donorCountrySnapshot, donorId, referralId: referralId ?? undefined,
+            subscriptionId: sub?.id ?? null, paymentMethod: "CARD", provider: "ALBARAKA", cardDetails: null,
+            providerRaw: { paymentRouting: { version: 1, gateway: "ALBARAKA" }, ...(donations.length ? { mixedCheckoutParentId: donations[0].id } : {}) } as Prisma.InputJsonValue,
+            ...(donationAttribution ? { attribution: donationAttribution } : {}),
+            ...(campaignWrites.length ? { items: { create: campaignWrites.map((row, index) => ({ ...row, ...giftLineData(group.items[index].gift) })) } } : {}),
+            ...(categoryWrites.length ? { categoryItems: { create: categoryWrites } } : {}),
+            ...(group.waqfItems.length ? { waqfItems: { create: group.waqfItems.map(line => ({ unit: line.unit === "meter" ? "METER" as const : "SHARE" as const, count: line.count, unitPrice: line.unitPrice, amount: line.amount, amountUSD: line.amountUSD, donorName: line.donorName, onBehalf: line.onBehalf })) } } : {}),
+          } });
+          donations.push(donation);
+        }
+        const root = donations[0];
+        const providerRaw = { paymentRouting: { version: 1, gateway: "ALBARAKA" }, mixedCheckout: { version: 2, donationIds: donations.slice(1).map(row => row.id), totalAmount: finalTotalAmount } } as Prisma.InputJsonValue;
+        await tx.donation.update({ where: { id: root.id }, data: { providerRaw } });
+        Object.assign(root, { providerRaw });
+        if (validLocale) {
+          const donor = await tx.user.findUnique({ where: { id: donorId }, select: { preferredLang: true } });
+          if (donor && donor.preferredLang == null) await tx.user.update({ where: { id: donorId }, data: { preferredLang: validLocale } });
+        }
+        return { donation: root, donations, subscription: subscriptions[0], subscriptions };
+      }, { timeout: 30000 });
+      await writeAuditLog({ actorId: donorId, actorName: donorName, actorRole: session?.user?.role ?? "DONOR", action: "DONATION_RECURRING_CHECKOUT_START", messageAr: "بدأ دفع سلة باشتراكات مستقلة لكل دورية", entityType: "Donation", entityId: result.donation.id, metadata: { amountUSD: donationTotalUsd, via: "cart_payment", provider: "ALBARAKA", cadences, donationIds: result.donations.map(row => row.id) }, stream: "SITE" });
+      return NextResponse.json({ success: true, ...result });
+    }
+
+    if (frequency) {
+      // Every new recurring basket uses Albaraka 2D, irrespective of currency/main gateway.
+      const rail = "ALBARAKA" as const;
+      if (rail === "ALBARAKA" && !isAlbarakaRecurringCheckoutReady()) {
+        return NextResponse.json(
+          { error: "Recurring donations at this frequency are not available at the moment", code: "RECURRING_UNAVAILABLE" },
+          { status: 400 }
+        );
+      }
+
+      /* The plan's own clock: ONE rule  the donor's chosen day and time
+         from which the first `nextBillingDate` and the consent record are
+         both computed, so the three cannot disagree. `nextBillingDate` is
+         re-derived from the same rule when the first instalment settles;
+         `consentSnapshot` is never rewritten. */
+      const recurringTotal = planLines.amount + planTeamSupport + (coverFees ? (planLines.amount + planTeamSupport) * 0.03 : 0);
+      const recurringAmountUSD = await convertAmountInCurrencyToUsd(recurringTotal, currencyNorm);
+      const now = new Date();
+      const rule = scheduleRuleFor(frequency, now, timezone, scheduleChoice.value);
+      const nextBilling = firstChargeAfterCheckout(rule, now, timezone);
+      const consent = consentSnapshotFor({
+        frequency,
+        amount: recurringTotal,
+        currency,
+        timezone,
+        rail,
+        locale: validLocale,
+        now,
+        rule,
+        notes: scheduleChoice.value?.notes ?? null,
+      });
+
+      const hasOneTime = lineFrequencies.includes("once");
+      const firstRecurringSupport = hasOneTime ? planTeamSupport : teamSupport;
+      const recurringFirstTotal = hasOneTime ? recurringTotal : finalTotalAmount;
+      const recurringFirstUsd = await convertAmountInCurrencyToUsd(recurringFirstTotal, currencyNorm);
+      const onceSupport = teamSupport - firstRecurringSupport;
+      const oncePrincipal = totalAmount - planLines.amount;
+      const onceTotal = Math.round((finalTotalAmount - recurringFirstTotal) * 100) / 100;
+      const onceUsd = donationTotalUsd - recurringFirstUsd;
+      const selectLines = (recurring: boolean) => ({
+        ...(itemsResolved.some((_, i) => (lineFrequencies[i] !== "once") === recurring) ? { items: { create: itemsResolved.filter((_, i) => (lineFrequencies[i] !== "once") === recurring).map(item => ({ campaignId: item.campaignId, amount: item.amount, amountUSD: item.amountUSD, ...(item.shareCount ? { shareCount: item.shareCount } : {}), ...giftLineData(item.gift) })) } } : {}),
+        ...(categoryItemsResolved.some((_, i) => (lineFrequencies[itemsResolved.length + i] !== "once") === recurring) ? { categoryItems: { create: categoryItemsResolved.filter((_, i) => (lineFrequencies[itemsResolved.length + i] !== "once") === recurring).map(item => ({ categoryId: item.categoryId, amount: item.amount, amountUSD: item.amountUSD })) } } : {}),
+        ...(waqfResolved.some((_, i) => (lineFrequencies[itemsResolved.length + categoryItemsResolved.length + i] !== "once") === recurring) ? { waqfItems: { create: waqfResolved.filter((_, i) => (lineFrequencies[itemsResolved.length + categoryItemsResolved.length + i] !== "once") === recurring).map(line => ({ unit: line.unit === "meter" ? ("METER" as const) : ("SHARE" as const), count: line.count, unitPrice: line.unitPrice, amount: line.amount, amountUSD: line.amountUSD, donorName: line.donorName, onBehalf: line.onBehalf })) } } : {}),
+      });
+      const result = await prisma.$transaction(async (tx) => {
+        const sub = await tx.subscription.create({
+          data: {
+            status: "ACTIVE",
+            amount: planLines.amount,
+            amountUSD: recurringAmountUSD,
+            currency,
+            teamSupport: planTeamSupport,
+            coverFees,
+            paymentMethod,
+            // A subscription is billed via its verified paymentCardId (or
+            // provider vault), never by persisting checkout PAN/CVV. Card
+            // verification values must remain ephemeral even for legacy plans.
+            cardDetails: null,
+            donorId: donorId,
+            referralId: referralId ?? undefined,
+            frequency,
+            timezone,
+            provider: rail,
+            /* Plain data, but Prisma's `InputJsonValue` does not accept a
+               named interface without the cast. */
+            scheduleRule: rule as unknown as Prisma.InputJsonValue,
+            consentSnapshot: consent as unknown as Prisma.InputJsonValue,
+            nextBillingDate: nextBilling,
+            /* Stamped when the first instalment actually settles  by the
+               Stripe webhook or the Albaraka callback  never optimistically. */
+            lastBillingDate: null,
+            ...planCampaignLines,
+            ...planCategoryLines,
+          },
+        });
+
+        const donation = await tx.donation.create({
+          data: {
+            accessToken: mintDonationAccessToken(),
+            amount: planLines.amount,
+            amountUSD: recurringFirstUsd,
+            teamSupport: firstRecurringSupport,
+            coverFees,
+            currency,
+            fees: coverFees ? recurringFirstTotal - planLines.amount - firstRecurringSupport : 0,
+            totalAmount: recurringFirstTotal,
+            status: "PAID",
+            locale: validLocale ?? undefined,
+            donorCountryCode: donorCountrySnapshot,
+            donorId: donorId,
+            referralId: referralId ?? undefined,
+            subscriptionId: sub.id,
+            paymentMethod,
+            provider: "ALBARAKA",
+            providerRaw: { paymentRouting: { version: 1, gateway: "ALBARAKA" } } as Prisma.InputJsonValue,
+            cardDetails: null,
+            attribution: { ...((donationAttribution ?? {}) as object), checkout_line_frequencies: lineFrequencies, recurring_principal: planLines.amount, one_time_principal: totalAmount - planLines.amount } as Prisma.InputJsonValue,
+            ...selectLines(true),
+          },
+          include: {
+            donor: { select: { name: true, email: true } },
+            items: { include: { campaign: { select: { title: true } } } },
+            categoryItems: { include: { category: { select: { name: true } } } },
+          },
+        });
+
+        if (validLocale) {
+          const donor = await tx.user.findUnique({
+            where: { id: donorId },
+            select: { preferredLang: true },
+          });
+          if (donor && donor.preferredLang == null) {
+            await tx.user.update({
+              where: { id: donorId },
+              data: { preferredLang: validLocale },
+            });
+          }
+        }
+
+        let oneTimeDonation = null;
+        if (hasOneTime) {
+          oneTimeDonation = await tx.donation.create({ data: {
+            accessToken: mintDonationAccessToken(), amount: oncePrincipal, amountUSD: onceUsd,
+            teamSupport: onceSupport, coverFees, fees: coverFees ? onceTotal - oncePrincipal - onceSupport : 0,
+            totalAmount: onceTotal, currency, status: "PAID", locale: validLocale ?? undefined,
+            donorCountryCode: donorCountrySnapshot, donorId, referralId: referralId ?? undefined,
+            subscriptionId: null, paymentMethod: "CARD", provider: "ALBARAKA", cardDetails: null,
+            providerRaw: { mixedCheckoutParentId: donation.id, paymentRouting: { version: 1, gateway: "ALBARAKA" } } as Prisma.InputJsonValue,
+            ...(donationAttribution ? { attribution: donationAttribution } : {}),
+            ...selectLines(false),
+          } });
+          const providerRaw = { paymentRouting: { version: 1, gateway: "ALBARAKA" }, mixedCheckout: { oneTimeDonationId: oneTimeDonation.id, totalAmount: finalTotalAmount } } as Prisma.InputJsonValue;
+          await tx.donation.update({ where: { id: donation.id }, data: { providerRaw } });
+          Object.assign(donation, { providerRaw });
+        }
+        return { subscription: sub, donation, oneTimeDonation };
+      }, { timeout: 15000 });
+
+      const d = result.donation;
+      if (concierge) void recordConciergeEvents([{ sessionId: concierge.sessionId, event: "order_created", locale: validLocale ?? "ar", intent: concierge.intent, campaignId: concierge.campaignId, amountUSD: donationTotalUsd, frequency: frequency.toLowerCase(), donationId: d.id }]);
+      const actorRole = session?.user?.role ?? "DONOR";
+      await writeAuditLog({
+        actorId: donorId,
+        actorName: donorName,
+        actorRole,
+        action: "DONATION_RECURRING_CHECKOUT_START",
+        messageAr: `${donorName ?? "متبرع"} بدأ عملية دفع تبرعًا ${frequency === "DAILY" ? "يوميًا" : frequency === "FRIDAY" ? "أسبوعياً" : "شهريًا"} عبر السلة (≈ ${recurringAmountUSD.toFixed(0)} USD لكل دورة)`,
+        entityType: "Donation",
+        entityId: d.id,
+        metadata: { amountUSD: donationTotalUsd, via: "cart_payment", status: "PENDING", provider: rail, frequency, timezone, nextChargeAt: consent.nextChargeAt },
+        stream: "SITE",
+      });
+
+      return NextResponse.json({
+        success: true,
+        subscription: result.subscription,
+        donation: result.donation,
+        oneTimeDonation: result.oneTimeDonation,
+      });
+    }
+
+    /* The bank account the donor was shown, resolved server-side so the name
+       on the claim is the published one and not whatever the browser sent. */
+    let bankSnapshot: { slug: string; name: string } | null = null;
+    if (isBankTransfer && typeof bankSlug === "string" && bankSlug.trim()) {
+      const accounts = await listBankAccounts(validLocale ?? "ar").catch(() => []);
+      const match = accounts.find((account) => account.slug === bankSlug.trim());
+      if (match) bankSnapshot = { slug: match.slug, name: match.name };
+    }
+
     const donation = await prisma.$transaction(async (tx) => {
       const d = await tx.donation.create({
         data: {
+          accessToken: mintDonationAccessToken(),
           amount: totalAmount,
           amountUSD: donationTotalUsd,
           teamSupport,
@@ -251,6 +948,9 @@ export async function POST(request: NextRequest) {
           currency,
           fees: coverFees ? fees : 0,
           totalAmount: finalTotalAmount,
+          /* PAID with no paidAt is the site's "قيد التأكيد" state. A card
+             order is stamped by the gateway's webhook; a bank transfer by a
+             finance officer from the dashboard. Neither counts anywhere before. */
           status: "PAID",
           locale: validLocale ?? undefined,
           donorCountryCode: donorCountrySnapshot,
@@ -258,20 +958,21 @@ export async function POST(request: NextRequest) {
           referralId: referralId ?? undefined,
           paymentMethod,
           cardDetails: null,
-          items: {
-            create: itemsResolved.map((item) => ({
-              campaignId: item.campaignId,
-              amount: item.amount,
-              amountUSD: item.amountUSD,
-              ...(item.shareCount != null && item.shareCount > 0
-                ? { shareCount: item.shareCount }
-                : {}),
-            })),
-          },
+          ...(paymentRoute ? { provider: paymentRoute.gateway, providerRaw: { paymentRouting: paymentRoute } as unknown as Prisma.InputJsonValue } : {}),
+          ...(isBankTransfer
+            ? { provider: BANK_TRANSFER_PROVIDER, providerTxnResult: "Pending" }
+            : isPayPal
+              ? { provider: "PAYPAL" }
+              : {}),
+          ...(donationAttribution ? { attribution: donationAttribution } : {}),
+          ...campaignLines,
+          ...categoryLines,
+          ...waqfLines,
         },
         include: {
           donor: { select: { name: true, email: true } },
           items: { include: { campaign: { select: { title: true } } } },
+          categoryItems: { include: { category: { select: { name: true } } } },
         },
       });
 
@@ -288,25 +989,41 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return d;
+      const claim = isBankTransfer
+        ? await createBankTransferClaim(tx, {
+            donationId: d.id,
+            bankSlug: bankSnapshot?.slug ?? null,
+            bankName: bankSnapshot?.name ?? null,
+            bankCurrency: typeof bankCurrency === "string" ? bankCurrency : null,
+          })
+        : null;
+
+      return { ...d, claim };
     }, { timeout: 15000 });
 
+    const { claim, ...donationRow } = donation;
+    if (concierge) void recordConciergeEvents([{ sessionId: concierge.sessionId, event: "order_created", locale: validLocale ?? "ar", intent: concierge.intent, campaignId: concierge.campaignId, amountUSD: donationTotalUsd, frequency: "once", donationId: donationRow.id }]);
     const actorRole = session?.user?.role ?? "DONOR";
     await writeAuditLog({
       actorId: donorId,
       actorName: donorName,
       actorRole,
-      action: "DONATION_ONE_TIME_CHECKOUT_START",
-      messageAr: `${donorName ?? "متبرع"} بدأ عملية دفع تبرعًا لمرة واحدة عبر السلة (≈ ${donationTotalUsd.toFixed(0)} USD)`,
+      action: isBankTransfer ? "DONATION_BANK_TRANSFER_CHECKOUT_START" : "DONATION_ONE_TIME_CHECKOUT_START",
+      messageAr: isBankTransfer
+        ? `${donorName ?? "متبرع"} سجّل تبرعًا بالتحويل البنكي عبر السلة (≈ ${donationTotalUsd.toFixed(0)} USD)  بانتظار الإيصال`
+        : `${donorName ?? "متبرع"} بدأ عملية دفع تبرعًا لمرة واحدة عبر السلة (≈ ${donationTotalUsd.toFixed(0)} USD)`,
       entityType: "Donation",
-      entityId: donation.id,
-      metadata: { amountUSD: donationTotalUsd, via: "cart_payment", status: "PENDING", provider: "PAYFOR" },
-      stream: auditStreamForRole(actorRole),
+      entityId: donationRow.id,
+      metadata: { amountUSD: donationTotalUsd, via: "cart_payment", status: "PENDING", provider: isBankTransfer ? BANK_TRANSFER_PROVIDER : isPayPal ? "PAYPAL" : "PAYFOR" },
+      stream: "SITE",
     });
 
     return NextResponse.json({
       success: true,
-      donation,
+      donation: donationRow,
+      /* The guest's key to the upload page; a signed-in owner does not need
+         it but is handed it all the same, which keeps the redirect uniform. */
+      ...(claim ? { bankTransfer: { accessToken: claim.accessToken } } : {}),
     });
   } catch (error) {
     console.error("Error creating donation:", error);

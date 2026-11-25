@@ -147,6 +147,7 @@ interface Props {
   onError?: (e: unknown) => void;
   /** Called when GSI cannot be loaded; receives a `triggerFallback()` callback. */
   fallbackRender?: (triggerFallback: () => void) => React.ReactNode;
+  fallbackLabel?: string;
 }
 
 export default function GoogleSignInButton({
@@ -159,6 +160,7 @@ export default function GoogleSignInButton({
   text = "signin_with",
   onError,
   fallbackRender,
+  fallbackLabel,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
@@ -166,7 +168,7 @@ export default function GoogleSignInButton({
 
   // Fallback path used when GSI can't load OR when the user is in an in-app
   // browser where popups are unreliable. Hands off to the legacy redirect
-  // OAuth flow — the existing in-app browser notice will catch webviews.
+  // OAuth flow  the existing in-app browser notice will catch webviews.
   const triggerFallback = () => {
     signIn("google", { callbackUrl });
   };
@@ -250,7 +252,7 @@ export default function GoogleSignInButton({
         renderInto();
         setStatus("ready");
 
-        // Re-render on container width change (responsive layouts) — but only
+        // Re-render on container width change (responsive layouts)  but only
         // when the width meaningfully changes, to avoid an infinite RO loop
         // that fires on every iframe paint.
         if (typeof ResizeObserver !== "undefined" && hostRef.current) {
@@ -290,7 +292,7 @@ export default function GoogleSignInButton({
           <path fill="#4CAF50" d="M24 44c4.9 0 9.4-1.9 12.7-5l-5.9-5c-1.9 1.4-4.4 2.3-6.8 2.3-5.3 0-9.7-3.4-11.3-8l-6.6 5.1C9.5 39.6 16.2 44 24 44z" />
           <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.7 2.1-2.1 3.9-3.9 5.1l5.9 5c4.1-3.8 6.7-9.4 6.7-15.6 0-1.3-.1-2.4-.4-3.5z" />
         </svg>
-        <span>Sign in with Google</span>
+        <span>{fallbackLabel || "Sign in with Google"}</span>
       </button>
     );
   }

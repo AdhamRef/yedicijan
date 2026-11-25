@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from "next/navigation";
-import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 import { localeDirection } from "@/lib/locales";
 import SessionProvider from '@/components/providers/SessionProvider';
@@ -10,7 +10,6 @@ import { NextIntlClientProvider } from "next-intl";
 import { Toaster } from "react-hot-toast";
 import { ConfettiProvider } from "@/components/providers/confetti-provider";
 import { CurrencyProvider } from "@/context/CurrencyContext";
-import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
 import { ViewUserProfileProvider } from "@/context/ViewUserProfileContext";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -18,6 +17,7 @@ import type { Session } from "next-auth";
 import {
   userCanEnterDashboard,
   userHasDashboardPermission,
+  userCanOpenDashboardPath,
   pathToDashboardPermission,
   getFirstAllowedDashboardHref,
 } from "@/lib/dashboard/permissions";
@@ -29,18 +29,21 @@ import {
 } from "@/lib/dashboard/nav-config";
 import { buildBreadcrumbs } from "@/lib/dashboard/breadcrumbs";
 import { INBOX_UNREAD_EVENT } from "@/lib/messages/inbox-status";
+import { TRANSFER_RECEIPTS_PENDING_EVENT } from "@/lib/donations/transfer-receipts-badge";
 import { DashboardSidebar } from "./_shell/DashboardSidebar";
 import { DashboardTopbar } from "./_shell/DashboardTopbar";
 import { CommandPalette } from "./_shell/CommandPalette";
+import { DashboardTextTranslator } from "./_shell/DashboardTextTranslator";
 import { DashboardAutoEnhancements } from "./_components/DashboardAutoEnhancements";
 import { ProjectEditorSectionsEnhancer } from "./_components/ProjectEditorSectionsEnhancer";
-import { ProjectLocaleSlugEditor } from "./_components/ProjectLocaleSlugEditor";
+import { dt, parseDashLocale, setDashLocale } from "@/lib/dashboard/i18n";
 
 const COLLAPSE_STORAGE_KEY = 'dashboard-nav-collapsed';
-const DEFAULT_COLLAPSED: Record<string, boolean> = {
-  "ربط المنصات والإرسال": true,
-  "الإدارة": true,
-};
+/* Keyed by the group's displayed title, so built per language. */
+const defaultCollapsed = (): Record<string, boolean> => ({
+  [dt("ربط المنصات والإرسال")]: true,
+  [dt("الإدارة")]: true,
+});
 
 function DashboardContent({
   children,
@@ -54,8 +57,18 @@ function DashboardContent({
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(DEFAULT_COLLAPSED);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(defaultCollapsed);
   const dir = localeDirection(locale) as 'rtl' | 'ltr';
+
+  /* The root layout sets <html lang/dir> from the public site's language; portalled
+     dialogs and popovers inherit from it, so it follows the dashboard's while here. */
+  useEffect(() => {
+    const html = document.documentElement;
+    const previous = { lang: html.lang, dir: html.dir };
+    html.lang = locale;
+    html.dir = dir;
+    return () => { html.lang = previous.lang; html.dir = previous.dir; };
+  }, [locale, dir]);
   const hasChecked = useRef(false);
 
   // Collapse state used to live only in useState, so every full page load re-collapsed the
@@ -63,8 +76,8 @@ function DashboardContent({
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(COLLAPSE_STORAGE_KEY);
-      if (stored) setCollapsedGroups({ ...DEFAULT_COLLAPSED, ...JSON.parse(stored) });
-    } catch { /* corrupt or unavailable storage — keep defaults */ }
+      if (stored) setCollapsedGroups({ ...defaultCollapsed(), ...JSON.parse(stored) });
+    } catch { /* corrupt or unavailable storage  keep defaults */ }
   }, []);
 
   const toggleGroup = useCallback((g: string) => {
@@ -87,7 +100,7 @@ function DashboardContent({
     if (status !== "authenticated" || !session?.user) return;
     if (!userCanEnterDashboard(session.user)) { router.replace("/"); return; }
     const required = pathToDashboardPermission(pathname);
-    if (required && !userHasDashboardPermission(session.user, required)) {
+    if (required && !userCanOpenDashboardPath(session.user, pathname)) {
       const fallback = getFirstAllowedDashboardHref(session.user, DASHBOARD_NAV_HREFS_ORDERED, dashboardHrefToPermissionKey);
       router.replace(fallback || "/");
     }
@@ -99,7 +112,9 @@ function DashboardContent({
     return DASHBOARD_NAV_GROUPS
       .map((section) => ({
         group: section.group,
-        items: section.items.filter((item) => userHasDashboardPermission(u, item.key)),
+        items: section.items.filter((item) =>
+          (item.anyPermissions || [item.key]).some(key => userHasDashboardPermission(u, key)) && (!item.adminOnly || u.role === "ADMIN")
+        ),
       }))
       .filter((s) => s.items.length > 0);
   }, [session?.user]);
@@ -133,8 +148,11 @@ function DashboardContent({
     () => navigation.flatMap((s) => s.items.filter((i) => i.badge).map((i) => i.badge!)),
     [navigation],
   );
-  const wantsInboxBadge = badgeKeys.includes('inboxUnread');
+  const canUseWhatsappInbox = Boolean(session?.user && userHasDashboardPermission(session.user, "messages"));
+  // Inbox links live in the top bar now, so their count must not depend on a sidebar item.
+  const wantsInboxBadge = canUseWhatsappInbox || badgeKeys.includes('inboxUnread');
   const [navCounts, setNavCounts] = useState<Record<string, number>>({});
+  const [whatsappInboxCount, setWhatsappInboxCount] = useState(0);
 
   useEffect(() => {
     if (!wantsInboxBadge) return;
@@ -142,16 +160,18 @@ function DashboardContent({
     const setInbox = (n: number) =>
       setNavCounts((prev) => (prev.inboxUnread === n ? prev : { ...prev, inboxUnread: n }));
 
+    let running = false;
     const run = async () => {
+      if (running || document.hidden) return;
+      running = true;
       try {
-        const res = await fetch('/api/admin/messages/unread-count', { cache: 'no-store' });
-        if (!res.ok) { if (!cancelled) setInbox(0); return; }
+        const res = await fetch('/api/admin/messages/unread-count', { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+        if (!res.ok) return;
         const data = await res.json();
-        // ok:false means the count failed server-side; show no badge rather than a false "0 left".
-        if (!cancelled) setInbox(data?.ok === false ? 0 : Number(data?.count ?? 0));
-      } catch {
-        if (!cancelled) setInbox(0);
-      }
+        // Failed reads must not replace the last confirmed badge with a false zero.
+        if (!cancelled && data?.ok !== false && Number.isFinite(Number(data?.count))) setInbox(Number(data.count));
+      } catch { /* Retain the last confirmed count while disconnected. */ }
+      finally { running = false; }
     };
 
     run();
@@ -172,16 +192,123 @@ function DashboardContent({
     };
   }, [wantsInboxBadge]);
 
+  useEffect(() => {
+    if (!canUseWhatsappInbox) { setWhatsappInboxCount(0); return; }
+    let cancelled = false;
+    let running = false;
+    const run = async () => {
+      if (running || document.hidden) return;
+      running = true;
+      try {
+        const res = await fetch('/api/dashboard/communication/inbox/summary', { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+        if (!res.ok) return;
+        const data = await res.json();
+        const count = Number(data?.unread);
+        if (!cancelled && Number.isFinite(count)) setWhatsappInboxCount(Math.max(0, count));
+      } catch { /* Retain the last confirmed count during transient failures. */ }
+      finally { running = false; }
+    };
+    void run();
+    const timer = setInterval(run, 30000);
+    window.addEventListener("whatsapp-inbox-updated", run);
+    window.addEventListener("focus", run);
+    document.addEventListener("visibilitychange", run);
+    return () => {
+      cancelled = true; clearInterval(timer);
+      window.removeEventListener("whatsapp-inbox-updated", run);
+      window.removeEventListener("focus", run);
+      document.removeEventListener("visibilitychange", run);
+    };
+  }, [canUseWhatsappInbox]);
+
+  /**
+   * Same shape for the finance queue: bank-transfer receipts waiting on a decision. The review
+   * page pushes the number down as it confirms or rejects, so the badge never lags a click.
+   */
+  const wantsReceiptsBadge = badgeKeys.includes('transferReceiptsPending');
+  useEffect(() => {
+    if (!wantsReceiptsBadge) return;
+    let cancelled = false;
+    const setPending = (n: number) =>
+      setNavCounts((prev) => (prev.transferReceiptsPending === n ? prev : { ...prev, transferReceiptsPending: n }));
+
+    const run = async () => {
+      try {
+        const res = await fetch('/api/admin/transfer-receipts/pending-count', { cache: 'no-store' });
+        if (!res.ok) { if (!cancelled) setPending(0); return; }
+        const data = await res.json();
+        if (!cancelled) setPending(data?.ok === false ? 0 : Number(data?.count ?? 0));
+      } catch {
+        if (!cancelled) setPending(0);
+      }
+    };
+
+    run();
+    const timer = setInterval(run, 60000);
+    const onLocalChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ delta?: number; count?: number }>).detail;
+      if (typeof detail?.count === 'number') { setPending(Math.max(0, detail.count)); return; }
+      if (typeof detail?.delta !== 'number' || !Number.isFinite(detail.delta)) return;
+      setNavCounts((prev) => ({
+        ...prev,
+        transferReceiptsPending: Math.max(0, (prev.transferReceiptsPending ?? 0) + detail.delta!),
+      }));
+    };
+    window.addEventListener(TRANSFER_RECEIPTS_PENDING_EVENT, onLocalChange);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener(TRANSFER_RECEIPTS_PENDING_EVENT, onLocalChange);
+    };
+  }, [wantsReceiptsBadge]);
+
+  const wantsRequestsBadge = badgeKeys.includes('subscriptionRequestsOpen');
+  useEffect(() => {
+    if (!wantsRequestsBadge) return;
+    const controller = new AbortController();
+    let running = false;
+    const run = async () => {
+      if (running || document.hidden) return;
+      running = true;
+      try {
+        const response = await fetch('/api/admin/subscription-requests/count', { cache: 'no-store', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!controller.signal.aborted && Number.isSafeInteger(data.count) && data.count >= 0)
+          setNavCounts(previous => ({ ...previous, subscriptionRequestsOpen: data.count }));
+      } catch { /* Preserve the last confirmed count on a failed read. */ }
+      finally { running = false; }
+    };
+    void run();
+    const timer = setInterval(run, 60000);
+    window.addEventListener('subscription-requests-updated', run);
+    window.addEventListener('focus', run);
+    document.addEventListener('visibilitychange', run);
+    return () => {
+      controller.abort(); clearInterval(timer);
+      window.removeEventListener('subscription-requests-updated', run);
+      window.removeEventListener('focus', run);
+      document.removeEventListener('visibilitychange', run);
+    };
+  }, [wantsRequestsBadge]);
+
   const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
+  useEffect(() => { setIsSidebarOpen(false); }, [pathname]);
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const closeOnDesktop = () => { if (desktop.matches) setIsSidebarOpen(false); };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
   const openSearch = useCallback(() => { setIsSidebarOpen(false); setIsSearchOpen(true); }, []);
 
   if (status === 'loading') return <LoadingSkeleton />;
 
   return (
-    <div className="min-h-screen flex bg-slate-50" dir={dir}>
+    <div data-dashboard-shell="true" className="dash-vivid min-h-screen flex bg-slate-50" dir={dir}>
+      {locale !== "ar" && <DashboardTextTranslator />}
       <DashboardAutoEnhancements />
       <ProjectEditorSectionsEnhancer />
-      <ProjectLocaleSlugEditor />
 
       {isSidebarOpen && (
         <div
@@ -212,19 +339,25 @@ function DashboardContent({
       />
 
       <main
+        inert={isSidebarOpen}
         className={`flex-1 min-w-0 ${dir === 'rtl' ? 'lg:mr-[268px]' : 'lg:ml-[268px]'}`}
       >
-        <DashboardTopbar
+        <DashboardTopbar showSiteNotifications={userHasDashboardPermission(session?.user, "logs")}
           crumbs={crumbs}
+          sidebarOpen={isSidebarOpen}
           onOpenSidebar={() => setIsSidebarOpen(true)}
           onOpenSearch={openSearch}
           dir={dir}
+          showWhatsappInbox={canUseWhatsappInbox}
+          whatsappInboxCount={whatsappInboxCount}
+          showGeneralInbox={canUseWhatsappInbox}
+          generalInboxCount={navCounts.inboxUnread ?? 0}
         />
 
-        {/* Content well. Pages own their own surfaces (Card, PageHeader, …) — the shell no
+        {/* Content well. Pages own their own surfaces (Card, PageHeader, …)  the shell no
             longer wraps every route in a white rounded card, which produced a box-inside-a-box
             with doubled padding on every one of the 151 routes. */}
-        <div className="p-3 sm:p-4 lg:p-6 min-h-[calc(100vh-4rem)]">{children}</div>
+        <div data-dashboard-content="true" className="min-h-[calc(100dvh-4rem)] min-w-0 p-3 sm:p-4 lg:p-6">{children}</div>
       </main>
     </div>
   );
@@ -234,38 +367,47 @@ const LoadingSkeleton = () => (
   <div className="min-h-screen flex items-center justify-center bg-slate-50">
     <div className="flex flex-col items-center gap-4">
       <div className="w-10 h-10 border-4 border-slate-200 border-t-brand rounded-full animate-spin" />
-      <p className="text-sm text-slate-400 font-medium">جاري التحميل...</p>
+      <p className="text-sm text-slate-400 font-medium">{dt("جاري التحميل...")}</p>
     </div>
   </div>
 );
 
 export default function DashboardLayoutClient({
-  children, session, messages, locale = "ar",
+  children, session, messages, locale = "ar", enableVercelAnalytics = false,
 }: {
   children: React.ReactNode;
   session: Session | null;
   messages: Record<string, string | Record<string, string>>;
   locale?: string;
+  enableVercelAnalytics?: boolean;
 }) {
+  /* Before anything below renders: `dt()` reads this during SSR and in the browser. */
+  setDashLocale(parseDashLocale(locale));
+
+  // Saturated accent ramps (see tailwind.config.ts). Set on <body> as well as the shell so
+  // dialogs, popovers and toasts  portalled outside the shell  use the same palette.
+  useEffect(() => {
+    document.body.classList.add('dash-vivid');
+    return () => document.body.classList.remove('dash-vivid');
+  }, []);
+
   return (
     <NextIntlClientProvider messages={messages} locale={locale}>
       <CurrencyProvider>
-        <Suspense fallback={null}><CurrencyFromUrlSync /></Suspense>
         <SessionProvider session={session}>
           {/* DashboardThemeProvider was mounted here but `useDashboardTheme` had zero consumers
-              anywhere in the app — it only wrote a `dashboard-theme-dark` key to localStorage. */}
+              anywhere in the app  it only wrote a `dashboard-theme-dark` key to localStorage. */}
           <ViewUserProfileProvider>
             <DashboardContent locale={locale}>{children}</DashboardContent>
           </ViewUserProfileProvider>
           <ConfettiProvider />
           <Toaster position="top-center" toastOptions={{
             style: { fontFamily: 'inherit', fontSize: '14px' },
-            success: { iconTheme: { primary: '#025EB8', secondary: '#fff' } },
+            success: { iconTheme: { primary: '#1F3F4F', secondary: '#fff' } },
           }} />
         </SessionProvider>
       </CurrencyProvider>
-      <Analytics />
-      <SpeedInsights />
+      {enableVercelAnalytics ? <><Analytics /><SpeedInsights /></> : null}
     </NextIntlClientProvider>
   );
 }

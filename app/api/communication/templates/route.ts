@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * Templates for one channel, with the locales each actually carries.
  *
  * Goes through `template-compat` rather than reading a store directly, so the campaign wizard picks
- * up the SMS/WhatsApp/Email split for free — including the fact that SMS now has its own collection
+ * up the SMS/WhatsApp/Email split for free  including the fact that SMS now has its own collection
  * instead of borrowing WhatsApp's.
  *
  * `availableLocales` matters to the caller: a campaign sends each donor their own language, so a
@@ -29,6 +29,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "channel must be EMAIL, WHATSAPP or SMS" }, { status: 400 });
   }
 
-  const templates = await listChannelTemplates(channel);
-  return NextResponse.json({ ok: true, templates });
+  try {
+    const templates = await listChannelTemplates(channel);
+    return NextResponse.json({ ok: true, templates });
+  } catch {
+    return NextResponse.json({ ok: false, error: "تعذّر تحميل القوالب الجاهزة لهذه القناة. راجع اتصال المزوّد والرقم الافتراضي ثم أعد المحاولة." }, { status: 503 });
+  }
 }

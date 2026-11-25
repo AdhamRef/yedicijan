@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,10 +10,9 @@ import {
   DollarSign,
   Heart,
   FolderTree,
+  Repeat,
   Calendar,
   Receipt,
-  Target,
-  Layers,
   BarChart3,
   PieChart as PieChartIcon,
   Search,
@@ -33,7 +32,6 @@ import {
   BarChart,
   Bar,
   Line,
-  AreaChart,
   Area,
   PieChart,
   Pie,
@@ -55,11 +53,17 @@ import { cn } from "@/lib/utils";
 import { DonationTableCountryColumn } from "@/components/dashboard/DonationTableCountryColumn";
 import { DashboardPieLegendByValue } from "@/components/dashboard/DashboardPieLegend";
 import { useViewUserProfile } from "@/context/ViewUserProfileContext";
+import { dashDir, dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
+import { donationCadenceLabel } from "@/lib/dashboard/donation-cadence-label";
 
 interface ChartDataPoint {
   date: string;
   amountUSD: number;
   count: number;
+  amountOneTime: number;
+  countOneTime: number;
+  amountMonthly: number;
+  countMonthly: number;
   teamSupport: number;
   fees: number;
 }
@@ -91,6 +95,8 @@ interface DonationRow {
   currency: string;
   teamSupport: number;
   fees: number;
+  type: string;
+  frequency?: string | null;
   createdAt: string;
   donor: { id: string; name: string | null; email: string };
   donorCountryCode?: string | null;
@@ -105,7 +111,18 @@ interface DashboardStats {
   totalUsers: number;
   totalAmount: number;
   allTimeRevenue?: number;
+  oneTimeCount: number;
+  monthlyCount: number;
+  oneTimeAllCount?: number;
+  monthlyAllCount?: number;
+  activeMonthlyCount: number;
+  monthlyStoppedCount?: number;
+  activeMonthlyAmountUSD?: number;
+  monthlyStoppedAmountUSD?: number;
+  monthlyRecurringRevenue: number;
   thisMonthRevenue: number;
+  oneTimeTotalAmount?: number;
+  monthlyTotalAmount?: number;
   campaignDonationsTotal: number;
   categoryDonationsTotal: number;
   campaignDonationsCount?: number;
@@ -117,6 +134,7 @@ interface DashboardStats {
     amount: number;
     currency: string;
     donorName: string;
+    type: string;
     campaignTitle: string | null;
     categoryName: string | null;
     createdAt: string;
@@ -126,22 +144,22 @@ interface DashboardStats {
 type ChartViewType = "bar" | "line" | "area";
 type ChartPeriod = "day" | "week" | "month" | "all" | "custom";
 type ChartMetric = "amount" | "teamSupport" | "fees";
-type StatCardSet = "revenue" | "overview";
+type StatCardSet = "revenue" | "overview" | "breakdown";
 
 const PERIOD_LABELS: Record<ChartPeriod, string> = {
-  day: "يوم",
-  week: "أسبوع",
-  month: "شهر",
-  all: "كل الوقت",
-  custom: "مخصص",
+  get day() { return dt("يوم"); },
+  get week() { return dt("أسبوع"); },
+  get month() { return dt("شهر"); },
+  get all() { return dt("كل الوقت"); },
+  get custom() { return dt("مخصص"); },
 };
 
 const CHART_COLORS = {
-  primary: "#2563eb",
-  primaryLight: "#93c5fd",
-  secondary: "#1d4ed8",
-  grid: "#e2e8f0",
-  text: "#334155",
+  primary: "#295a75",
+  primaryLight: "#83b2c9",
+  secondary: "#234a60",
+  grid: "#dde4e8",
+  text: "#3e4c55",
 };
 
 const PAGE_SIZE = 10;
@@ -255,7 +273,7 @@ export default function DashboardPage() {
         );
         const data = await res.json();
         if (!res.ok) {
-          toast.error(typeof data?.error === "string" ? data.error : "فشل البحث عن المستخدمين");
+          toast.error(typeof data?.error === "string" ? data.error : dt("فشل البحث عن المستخدمين"));
           setUsers([]);
           return;
         }
@@ -291,7 +309,7 @@ export default function DashboardPage() {
     };
   }, [usersSearchCommitted, selectedUserId]);
 
-  // Chart data (filters + period + from/to + user — user from state or URL when coming via link)
+  // Chart data (filters + period + from/to + user  user from state or URL when coming via link)
   useEffect(() => {
     const userIdFromUrl = searchParams.get("userId");
     const effectiveUserId = selectedUserId !== "all" ? selectedUserId : (userIdFromUrl && userIdFromUrl !== "all" ? userIdFromUrl : "all");
@@ -311,7 +329,7 @@ export default function DashboardPage() {
         setChartData(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
         console.error("Error fetching chart data:", error);
-        toast.error("فشل في تحميل بيانات التبرعات");
+        toast.error(dt("فشل في تحميل بيانات التبرعات"));
         setChartData([]);
       } finally {
         setChartLoading(false);
@@ -320,7 +338,7 @@ export default function DashboardPage() {
     fetchChartData();
   }, [selectedCategory, selectedCampaign, selectedUserId, searchParams, chartPeriod, dateFrom, dateTo]);
 
-  // Stats — affected by فترة (period + dateFrom/dateTo) and category/campaign filters
+  // Stats  affected by فترة (period + dateFrom/dateTo) and category/campaign filters
   useEffect(() => {
     const fetchStats = async () => {
       try {
@@ -335,14 +353,14 @@ export default function DashboardPage() {
         const response = await fetch(`/api/admin/stats?${params}`);
         const data = await response.json();
         if (!response.ok) {
-          const message = data?.details || data?.error || "فشل في تحميل إحصائيات لوحة التحكم";
+          const message = data?.details || data?.error || dt("فشل في تحميل إحصائيات لوحة التحكم");
           toast.error(message);
           return;
         }
         setStats(data);
       } catch (error) {
         console.error("Error fetching stats:", error);
-        toast.error("فشل في تحميل إحصائيات لوحة التحكم");
+        toast.error(dt("فشل في تحميل إحصائيات لوحة التحكم"));
       } finally {
         setLoading(false);
       }
@@ -350,7 +368,7 @@ export default function DashboardPage() {
     fetchStats();
   }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign]);
 
-  // Donations list — uses تصفية النتائج + chart time span (period + from/to) + sort
+  // Donations list  uses تصفية النتائج + chart time span (period + from/to) + sort
   const fetchDonations = useCallback(
     async (page: number, append: boolean) => {
       setDonationsLoading(true);
@@ -369,7 +387,7 @@ export default function DashboardPage() {
         const res = await fetch(`/api/donations?${params}`);
         const data = await res.json();
         if (!res.ok) {
-          toast.error(data?.error || "فشل في تحميل التبرعات");
+          toast.error(data?.error || dt("فشل في تحميل التبرعات"));
           return;
         }
         const list = Array.isArray(data.donations) ? data.donations : [];
@@ -377,7 +395,7 @@ export default function DashboardPage() {
         setDonationsTotal(data.pagination?.total ?? 0);
       } catch (error) {
         console.error("Error fetching donations:", error);
-        toast.error("فشل في تحميل التبرعات");
+        toast.error(dt("فشل في تحميل التبرعات"));
       } finally {
         setDonationsLoading(false);
         setDonationsFetchedOnce(true);
@@ -415,7 +433,7 @@ export default function DashboardPage() {
     return <LoadingSkeleton />;
   }
 
-  const currencySymbol: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", TRY: "₺", EGP: "EGP ", OMR: "ر.ع.‏" };
+  const currencySymbol: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", TRY: "₺", EGP: "EGP ", OMR: dt("ر.ع.‏") };
   const formatMoney = (n: number, sourceCurrency?: string, amountUSD?: number, approximate?: boolean) => {
     const decimals = approximate ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : { minimumFractionDigits: 0, maximumFractionDigits: 2 };
     const selected = getSelectedCurrency?.() ?? "DEFAULT";
@@ -440,71 +458,89 @@ export default function DashboardPage() {
     return "$" + val.toLocaleString(undefined, decimals);
   };
 
+  const oneTimeTotal = stats?.oneTimeTotalAmount ?? 0;
+  const monthlyTotal = stats?.monthlyTotalAmount ?? 0;
   const revenueSplitData = [
     {
-      name: "مشاريع",
+      name: dt("مشاريع"),
       value: stats?.campaignDonationsTotal ?? 0,
       count: stats?.campaignDonationsCount ?? 0,
-      color: "#2563eb",
+      color: "#295a75",
     },
     {
-      name: "فئات",
+      name: dt("فئات"),
       value: stats?.categoryDonationsTotal ?? 0,
       count: stats?.categoryDonationsCount ?? 0,
-      color: "#64748b",
+      color: "#6e818b",
+    },
+  ].filter((d) => d.value > 0 || d.count > 0);
+
+  const typeSplitData = [
+    {
+      name: dt("مرة واحدة"),
+      value: oneTimeTotal,
+      count: stats?.oneTimeCount ?? 0,
+      color: "#35708f",
+    },
+    {
+      name: dt("شهرية"),
+      value: monthlyTotal,
+      count: stats?.monthlyCount ?? 0,
+      color: "#234a60",
     },
   ].filter((d) => d.value > 0 || d.count > 0);
 
   return (
-    <div className="min-h-0" dir="rtl">
+    <div className="min-h-0" dir={dashDir()}>
       <div className="space-y-6 sm:space-y-8 p-0 sm:p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto">
         <header className="flex flex-wrap items-center justify-between gap-4">
-          <div className="text-right min-w-0 flex-1">
+          <div className="text-start min-w-0 flex-1">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              تحليل الإيرادات
-            </h1>
+              {dt("تحليل الإيرادات")}</h1>
             <p className="text-muted-foreground mt-1 text-sm break-words">
               {searchParams.get("userId") ? (
                 <>
-                  عرض تبرعات:{" "}
+                  {dt("عرض تبرعات: ")}
                   <span className="font-medium text-foreground whitespace-normal break-words">
                     {users.find((u) => u.id === searchParams.get("userId"))?.name ||
                       users.find((u) => u.id === searchParams.get("userId"))?.email ||
-                      "جاري التحميل..."}
+                      dt("جاري التحميل...")}
                   </span>
                 </>
               ) : (
-                "نظرة شاملة على الإيرادات، التبرعات والتحليلات"
+                dt("نظرة شاملة على الإيرادات، التبرعات والتحليلات")
               )}
             </p>
           </div>
         </header>
 
-        {/* المؤشرات — تختفي عند عرض تبرعات مستخدم معين عبر الرابط */}
+        {/* المؤشرات  تختفي عند عرض تبرعات مستخدم معين عبر الرابط */}
         {!searchParams.get("userId") && (
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-4 flex-row-reverse">
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              المؤشرات (حسب الفترة والتصفية)
-            </h2>
+              {dt("المؤشرات (حسب الفترة والتصفية)")}</h2>
             <Tabs
               value={statCardSet}
               onValueChange={(v) => setStatCardSet(v as StatCardSet)}
               className="w-auto"
             >
-              <TabsList className="bg-muted p-1 rounded-lg h-9" dir="rtl">
+              <TabsList className="bg-muted p-1 rounded-lg h-9" dir={dashDir()}>
                 <TabsTrigger
                   value="revenue"
                   className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
                 >
-                  الإيرادات
-                </TabsTrigger>
+                  {dt("الإيرادات")}</TabsTrigger>
                 <TabsTrigger
                   value="overview"
                   className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
                 >
-                  نظرة عامة
-                </TabsTrigger>
+                  {dt("نظرة عامة")}</TabsTrigger>
+                <TabsTrigger
+                  value="breakdown"
+                  className="text-xs px-3 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+                >
+                  {dt("تفصيل التبرعات")}</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -512,28 +548,35 @@ export default function DashboardPage() {
             {statCardSet === "revenue" && (
               <>
                 <StatsCard
-                  title="إيرادات إجمالية"
+                  title={dt("إيرادات إجمالية")}
                   value={stats?.allTimeRevenue ?? stats?.totalAmount ?? 0}
                   icon={DollarSign}
                   accent="emerald"
                   format="money"
                 />
                 <StatsCard
-                  title="إيرادات هذا الشهر"
+                  title={dt("إيرادات هذا الشهر")}
                   value={stats?.thisMonthRevenue ?? 0}
                   icon={Calendar}
                   accent="emerald"
                   format="money"
                 />
                 <StatsCard
-                  title="دعم الفريق"
+                  title={dt("إيرادات شهرية متكررة")}
+                  value={stats?.monthlyRecurringRevenue ?? 0}
+                  icon={Repeat}
+                  accent="emerald"
+                  format="money"
+                />
+                <StatsCard
+                  title={dt("دعم الفريق")}
                   value={stats?.teamSupportTotal ?? 0}
                   icon={HandCoins}
                   accent="amber"
                   format="money"
                 />
                 <StatsCard
-                  title="الرسوم"
+                  title={dt("الرسوم")}
                   value={stats?.feesTotal ?? 0}
                   icon={Percent}
                   accent="orange"
@@ -544,19 +587,19 @@ export default function DashboardPage() {
             {statCardSet === "overview" && (
               <>
                 <StatsCard
-                  title="المشاريع"
+                  title={dt("المشاريع")}
                   value={stats?.totalCampaigns ?? 0}
                   icon={Heart}
                   accent="teal"
                 />
                 <StatsCard
-                  title="الفئات"
+                  title={dt("الفئات")}
                   value={stats?.totalCategories ?? 0}
                   icon={FolderTree}
                   accent="indigo"
                 />
                 <StatsCard
-                  title="المستخدمين"
+                  title={dt("المستخدمين")}
                   value={stats?.totalUsers ?? 0}
                   icon={Users}
                   accent="amber"
@@ -566,6 +609,40 @@ export default function DashboardPage() {
                   value={stats?.totalDonations ?? 0}
                   icon={Receipt}
                   accent="violet"
+                />
+              </>
+            )}
+            {statCardSet === "breakdown" && (
+              <>
+                <StatsCard
+                  title={dt("مرة واحدة (عدد)")}
+                  value={stats?.oneTimeAllCount ?? 0}
+                  icon={Receipt}
+                  accent="slate"
+                  subtitle={dt("ناجح: {0}", [stats?.oneTimeCount ?? 0])}
+                />
+                <StatsCard
+                  title={dt("شهرية (عدد)")}
+                  value={stats?.monthlyAllCount ?? 0}
+                  icon={Repeat}
+                  accent="slate"
+                  subtitle={dt("ناجح: {0}", [stats?.monthlyCount ?? 0])}
+                />
+                <StatsCard
+                  title={dt("التبرعات الشهرية الناشطة")}
+                  value={stats?.activeMonthlyAmountUSD ?? 0}
+                  icon={Repeat}
+                  accent="teal"
+                  format="money"
+                  subtitle={dt("عدد: {0}", [stats?.activeMonthlyCount ?? 0])}
+                />
+                <StatsCard
+                  title={dt("التبرعات الشهرية المتوقفة")}
+                  value={stats?.monthlyStoppedAmountUSD ?? 0}
+                  icon={Repeat}
+                  accent="indigo"
+                  format="money"
+                  subtitle={dt("عدد: {0}", [stats?.monthlyStoppedCount ?? 0])}
                 />
               </>
             )}
@@ -579,10 +656,10 @@ export default function DashboardPage() {
         <section className="space-y-4">
           <Card className="border-border shadow-sm">
             <CardContent className="pt-6">
-              <Tabs defaultValue="time-series" className="w-full" dir="rtl">
+              <Tabs defaultValue="time-series" className="w-full" dir={dashDir()}>
 
 
-                <TabsContent value="time-series" className="mt-0" dir="rtl">
+                <TabsContent value="time-series" className="mt-0" dir={dashDir()}>
                   <div className="h-[400px] w-full">
                     {chartLoading ? (
                       <div className="h-full flex items-center justify-center bg-slate-50 rounded-lg">
@@ -617,7 +694,7 @@ export default function DashboardPage() {
                             <Tooltip
                               contentStyle={{
                                 backgroundColor: "#fff",
-                                border: "1px solid #e2e8f0",
+                                border: "1px solid #dde4e8",
                                 borderRadius: "8px",
                                 boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                               }}
@@ -630,17 +707,18 @@ export default function DashboardPage() {
                                 })
                               }
                               formatter={(value: number, name: string) => {
-                                if (name === "amountUSD") return [formatMoney(Number(value), undefined, undefined, true), "مبلغ ناجح"];
+                                if (name === "amountOneTime") return [formatMoney(Number(value), undefined, undefined, true), "مبلغ مرة واحدة"];
+                                if (name === "amountMonthly") return [formatMoney(Number(value), undefined, undefined, true), "مبلغ شهري"];
                                 return [formatMoney(Number(value), undefined, undefined, true), name];
                               }}
                               content={({ active, payload, label }) => {
                                 if (!active || !payload?.length) return null;
                                 const point = chartData.find((d) => d.date === label);
-                                const isAmount = (key: string) => key === "amountUSD" || key === "مبلغ ناجح";
+                                const isAmount = (key: string) => key === "amountOneTime" || key === "amountMonthly" || key === "مبلغ مرة واحدة" || key === "مبلغ شهري";
                                 return (
                                   <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
                                     <p className="text-sm font-medium text-slate-700 mb-1.5">
-                                      {label ? new Date(label).toLocaleDateString("ar-EG", { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : ""}
+                                      {label ? new Date(label).toLocaleDateString(dashIntl("ar-EG"), { weekday: "long", year: "numeric", month: "long", day: "numeric" }) : ""}
                                     </p>
                                     {payload.map((entry) => {
                                       const dataKey = (entry as { dataKey?: string }).dataKey ?? entry.name;
@@ -654,10 +732,10 @@ export default function DashboardPage() {
                                     {point != null && (
                                       <>
                                         <p className="text-sm font-medium text-slate-700 mt-1.5 pt-1 border-t border-slate-100">
-                                          الإجمالي: {formatMoney(Number(point.amountUSD ?? 0), undefined, undefined, true)}
+                                          {dtx("الإجمالي: {0}", [formatMoney(Number(point.amountUSD ?? 0), undefined, undefined, true)])}
                                         </p>
                                         <p className="text-sm text-slate-500 mt-0.5">
-                                          عدد التبرعات: {Math.round(Number(point.count))}
+                                          {dtx("عدد التبرعات: {0}", [Math.round(Number(point.count))])}
                                         </p>
                                       </>
                                     )}
@@ -667,11 +745,18 @@ export default function DashboardPage() {
                             />
                             <Legend />
                             <Bar
-                              dataKey="amountUSD"
-                              fill="#3b82f6"
+                              dataKey="amountOneTime"
+                              fill="#35708f"
                               radius={[4, 4, 0, 0]}
                               maxBarSize={32}
-                              name="مبلغ ناجح"
+                              name="مبلغ مرة واحدة"
+                            />
+                            <Bar
+                              dataKey="amountMonthly"
+                              fill="#234a60"
+                              radius={[4, 4, 0, 0]}
+                              maxBarSize={32}
+                              name="مبلغ شهري"
                             />
                           </BarChart>
                         </ResponsiveContainer>
@@ -711,7 +796,7 @@ export default function DashboardPage() {
                             <Tooltip
                               contentStyle={{
                                 backgroundColor: "#fff",
-                                border: "1px solid #e2e8f0",
+                                border: "1px solid #dde4e8",
                                 borderRadius: "8px",
                                 boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                               }}
@@ -725,16 +810,16 @@ export default function DashboardPage() {
                               }
                               formatter={(value: number, name: string) => {
                                 if (name === "count" || name === "عدد التبرعات") return [String(Math.round(Number(value))), "عدد التبرعات"];
-                                if (chartMetric === "teamSupport") return [formatMoney(Number(value), undefined, undefined, true), "دعم الفريق"];
-                                if (chartMetric === "fees") return [formatMoney(Number(value), undefined, undefined, true), "الرسوم"];
-                                return [String(Math.round(Number(value))), "العدد"];
+                                if (chartMetric === "teamSupport") return [formatMoney(Number(value), undefined, undefined, true), dt("دعم الفريق")];
+                                if (chartMetric === "fees") return [formatMoney(Number(value), undefined, undefined, true), dt("الرسوم")];
+                                return [String(Math.round(Number(value))), dt("العدد")];
                               }}
                             />
                             <Legend />
                             <Bar
                               yAxisId="amount"
                               dataKey={chartMetric}
-                              fill={chartMetric === "teamSupport" ? "#f59e0b" : "#ea580c"}
+                              fill={chartMetric === "teamSupport" ? "#d39a27" : "#b04a2c"}
                               radius={[4, 4, 0, 0]}
                               maxBarSize={36}
                               name={chartMetric === "teamSupport" ? "دعم الفريق" : "الرسوم"}
@@ -743,7 +828,7 @@ export default function DashboardPage() {
                               yAxisId="count"
                               type="monotone"
                               dataKey="count"
-                              stroke="#0f766e"
+                              stroke="#1a6340"
                               strokeWidth={2}
                               dot={false}
                               name="عدد التبرعات"
@@ -785,7 +870,7 @@ export default function DashboardPage() {
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "#fff",
-                              border: "1px solid #e2e8f0",
+                              border: "1px solid #dde4e8",
                               borderRadius: "8px",
                               boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                             }}
@@ -799,10 +884,10 @@ export default function DashboardPage() {
                             }
                             formatter={(value: number, name: string) => {
                               if (name === "count" || name === "عدد التبرعات") return [String(Math.round(Number(value))), "عدد التبرعات"];
-                              if (chartMetric === "amount") return [formatMoney(Number(value), undefined, undefined, true), "المبلغ"];
-                              if (chartMetric === "teamSupport") return [formatMoney(Number(value), undefined, undefined, true), "دعم الفريق"];
-                              if (chartMetric === "fees") return [formatMoney(Number(value), undefined, undefined, true), "الرسوم"];
-                              return [String(Math.round(Number(value))), "العدد"];
+                              if (chartMetric === "amount") return [formatMoney(Number(value), undefined, undefined, true), dt("المبلغ")];
+                              if (chartMetric === "teamSupport") return [formatMoney(Number(value), undefined, undefined, true), dt("دعم الفريق")];
+                              if (chartMetric === "fees") return [formatMoney(Number(value), undefined, undefined, true), dt("الرسوم")];
+                              return [String(Math.round(Number(value))), dt("العدد")];
                             }}
                           />
                           <Legend />
@@ -812,10 +897,10 @@ export default function DashboardPage() {
                             dataKey={chartMetric === "amount" ? "amountUSD" : chartMetric}
                             stroke={
                               chartMetric === "amount"
-                                ? "#2563eb"
+                                ? "#295a75"
                                 : chartMetric === "teamSupport"
-                                  ? "#f59e0b"
-                                  : "#ea580c"
+                                  ? "#d39a27"
+                                  : "#b04a2c"
                             }
                             strokeWidth={2}
                             dot={false}
@@ -831,7 +916,7 @@ export default function DashboardPage() {
                             yAxisId="count"
                             type="monotone"
                             dataKey="count"
-                            stroke="#0f766e"
+                            stroke="#1a6340"
                             strokeWidth={2}
                             dot={false}
                             name="عدد التبرعات"
@@ -872,7 +957,7 @@ export default function DashboardPage() {
                           <Tooltip
                             contentStyle={{
                               backgroundColor: "#fff",
-                              border: "1px solid #e2e8f0",
+                              border: "1px solid #dde4e8",
                               borderRadius: "8px",
                               boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
                             }}
@@ -886,10 +971,10 @@ export default function DashboardPage() {
                             }
                             formatter={(value: number, name: string) => {
                               if (name === "count" || name === "عدد التبرعات") return [String(Math.round(Number(value))), "عدد التبرعات"];
-                              if (chartMetric === "amount") return [formatMoney(Number(value), undefined, undefined, true), "المبلغ"];
-                              if (chartMetric === "teamSupport") return [formatMoney(Number(value), undefined, undefined, true), "دعم الفريق"];
-                              if (chartMetric === "fees") return [formatMoney(Number(value), undefined, undefined, true), "الرسوم"];
-                              return [String(Math.round(Number(value))), "العدد"];
+                              if (chartMetric === "amount") return [formatMoney(Number(value), undefined, undefined, true), dt("المبلغ")];
+                              if (chartMetric === "teamSupport") return [formatMoney(Number(value), undefined, undefined, true), dt("دعم الفريق")];
+                              if (chartMetric === "fees") return [formatMoney(Number(value), undefined, undefined, true), dt("الرسوم")];
+                              return [String(Math.round(Number(value))), dt("العدد")];
                             }}
                           />
                           <Legend />
@@ -899,17 +984,17 @@ export default function DashboardPage() {
                             dataKey={chartMetric === "amount" ? "amountUSD" : chartMetric}
                             stroke={
                               chartMetric === "amount"
-                                ? "#2563eb"
+                                ? "#295a75"
                                 : chartMetric === "teamSupport"
-                                  ? "#f59e0b"
-                                  : "#ea580c"
+                                  ? "#d39a27"
+                                  : "#b04a2c"
                             }
                             fill={
                               chartMetric === "amount"
-                                ? "#93c5fd"
+                                ? "#83b2c9"
                                 : chartMetric === "teamSupport"
-                                  ? "#fcd34d"
-                                  : "#fdba74"
+                                  ? "#ecc977"
+                                  : "#e8a783"
                             }
                             fillOpacity={0.4}
                             strokeWidth={2}
@@ -925,7 +1010,7 @@ export default function DashboardPage() {
                             yAxisId="count"
                             type="monotone"
                             dataKey="count"
-                            stroke="#0f766e"
+                            stroke="#1a6340"
                             strokeWidth={2}
                             dot={false}
                             name="عدد التبرعات"
@@ -936,15 +1021,19 @@ export default function DashboardPage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="split" className="mt-0" dir="rtl">
-                  <Tabs defaultValue="campaign-category" className="w-full" dir="rtl">
+                <TabsContent value="split" className="mt-0" dir={dashDir()}>
+                  <Tabs defaultValue="one-time-monthly" className="w-full" dir={dashDir()}>
                     <TabsList className="bg-slate-100 p-1 rounded-lg mb-4 inline-flex flex-row-reverse">
                       <TabsTrigger
                         value="campaign-category"
                         className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
                       >
-                        مشاريع vs فئات
-                      </TabsTrigger>
+                        {dt("مشاريع vs فئات")}</TabsTrigger>
+                      <TabsTrigger
+                        value="one-time-monthly"
+                        className="data-[state=active]:bg-card data-[state=active]:shadow-sm text-sm"
+                      >
+                        {dt("مرة واحدة vs شهرية")}</TabsTrigger>
                     </TabsList>
                     <TabsContent value="campaign-category" className="mt-0">
                       <div className="h-[340px] w-full flex items-center justify-center">
@@ -970,8 +1059,8 @@ export default function DashboardPage() {
                                 formatter={(value: number, _name: string, props: { payload?: { count?: number } }) => {
                                   const count = props?.payload?.count ?? 0;
                                   return [
-                                    `${formatMoney(Number(value), undefined, undefined, true)} — عدد: ${count}`,
-                                    "المبلغ / العدد",
+                                    dt("{0}  عدد: {1}", [formatMoney(Number(value), undefined, undefined, true), count]),
+                                    dt("المبلغ / العدد"),
                                   ];
                                 }}
                               />
@@ -979,7 +1068,44 @@ export default function DashboardPage() {
                             </PieChart>
                           </ResponsiveContainer>
                         ) : (
-                          <p className="text-slate-500">لا توجد بيانات</p>
+                          <p className="text-slate-500">{dt("لا توجد بيانات")}</p>
+                        )}
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="one-time-monthly" className="mt-0" dir={dashDir()}>
+                      <div className="h-[340px] w-full flex items-center justify-center">
+                        {typeSplitData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={typeSplitData}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={70}
+                                outerRadius={110}
+                                paddingAngle={2}
+                                dataKey="value"
+                                nameKey="name"
+                                label={false}
+                              >
+                                {typeSplitData.map((entry) => (
+                                  <Cell key={entry.name} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip
+                                formatter={(value: number, _name: string, props: { payload?: { count?: number } }) => {
+                                  const count = props?.payload?.count ?? 0;
+                                  return [
+                                    dt("{0}  عدد: {1}", [formatMoney(Number(value), undefined, undefined, true), count]),
+                                    dt("المبلغ / العدد"),
+                                  ];
+                                }}
+                              />
+                              <Legend content={DashboardPieLegendByValue} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <p className="text-slate-500">{dt("لا توجد بيانات")}</p>
                         )}
                       </div>
                     </TabsContent>
@@ -991,38 +1117,35 @@ export default function DashboardPage() {
                     className="data-[state=active]:bg-card data-[state=active]:shadow-sm gap-2"
                   >
                     <PieChartIcon className="w-4 h-4" />
-                    توزيع الإيرادات
-                  </TabsTrigger>
+                    {dt("توزيع الإيرادات")}</TabsTrigger>
                   <TabsTrigger
                     value="time-series"
                     className="data-[state=active]:bg-card data-[state=active]:shadow-sm gap-2"
                   >
                     <BarChart3 className="w-4 h-4" />
-                    التبرعات عبر الزمن
-                  </TabsTrigger>
+                    {dt("التبرعات عبر الزمن")}</TabsTrigger>
                 </TabsList>
               </Tabs>
             </CardContent>
           </Card>
         </section>
 
-        {/* تصفية النتائج — تؤثر على الرسم وجدول التبرعات (فترة، فئة، مشروع، مستخدم، نوع الرسم) */}
+        {/* تصفية النتائج  تؤثر على الرسم وجدول التبرعات (فترة، فئة، مشروع، مستخدم، نوع الرسم) */}
         <Card className="border-border shadow-sm">
           <CardHeader className="py-4">
             <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2 justify-end">
               <Search className="w-4 h-4 shrink-0" />
-              <span>تصفية النتائج</span>
+              <span>{dt("تصفية النتائج")}</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0 space-y-4" dir="rtl">
+          <CardContent className="pt-0 space-y-4" dir={dashDir()}>
 
 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
 
-    {/* Period — مع من/إلى/مسح تحته عند مخصص */}
-    <div className="space-y-2 text-right">
+    {/* Period  مع من/إلى/مسح تحته عند مخصص */}
+    <div className="space-y-2 text-start">
       <label className="text-[11px] font-medium text-slate-500">
-        الفترة
-      </label>
+        {dt("الفترة")}</label>
       <Select
         value={chartPeriod === "custom" || (dateFrom && dateTo) ? "custom" : chartPeriod}
         onValueChange={(v) => {
@@ -1041,7 +1164,7 @@ export default function DashboardPage() {
         }}
       >
         <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50 hover:bg-slate-100 shadow-sm">
-          <SelectValue placeholder="اختر الفترة" />
+          <SelectValue placeholder={dt("اختر الفترة")} />
         </SelectTrigger>
         <SelectContent>
           {(Object.keys(PERIOD_LABELS) as ChartPeriod[]).map((p) => (
@@ -1054,7 +1177,7 @@ export default function DashboardPage() {
       {chartPeriod === "custom" && (
         <div className="flex gap-2 pt-1 border-slate-100">
           <div className="space-y-1">
-            <label className="text-[11px] font-medium text-slate-500">من</label>
+            <label className="text-[11px] font-medium text-slate-500">{dt("من")}</label>
             <input
               type="date"
               value={dateFrom}
@@ -1063,7 +1186,7 @@ export default function DashboardPage() {
             />
           </div>
           <div className="space-y-1">
-            <label className="text-[11px] font-medium text-slate-500">إلى</label>
+            <label className="text-[11px] font-medium text-slate-500">{dt("إلى")}</label>
             <input
               type="date"
               value={dateTo}
@@ -1076,16 +1199,15 @@ export default function DashboardPage() {
     </div>
 
   {/* Category */}
-  <div className="space-y-1 text-right">
+  <div className="space-y-1 text-start">
     <label className="text-[11px] font-medium text-slate-500">
-      الفئة
-    </label>
+      {dt("الفئة")}</label>
     <Select value={selectedCategory} onValueChange={setSelectedCategory}>
       <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50 hover:bg-slate-100 shadow-sm">
-        <SelectValue placeholder="اختر الفئة" />
+        <SelectValue placeholder={dt("اختر الفئة")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="all" className="text-xs">جميع الفئات</SelectItem>
+        <SelectItem value="all" className="text-xs">{dt("جميع الفئات")}</SelectItem>
         {categories.map((c) => (
           <SelectItem key={c.id} value={c.id} className="text-xs">
             {c.name}
@@ -1096,24 +1218,23 @@ export default function DashboardPage() {
   </div>
 
   {/* Campaign */}
-  <div className="space-y-1 text-right">
+  <div className="space-y-1 text-start">
     <label className="text-[11px] font-medium text-slate-500">
-      المشروع
-    </label>
+      {dt("المشروع")}</label>
     <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
       <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50 hover:bg-slate-100 shadow-sm">
-        <SelectValue placeholder="اختر المشروع" />
+        <SelectValue placeholder={dt("اختر المشروع")} />
       </SelectTrigger>
       <SelectContent>
         <div className="p-2 border-b border-slate-100">
           <Input
-            placeholder="بحث..."
+            placeholder={dt("بحث...")}
             value={searchCampaign}
             onChange={(e) => setSearchCampaign(e.target.value)}
             className="w-full h-8 text-xs"
           />
         </div>
-        <SelectItem value="all" className="text-xs">جميع المشاريع</SelectItem>
+        <SelectItem value="all" className="text-xs">{dt("جميع المشاريع")}</SelectItem>
         {campaigns
           .filter((c) => {
             const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : []);
@@ -1130,12 +1251,11 @@ export default function DashboardPage() {
     </Select>
   </div>
 
-  {/* User — hidden when viewing a specific user via link (?userId=...) */}
+  {/* User  hidden when viewing a specific user via link (?userId=...) */}
   {!searchParams.get("userId") && (
-    <div className="space-y-1 text-right">
+    <div className="space-y-1 text-start">
       <label className="text-[11px] font-medium text-slate-500">
-        المستخدم
-      </label>
+        {dt("المستخدم")}</label>
       <Select
         value={selectedUserId}
         onValueChange={(v) => {
@@ -1148,12 +1268,12 @@ export default function DashboardPage() {
         }}
       >
         <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50 hover:bg-slate-100 shadow-sm">
-          <SelectValue placeholder="اختر المستخدم" />
+          <SelectValue placeholder={dt("اختر المستخدم")} />
         </SelectTrigger>
         <SelectContent>
           <div className="p-2 border-b border-slate-100 flex gap-1.5 flex-row-reverse items-center">
             <Input
-              placeholder="بحث… ثم Enter أو زر البحث"
+              placeholder={dt("بحث… ثم Enter أو زر البحث")}
               value={usersSearchInput}
               onChange={(e) => setUsersSearchInput(e.target.value)}
               onKeyDown={(e) => {
@@ -1166,7 +1286,7 @@ export default function DashboardPage() {
             />
             <button
               type="button"
-              title="بحث"
+              title={dt("بحث")}
               disabled={usersSearchLoading}
               onClick={(e) => {
                 e.preventDefault();
@@ -1182,7 +1302,7 @@ export default function DashboardPage() {
               )}
             </button>
           </div>
-          <SelectItem value="all" className="text-xs">الكل</SelectItem>
+          <SelectItem value="all" className="text-xs">{dt("الكل")}</SelectItem>
           {users.map((u) => (
             <SelectItem key={u.id} value={u.id} className="text-xs">
               {u.name || u.email}
@@ -1194,35 +1314,33 @@ export default function DashboardPage() {
   )}
 
   {/* Chart Metric */}
-  <div className="space-y-1 text-right">
+  <div className="space-y-1 text-start">
     <label className="text-[11px] font-medium text-slate-500">
-      القيمة
-    </label>
+      {dt("القيمة")}</label>
     <Select value={chartMetric} onValueChange={(v) => setChartMetric(v as ChartMetric)}>
       <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50 hover:bg-slate-100 shadow-sm">
-        <SelectValue placeholder="اختر القيمة" />
+        <SelectValue placeholder={dt("اختر القيمة")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="amount" className="text-xs">المبلغ</SelectItem>
-        <SelectItem value="teamSupport" className="text-xs">دعم الفريق</SelectItem>
-        <SelectItem value="fees" className="text-xs">الرسوم</SelectItem>
+        <SelectItem value="amount" className="text-xs">{dt("المبلغ")}</SelectItem>
+        <SelectItem value="teamSupport" className="text-xs">{dt("دعم الفريق")}</SelectItem>
+        <SelectItem value="fees" className="text-xs">{dt("الرسوم")}</SelectItem>
       </SelectContent>
     </Select>
   </div>
 
   {/* Chart Type */}
-  <div className="space-y-1 text-right">
+  <div className="space-y-1 text-start">
     <label className="text-[11px] font-medium text-slate-500">
-      نوع الرسم
-    </label>
+      {dt("نوع الرسم")}</label>
     <Select value={chartView} onValueChange={(v) => setChartView(v as ChartViewType)}>
       <SelectTrigger className="w-full h-9 px-3 text-xs rounded-lg border-slate-200 bg-slate-50 hover:bg-slate-100 shadow-sm">
-        <SelectValue placeholder="اختر النوع" />
+        <SelectValue placeholder={dt("اختر النوع")} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="bar" className="text-xs">أعمدة</SelectItem>
-        <SelectItem value="line" className="text-xs">خط</SelectItem>
-        <SelectItem value="area" className="text-xs">منطقة</SelectItem>
+        <SelectItem value="bar" className="text-xs">{dt("أعمدة")}</SelectItem>
+        <SelectItem value="line" className="text-xs">{dt("خط")}</SelectItem>
+        <SelectItem value="area" className="text-xs">{dt("منطقة")}</SelectItem>
       </SelectContent>
     </Select>
   </div>
@@ -1238,15 +1356,13 @@ export default function DashboardPage() {
 
         {/* التبرعات */}
         <section className="space-y-4">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">
-            التبرعات
-          </h2>
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider text-start">
+            {dt("التبرعات")}</h2>
           <Card className="border-border shadow-sm">
             <CardHeader className="border-b border-slate-100 py-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 flex-row-reverse">
-                <CardTitle className="text-base font-semibold text-slate-900 text-right">
-                  أحدث التبرعات (تصفية من الأعلى + الفترة الزمنية)
-                </CardTitle>
+                <CardTitle className="text-base font-semibold text-slate-900 text-start">
+                  {dt("أحدث التبرعات (تصفية من الأعلى + الفترة الزمنية)")}</CardTitle>
                 <Select
                   value={`${donationsSortBy}-${donationsSortOrder}`}
                   onValueChange={(v) => {
@@ -1255,64 +1371,57 @@ export default function DashboardPage() {
                     setDonationsSortOrder(order);
                   }}
                 >
-                  <SelectTrigger className="w-full sm:w-[200px] h-9 border-slate-200 bg-slate-50/50" dir="rtl">
-                    <SelectValue placeholder="ترتيب" />
+                  <SelectTrigger className="w-full sm:w-[200px] h-9 border-slate-200 bg-slate-50/50" dir={dashDir()}>
+                    <SelectValue placeholder={dt("ترتيب")} />
                   </SelectTrigger>
-                  <SelectContent dir="rtl">
-                    <SelectItem value="date-desc">الأحدث أولاً</SelectItem>
-                    <SelectItem value="date-asc">الأقدم أولاً</SelectItem>
-                    <SelectItem value="amount-desc">الأعلى مبلغاً</SelectItem>
-                    <SelectItem value="amount-asc">الأقل مبلغاً</SelectItem>
+                  <SelectContent dir={dashDir()}>
+                    <SelectItem value="date-desc">{dt("الأحدث أولاً")}</SelectItem>
+                    <SelectItem value="date-asc">{dt("الأقدم أولاً")}</SelectItem>
+                    <SelectItem value="amount-desc">{dt("الأعلى مبلغاً")}</SelectItem>
+                    <SelectItem value="amount-asc">{dt("الأقل مبلغاً")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto" dir="rtl">
-                <table className="w-full text-xs text-right leading-snug">
+              <div className="overflow-x-auto" dir={dashDir()}>
+                <table className="w-full text-xs text-start leading-snug">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/80">
-                      <th className="text-right py-1.5 px-2 font-semibold text-slate-700">
-                        المتبرع
-                      </th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-slate-700 min-w-[100px] max-w-[130px]">
-                        الدولة
-                      </th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
-                        التبرع
-                      </th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
-                        دعم الفريق
-                      </th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
-                      الرسوم
-                      </th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-slate-700 max-w-[160px]">
-                        المشروع / الفئة
-                      </th>
-                      <th className="text-right py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
-                        التاريخ
-                      </th>
+                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700">
+                        {dt("المتبرع")}</th>
+                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700 min-w-[100px] max-w-[130px]">
+                        {dt("الدولة")}</th>
+                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
+                        {dt("التبرع")}</th>
+                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
+                        {dt("دعم الفريق")}</th>
+                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
+                      {dt("الرسوم")}</th>
+                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700">
+                        {dt("النوع")}</th>
+                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700 max-w-[160px]">
+                        {dt("المشروع / الفئة")}</th>
+                      <th className="text-start py-1.5 px-2 font-semibold text-slate-700 whitespace-nowrap">
+                        {dt("التاريخ")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {donationsLoading && donations.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center">
+                        <td colSpan={8} className="py-12 text-center">
                           <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-400" />
                         </td>
                       </tr>
                     ) : !donationsFetchedOnce ? (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-slate-500">
-                          جاري التحميل...
-                        </td>
+                        <td colSpan={8} className="py-12 text-center text-slate-500">
+                          {dt("جاري التحميل...")}</td>
                       </tr>
                     ) : donations.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-slate-500">
-                          لا توجد تبرعات تطابق التصفية
-                        </td>
+                        <td colSpan={8} className="py-12 text-center text-slate-500">
+                          {dt("لا توجد تبرعات تطابق التصفية")}</td>
                       </tr>
                     ) : (
                       donations.map((d) => (
@@ -1324,7 +1433,7 @@ export default function DashboardPage() {
                             <button
                               type="button"
                               onClick={() => d.donor?.id && openUserProfile(d.donor.id)}
-                              className="text-right w-full max-w-[200px] rounded-md -mx-0.5 px-0.5 py-0 hover:bg-slate-100/80 transition-colors cursor-pointer border-0 bg-transparent"
+                              className="text-start w-full max-w-[200px] rounded-md -mx-0.5 px-0.5 py-0 hover:bg-slate-100/80 transition-colors cursor-pointer border-0 bg-transparent"
                             >
                               <p className="font-medium text-slate-900">
                                 {d.donor?.name || "—"}
@@ -1339,12 +1448,12 @@ export default function DashboardPage() {
                           <td className="py-1.5 px-2 align-middle max-w-[130px]">
                             <DonationTableCountryColumn countryCode={d.donorCountryCode} />
                           </td>
-                          <td className="py-1.5 px-2 font-medium text-slate-800" dir="rtl">
+                          <td className="py-1.5 px-2 font-medium text-slate-800" dir={dashDir()}>
                             <span dir="ltr">
                               {formatMoney((d.totalAmount ?? d.amount ?? 0) as number, d.currency, d.amountUSD)}
                             </span>
                           </td>
-                          <td className="py-1.5 px-2 font-medium text-slate-800" dir="rtl">
+                          <td className="py-1.5 px-2 font-medium text-slate-800" dir={dashDir()}>
                             {(d.teamSupport ?? 0) > 0 ? (
                               <span dir="ltr">
                                 {formatMoney(d.teamSupport ?? 0, d.currency, (d.totalAmount && (d.amountUSD != null)) ? ((d.teamSupport ?? 0) / d.totalAmount) * d.amountUSD : undefined)}
@@ -1353,7 +1462,7 @@ export default function DashboardPage() {
                               <span className="text-slate-500">—</span>
                             )}
                           </td>
-                          <td className="py-1.5 px-2 font-medium text-slate-800" dir="rtl">
+                          <td className="py-1.5 px-2 font-medium text-slate-800" dir={dashDir()}>
                             {(d.fees ?? 0) > 0 ? (
                               <span dir="ltr">
                                 {formatMoney(d.fees ?? 0, d.currency, (d.totalAmount && (d.amountUSD != null)) ? ((d.fees ?? 0) / d.totalAmount) * d.amountUSD : undefined)}
@@ -1362,6 +1471,18 @@ export default function DashboardPage() {
                               <span className="text-slate-500">—</span>
                             )}
                           </td>
+                          <td className="py-1.5 px-2">
+                            <span
+                              className={cn(
+                                "inline-block w-max px-1.5 py-px rounded-full text-[11px]",
+                                d.type === "MONTHLY"
+                                  ? "bg-brand/10 text-brand"
+                                  : "bg-slate-100 text-slate-600"
+                              )}
+                            >
+                              {donationCadenceLabel(d)}
+                            </span>
+                          </td>
                           <td className="py-1.5 px-2 text-slate-600 max-w-[160px]">
                             {d.campaigns?.length > 0 ? (
                               <span>
@@ -1369,7 +1490,7 @@ export default function DashboardPage() {
                               </span>
                             ) : d.categories?.length > 0 ? (
                               <span>
-                                فئة: {d.categories.map((c) => c.name).join(", ")}
+                                {dt("فئة: ")}{d.categories.map((c) => c.name).join(", ")}
                               </span>
                             ) : (
                               "—"
@@ -1399,14 +1520,12 @@ export default function DashboardPage() {
                     ) : (
                       <ChevronDown className="w-4 h-4 rotate-180" />
                     )}
-                    عرض المزيد
-                  </button>
+                    {dt("عرض المزيد")}</button>
                 </div>
               )}
               {donationsTotal > 0 && (
-                <p className="text-xs text-slate-500 px-4 py-2 border-t border-slate-100 text-right">
-                  عرض {donations.length} من {donationsTotal} تبرع
-                </p>
+                <p className="text-xs text-slate-500 px-4 py-2 border-t border-slate-100 text-start">
+                  {dtx("عرض {0} من {1} تبرع", [donations.length, donationsTotal])}</p>
               )}
             </CardContent>
           </Card>
@@ -1488,12 +1607,12 @@ function StatsCard({
   const moneyEnd = moneyResult?.convertedValue ?? displayValue;
 
   return (
-    <Card className={cn("border border-border shadow-sm overflow-hidden", styles.border)} dir="rtl">
+    <Card className={cn("border border-border shadow-sm overflow-hidden", styles.border)} dir={dashDir()}>
       <div className="p-5 flex items-start gap-4">
         <div className={cn("p-2.5 rounded-lg shrink-0", styles.bg, styles.text)}>
           <Icon className="w-5 h-5" />
         </div>
-        <div className="min-w-0 text-right">
+        <div className="min-w-0 text-start">
           <p className="text-xs font-medium text-slate-500 truncate">{title}</p>
           <p className="text-xl font-bold text-slate-900 mt-0.5 tabular-nums">
             {isMoney ? (
@@ -1524,7 +1643,7 @@ function StatsCard({
 
 function LoadingSkeleton() {
   return (
-    <div className="space-y-6 p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto" dir="rtl">
+    <div className="space-y-6 p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto" dir={dashDir()}>
       <div className="h-16 rounded-lg bg-slate-200 animate-pulse" />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (

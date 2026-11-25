@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { Loader2, Upload, X } from "lucide-react";
@@ -15,19 +15,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import WysiwygEditor from "@/app/[locale]/blog/_components/wysiwyg/wysiwyg-editor";
-import { defaultEditorContent } from "@/app/[locale]/blog/_components/wysiwyg/default-content";
+import { contentToTiptapDocument } from "@/lib/blog/rich-text";
 import { useCreateTranslations, type BufferedLocale } from "./CreateTranslationsContext";
+import { localeDir, localeNativeLabel } from "../../../_components/locale-form";
+import { AutoTranslateButton } from "../../../_components/AutoTranslateButton";
 import { SmartSeoAuditCard } from "../../../_components/SmartSeoAuditCard";
+import { dashDir, dt } from "@/lib/dashboard/i18n";
 
-const localeMeta: Record<BufferedLocale, { name: string; required: boolean; dir: "ltr" | "rtl" }> = {
-  en: { name: "English", required: true, dir: "ltr" },
-  fr: { name: "Français", required: false, dir: "ltr" },
-  tr: { name: "Türkçe", required: false, dir: "ltr" },
-  id: { name: "Bahasa Indonesia", required: false, dir: "ltr" },
-  pt: { name: "Português", required: false, dir: "ltr" },
-  es: { name: "Español", required: false, dir: "ltr" },
-  de: { name: "Deutsch", required: false, dir: "ltr" },
-};
+/** English is the site's fallback language and the one translation it requires. */
+const metaFor = (locale: BufferedLocale) => ({ name: localeNativeLabel(locale), required: locale === "en", dir: localeDir(locale) });
 
 export default function BlogLocaleBufferEditor({ locale }: { locale: BufferedLocale }) {
   const ctx = useCreateTranslations();
@@ -39,50 +35,86 @@ export default function BlogLocaleBufferEditor({ locale }: { locale: BufferedLoc
   const [image, setImage] = useState(seed?.image ?? "");
   const [uploading, setUploading] = useState(false);
 
-  const meta = localeMeta[locale];
-
+  const meta = metaFor(locale);
+  /* A bulk fill from the Arabic tab lands in the context; re-seed the local
+     state from it and remount the body editor, which is uncontrolled. */
+  const [editorKey, setEditorKey] = useState(0);
+  const seenVersion = useRef(ctx?.version ?? 0);
+  const version = ctx?.version ?? 0;
+  const buffered = ctx?.translations;
   useEffect(() => {
-    ctx?.updateLocale(locale, { title, description, content, image });
-  }, [ctx, locale, title, description, content, image]);
+    if (version === seenVersion.current) return;
+    seenVersion.current = version;
+    const next = buffered?.[locale];
+    if (!next) return;
+    setTitle(next.title);
+    setDescription(next.description);
+    setContent(next.content);
+    setEditorKey((k) => k + 1);
+  }, [version, buffered, locale]);
+
+  // Depend on the stable updater, not the whole context object. Translation
+  // state changes must not cause local drafts to write back in a loop.
+  const updateLocale = ctx?.updateLocale;
+  useEffect(() => {
+    updateLocale?.(locale, { title, description, content, image });
+  }, [updateLocale, locale, title, description, content, image]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 2 * 1024 * 1024) {
+      toast.error(dt("اختر صورة صالحة بحجم لا يزيد عن 2MB"));
+      e.target.value = "";
+      return;
+    }
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
       const response = await axios.post("/api/upload", formData);
       setImage(response.data?.url ?? "");
-      toast.success("تم رفع الصورة بنجاح");
+      toast.success(dt("تم رفع الصورة بنجاح"));
     } catch (err) {
       console.error("Image upload error:", err);
-      toast.error("فشل رفع الصورة");
+      toast.error(dt("فشل رفع الصورة"));
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
   };
 
-  const removeImage = () => {
-    if (image) {
-      const publicId = image.split("/").slice(-1)[0].split(".")[0];
-      if (publicId) {
-        axios.delete(`/api/upload?publicId=${publicId}`).catch(() => {});
-      }
-    }
-    setImage("");
-  };
+  // Clearing a reference must never delete potentially shared cloud media.
+  const removeImage = () => setImage("");
 
   return (
     <div className="space-y-6" dir={meta.dir}>
       <Card>
         <CardHeader dir={meta.dir}>
-          <CardTitle>Translation — {meta.name}</CardTitle>
+          <CardTitle>Translation  {meta.name}</CardTitle>
           <CardDescription>
             This {meta.name} version will be saved together with the Arabic post when you click <strong>Save</strong> in the Arabic tab.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {ctx ? (
+            <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-3" dir={dashDir()}>
+              <AutoTranslateButton
+                source={{ title: ctx.arabic.title, description: ctx.arabic.description }}
+                richSource={{ content: ctx.arabic.content ?? "" }}
+                locales={[locale]}
+                itemLabel="blog article"
+                onResult={(translations, overwrite) => {
+                  const t = translations[locale];
+                  if (!t) return;
+                  if (t.fields.title && (overwrite || !title.trim())) setTitle(t.fields.title);
+                  if (t.fields.description && (overwrite || !description.trim())) setDescription(t.fields.description);
+                  if (t.richFields.content && (overwrite || !content)) { setContent(t.richFields.content); setEditorKey((k) => k + 1); }
+                }}
+              />
+              <p className="mt-2 text-[11px] text-slate-600">{dt("تُترجم هذه اللغة وحدها من مسودة التبويب العربي.")}</p>
+            </div>
+          ) : null}
           <div className="space-y-2">
             <label className="text-sm font-medium leading-none">
               Title{meta.required ? " *" : ""}
@@ -168,6 +200,7 @@ export default function BlogLocaleBufferEditor({ locale }: { locale: BufferedLoc
         title={title}
         description={`${description || ""}\n${content || ""}`}
         imageCount={image ? 1 : 0}
+        arabicSource={{ title: ctx?.arabic.title || "", description: `${ctx?.arabic.description || ""}\n${ctx?.arabic.content || ""}` }}
       />
 
       <Card>
@@ -177,15 +210,12 @@ export default function BlogLocaleBufferEditor({ locale }: { locale: BufferedLoc
         </CardHeader>
         <CardContent>
           <WysiwygEditor
+            key={`buffer-body-${locale}-${editorKey}`}
             defaultValue={(() => {
-              if (!content) return defaultEditorContent;
-              try {
-                return JSON.parse(content);
-              } catch {
-                return defaultEditorContent;
-              }
+              return contentToTiptapDocument(content);
             })()}
-            onDebouncedUpdate={(editor) => {
+            onUpdate={(editor) => {
+              // A debounce can lose the last keystrokes when switching tabs.
               setContent(JSON.stringify(editor?.getJSON()));
             }}
           />

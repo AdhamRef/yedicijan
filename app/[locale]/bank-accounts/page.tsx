@@ -1,0 +1,43 @@
+import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+
+import { banksFor } from "@/lib/minbar/banks-server";
+import { slugFor } from "@/lib/minbar/routes";
+import MinbarMessages from "@/components/minbar/MinbarMessages";
+import BankAccountsPage from "@/components/minbar/banks/BankAccountsPage";
+
+interface Props {
+  params: Promise<{ locale: string }>;
+}
+
+/** The page's own namespaces, on top of the shell bundle. */
+const NAMESPACES = ["cart"] as const;
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "cart" });
+  return buildManagedPageMetadata("bankAccounts", locale, {
+    title: t("bankPageTitle"),
+    description: t("bankPageLead"),
+    path: `/${slugFor("bankAccounts", locale)}`,
+  });
+}
+
+/**
+ * Bank accounts  ported from `Minbar/الحسابات البنكية.dc.html`.
+ *
+ * Indexable: the handoff lists this among the public pages, and a donor
+ * searching for the association's IBAN should find the association's own page
+ * rather than a third-party copy of it.
+ */
+export default async function BankAccounts({ params }: Props) {
+  const { locale } = await params;
+  const banks = await banksFor(locale);
+
+  return (
+    <MinbarMessages locale={locale} namespaces={NAMESPACES}>
+      <BankAccountsPage banks={banks} />
+    </MinbarMessages>
+  );
+}

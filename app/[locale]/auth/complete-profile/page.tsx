@@ -7,8 +7,7 @@ import { useTranslations, useLocale } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import { Loader2, Phone, Calendar, Users, ArrowRight } from "lucide-react";
 import Image from "next/image";
-import { PhoneInput } from "react-international-phone";
-import "react-international-phone/style.css";
+import SearchablePhoneInput from "@/components/SearchablePhoneInput";
 import { useIpCountry } from "@/hooks/useIpCountry";
 
 const MONTH_LABELS: Record<string, string[]> = {
@@ -34,8 +33,8 @@ function ChevronDown() {
   );
 }
 
-const LOGO_URL = "/yedicijan_logo.png";
-// Same field photo the QuickDonate panel uses — here it sits far behind the brand
+const LOGO_URL = "/logometaminber.avif";
+// Same field photo the QuickDonate panel uses  here it sits far behind the brand
 // wash as a texture, so the auth screen shares the homepage's visual language.
 const TEXTURE_URL = "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg";
 
@@ -208,7 +207,7 @@ export default function CompleteProfilePage() {
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl shadow-black/25 ring-1 ring-black/5 overflow-hidden">
 
-          {/* Gold hairline — the same accent the homepage cards carry */}
+          {/* Gold hairline  the same accent the homepage cards carry */}
           <div className="h-1 w-full bg-gradient-to-r from-gold via-gold/70 to-transparent rtl:bg-gradient-to-l" />
 
           <div className="px-6 py-5 space-y-3.5">
@@ -228,7 +227,7 @@ export default function CompleteProfilePage() {
                   {t("phoneLabel")}
                 </label>
                 <div className="overflow-visible phone-input-wrapper">
-                  <PhoneInput
+                  <SearchablePhoneInput locale={locale}
                     defaultCountry={ipCountry}
                     value={phone}
                     onChange={setPhone}

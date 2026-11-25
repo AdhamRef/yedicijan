@@ -19,13 +19,12 @@ function sessionFor(permissions: string[]): Session {
   } as Session;
 }
 
-test("marketing navigation exposes exactly the two approved pages", () => {
+test("marketing navigation keeps one attribution entry and exposes tracking through platform settings", () => {
   const marketing = DASHBOARD_NAV_GROUPS.find((group) => group.group === "التسويق");
   assert.ok(marketing);
-  assert.deepEqual(marketing.items.map((item) => item.href), [
-    "/dashboard/marketing/attribution",
-    "/dashboard/marketing/tracking",
-  ]);
+  assert.deepEqual(marketing.items.map((item) => item.href), ["/dashboard/google-analytics", "/dashboard/marketing/google-search", "/dashboard/marketing/attribution", "/dashboard/referrals"]);
+  assert.equal(DASHBOARD_NAV_GROUPS.flatMap((group) => group.items).some((item) => item.href === "/dashboard/marketing/tracking"), false);
+  assert.match(readFileSync("app/(dashboard)/dashboard/platform-connections/tracking/page.tsx", "utf8"), /\/dashboard\/marketing\/tracking/);
 });
 
 test("marketing routes preserve independent permission boundaries", () => {
@@ -78,4 +77,37 @@ test("legacy marketing routes have explicit redirects", () => {
   ]) {
     assert.match(config, new RegExp(legacy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+});
+
+
+test("dashboard navigation permissions stay aligned with protected routes", () => {
+  assert.equal(pathToDashboardPermission("/dashboard/cart-settings"), "campaigns");
+  assert.equal(pathToDashboardPermission("/dashboard/telegram"), "platformConnectionsAdmin");
+  assert.equal(pathToDashboardPermission("/dashboard/archive/collections"), "archive");
+
+  const items = DASHBOARD_NAV_GROUPS.flatMap((group) => group.items);
+  assert.equal(items.find((item) => item.href === "/dashboard/cart-settings")?.key, "campaigns");
+  for (const href of ["/dashboard/campaigns", "/dashboard/categories", "/dashboard/blog", "/dashboard/videos", "/dashboard/ticker"]) {
+    assert.equal(items.filter((item) => item.href === href).length, 1, href);
+  }
+  for (const item of items) {
+    assert.equal(pathToDashboardPermission(item.href), item.key, item.href);
+  }
+
+  const connections = DASHBOARD_NAV_GROUPS.find((group) => group.group === "الإدارة");
+  const telegram = connections?.items.find((item) => item.href === "/dashboard/telegram");
+  assert.equal(telegram?.key, "platformConnectionsAdmin");
+  assert.equal(telegram?.adminOnly, true);
+
+  const admin = DASHBOARD_NAV_GROUPS.find((group) => group.group === "الإدارة");
+  assert.equal(admin?.items.some((item) => item.key === "archive"), false);
+  assert.match(readFileSync("app/(dashboard)/dashboard/archive/[[...archivePath]]/page.tsx", "utf8"), /redirect\(\"\/dashboard\"\)/);
+  assert.equal(DASHBOARD_NAV_GROUPS.flatMap((group) => group.items).some((item) => item.href.startsWith("/dashboard/archive")), false);
+});
+
+test("Telegram dashboard has the same admin-only boundary as its setup API", () => {
+  const layout = readFileSync("app/(dashboard)/dashboard/telegram/layout.tsx", "utf8");
+  const api = readFileSync("app/api/telegram/setup/route.ts", "utf8");
+  assert.match(layout, /session\.user\.role !== "ADMIN"/);
+  assert.match(api, /requireAdminSession/);
 });

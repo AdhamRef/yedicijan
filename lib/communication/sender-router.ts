@@ -1,13 +1,14 @@
 import { isKnownLocale } from "@/lib/locales";
+import { isActiveSenderProvider } from "./communication-runtime-types";
 import type { CommunicationChannel, CommunicationPurpose } from "./communication-types";
 
 /**
  * Pure sender routing. Given a channel + recipient locale/country + message purpose,
  * pick the best configured sender, honouring explicit routing rules first, then sender
- * capability, priority, status and health, with an explicit fallback. No DB, no I/O —
+ * capability, priority, status and health, with an explicit fallback. No DB, no I/O 
  * senders/rules are passed in so this stays testable and reusable across the app.
  *
- * If nothing matches, returns `{ skipped: true, reason }` — the caller must NOT send.
+ * If nothing matches, returns `{ skipped: true, reason }`  the caller must NOT send.
  */
 
 export type SenderStatus = "ACTIVE" | "DISABLED" | "NEEDS_ATTENTION";
@@ -16,7 +17,7 @@ export type SenderHealth = "HEALTHY" | "DEGRADED" | "UNKNOWN";
 export type CommunicationSenderConfig = {
   id: string;
   channel: CommunicationChannel;
-  provider: string; // runtime provider id (META_WHATSAPP | TWILIO | SENDGRID | NETGSM | CUSTOM)
+  provider: string;
   name: string;
   supportedLocales?: string[] | null; // empty/undefined = any locale
   supportedCountries?: string[] | null; // empty/undefined = any country
@@ -29,6 +30,7 @@ export type CommunicationSenderConfig = {
 };
 
 export type SenderRoutingRuleConfig = {
+  id?: string;
   channel: CommunicationChannel;
   locale?: string | null;
   country?: string | null;
@@ -47,7 +49,7 @@ export type SenderRoutingRequest = {
 };
 
 export type SenderRoutingResult =
-  | { sender: CommunicationSenderConfig; matchedBy: "rule" | "capability" | "default" }
+  | { sender: CommunicationSenderConfig; matchedBy: "rule" | "capability" | "default"; ruleId?: string; fallbackUsed?: boolean }
   | { skipped: true; reason: string };
 
 function normLocale(value?: string | null): string | null {
@@ -61,7 +63,7 @@ function normCountry(value?: string | null): string | null {
 }
 
 function isUsable(sender: CommunicationSenderConfig): boolean {
-  return sender.enabled && sender.status === "ACTIVE" && sender.health !== "DEGRADED";
+  return isActiveSenderProvider(sender.channel, sender.provider) && sender.enabled && sender.status === "ACTIVE" && sender.health !== "DEGRADED";
 }
 
 function supportsLocale(sender: CommunicationSenderConfig, locale: string | null): boolean {
@@ -85,7 +87,7 @@ function byPriority(a: CommunicationSenderConfig, b: CommunicationSenderConfig):
   const pa = a.priority ?? 100;
   const pb = b.priority ?? 100;
   if (pa !== pb) return pa - pb;
-  return (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0);
+  return (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0) || a.id.localeCompare(b.id);
 }
 
 /**
@@ -95,6 +97,8 @@ function byPriority(a: CommunicationSenderConfig, b: CommunicationSenderConfig):
  */
 function ruleScore(rule: SenderRoutingRuleConfig, req: { locale: string | null; country: string | null; purpose: CommunicationPurpose }): number | null {
   let score = 0;
+  if (rule.locale && !normLocale(rule.locale)) return null;
+  if (rule.country && !normCountry(rule.country)) return null;
   const ruleLocale = normLocale(rule.locale);
   const ruleCountry = normCountry(rule.country);
   if (ruleLocale) {
@@ -110,6 +114,21 @@ function ruleScore(rule: SenderRoutingRuleConfig, req: { locale: string | null; 
     score += 1;
   }
   return score;
+}
+
+/** Inspect the same rule predicates as the executor without contacting any provider. */
+export function explainSenderRouting(request: SenderRoutingRequest, senders: CommunicationSenderConfig[], rules: SenderRoutingRuleConfig[]) {
+  const locale = normLocale(request.locale), country = normCountry(request.country);
+  const available = (id: string | null | undefined) => {
+    const sender = senders.find(row => row.id === id);
+    return Boolean(sender && sender.channel === request.channel && isUsable(sender) && supportsLocale(sender, locale) && supportsCountry(sender, country) && supportsPurpose(sender, request.purpose));
+  };
+  return rules.map(rule => {
+    const score = ruleScore(rule, { locale, country, purpose: request.purpose });
+    return { ruleId: rule.id ?? null, locale: rule.locale ?? null, country: rule.country ?? null, purpose: rule.purpose ?? null, priority: rule.priority ?? 100, specificity: score,
+      reason: !rule.enabled ? "DISABLED" : rule.channel !== request.channel ? "CHANNEL_MISMATCH" : score === null ? "PREDICATE_MISMATCH" : "MATCH",
+      primaryAvailable: available(rule.senderId), fallbackAvailable: available(rule.fallbackSenderId) };
+  }).sort((a, b) => (b.specificity ?? -1) - (a.specificity ?? -1) || a.priority - b.priority || (a.ruleId ?? "").localeCompare(b.ruleId ?? ""));
 }
 
 export function resolveSender(
@@ -131,13 +150,13 @@ export function resolveSender(
     .filter((r) => r.enabled && r.channel === request.channel)
     .map((r) => ({ rule: r, score: ruleScore(r, { locale, country, purpose: request.purpose }) }))
     .filter((entry): entry is { rule: SenderRoutingRuleConfig; score: number } => entry.score !== null)
-    .sort((a, b) => b.score - a.score || (a.rule.priority ?? 100) - (b.rule.priority ?? 100));
+    .sort((a, b) => b.score - a.score || (a.rule.priority ?? 100) - (b.rule.priority ?? 100) || (a.rule.id ?? a.rule.senderId).localeCompare(b.rule.id ?? b.rule.senderId));
 
   for (const { rule } of candidateRules) {
     const primary = byId.get(rule.senderId);
-    if (primary && isUsable(primary)) return { sender: primary, matchedBy: "rule" };
+    if (primary && primary.channel === request.channel && isUsable(primary) && supportsLocale(primary, locale) && supportsCountry(primary, country) && supportsPurpose(primary, request.purpose)) return { sender: primary, matchedBy: "rule", ruleId: rule.id, fallbackUsed: false };
     const fallback = rule.fallbackSenderId ? byId.get(rule.fallbackSenderId) : undefined;
-    if (fallback && isUsable(fallback)) return { sender: fallback, matchedBy: "rule" };
+    if (fallback && fallback.channel === request.channel && isUsable(fallback) && supportsLocale(fallback, locale) && supportsCountry(fallback, country) && supportsPurpose(fallback, request.purpose)) return { sender: fallback, matchedBy: "rule", ruleId: rule.id, fallbackUsed: true };
   }
 
   // 2) Capability match (locale + country + purpose), by priority.
@@ -147,8 +166,17 @@ export function resolveSender(
     .sort(byPriority);
   if (capable.length > 0) return { sender: capable[0], matchedBy: "capability" };
 
-  // 3) Default sender for the channel.
-  const fallbackDefault = channelSenders.filter(isUsable).sort(byPriority).find((s) => s.isDefault);
+  // 3) Default sender for the channel, but never bypass its declared capabilities.
+  //
+  // The old fallback picked any usable default after capability matching failed. That meant an
+  // Arabic recipient could silently fall through to a Turkish-only default (or a marketing-only
+  // sender could receive a utility message) simply because no better match existed. A default is
+  // a preference among compatible senders, not permission to violate locale/country/purpose rules.
+  const fallbackDefault = channelSenders
+    .filter(isUsable)
+    .filter((s) => supportsLocale(s, locale) && supportsCountry(s, country) && supportsPurpose(s, request.purpose))
+    .sort(byPriority)
+    .find((s) => s.isDefault);
   if (fallbackDefault) return { sender: fallbackDefault, matchedBy: "default" };
 
   return { skipped: true, reason: "NO_SENDER_AVAILABLE" };

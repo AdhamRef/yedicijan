@@ -1,0 +1,42 @@
+import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+
+import { slugFor } from "@/lib/minbar/routes";
+import MinbarMessages from "@/components/minbar/MinbarMessages";
+import PublicationsPage from "@/components/minbar/publications/PublicationsPage";
+import { listBooklets } from "@/lib/minbar/cms";
+
+interface Props {
+  params: Promise<{ locale: string }>;
+}
+
+/** The page's own namespaces, on top of the shell bundle. */
+const NAMESPACES = [] as const;
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "common" });
+  return buildManagedPageMetadata("publications", locale, {
+    title: t("bookletsTitle"),
+    description: t("bookletsLead"),
+    path: `/${slugFor("publications", locale)}`,
+  });
+}
+
+/**
+ * Our publications  ported from `Minbar/كتيبات المؤسسة.dc.html`.
+ *
+ * Every string it needs is in `common`, which the shell bundle already carries,
+ * so this page adds no namespaces of its own.
+ */
+export default async function Publications({ params }: Props) {
+  const { locale } = await params;
+  const booklets = await listBooklets(locale);
+
+  return (
+    <MinbarMessages locale={locale} namespaces={NAMESPACES}>
+      <PublicationsPage booklets={booklets} />
+    </MinbarMessages>
+  );
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { resolveTemplateKind } from "@/lib/communication/template-kind";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,8 @@ import {
   Eye,
   DownloadCloud,
   RefreshCw,
-  Info,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WhatsappTemplateEditorDialog } from "./WhatsappTemplateEditorDialog";
@@ -22,6 +24,7 @@ import type {
   PreviewHeader,
   PreviewVariable,
 } from "./WhatsappTemplatePreview";
+import { dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
 
 interface WhatsappTemplateRow {
   id: string;
@@ -35,7 +38,25 @@ interface WhatsappTemplateRow {
   templateType: string | null;
   language: string | null;
   category: string | null;
+  kind: string | null;
+  purpose: string | null;
+  status: string | null;
   approvalStatus: string | null;
+  providerApprovalStatus?: string | null;
+  internalApprovalStatus?: string | null;
+  approvalLabelAr?: string | null;
+  approvalReason?: string | null;
+  statusUpdatedAt?: string | null;
+  variants?: Array<{
+    languageCode: string;
+    locale: string | null;
+    approvalStatus: string;
+    category?: string | null;
+    providerCategories?: string[];
+    rejectionReason: string | null;
+    qualityRating: string | null;
+    lastSyncedAt: string;
+  }>;
   header: PreviewHeader | null;
   footerText: string | null;
   buttons: PreviewButton[] | null;
@@ -45,28 +66,38 @@ interface WhatsappTemplateRow {
   lastSyncError: string | null;
 }
 
-interface ImportSummary {
-  status: "ok" | "missing_config" | "not_implemented" | "failed";
-  messageAr: string;
-  imported: number;
-  updated: number;
-  skipped: number;
-  total: number;
-  error?: string | null;
-}
-
 const APPROVAL_PILL: Record<string, string> = {
   approved: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  in_review: "bg-amber-50 text-amber-700 border-amber-200",
   pending: "bg-amber-50 text-amber-700 border-amber-200",
   rejected: "bg-rose-50 text-rose-700 border-rose-200",
+  paused: "bg-orange-50 text-orange-700 border-orange-200",
+  disabled: "bg-slate-100 text-slate-700 border-slate-300",
+  in_appeal: "bg-sky-50 text-sky-700 border-sky-200",
+  missing_in_waba: "bg-violet-50 text-violet-700 border-violet-200",
   unknown: "bg-slate-50 text-slate-600 border-slate-200",
 };
 
+const APPROVAL_LABEL: Record<string, string> = {
+  get approved() { return dt("معتمد في الحساب الافتراضي"); },
+  get in_review() { return dt("قيد المراجعة"); },
+  get pending() { return dt("قيد المراجعة"); },
+  get rejected() { return dt("مرفوض"); },
+  get paused() { return dt("موقوف مؤقتًا"); },
+  get disabled() { return dt("معطّل"); },
+  get in_appeal() { return dt("قيد الاستئناف"); },
+  get missing_in_waba() { return dt("غير متاح في الحساب الافتراضي"); },
+  get unknown() { return dt("غير معروف"); },
+};
+
 export function WhatsappTemplateList() {
+  const [search, setSearch] = React.useState("");
   const [templates, setTemplates] = React.useState<WhatsappTemplateRow[]>([]);
+  const [directSendEnabled, setDirectSendEnabled] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
-  const [importing, setImporting] = React.useState(false);
-  const [importStatus, setImportStatus] = React.useState<ImportSummary | null>(null);
+  const [section, setSection] = React.useState<"SYSTEM" | "CAMPAIGN">("CAMPAIGN");
+  const [archiveView, setArchiveView] = React.useState<"ACTIVE" | "ARCHIVED">("ACTIVE");
+  const [syncingMeta, setSyncingMeta] = React.useState(false);
   const [editor, setEditor] = React.useState<{ open: boolean; id: string | null }>({
     open: false,
     id: null,
@@ -81,8 +112,9 @@ export function WhatsappTemplateList() {
     try {
       const res = await axios.get("/api/templates/whatsapp");
       setTemplates(res.data?.templates ?? []);
+      setDirectSendEnabled(res.data?.directSendEnabled === true);
     } catch {
-      toast.error("فشل في تحميل القوالب");
+      toast.error(dt("فشل في تحميل القوالب"));
     } finally {
       setLoading(false);
     }
@@ -92,112 +124,151 @@ export function WhatsappTemplateList() {
     fetchAll();
   }, [fetchAll]);
 
-  const handleImport = async () => {
-    setImporting(true);
+  const visibleTemplates = templates.filter((template) => {
+    const bucket = resolveTemplateKind(template);
+    const archived = String(template.status ?? "").toUpperCase() === "ARCHIVED";
+    return bucket === section &&
+      template.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()) &&
+      (archiveView === "ARCHIVED" ? archived : !archived);
+  });
+
+  const archivedCount = templates.filter((template) => String(template.status ?? "").toUpperCase() === "ARCHIVED").length;
+
+  const handleMetaSync = async () => {
+    setSyncingMeta(true);
     try {
-      const res = await axios.post<ImportSummary>("/api/templates/whatsapp/import");
-      setImportStatus(res.data);
-      if (res.data.status === "ok") {
-        toast.success(res.data.messageAr);
-        fetchAll();
-      } else if (res.data.status === "missing_config") {
-        toast(res.data.messageAr, { icon: "⚙️" });
-      } else if (res.data.status === "not_implemented") {
-        toast(res.data.messageAr, { icon: "ℹ️" });
-      } else {
-        toast.error(res.data.messageAr);
-      }
-    } catch {
-      toast.error("فشل استيراد قوالب Twilio");
+      const res = await axios.post("/api/dashboard/communication/whatsapp/templates/sync");
+      const summary = res.data?.summary;
+      toast.success(
+        summary
+          ? dt("تم تحديث حالات Meta: {0} قالب، {1} نسخة لغة/WABA.", [summary.matchedTemplates ?? 0, summary.variantsUpserted ?? 0])
+          : dt("تم تحديث حالات Meta."),
+      );
+      await fetchAll();
+    } catch (error) {
+      const requestError = error as { response?: { data?: { error?: string; detail?: string } } };
+      const data = requestError.response?.data;
+      toast.error(
+        [data?.error, data?.detail].filter(Boolean).join(" — ") ||
+          (requestError.response
+            ? dt("فشل تحديث حالات Meta")
+            : dt("تعذّر الاتصال بالخادم أثناء تحديث القوالب من Meta. تحقّق من الاتصال ثم أعد المحاولة.")),
+      );
     } finally {
-      setImporting(false);
+      setSyncingMeta(false);
+    }
+  };
+
+  const handleArchive = async (template: WhatsappTemplateRow, action: "ARCHIVE" | "RESTORE") => {
+    const prompt = action === "ARCHIVE"
+      ? dt("أرشفة «{0}»؟ سيختفي من اختيارات الإرسال الجديدة مع بقاء السجل والتاريخ محفوظين.", [template.name])
+      : dt("استعادة «{0}» من الأرشيف؟", [template.name]);
+    if (!window.confirm(prompt)) return;
+    try {
+      const res = await axios.post(`/api/templates/whatsapp/${template.id}/archive`, { action });
+      if (!res.data?.ok) throw new Error(res.data?.error || dt("تعذّر تحديث القالب"));
+      toast.success(action === "ARCHIVE" ? dt("تمت أرشفة القالب") : dt("تمت استعادة القالب"));
+      await fetchAll();
+    } catch (error) {
+      const data = (error as { response?: { data?: { error?: string } } }).response?.data;
+      toast.error(data?.error || (error as Error).message || dt("تعذّر تحديث القالب"));
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("هل تريد حذف هذا القالب؟")) return;
+    if (!window.confirm(dt("هل تريد حذف هذا القالب؟"))) return;
     try {
       await axios.delete(`/api/templates/whatsapp/${id}`);
-      toast.success("تم الحذف");
+      toast.success(dt("تم الحذف"));
       fetchAll();
     } catch {
-      toast.error("فشل الحذف");
+      toast.error(dt("فشل الحذف"));
     }
   };
 
   return (
     <div className="space-y-4">
+      <input
+        aria-label={dt("البحث في القوالب")}
+        placeholder={dt("البحث في القوالب")}
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        className="h-10 w-full rounded-md border px-3 text-sm"
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+          <button type="button" aria-pressed={section === "CAMPAIGN"} onClick={() => setSection("CAMPAIGN")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${section === "CAMPAIGN" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>{dt("الحملات التسويقية")} ({templates.filter((template) => resolveTemplateKind(template) === "CAMPAIGN").length})</button>
+          <button type="button" aria-pressed={section === "SYSTEM"} onClick={() => setSection("SYSTEM")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${section === "SYSTEM" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}>{dt("التلقائية والتوثيق")} ({templates.filter((template) => resolveTemplateKind(template) === "SYSTEM").length})</button>
+        </div>
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+          <button type="button" onClick={() => setArchiveView("ACTIVE")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${archiveView === "ACTIVE" ? "bg-slate-900 text-white shadow-sm" : "text-slate-500"}`}>{dt("النشطة")}</button>
+          <button type="button" onClick={() => setArchiveView("ARCHIVED")} className={`rounded-md px-3 py-1.5 text-xs font-medium ${archiveView === "ARCHIVED" ? "bg-slate-900 text-white shadow-sm" : "text-slate-500"}`}>
+            {dtx("الأرشيف {0}", [archivedCount > 0 ? `(${archivedCount})` : ""])}
+          </button>
+        </div>
+      </div>
+      {section === "SYSTEM" && (
+        <div className={cn(
+          "rounded-xl border px-3 py-2.5 text-xs leading-5",
+          directSendEnabled
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-slate-200 bg-slate-50 text-slate-600",
+        )}>
+          <span className="font-semibold">
+            {directSendEnabled ? dt("Direct Send مفعّل للرسائل التلقائية.") : dt("Direct Send Beta غير مفعّل بعد.")}
+          </span>{" "}
+          {directSendEnabled
+            ? dt("رسائل Utility/Auth التلقائية تحاول Direct Send أولًا، وتبقى قوالب Meta الحالية مسار fallback آمنًا إذا تعذر الإرسال المباشر.")
+            : dt("القوالب المعتمدة الحالية تظل مسار الإرسال الأساسي. عند تفعيل Direct Send لن نحذفها؛ ستبقى fallback للموثوقية.")}
+        </div>
+      )}
       <div className="flex justify-between items-center flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-xs text-muted-foreground">
-            {loading ? "…" : `${templates.length} قالب واتساب`}
+            {loading ? "…" : dt("{0} قالب واتساب", [visibleTemplates.length])}
           </p>
-          {templates.some((t) => t.provider === "TWILIO") ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-[10px] text-slate-600">
-              {templates.filter((t) => t.provider === "TWILIO").length} من Twilio
-            </span>
-          ) : null}
+
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleMetaSync}
+            disabled={syncingMeta}
+            className="gap-2"
+            title={dt("جلب أحدث حالات اعتماد القوالب من Meta")}
+          >
+            {syncingMeta ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
+            {syncingMeta ? dt("جارٍ التحديث من Meta…") : dt("تحديث من Meta")}</Button>
           <Button
             size="sm"
             variant="outline"
             onClick={fetchAll}
             disabled={loading}
             className="gap-2"
-            title="إعادة التحميل من قاعدة البيانات"
+            title={dt("إعادة التحميل من قاعدة البيانات")}
           >
-            <RefreshCw className="w-4 h-4" /> تحديث
-          </Button>
+            <RefreshCw className="w-4 h-4" /> {dt(" تحديث")}</Button>
           <Button
             size="sm"
             onClick={() => setEditor({ open: true, id: null })}
             className="gap-2 bg-[#25D366] hover:bg-[#25D366]/90"
           >
-            <Plus className="w-4 h-4" /> قالب جديد
-          </Button>
+            <Plus className="w-4 h-4" /> {dt(" قالب جديد")}</Button>
         </div>
       </div>
 
-      {importStatus && importStatus.status !== "ok" ? (
-        <div
-          className={cn(
-            "rounded-lg border p-3 text-sm flex items-start gap-2",
-            importStatus.status === "missing_config"
-              ? "border-amber-200 bg-amber-50 text-amber-800"
-              : importStatus.status === "not_implemented"
-              ? "border-sky-200 bg-sky-50 text-sky-800"
-              : "border-rose-200 bg-rose-50 text-rose-800"
-          )}
-        >
-          <Info className="w-4 h-4 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-medium">{importStatus.messageAr}</p>
-            {importStatus.error ? (
-              <p className="text-[11px] mt-1 opacity-80 font-mono break-all">
-                {importStatus.error}
-              </p>
-            ) : null}
-            {importStatus.status === "missing_config" ? (
-              <p className="text-[11px] mt-1 opacity-80">
-                أضف TWILIO_ACCOUNT_SID و TWILIO_AUTH_TOKEN في إعدادات البيئة ثم
-                أعِد المحاولة. لن يتم تخزين هذه القيم في سجل التدقيق.
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="rounded-lg border border-border overflow-hidden">
-        <table className="w-full text-sm text-right">
+      <p className="text-xs leading-6 text-slate-500">{dt("تُعرض حالات الاعتماد للحساب الافتراضي فقط. الأرقام الأخرى للمحادثات المباشرة.")}</p>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full text-sm text-start">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80">
-              <th className="text-right py-3 px-4 font-semibold text-slate-700">الاسم</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-700">النوع</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-700">الحالة</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-700">المحتوى</th>
-              <th className="text-right py-3 px-4 font-semibold text-slate-700">آخر تحديث</th>
-              <th className="text-left py-3 px-4 font-semibold text-slate-700">الإجراءات</th>
+              <th className="text-start py-3 px-4 font-semibold text-slate-700">{dt("الاسم")}</th>
+              <th className="text-start py-3 px-4 font-semibold text-slate-700">{dt("النوع")}</th>
+              <th className="text-start py-3 px-4 font-semibold text-slate-700">{dt("الحالة")}</th>
+              <th className="text-start py-3 px-4 font-semibold text-slate-700">{dt("المحتوى")}</th>
+              <th className="text-start py-3 px-4 font-semibold text-slate-700">{dt("آخر تحديث")}</th>
+              <th className="text-end py-3 px-4 font-semibold text-slate-700">{dt("الإجراءات")}</th>
             </tr>
           </thead>
           <tbody>
@@ -207,18 +278,29 @@ export function WhatsappTemplateList() {
                   <Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400" />
                 </td>
               </tr>
-            ) : templates.length === 0 ? (
+            ) : visibleTemplates.length === 0 ? (
               <tr>
                 <td colSpan={6} className="py-12 text-center text-slate-500">
-                  لا توجد قوالب بعد — اضغط «قالب جديد» للبدء
-                </td>
+                  {dt("لا توجد قوالب بعد  اضغط «قالب جديد» للبدء")}</td>
               </tr>
             ) : (
-              templates.map((t) => {
-                const approvalKey = (t.approvalStatus ?? "").toLowerCase();
+              visibleTemplates.map((t) => {
+                const mappedStatus = t.internalApprovalStatus ?? t.providerApprovalStatus ?? t.approvalStatus ?? "UNKNOWN";
+                const approvalKey = mappedStatus.toLowerCase();
                 const approvalClass = APPROVAL_PILL[approvalKey];
+                const approvalLabel = t.approvalLabelAr ?? t.approvalStatus ?? dt("غير معروف");
+                const requestedCategory = String(t.category ?? t.purpose ?? "").toUpperCase();
+                const providerCategories = [...new Set((t.variants ?? []).flatMap((variant) =>
+                  (variant.providerCategories?.length ? variant.providerCategories : variant.category ? [variant.category] : [])
+                    .map((category) => String(category).toUpperCase())
+                    .filter(Boolean),
+                ))];
+                const recategorized = (t.variants ?? []).filter((variant) => {
+                  const categories = variant.providerCategories?.length ? variant.providerCategories : variant.category ? [variant.category] : [];
+                  return requestedCategory && categories.some((category) => String(category).toUpperCase() !== requestedCategory);
+                });
                 return (
-                  <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/60">
+                  <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/60 align-top">
                     <td className="py-3 px-4">
                       <div className="flex flex-col items-start gap-0.5">
                         <span className="font-medium text-slate-900">{t.name}</span>
@@ -231,70 +313,150 @@ export function WhatsappTemplateList() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {t.templateType ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-violet-200 bg-violet-50 text-violet-700 text-[10px]">
-                            {t.templateType}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-[10px]">—</span>
-                        )}
-                        {t.provider === "TWILIO" ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600 text-[10px]">
-                            Twilio
-                          </span>
-                        ) : null}
-                        {t.language ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-600 text-[10px]">
-                            {t.language}
-                          </span>
-                        ) : null}
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                          {dtx("منصتنا: {0}", [String(t.category ?? t.purpose ?? t.templateType ?? "—").toUpperCase()])}
+                        </span>
+
                       </div>
                     </td>
-                    <td className="py-3 px-4">
-                      {t.approvalStatus ? (
+                    <td className="py-3 px-4 align-top">
+                      {t.variants?.length ? (() => {
+                        const variants = t.variants
+                          .slice()
+                          .sort((a, b) => (a.locale ?? a.languageCode).localeCompare(b.locale ?? b.languageCode));
+                        const approvedCount = variants.filter((variant) => String(variant.approvalStatus).toUpperCase() === "APPROVED").length;
+                        const reviewCount = variants.filter((variant) => ["PENDING", "IN_REVIEW"].includes(String(variant.approvalStatus).toUpperCase())).length;
+                        const issueCount = Math.max(0, variants.length - approvedCount - reviewCount);
+                        return (
+                          <div className="min-w-[340px] max-w-[520px] space-y-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                {dtx("{0} لغة", [variants.length])}</span>
+                              {providerCategories.length === 1 && (
+                                <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                                  Meta: {providerCategories[0]}
+                                </span>
+                              )}
+                              {providerCategories.length > 1 && (
+                                <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700">
+                                  {dt("Meta: تصنيفات متعددة")}</span>
+                              )}
+                              {recategorized.length > 0 && (
+                                <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-700" title={dt("Meta أعادت تصنيف لغة أو أكثر عن التصنيف المطلوب من المنصة")}>
+                                  {dtx("⚠ أعادت Meta تصنيف {0} لغة", [recategorized.length])}</span>
+                              )}
+                              {approvedCount > 0 && (
+                                <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                                  {dtx("{0} معتمد", [approvedCount])}</span>
+                              )}
+                              {reviewCount > 0 && (
+                                <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                                  {dtx("{0} قيد المراجعة", [reviewCount])}</span>
+                              )}
+                              {issueCount > 0 && (
+                                <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                                  {dtx("{0} يحتاج انتباه", [issueCount])}</span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1">
+                              {variants.map((variant) => {
+                                const statusKey = String(variant.approvalStatus ?? "UNKNOWN").toLowerCase();
+                                const language = variant.locale ?? variant.languageCode;
+                                const variantCategories = variant.providerCategories?.length
+                                  ? variant.providerCategories.map((category) => String(category).toUpperCase())
+                                  : variant.category ? [String(variant.category).toUpperCase()] : [];
+                                const categoryMismatch = requestedCategory && variantCategories.some((category) => category !== requestedCategory);
+                                return (
+                                  <span
+                                    key={variant.languageCode}
+                                    className={cn(
+                                      "inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none",
+                                      APPROVAL_PILL[statusKey] ?? APPROVAL_PILL.unknown,
+                                    )}
+                                    title={[
+                                      language,
+                                      APPROVAL_LABEL[statusKey] ?? APPROVAL_LABEL.unknown,
+                                      variantCategories.length ? `Meta: ${variantCategories.join(" / ")}` : null,
+                                      categoryMismatch ? dt("المطلوب: {0}", [requestedCategory]) : null,
+                                      variant.rejectionReason,
+                                    ].filter(Boolean).join(" — ")}
+                                  >
+                                    <span className="font-mono font-semibold">{language}</span>
+                                    <span className="opacity-50">·</span>
+                                    <span>{APPROVAL_LABEL[statusKey] ?? APPROVAL_LABEL.unknown}</span>
+                                    {categoryMismatch && <span className="font-semibold text-orange-700">· {variantCategories.join("/")}</span>}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            <div className="text-[9px] text-slate-400" title={t.approvalReason ?? undefined}>
+                              {dtx("الحالة الإجمالية: {0}", [approvalLabel])}
+                            </div>
+                          </div>
+                        );
+                      })() : t.approvalStatus || t.providerApprovalStatus ? (
                         <span
                           className={cn(
-                            "inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-medium",
-                            approvalClass ?? APPROVAL_PILL.unknown
+                            "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                            approvalClass ?? APPROVAL_PILL.unknown,
                           )}
+                          title={t.approvalReason ?? undefined}
                         >
-                          {t.approvalStatus}
+                          {approvalLabel}
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[10px]">محلي</span>
+                        <span className="text-slate-400 text-[10px]">{dt("محلي")}</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-slate-600 truncate max-w-[320px]" title={t.body}>
-                      {t.body}
+                    <td className="py-3 px-4 text-slate-600 max-w-[300px]" title={t.body}>
+                      <div className="line-clamp-2 leading-5">
+                        {t.body}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-slate-500">
-                      {new Date(t.updatedAt).toLocaleDateString("ar-EG", { dateStyle: "medium" })}
+                      {new Date(t.updatedAt).toLocaleDateString(dashIntl("ar-EG"), { dateStyle: "medium" })}
                     </td>
-                    <td className="py-3 px-4 text-left">
+                    <td className="py-3 px-4 text-end">
                       <div className="flex justify-end gap-2 flex-wrap">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setPreview({ open: true, template: t })}
-                          title="عرض القالب"
+                          title={dt("عرض القالب")}
                         >
-                          <Eye className="w-3.5 h-3.5 me-1" /> عرض
-                        </Button>
+                          <Eye className="w-3.5 h-3.5 me-1" /> {dt(" عرض")}</Button>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setEditor({ open: true, id: t.id })}
                         >
-                          <Pencil className="w-3.5 h-3.5 me-1" /> تعديل
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDelete(t.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 me-1" /> حذف
-                        </Button>
+                          <Pencil className="w-3.5 h-3.5 me-1" /> {dt(" تعديل")}</Button>
+                        {archiveView === "ACTIVE" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleArchive(t, "ARCHIVE")}
+                            className="text-slate-700 hover:text-slate-900"
+                          >
+                            <Archive className="w-3.5 h-3.5 me-1" /> {dt(" أرشف")}</Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleArchive(t, "RESTORE")}
+                            className="text-emerald-700 hover:text-emerald-800"
+                          >
+                            <ArchiveRestore className="w-3.5 h-3.5 me-1" /> {dt(" استعادة")}</Button>
+                        )}
+                        {archiveView === "ACTIVE" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(t.id)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 me-1" /> {dt(" حذف")}</Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -307,6 +469,7 @@ export function WhatsappTemplateList() {
 
       {editor.open && (
         <WhatsappTemplateEditorDialog
+          initialKind={section}
           id={editor.id}
           open={editor.open}
           onOpenChange={(open) => {

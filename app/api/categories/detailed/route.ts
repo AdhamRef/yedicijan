@@ -1,5 +1,7 @@
+import { categoryProjectCounts } from "@/lib/campaign/category-project-counts";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { getServerSession } from 'next-auth';
 import { authOptions } from "../../auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
@@ -29,7 +31,7 @@ export async function GET(request: NextRequest) {
     const categories = await prisma.category.findMany({
       take: limit + 1,
       ...(cursor && { skip: 1, cursor: { id: cursor } }),
-      orderBy: { order: 'asc' },
+      orderBy: [{ order: 'asc' }, { id: 'asc' }],
       where: includeInactive ? undefined : CATEGORY_ACTIVE_OR_UNSET,
       select: {
         id: true,
@@ -41,7 +43,7 @@ export async function GET(request: NextRequest) {
         order: true,
         isActive: true,
         translations: { where: translationLocaleWhere(locale), take: 2, select: { locale: true, name: true, description: true } },
-        ...(includeCounts ? { _count: { select: { campaigns: true } } } : {})
+
       }
     });
 
@@ -50,13 +52,30 @@ export async function GET(request: NextRequest) {
     const nextCursor = hasMore ? page[page.length - 1]?.id : null;
 
     // If campaigns requested, batch fetch limited campaigns per category in parallel
-    let campaignsByCategory: Record<string, any[]> = {};
+    type DetailedCampaignRow = {
+      id: string;
+      slug: string | null;
+      title: string;
+      description: string;
+      images: string[];
+      targetAmount: number;
+      currentAmount: number;
+      isActive: boolean;
+      priority: number | null;
+      createdAt: Date;
+      /* A Json column in the schema, not a number array. */
+      suggestedDonations: Prisma.JsonValue;
+      translations: { locale: string; title: string; description: string }[];
+      _count: { donations: number };
+    };
+    let campaignsByCategory: Record<string, DetailedCampaignRow[]> = {};
     if (includeCampaigns && page.length > 0) {
       const campaignFetches = page.map(cat =>
         prisma.campaign.findMany({
           where: {
             AND: [
               { categoryIds: { has: cat.id } },
+              { isActive: true },
               NOT_SOFT_DELETED,
             ],
           },
@@ -84,9 +103,10 @@ export async function GET(request: NextRequest) {
       campaignsByCategory = resolved.reduce((acc, cur) => {
         acc[cur.id] = cur.list;
         return acc;
-      }, {} as Record<string, any[]>);
+      }, {} as Record<string, DetailedCampaignRow[]>);
     }
 
+    const counts = includeCounts ? await categoryProjectCounts(prisma, page.map(row => row.id)) : null;
     const transformed = page.map(cat => {
       const tCat = pickTranslation(cat.translations, locale);
       return {
@@ -98,7 +118,10 @@ export async function GET(request: NextRequest) {
         icon: cat.icon,
         order: cat.order,
         isActive: cat.isActive ?? true,
-        campaignCount: cat._count?.campaigns ?? undefined,
+        campaignCount: counts?.get(cat.id)?.published,
+        archivedCampaignCount: counts?.get(cat.id)?.archived,
+        deletedCampaignCount: counts?.get(cat.id)?.deleted,
+        linkedCampaignCount: counts?.get(cat.id)?.total,
         campaigns: includeCampaigns ? (campaignsByCategory[cat.id] || []).map(c => {
           const tC = pickTranslation(c.translations, locale);
           return {

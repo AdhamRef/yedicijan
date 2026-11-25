@@ -1,78 +1,120 @@
 import { prisma } from "@/lib/prisma";
 
-/**
- * Derive a campaign's headline counters from its delivery rows instead of trusting what was written
- * at send time.
- *
- * `executeCampaignSend` stamps `sentCount`/`failedCount` once, from what the provider answered
- * during the call — and for Elastic Email that answer only ever means "the message was ACCEPTED".
- * The real outcome (Suppress, Error, bounce) arrives minutes later and is applied to the
- * `CommunicationDelivery` rows by the webhook / event-sync cron. Nothing ever carried it back up to
- * the campaign, so a campaign whose only delivery reads FAILED — "Delivery failed due to account
- * problem or spam block" — still showed «أُرسلت 1 · وصلت 0 · فشلت 0» on the campaign screen. The
- * delivery log knew the truth; the campaign header contradicted it.
- *
- * `deliveredCount` was never written by any code path at all, which is why the «وصلت» tile read 0
- * even for mail that was opened and clicked.
- */
-
-/** Provider accepted it and nothing has contradicted that yet. */
+/** Counters reflect delivery records, not a promise that provider acceptance is delivery. */
 const ACCEPTED = new Set(["SENT_TO_PROVIDER", "SENT", "DELIVERED", "READ", "OPENED", "CLICKED", "REPLIED"]);
-/**
- * Arrival is *proven*. Elastic Email never emits a `Delivered` event — its `Sent` event means
- * "handed to the recipient's mail server" and that is already folded into ACCEPTED — so an open, a
- * read, a click or a reply is the only positive evidence a message reached a human.
- */
 const ARRIVED = new Set(["DELIVERED", "READ", "OPENED", "CLICKED", "REPLIED"]);
 const READ_LIKE = new Set(["READ", "OPENED"]);
-const CLICKED_LIKE = new Set(["CLICKED", "REPLIED"]);
-/** Terminal failures. UNSUBSCRIBED is terminal too but is not a delivery failure, so it is counted apart. */
+// A reply proves engagement, but provides no evidence that a URL was clicked.
+const CLICKED_LIKE = new Set(["CLICKED"]);
 const FAILURES = new Set(["FAILED", "BOUNCED"]);
-
-/**
- * Statuses whose value is a *result* and may therefore be re-derived. DRAFT/REVIEW/APPROVED/
- * SCHEDULED describe where a human left the campaign, SENDING means a run is in flight and the
- * executor owns the field, and CANCELLED/ARCHIVED are deliberate end states — recomputing any of
- * those would overwrite an intent with an observation.
- */
 const RECOMPUTABLE_STATUS = new Set(["SENT", "SENT_WITH_ISSUES", "FAILED", "BLOCKED"]);
 
 export type CampaignCounters = {
-  total: number;
-  sent: number;
-  delivered: number;
-  read: number;
-  clicked: number;
-  failed: number;
-  skipped: number;
-  unsubscribed: number;
+  total: number; sent: number; delivered: number; read: number; clicked: number;
+  replied: number; failed: number; skipped: number; unsubscribed: number;
 };
 
-/**
- * The one place that turns a run's tallies into a campaign status. Shared by the send executor
- * (which counts what just happened) and the reconciler (which counts what the rows now say), so the
- * two can never drift into disagreeing about what "SENT" means.
- */
+/** One indexed server aggregation, without loading message bodies or donor contacts.
+ * Includes retries and webhook evidence even while a campaign remains blocked. */
+export async function readCampaignDeliveryCounters(ids: readonly string[]): Promise<Map<string, CampaignCounters>> {
+  const unique = [...new Set(ids)];
+  const result = new Map<string, CampaignCounters>(unique.map(id => [id, tallyDeliveryStatuses([])]));
+  if (!unique.length) return result;
+  if (unique.some(id => !/^[a-f0-9]{24}$/i.test(id))) throw new Error("INVALID_CAMPAIGN_ID");
+  const present = (field: string) => ({ $ne: [{ $ifNull: [`$${field}`, null] }, null] });
+  const statusIn = (values: Set<string>) => ({ $in: ["$status", [...values]] });
+  const sum = (conditions: unknown[]) => ({ $sum: { $cond: [{ $or: conditions }, 1, 0] } });
+  let rows:unknown;
+  try { rows = await prisma.communicationDelivery.aggregateRaw({ pipeline: [
+    { $match: { campaignId: { $in: unique.map(id => ({ $oid: id })) } } },
+    { $group: { _id: "$campaignId", total: { $sum: 1 },
+      sent: sum([statusIn(ACCEPTED), present("sentAt"), { $and: [present("providerMessageId"), { $ne: ["$providerMessageId", ""] }] }]),
+      delivered: sum([statusIn(ARRIVED), ...["deliveredAt", "readAt", "openedAt", "clickedAt", "repliedAt"].map(present)]),
+      read: sum([statusIn(READ_LIKE), ...["readAt", "openedAt", "clickedAt", "repliedAt"].map(present)]),
+      clicked: sum([statusIn(CLICKED_LIKE), present("clickedAt")]),
+      replied: sum([{ $eq: ["$status", "REPLIED"] }, present("repliedAt")]),
+      failed: sum([statusIn(FAILURES)]), skipped: sum([{ $eq: ["$status", "SKIPPED"] }]), unsubscribed: sum([{ $eq: ["$status", "UNSUBSCRIBED"] }]),
+    } },
+  ] as never, options: { maxTimeMS: 15000 } }); }
+  catch { return readCampaignDeliveryPages(unique); }
+  if (!Array.isArray(rows)) throw new Error("CAMPAIGN_COUNTERS_UNAVAILABLE");
+  for (const row of rows as Array<Record<string, unknown>>) {
+    const id = typeof row._id === "string" ? row._id : (row._id as { $oid?: string } | null)?.$oid;
+    if (!id || !result.has(id)) throw new Error("INVALID_CAMPAIGN_COUNTER_ROW");
+    const counters = tallyDeliveryStatuses([]);
+    for (const key of Object.keys(counters) as Array<keyof CampaignCounters>) {
+      if (typeof row[key] !== "number" || !Number.isSafeInteger(row[key]) || row[key] < 0) throw new Error("INVALID_CAMPAIGN_COUNTER_VALUE");
+      counters[key] = row[key];
+    }
+    result.set(id, counters);
+  }
+  return result;
+}
+
+/** A complete keyset walk when a Mongo aggregation cannot run. Only event
+ * evidence is selected; no contacts, message bodies or campaign writes. Any
+ * failed page rejects the entire read instead of displaying partial counts. */
+async function readCampaignDeliveryPages(ids:readonly string[]) {
+  const result=new Map(ids.map(id=>[id,tallyDeliveryStatuses([])]));let cursor:string|undefined;
+  for(;;){
+    const rows=await prisma.communicationDelivery.findMany({where:{campaignId:{in:[...ids]},...(cursor?{id:{gt:cursor}}:{})},orderBy:{id:"asc"},take:1000,
+      select:{id:true,campaignId:true,status:true,sentAt:true,providerMessageId:true,deliveredAt:true,readAt:true,openedAt:true,clickedAt:true,repliedAt:true}});
+    for(const row of rows){
+      if(!row.campaignId||!result.has(row.campaignId)||cursor&&row.id<=cursor)throw Error("INVALID_CAMPAIGN_COUNTER_PAGE");
+      const counts=tallyDeliveryRows([row]),total=result.get(row.campaignId)!;
+      for(const key of Object.keys(total) as Array<keyof CampaignCounters>)total[key]+=counts[key];
+      cursor=row.id;
+    }
+    if(rows.length<1000)return result;
+  }
+}
+
 export function computeFinalStatus(total: number, sent: number, skipped: number, failed: number): string {
-  if (total === 0) return "BLOCKED";
-  if (sent > 0 && failed === 0 && skipped === 0) return "SENT";
+  if (total <= 0) return "BLOCKED";
+  // A partial result or a still-rendered attempt is never an entirely sent audience.
+  if (sent === total && sent > 0 && failed === 0 && skipped === 0) return "SENT";
   if (sent > 0) return "SENT_WITH_ISSUES";
   if (failed > 0) return "FAILED";
   return "BLOCKED";
 }
 
 export function tallyDeliveryStatuses(statuses: readonly (string | null)[]): CampaignCounters {
-  const counters: CampaignCounters = { total: 0, sent: 0, delivered: 0, read: 0, clicked: 0, failed: 0, skipped: 0, unsubscribed: 0 };
+  const counters: CampaignCounters = { total: 0, sent: 0, delivered: 0, read: 0, clicked: 0, replied: 0, failed: 0, skipped: 0, unsubscribed: 0 };
   for (const raw of statuses) {
     const status = raw ?? "";
-    counters.total += 1;
-    if (ACCEPTED.has(status)) counters.sent += 1;
-    if (ARRIVED.has(status)) counters.delivered += 1;
-    if (READ_LIKE.has(status)) counters.read += 1;
-    if (CLICKED_LIKE.has(status)) counters.clicked += 1;
-    if (FAILURES.has(status)) counters.failed += 1;
-    if (status === "SKIPPED") counters.skipped += 1;
-    if (status === "UNSUBSCRIBED") counters.unsubscribed += 1;
+    counters.total++;
+    if (ACCEPTED.has(status)) counters.sent++;
+    if (ARRIVED.has(status)) counters.delivered++;
+    if (READ_LIKE.has(status)) counters.read++;
+    if (CLICKED_LIKE.has(status)) counters.clicked++;
+    if (status === "REPLIED") counters.replied++;
+    if (FAILURES.has(status)) counters.failed++;
+    if (status === "SKIPPED") counters.skipped++;
+    if (status === "UNSUBSCRIBED") counters.unsubscribed++;
+  }
+  return counters;
+}
+
+type DeliveryEngagementRow = {
+  status: string | null; deliveredAt: Date | null; readAt: Date | null;
+  openedAt: Date | null; clickedAt: Date | null; repliedAt: Date | null;
+  sentAt?: Date | null; providerMessageId?: string | null;
+};
+
+/** Timestamp evidence survives subsequent status transitions. */
+export function tallyDeliveryRows(rows: readonly DeliveryEngagementRow[]): CampaignCounters {
+  const counters: CampaignCounters = { total: 0, sent: 0, delivered: 0, read: 0, clicked: 0, replied: 0, failed: 0, skipped: 0, unsubscribed: 0 };
+  for (const row of rows) {
+    const status = row.status ?? "";
+    counters.total++;
+    if (row.sentAt || row.providerMessageId || ACCEPTED.has(status)) counters.sent++;
+    if (row.deliveredAt || row.readAt || row.openedAt || row.clickedAt || row.repliedAt || ARRIVED.has(status)) counters.delivered++;
+    if (row.readAt || row.openedAt || row.clickedAt || row.repliedAt || READ_LIKE.has(status)) counters.read++;
+    if (row.clickedAt || CLICKED_LIKE.has(status)) counters.clicked++;
+    if (row.repliedAt || status === "REPLIED") counters.replied++;
+    if (FAILURES.has(status)) counters.failed++;
+    if (status === "SKIPPED") counters.skipped++;
+    if (status === "UNSUBSCRIBED") counters.unsubscribed++;
   }
   return counters;
 }
@@ -81,68 +123,45 @@ export type RecomputeResult =
   | { ok: true; changed: boolean; counters: CampaignCounters; status: string }
   | { ok: false; reason: string };
 
-/**
- * Re-derive one campaign's counters (and, when the status is a result rather than an intent, its
- * status) from the delivery rows. Idempotent and safe to call on every event batch.
- */
+/** Conditional update protects concurrent cancellation, archiving and resumed work. */
 export async function recomputeCampaignCounters(campaignId: string): Promise<RecomputeResult> {
   if (!process.env.DATABASE_URL) return { ok: false, reason: "DATABASE_UNAVAILABLE" };
-
-  const campaign = await prisma.communicationCampaign
-    .findUnique({
+  try {
+    const campaign = await prisma.communicationCampaign.findUnique({
       where: { id: campaignId },
-      select: { status: true, sentCount: true, deliveredCount: true, readCount: true, clickedCount: true, failedCount: true },
-    })
-    .catch(() => null);
-  if (!campaign) return { ok: false, reason: "NOT_FOUND" };
-
-  const rows = await prisma.communicationDelivery
-    .findMany({ where: { campaignId }, select: { status: true } })
-    .catch(() => null);
-  if (!rows) return { ok: false, reason: "QUERY_FAILED" };
-  // No rows means the run never got as far as archiving anything; leave the stored numbers alone
-  // rather than zeroing a campaign whose deliveries are simply not written yet.
-  if (!rows.length) return { ok: true, changed: false, counters: tallyDeliveryStatuses([]), status: campaign.status };
-
-  const counters = tallyDeliveryStatuses(rows.map((row) => row.status));
-  const status = RECOMPUTABLE_STATUS.has(campaign.status)
-    ? computeFinalStatus(counters.total, counters.sent, counters.skipped, counters.failed)
-    : campaign.status;
-
-  const changed =
-    campaign.sentCount !== counters.sent ||
-    campaign.deliveredCount !== counters.delivered ||
-    campaign.readCount !== counters.read ||
-    campaign.clickedCount !== counters.clicked ||
-    campaign.failedCount !== counters.failed ||
-    campaign.status !== status;
-  if (!changed) return { ok: true, changed: false, counters, status };
-
-  const updated = await prisma.communicationCampaign
-    .update({
-      where: { id: campaignId },
-      data: {
-        status,
-        sentCount: counters.sent,
-        deliveredCount: counters.delivered,
-        readCount: counters.read,
-        clickedCount: counters.clicked,
-        failedCount: counters.failed,
-      },
-    })
-    .then(() => true)
-    .catch(() => false);
-  if (!updated) return { ok: false, reason: "UPDATE_FAILED" };
-
-  return { ok: true, changed: true, counters, status };
+      select: { status: true, updatedAt: true, metadata: true, sentCount: true, deliveredCount: true, readCount: true, clickedCount: true, repliedCount: true, failedCount: true },
+    });
+    if (!campaign) return { ok: false, reason: "NOT_FOUND" };
+    const rows = await prisma.communicationDelivery.findMany({
+      where: { campaignId }, select: { status: true, sentAt: true, providerMessageId: true, deliveredAt: true, readAt: true, openedAt: true, clickedAt: true, repliedAt: true },
+    });
+    if (!rows.length) return { ok: true, changed: false, counters: tallyDeliveryStatuses([]), status: campaign.status };
+    const counters = tallyDeliveryRows(rows);
+    const metadata = campaign.metadata as { sendProgress?: { done?: boolean } } | null;
+    const incompleteWalk = !!metadata?.sendProgress && metadata.sendProgress.done !== true;
+    const status = RECOMPUTABLE_STATUS.has(campaign.status) && !incompleteWalk
+      ? computeFinalStatus(counters.total, counters.sent, counters.skipped, counters.failed)
+      : campaign.status;
+    const changed = campaign.sentCount !== counters.sent || campaign.deliveredCount !== counters.delivered ||
+      campaign.readCount !== counters.read || campaign.clickedCount !== counters.clicked ||
+      campaign.repliedCount !== counters.replied || campaign.failedCount !== counters.failed || campaign.status !== status;
+    if (!changed) return { ok: true, changed: false, counters, status };
+    const updated = await prisma.communicationCampaign.updateMany({
+      where: { id: campaignId, status: campaign.status, updatedAt: campaign.updatedAt },
+      data: { status, sentCount: counters.sent, deliveredCount: counters.delivered, readCount: counters.read, clickedCount: counters.clicked, repliedCount: counters.replied, failedCount: counters.failed },
+    });
+    if (updated.count !== 1) return { ok: false, reason: "CAMPAIGN_STATE_CHANGED" };
+    return { ok: true, changed: true, counters, status };
+  } catch {
+    return { ok: false, reason: "COUNTER_READ_OR_WRITE_FAILED" };
+  }
 }
 
-/** Recompute a set of campaigns, skipping blanks. Returns how many rows actually moved. */
 export async function recomputeCampaignCountersFor(campaignIds: Iterable<string | null | undefined>): Promise<number> {
   let changed = 0;
   for (const id of new Set([...campaignIds].filter((value): value is string => !!value))) {
     const result = await recomputeCampaignCounters(id);
-    if (result.ok && result.changed) changed += 1;
+    if (result.ok && result.changed) changed++;
   }
   return changed;
 }

@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { metaDonationEventId } from "@/lib/tracking/canonical";
+import { donationAccess } from "@/lib/certificates/http";
+import { DONATION_TOKEN_PARAM } from "@/lib/donations/access-token";
+import { metaDonationEventId, metaPurchaseEventId } from "@/lib/tracking/canonical";
+import { getServerConversionState } from "@/lib/tracking/conversion-event-log";
 import { buildMetaUserData } from "@/lib/tracking/meta-capi";
 
 export const runtime = "nodejs";
@@ -10,11 +13,12 @@ export const dynamic = "force-dynamic";
 /**
  * Single source of truth for what this route loads. The helpers below are typed from THIS
  * object, so if a field is ever dropped from the query the helper that reads it stops
- * compiling — previously they were typed as a bare `findUnique` payload (no relations), which
+ * compiling  previously they were typed as a bare `findUnique` payload (no relations), which
  * made `row.donor` a type error and, more importantly, meant the types could not have caught
  * an actually-missing include.
  */
 const donationTrackingInclude = {
+  subscription: { select: { frequency: true } },
   donor: {
     select: {
       id: true,
@@ -45,6 +49,7 @@ interface TrackingContent {
 interface TrackingResponseOk {
   ok: true;
   eventName: "Donate";
+  metaEvents: Array<{ eventName: "Donate" | "Purchase"; eventId: string }>;
   eventId: string;
   transactionId: string;
   orderId: string;
@@ -59,7 +64,7 @@ interface TrackingResponseOk {
   status: "paid";
   success: true;
   paymentInfoAvailable: true;
-  donationType: "ONE_TIME";
+  donationType: "ONE_TIME" | "DAILY" | "FRIDAY" | "MONTHLY";
   paymentMethod: string;
   browserAdvancedMatching?: Record<string, string>;
 }
@@ -110,12 +115,20 @@ function buildBrowserAdvancedMatching(row: DonationTrackingRow) {
 }
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
   if (!id) {
     return NextResponse.json<TrackingResponseFail>({ ok: false, reason: "missing donation id" }, { status: 400 });
+  }
+
+  /* The payload carries hashed donor identity for advanced matching, so it is
+     read under the same rule as the receipt: session owner / revenue user, or
+     the donation's access token the success page was opened with. */
+  const access = await donationAccess(id, req.nextUrl.searchParams.get(DONATION_TOKEN_PARAM));
+  if (!access.allowed) {
+    return NextResponse.json<TrackingResponseFail>({ ok: false, reason: "forbidden" }, { status: 403 });
   }
 
   const row = await prisma.donation.findUnique({
@@ -166,30 +179,43 @@ export async function GET(
     contentIds.push("donation");
   }
 
+  const donationType = row.subscriptionId ? (row.subscription?.frequency ?? "MONTHLY") : "ONE_TIME";
+
+  const purchaseId = metaPurchaseEventId(row.id);
+  const purchaseState = await getServerConversionState("META", purchaseId);
+  // Browser/server deduplication has a 48-hour window. Old receipts are not new conversions.
+  const withinBrowserWindow = Date.now() - row.paidAt.getTime() < 48 * 60 * 60 * 1000;
+  const metaEvents: TrackingResponseOk["metaEvents"] = withinBrowserWindow
+    ? [{ eventName: "Donate", eventId: metaDonationEventId(row.id, "success") }]
+    : [];
+  if (withinBrowserWindow && (row.conversionEventsSentAt == null || purchaseState)) {
+    metaEvents.push({ eventName: "Purchase", eventId: purchaseId });
+  }
   const payload: TrackingResponseOk = {
     ok: true,
     eventName: "Donate",
+    metaEvents,
     eventId: metaDonationEventId(row.id, "success"),
     transactionId: row.id,
     orderId: row.id,
     value,
-    currency: row.currency || "USD",
+    currency: (row.currency || "USD").toUpperCase(),
     contentType: "donation",
     contentIds,
     contentName: primaryName ?? "Donation",
-    contentCategory: "donation",
+    contentCategory: donationType === "ONE_TIME" ? "donation" : donationType.toLowerCase(),
     contents,
     numItems: contents.reduce((s, c) => s + c.quantity, 0),
     status: "paid",
     success: true,
     paymentInfoAvailable: true,
-    donationType: "ONE_TIME",
+    donationType,
     paymentMethod: (row.paymentMethod ?? "CARD").toLowerCase(),
     browserAdvancedMatching: buildBrowserAdvancedMatching(row),
   };
 
   return NextResponse.json<TrackingResponseOk>(payload, {
     status: 200,
-    headers: { "Cache-Control": "private, max-age=300" },
+    headers: { "Cache-Control": "private, no-store" },
   });
 }

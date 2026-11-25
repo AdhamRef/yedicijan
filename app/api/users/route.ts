@@ -11,6 +11,7 @@ import {
   sessionHasDashboardPermission,
 } from '@/lib/dashboard/permissions';
 import { writeAuditLog } from '@/lib/audit-log';
+import { PAID_DONATION_FILTER } from '@/lib/dashboard/donation-usd-revenue';
 import {
   birthdateRangeForAges,
   genderQueryValues,
@@ -18,9 +19,11 @@ import {
   parseGenderParam,
 } from '@/lib/dashboard/user-demographics';
 
+import { donorAccountStatus, donorAccountWhere } from "@/lib/dashboard/donor-account";
+
 type UserScope = 'donors' | 'team' | 'all';
 
-// GET /api/users — scope=donors | scope=team | omit/empty/all = every role (no role filter)
+// GET /api/users  scope=donors | scope=team | omit/empty/all = every role (no role filter)
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -47,7 +50,8 @@ export async function GET(request: NextRequest) {
     if (scope === 'donors') {
       const canListDonors =
         sessionHasDashboardPermission(session, 'donors') ||
-        sessionHasDashboardPermission(session, 'revenue');
+        sessionHasDashboardPermission(session, 'revenue') ||
+        sessionHasDashboardPermission(session, 'monthly');
       if (!canListDonors) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
@@ -59,12 +63,22 @@ export async function GET(request: NextRequest) {
         session.user.role === 'ADMIN' ||
         sessionHasDashboardPermission(session, 'donors') ||
         sessionHasDashboardPermission(session, 'team') ||
-        sessionHasDashboardPermission(session, 'revenue');
+        sessionHasDashboardPermission(session, 'revenue') ||
+        sessionHasDashboardPermission(session, 'monthly');
       if (!canListAll) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
 
+    // The global registered-account card must not wait for list joins, sorting or filtered totals.
+    if (searchParams.get("summary") === "registered") {
+      if (scope !== "donors") return NextResponse.json({ error: "Invalid summary scope" }, { status: 400 });
+      const registeredDonorsTotal = await prisma.user.count({ where: { role: "DONOR", AND: [donorAccountWhere("MEMBER"), { OR: [{ mergedIntoUserId: null }, { mergedIntoUserId: { isSet: false } }] }] } });
+      return NextResponse.json({ registeredDonorsTotal }, { headers: { "Cache-Control": "private, no-store" } });
+    }
+
+    const accountStatus = searchParams.get("accountStatus");
+    if (accountStatus && !["MEMBER", "GUEST", "UNKNOWN"].includes(accountStatus)) return NextResponse.json({ error: "Invalid account status" }, { status: 400 });
     const preferredLang = searchParams.get('preferredLang') || undefined;
     const badgeId = searchParams.get('badgeId') || undefined;
     const search = searchParams.get('search')?.trim() || undefined;
@@ -73,7 +87,7 @@ export async function GET(request: NextRequest) {
     const maxAge = parseAgeParam(searchParams.get('maxAge'));
     const sortBy = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'name' | 'email' | 'donationsCount' | 'totalDonated' | 'role';
     const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
-    const page = parseInt(searchParams.get('page') || '1');
+    const page = Math.max(1, Number.parseInt(searchParams.get('page') || '1') || 1);
     const limit = Math.min(parseInt(searchParams.get('limit') || '10') || 10, 100);
     const skip = (page - 1) * limit;
 
@@ -86,14 +100,18 @@ export async function GET(request: NextRequest) {
 
     let where: Record<string, unknown> = {
       ...roleFilter,
+      AND: [{ OR: [{ mergedIntoUserId: null }, { mergedIntoUserId: { isSet: false } }] }, { OR: [{ email: null }, { email: { isSet: false } }, { email: { not: { endsWith: "@deleted.invalid" } } }] }],
       ...(preferredLang && { preferredLang }),
       ...(search && search.length > 0 && {
         OR: [
-          { name: { contains: search } },
-          { email: { contains: search } },
+          { name: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+          { phone: { contains: search } },
         ],
       }),
     };
+
+    if (accountStatus && scope === 'donors') where.AND = [...(where.AND as unknown[]), donorAccountWhere(accountStatus as "MEMBER" | "GUEST" | "UNKNOWN")];
 
     if (scope === 'team' && session?.user?.id) {
       where = { ...where, NOT: { id: session.user.id } };
@@ -106,7 +124,7 @@ export async function GET(request: NextRequest) {
     }
 
     // `birthdate` is an ISO "YYYY-MM-DD" string, and ISO dates sort
-    // lexicographically — so an age range is a plain string range. Users with no
+    // lexicographically  so an age range is a plain string range. Users with no
     // birthdate recorded drop out of the result, which is the intended meaning
     // of "donors aged 25-40".
     const birthdateRange = birthdateRangeForAges(minAge, maxAge);
@@ -129,7 +147,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const total = await prisma.user.count({ where });
+    const [total, registeredDonorsTotal] = await Promise.all([
+      prisma.user.count({ where }),
+      scope === "donors" && searchParams.get("includeRegisteredCount") !== "0" ? prisma.user.count({ where: { role: "DONOR", AND: [donorAccountWhere("MEMBER"), { OR: [{ mergedIntoUserId: null }, { mergedIntoUserId: { isSet: false } }] }] } }) : Promise.resolve(null),
+    ]);
 
     const isAggregateSort = sortBy === 'donationsCount' || sortBy === 'totalDonated';
     let orderedIds: string[] = [];
@@ -144,7 +165,7 @@ export async function GET(request: NextRequest) {
         if (ids.length === 0) return [];
         const gRows = await prisma.donation.groupBy({
           by: ['donorId'],
-          where: { donorId: { in: ids }, status: "PAID" },
+          where: { donorId: { in: ids }, ...PAID_DONATION_FILTER },
           _count: { id: true },
           _sum: { amountUSD: true, totalAmount: true },
         });
@@ -157,7 +178,7 @@ export async function GET(request: NextRequest) {
             amountUSD: g?._sum.amountUSD ?? 0,
           };
         });
-        const mult = sortOrder === 'desc' ? 1 : -1;
+        const mult = sortOrder === 'desc' ? -1 : 1;
         if (sortBy === 'donationsCount') {
           withZero.sort((a, b) => mult * (a.count - b.count));
         } else {
@@ -202,7 +223,11 @@ export async function GET(request: NextRequest) {
       birthdate: true,
       createdAt: true,
       updatedAt: true,
-      _count: { select: { donations: true } },
+      verifiedAt: true,
+      registeredAt: true,
+      emailVerified: true,
+      password: true,
+      _count: { select: { donations: true, accounts: true } },
     } as const;
 
     type UserListRow = Prisma.UserGetPayload<{ select: typeof baseSelect }>;
@@ -248,7 +273,7 @@ export async function GET(request: NextRequest) {
       userIds.length > 0
         ? await prisma.donation.groupBy({
             by: ["donorId"],
-            where: { donorId: { in: userIds }, status: "PAID" },
+            where: { donorId: { in: userIds }, ...PAID_DONATION_FILTER },
             _sum: { totalAmount: true, amountUSD: true },
             _max: { createdAt: true },
             _count: { id: true },
@@ -277,17 +302,23 @@ export async function GET(request: NextRequest) {
         ? await getBadgeIdsByUser(userIds, allBadges)
         : new Map<string, string[]>();
 
-    const usersWithTotals = users.map((u) => ({
-      ...u,
-      totalDonationsCount: totalByDonorId.get(u.id)?.paidDonationCount ?? 0,
-      totalDonatedAmount: totalByDonorId.get(u.id)?.totalAmount ?? 0,
-      totalDonatedAmountUSD: totalByDonorId.get(u.id)?.amountUSD ?? 0,
-      lastDonationAt: totalByDonorId.get(u.id)?.lastDonationAt ?? null,
-      badgeIds: badgeIdsByUser.get(u.id) ?? [],
-    }));
+    const usersWithTotals = users.map((u) => {
+      const { password, ...safe } = u;
+      return {
+        ...safe,
+        accountStatus: donorAccountStatus(u),
+        hasPassword: Boolean(password),
+        totalDonationsCount: totalByDonorId.get(u.id)?.paidDonationCount ?? 0,
+        totalDonatedAmount: totalByDonorId.get(u.id)?.totalAmount ?? 0,
+        totalDonatedAmountUSD: totalByDonorId.get(u.id)?.amountUSD ?? 0,
+        lastDonationAt: totalByDonorId.get(u.id)?.lastDonationAt ?? null,
+        badgeIds: badgeIdsByUser.get(u.id) ?? [],
+      };
+    });
 
     return NextResponse.json({
       users: usersWithTotals,
+      registeredDonorsTotal,
       pagination: {
         total,
         pages: Math.ceil(total / limit),
@@ -305,7 +336,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/users — admin only
+// POST /api/users  admin only
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -374,3 +405,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

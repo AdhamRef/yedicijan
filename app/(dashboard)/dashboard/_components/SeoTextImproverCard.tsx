@@ -1,15 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Check, Clipboard, FileQuestion, FileText, Hash, Heading2, Loader2, Link, ListChecks, Send, Sparkles, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import type { SupportedLocale } from "@/lib/locales";
 import { Textarea } from "@/components/ui/textarea";
+import { dashDir, dt, dtx } from "@/lib/dashboard/i18n";
 
 type SeoContentType = "campaign" | "category" | "blog";
-type LocaleCode = "ar" | "en" | "fr" | "tr" | "id" | "pt" | "es" | "de";
+/**
+ * Every publicly routed locale. Derived from the single source of truth rather
+ * than listed here, so promoting a locale cannot leave this behind  which is
+ * exactly what happened when the Minbar port took the site from 8 to 19.
+ */
+type LocaleCode = SupportedLocale;
 type FaqItem = { question: string; answer: string };
 
 type SeoTextResult = {
@@ -32,6 +39,7 @@ type Props = {
   text?: string | null;
   keywords?: string[];
   onApply?: (text: string) => void;
+  arabicSource?: { title: string; text: string };
 };
 
 const emptyResult: SeoTextResult = {
@@ -47,13 +55,23 @@ const emptyResult: SeoTextResult = {
   keywords: [],
 };
 
-export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords = [], onApply }: Props) {
+export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords = [], onApply, arabicSource }: Props) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SeoTextResult>(emptyResult);
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [applied, setApplied] = useState(false);
   const [sentToSeo, setSentToSeo] = useState(false);
+  const requestId = useRef(0);
+  const missingArabicSource = locale !== "ar" && !(arabicSource?.title?.trim() || arabicSource?.text?.trim());
+  useEffect(() => {
+    requestId.current++;
+    setLoading(false);
+    setResult(emptyResult);
+    setError(null);
+    setApplied(false);
+    setSentToSeo(false);
+  }, [locale, type, title, text]);
 
   const hasText = Boolean((text || title || "").trim());
   const hasResult = Boolean(result.improvedText || result.improvedTitle || result.primaryKeyword || result.faq.length);
@@ -68,18 +86,19 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
 
   const seoPackageText = useMemo(() => {
     return [
-      `عنوان SEO: ${result.improvedTitle || "—"}`,
-      `وصف Meta: ${result.metaDescription || "—"}`,
-      `الكلمة الرئيسية: ${result.primaryKeyword || "—"}`,
-      `الكلمات المفتاحية: ${allKeywords.join(", ") || "—"}`,
-      `Slug مقترح: ${result.suggestedSlug || "—"}`,
-      result.suggestedHeadings.length ? `العناوين المقترحة:\n${result.suggestedHeadings.map((h, i) => `${i + 1}. ${h}`).join("\n")}` : "",
-      result.faq.length ? `الأسئلة الشائعة:\n${faqText}` : "",
+      dt("عنوان SEO: {0}", [result.improvedTitle || "—"]),
+      dt("وصف Meta: {0}", [result.metaDescription || "—"]),
+      dt("الكلمة الرئيسية: {0}", [result.primaryKeyword || "—"]),
+      dt("الكلمات المفتاحية: {0}", [allKeywords.join(", ") || "—"]),
+      dt("Slug مقترح: {0}", [result.suggestedSlug || "—"]),
+      result.suggestedHeadings.length ? dt("العناوين المقترحة:\n{0}", [result.suggestedHeadings.map((h, i) => `${i + 1}. ${h}`).join("\n")]) : "",
+      result.faq.length ? dt("الأسئلة الشائعة:\n{0}", [faqText]) : "",
     ].filter(Boolean).join("\n\n");
   }, [result, allKeywords, faqText]);
 
   const improve = async () => {
-    if (!hasText) return;
+    if (!hasText || missingArabicSource) { setError(dt("يجب توفير المصدر العربي المعتمد قبل تحسين لغة أخرى. لم يتغير المحتوى.")); return; }
+    const token = ++requestId.current;
     setLoading(true);
     setError(null);
     setApplied(false);
@@ -91,7 +110,9 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
         title: title || "",
         text: text || "",
         keywords,
+        ...(locale !== "ar" ? { sourceDraft: arabicSource } : {}),
       });
+      if (token !== requestId.current) return;
       setResult({
         improvedTitle: response.data?.improvedTitle || title || "",
         improvedText: response.data?.improvedText || "",
@@ -105,9 +126,9 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
         keywords: response.data?.keywords || [],
       });
     } catch (err: any) {
-      setError(err?.response?.data?.error || "تعذر تحسين النص الآن");
+      if (token === requestId.current) setError(err?.response?.data?.error || dt("تعذر تحسين النص الآن"));
     } finally {
-      setLoading(false);
+      if (token === requestId.current) setLoading(false);
     }
   };
 
@@ -157,7 +178,7 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
   };
 
   return (
-    <Card className="border-purple-100 bg-gradient-to-br from-white to-purple-50/40 shadow-sm" dir="rtl">
+    <Card className="border-purple-100 bg-gradient-to-br from-white to-purple-50/40 shadow-sm" dir={dashDir()}>
       <CardHeader className="pb-3">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex items-start gap-3">
@@ -165,44 +186,44 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
               <WandSparkles className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-base sm:text-lg">تحسين النص للظهور</CardTitle>
-              <p className="mt-1 text-sm text-muted-foreground">يرتب النص كمسودة SEO احترافية: عنوان، جسم النص، كلمة رئيسية، وصف Meta، عناوين وأسئلة شائعة.</p>
+              <CardTitle className="text-base sm:text-lg">{dt("تحسين النص للظهور")}</CardTitle>
+              <p className="mt-1 text-sm text-muted-foreground">{dt("يرتب النص كمسودة SEO احترافية: عنوان، جسم النص، كلمة رئيسية، وصف Meta، عناوين وأسئلة شائعة.")}</p>
             </div>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={improve} disabled={loading || !hasText} className="gap-2 border-purple-300 text-purple-700 hover:bg-purple-50">
+          <Button type="button" variant="outline" size="sm" onClick={improve} disabled={loading || !hasText || missingArabicSource} className="gap-2 border-purple-300 text-purple-700 hover:bg-purple-50">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            تحسين وترتيب النص
-          </Button>
+            {dt("تحسين وترتيب النص")}</Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!hasText && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">اكتب العنوان أو الوصف أولًا حتى يتم تجهيز اقتراح مناسب.</div>}
+        {missingArabicSource && <div role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{dt("هذه اللغة تحتاج مصدرًا عربيًا معتمدًا قبل إرسال النص إلى الذكاء الاصطناعي. لا تستخدم الترجمة الافتراضية كمصدر.")}</div>}
+        {!hasText && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{dt("اكتب العنوان أو الوصف أولًا حتى يتم تجهيز اقتراح مناسب.")}</div>}
         {error && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
         {hasResult && (
           <>
             <div className="rounded-xl border border-purple-200 bg-white p-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div className="text-sm font-bold text-slate-900">حزمة SEO جاهزة للمراجعة</div>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">بعد المراجعة يمكنك إرسال العنوان والوصف والكلمات والأسئلة إلى أداة SEO الذكي في نفس اللغة.</p>
+                  <div className="text-sm font-bold text-slate-900">{dt("حزمة SEO جاهزة للمراجعة")}</div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{dt("بعد المراجعة يمكنك إرسال العنوان والوصف والكلمات والأسئلة إلى أداة SEO الذكي في نفس اللغة.")}</p>
                 </div>
                 <Button type="button" size="sm" onClick={sendToSeoWorkbench} className="gap-2 bg-brand hover:bg-brand-dark">
                   <Send className="h-4 w-4" />
-                  {sentToSeo ? "تم الإرسال" : "إرسال إلى SEO الذكي"}
+                  {sentToSeo ? dt("تم الإرسال") : dt("إرسال إلى SEO الذكي")}
                 </Button>
               </div>
             </div>
 
             <div className="grid gap-3 lg:grid-cols-2">
-              <InfoField icon={<Heading2 className="h-4 w-4" />} label="عنوان محسّن" value={result.improvedTitle} onCopy={() => copy("title", result.improvedTitle)} copied={copiedKey === "title"} />
-              <InfoField icon={<Hash className="h-4 w-4" />} label="الكلمة الرئيسية" value={result.primaryKeyword} onCopy={() => copy("primary", result.primaryKeyword)} copied={copiedKey === "primary"} />
-              <InfoField icon={<FileText className="h-4 w-4" />} label="وصف Meta" value={result.metaDescription} onCopy={() => copy("meta", result.metaDescription)} copied={copiedKey === "meta"} area />
-              <InfoField icon={<Link className="h-4 w-4" />} label="Slug مقترح" value={result.suggestedSlug} onCopy={() => copy("slug", result.suggestedSlug)} copied={copiedKey === "slug"} />
+              <InfoField icon={<Heading2 className="h-4 w-4" />} label={dt("عنوان محسّن")} value={result.improvedTitle} onCopy={() => copy("title", result.improvedTitle)} copied={copiedKey === "title"} />
+              <InfoField icon={<Hash className="h-4 w-4" />} label={dt("الكلمة الرئيسية")} value={result.primaryKeyword} onCopy={() => copy("primary", result.primaryKeyword)} copied={copiedKey === "primary"} />
+              <InfoField icon={<FileText className="h-4 w-4" />} label={dt("وصف Meta")} value={result.metaDescription} onCopy={() => copy("meta", result.metaDescription)} copied={copiedKey === "meta"} area />
+              <InfoField icon={<Link className="h-4 w-4" />} label={dt("Slug مقترح")} value={result.suggestedSlug} onCopy={() => copy("slug", result.suggestedSlug)} copied={copiedKey === "slug"} />
             </div>
 
             {allKeywords.length > 0 && (
               <div className="rounded-xl border bg-white p-3">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800"><Hash className="h-4 w-4 text-purple-700" /> كلمات مفتاحية مرتبطة بأداة SEO</div>
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800"><Hash className="h-4 w-4 text-purple-700" /> {dt(" كلمات مفتاحية مرتبطة بأداة SEO")}</div>
                 <div className="flex flex-wrap gap-1.5">
                   {allKeywords.map((kw) => <span key={kw} className="rounded-full border bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-800">{kw}</span>)}
                 </div>
@@ -211,7 +232,7 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
 
             {result.suggestedHeadings.length > 0 && (
               <div className="rounded-xl border bg-white p-3">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800"><ListChecks className="h-4 w-4 text-purple-700" /> هيكل العناوين المقترح</div>
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800"><ListChecks className="h-4 w-4 text-purple-700" /> {dt(" هيكل العناوين المقترح")}</div>
                 <div className="grid gap-2 md:grid-cols-2">
                   {result.suggestedHeadings.map((heading, i) => <div key={`${heading}-${i}`} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">{i + 1}. {heading}</div>)}
                 </div>
@@ -222,20 +243,20 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
               <div className="rounded-xl border bg-white p-3">
                 <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-800"><FileQuestion className="h-4 w-4 text-purple-700" /> أسئلة شائعة مقترحة</div>
-                    <p className="mt-1 text-xs text-muted-foreground">يمكن مراجعتها وتعديلها ثم إرسالها إلى أداة SEO الذكي لاستخدامها مع البيانات المنظمة لاحقًا.</p>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-800"><FileQuestion className="h-4 w-4 text-purple-700" /> {dt(" أسئلة شائعة مقترحة")}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">{dt("يمكن مراجعتها وتعديلها ثم إرسالها إلى أداة SEO الذكي لاستخدامها مع البيانات المنظمة لاحقًا.")}</p>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => copy("faq", faqText)} className="gap-2">
                     <Clipboard className="h-4 w-4" />
-                    {copiedKey === "faq" ? "تم النسخ" : "نسخ الأسئلة"}
+                    {copiedKey === "faq" ? dt("تم النسخ") : dt("نسخ الأسئلة")}
                   </Button>
                 </div>
                 <div className="grid gap-3 lg:grid-cols-2">
                   {result.faq.map((item, index) => (
                     <div key={`${item.question}-${index}`} className="rounded-lg border bg-slate-50 p-3">
-                      <label className="text-xs font-semibold text-muted-foreground">السؤال {index + 1}</label>
+                      <label className="text-xs font-semibold text-muted-foreground">{dtx("السؤال {0}", [index + 1])}</label>
                       <Input value={item.question} onChange={(e) => updateFaq(index, { question: e.target.value })} className="mt-1 bg-white text-sm font-semibold" />
-                      <label className="mt-3 block text-xs font-semibold text-muted-foreground">الإجابة</label>
+                      <label className="mt-3 block text-xs font-semibold text-muted-foreground">{dt("الإجابة")}</label>
                       <Textarea value={item.answer} onChange={(e) => updateFaq(index, { answer: e.target.value })} className="mt-1 min-h-[85px] bg-white text-sm leading-6" />
                     </div>
                   ))}
@@ -244,9 +265,9 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
             )}
 
             <div className="space-y-1">
-              <label className="text-sm font-semibold text-slate-800">النص المحسّن والمنسق</label>
+              <label className="text-sm font-semibold text-slate-800">{dt("النص المحسّن والمنسق")}</label>
               <Textarea value={result.improvedText} onChange={(e) => setResult((prev) => ({ ...prev, improvedText: e.target.value }))} className="min-h-[240px] bg-white leading-7" />
-              <p className="text-xs text-muted-foreground">يمكنك مراجعة النص وتعديله قبل النسخ أو الاستخدام.</p>
+              <p className="text-xs text-muted-foreground">{dt("يمكنك مراجعة النص وتعديله قبل النسخ أو الاستخدام.")}</p>
             </div>
 
             {result.notes.length > 0 && (
@@ -259,16 +280,16 @@ export function SeoTextImproverCard({ type, locale = "ar", title, text, keywords
               {onApply && (
                 <Button type="button" size="sm" onClick={apply} className="gap-2 bg-purple-700 hover:bg-purple-800">
                   <Check className="h-4 w-4" />
-                  {applied ? "تم وضع النص" : "استخدام النص المقترح"}
+                  {applied ? dt("تم وضع النص") : dt("استخدام النص المقترح")}
                 </Button>
               )}
               <Button type="button" variant="outline" size="sm" onClick={() => copy("body", result.improvedText)} className="gap-2">
                 <Clipboard className="h-4 w-4" />
-                {copiedKey === "body" ? "تم النسخ" : "نسخ النص"}
+                {copiedKey === "body" ? dt("تم النسخ") : dt("نسخ النص")}
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => copy("seo", seoPackageText)} className="gap-2">
                 <Clipboard className="h-4 w-4" />
-                {copiedKey === "seo" ? "تم النسخ" : "نسخ حزمة SEO"}
+                {copiedKey === "seo" ? dt("تم النسخ") : dt("نسخ حزمة SEO")}
               </Button>
             </div>
           </>
@@ -285,7 +306,7 @@ function InfoField({ icon, label, value, onCopy, copied, area }: { icon: React.R
         <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">{icon}{label}</div>
         <button type="button" onClick={onCopy} disabled={!value} className="inline-flex items-center gap-1 rounded-md border bg-white px-2 py-1 text-[11px] text-slate-600 disabled:opacity-40">
           {copied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
-          {copied ? "تم النسخ" : "نسخ"}
+          {copied ? dt("تم النسخ") : dt("نسخ")}
         </button>
       </div>
       {area ? <Textarea value={value || ""} readOnly className="min-h-[78px] resize-none bg-slate-50 text-sm" /> : <Input value={value || ""} readOnly className="bg-slate-50 text-sm" />}

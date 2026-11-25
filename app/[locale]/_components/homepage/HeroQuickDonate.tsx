@@ -10,8 +10,8 @@ import { useSearchParams } from "next/navigation";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
 import { CardStackPlusIcon } from "@radix-ui/react-icons";
 
-// DonationDialog is a large client chunk; loading it lazily keeps it out of the
-// homepage critical path entirely.
+// DonationDialog pulls in @stripe/stripe-js (~230KiB) plus the Stripe utility script.
+// Loading it lazily keeps Stripe out of the homepage critical path entirely.
 const DonationDialog = dynamic(() => import("@/components/DonationDialog"), { ssr: false });
 
 interface CategoryOption {
@@ -21,7 +21,7 @@ interface CategoryOption {
 }
 
 interface HeroQuickDonateProps {
-  /** Server-fetched categories — when provided we skip the client fetch + loading state,
+  /** Server-fetched categories  when provided we skip the client fetch + loading state,
    *  which means the SSR HTML already contains the final dropdown content (no CLS). */
   initialCategories?: CategoryOption[];
 }
@@ -33,6 +33,7 @@ const HERO_DONATE_RESUME_KEY = "heroQuickDonateResume";
 const HeroQuickDonate: React.FC<HeroQuickDonateProps> = ({ initialCategories = [] }) => {
   const t = useTranslations("HeroSlider");
   const tQuick = useTranslations("QuickDonate");
+  const tDonation = useTranslations("DonationDialog");
   const locale = useLocale() as "ar" | "en" | "fr";
   const pathname = usePathname();
   const router = useRouter();
@@ -45,19 +46,31 @@ const HeroQuickDonate: React.FC<HeroQuickDonateProps> = ({ initialCategories = [
     initialCategories[0]?.id ?? ""
   );
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
-  // Gate the actual mount so the dialog chunk doesn't load on page paint.
+  // Gate the actual mount so the Stripe / dialog chunk doesn't load on page paint.
   const [donationDialogMounted, setDonationDialogMounted] = useState(false);
   const [categoriesLoading, setCategoriesLoading] = useState(initialCategories.length === 0);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
   const [currencyLabel, setCurrencyLabel] = useState<string>("USD");
+  const [stripeMinAmount, setStripeMinAmount] = useState(1);
   const [resumeAmount, setResumeAmount] = useState<number | undefined>(undefined);
   const [resumeCategoryId, setResumeCategoryId] = useState<string>("");
   const [resumeCategoryName, setResumeCategoryName] = useState<string>("");
   const [resumeCategoryImage, setResumeCategoryImage] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    setCurrencyLabel(getCurrency());
+    const cur = getCurrency();
+    setCurrencyLabel(cur);
+    if (cur !== "USD") {
+      try {
+        const cached = localStorage.getItem("cachedExchangeRates");
+        if (cached) {
+          const { rates } = JSON.parse(cached) as { rates: Record<string, number> };
+          const rate = rates?.[cur];
+          if (rate) setStripeMinAmount(Math.ceil(rate));
+        }
+      } catch { /* use default 1 */ }
+    }
   }, []);
 
   // After sign-in redirect: restore selection, open donation dialog, clean URL
@@ -94,7 +107,7 @@ const HeroQuickDonate: React.FC<HeroQuickDonateProps> = ({ initialCategories = [
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Categories arrive as a prop from the server — only re-fetch on the client if the
+  // Categories arrive as a prop from the server  only re-fetch on the client if the
   // server failed to populate them (e.g. /api/categories was 5xx during SSR).
   useEffect(() => {
     if (initialCategories.length > 0) return;
@@ -127,6 +140,7 @@ const HeroQuickDonate: React.FC<HeroQuickDonateProps> = ({ initialCategories = [
 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const displayAmount = selectedAmount ?? (customAmount ? parseFloat(customAmount) || 0 : 0);
+  const belowMin = stripeMinAmount > 1 && displayAmount > 0 && displayAmount < stripeMinAmount;
 
   const storeResume = () => {
     if (!selectedCategoryId || !selectedCategory || displayAmount <= 0) return;
@@ -190,7 +204,7 @@ const HeroQuickDonate: React.FC<HeroQuickDonateProps> = ({ initialCategories = [
           />
         </button>
 
-        {/* Opens upward — keeps the menu over the slide image instead of pushing the page. */}
+        {/* Opens upward  keeps the menu over the slide image instead of pushing the page. */}
         {categoryDropdownOpen && !categoriesLoading && (
           <div className="absolute bottom-full z-50 mb-2 w-full overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl">
             <div className="max-h-48 divide-y divide-gray-50 overflow-y-auto">
@@ -252,10 +266,17 @@ const HeroQuickDonate: React.FC<HeroQuickDonateProps> = ({ initialCategories = [
         </div>
       </div>
 
+      {/* Stripe minimum hint */}
+      {belowMin && (
+        <p className="mt-2 animate-fade-in text-center text-xs font-medium text-amber-600">
+          {tDonation("stripeMinDonation", { amount: stripeMinAmount, currency: currencyLabel })}
+        </p>
+      )}
+
       {/* CTA */}
       <button
         onClick={handleDonateClick}
-        disabled={!selectedCategoryId || displayAmount <= 0 || categoriesLoading}
+        disabled={!selectedCategoryId || displayAmount <= 0 || categoriesLoading || belowMin}
         className="shape-button group mt-4 flex w-full items-center justify-center gap-2 bg-burgundy px-5 py-3 text-sm font-bold text-white shadow-soft transition-all duration-300 hover:bg-burgundyDark hover:shadow-lift disabled:pointer-events-none disabled:opacity-50"
       >
         {t("secureDonate")}

@@ -1,11 +1,24 @@
+import { subscriptionPaymentSequence } from "@/lib/dashboard/subscription-payment-sequence";
+import { loadDonationFinancialSummaries } from "@/lib/dashboard/donation-financial-summary";
+import type { Prisma } from "@prisma/client";
+import { resolveNewCardPaymentRoute } from "@/lib/donations/payment-routing-server";
+import { donorAccountStatus } from "@/lib/dashboard/donor-account";
+import { getTrackingClientIp } from "@/lib/tracking/client-ip";
+import { donationPaymentEvidence } from "@/lib/donations/payment-evidence";
+import { POST as createCartDonation } from "@/app/api/cart/payment/route";
+import { isOrderType, isRecurringFrequency } from "@/lib/donations/recurring-schedule";
 import { NextRequest, NextResponse } from "next/server";
+import { donationProviderWhere } from "@/lib/dashboard/donation-provider-filter";
 import { prisma } from "@/lib/prisma";
+import { donationStatusWhere } from "@/lib/dashboard/donation-usd-revenue";
+import { donationListSafeFields } from "@/lib/dashboard/donation-list-privacy";
 import { isValidLocale } from "@/lib/locales";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/options";
 import { resolveReferralId } from "@/lib/referral-server";
+import { userHasDashboardPermission } from "@/lib/dashboard/permissions";
 import { isRevenueDashboardUser } from "@/lib/dashboard/api-auth";
-import { writeAuditLog, auditStreamForRole } from "@/lib/audit-log";
+import { writeAuditLog } from "@/lib/audit-log";
 import {
   convertAmountInCurrencyToUsd,
   normalizeDonationCurrencyCode,
@@ -19,6 +32,25 @@ import { sanitizeDonationAttribution } from "@/lib/attribution/sanitize";
 import { inferLocaleFromRequest } from "@/lib/preferred-lang";
 import { resolveGuestDonor } from "@/lib/users/resolve-guest-donor";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
+import { mintDonationAccessToken } from "@/lib/donations/access-token";
+import {
+  donationFrequencyWhere,
+  loadSubscriptionFrequencies,
+  parseFrequencyParam,
+} from "@/lib/dashboard/recurring-frequency-filter";
+import {
+  campaignWhereForDonationSearch,
+  campaignTranslationWhereForDonationSearch,
+  categoryWhereForDonationSearch,
+  categoryTranslationWhereForDonationSearch,
+  donationWhereForIds,
+  donationWhereForDonorSearch,
+  userWhereForDonorSearch,
+} from "@/lib/dashboard/donation-search";
+import { resolveDonationRelationFilterIds } from "@/lib/dashboard/donation-relation-filters";
+import { accountingDateWhere, canUseAccountingDate } from "@/lib/dashboard/accounting-date-where";
+import { dashboardLocaleWhere, dashboardCountryWhere } from "@/lib/dashboard/donation-location-scope";
+import { dashboardDonationDateSortField } from "@/lib/dashboard/donation-ledger-date";
 
 // GET /api/donations - Get all donations (admin) or user's donations
 export async function GET(request: NextRequest) {
@@ -36,13 +68,20 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")?.trim();
     const startParam = searchParams.get("start"); // YYYY-MM-DD
     const endParam = searchParams.get("end"); // YYYY-MM-DD
-    const sortBy = (searchParams.get("sortBy") || "date") as "date" | "amount";
-    const sortOrder = (searchParams.get("sortOrder") || "desc") as "asc" | "desc";
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = Math.min(parseInt(searchParams.get("limit") || "10") || 10, 100);
+    const sortBy = searchParams.get("sortBy") === "amount" ? "amount" : "date";
+    const sortOrder = searchParams.get("sortOrder") === "asc" ? "asc" : "desc";
+    const requestedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+    const requestedLimit = Number.parseInt(searchParams.get("limit") || "10", 10);
+    // Never pass negative or NaN skip/take into Prisma, including on legacy views.
+    const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 100)
+      : 10;
+    const validPage = Number.isSafeInteger(requestedPage) && requestedPage > 0
+      && Number.isSafeInteger((requestedPage - 1) * limit);
+    const page = validPage ? requestedPage : 1;
     const skip = (page - 1) * limit;
 
-    // Dashboard sends YYYY-MM-DD keys in the Istanbul calendar — interpret
+    // Dashboard sends YYYY-MM-DD keys in the Istanbul calendar  interpret
     // both ends as Istanbul day boundaries so the donations list agrees with
     // the chart/stats (UTC midnight was clipping 3 hours off every day).
     const dateFilter: { gte?: Date; lte?: Date } = {};
@@ -57,70 +96,204 @@ export async function GET(request: NextRequest) {
     }
 
     const isAdmin = isRevenueDashboardUser(session);
-    const statusFilter = isAdmin ? searchParams.get("status") : null;
-    const localeFilter = isAdmin ? searchParams.get("locale")?.trim() : null;
-    const countryFilter = isAdmin ? searchParams.get("country")?.trim() : null;
+    const recurringStaff = !isAdmin && userHasDashboardPermission(session.user, "monthly");
+    const dashboardReader = isAdmin || recurringStaff;
+    const subscriptionOnly =
+      dashboardReader &&
+      (searchParams.get("subscriptionOnly") === "true" || searchParams.get("subscriptionOnly") === "1");
+    if (recurringStaff && !subscriptionOnly) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const donationTypeFilter = isAdmin ? searchParams.get("donationType") : null;
+    const statusFilter = dashboardReader ? searchParams.get("status") : null;
+    const localeFilter = dashboardReader ? searchParams.get("locale")?.trim() : null;
+    const countryFilter = dashboardReader ? searchParams.get("country")?.trim() : null;
+    // Recurring cadence of the plan behind the charge (DAILY | FRIDAY | MONTHLY)  implies
+    // subscription-only, since a one-time gift has no plan.
+    const frequencyFilter = dashboardReader ? parseFrequencyParam(searchParams.get("frequency")) : null;
+
+    // Explicit opt-in only: existing donor and admin listing clients still
+    // filter by creation date. The dashboard's settled-date view follows the
+    // chart's paidAt/createdAt financial calendar, and requires revenue access.
+    const useAccountingDate = canUseAccountingDate({
+      revenueAuthorized: isAdmin,
+      dateBasis: searchParams.get("dateBasis"),
+      start: startParam,
+      end: endParam,
+    });
+    const accountingWhere = useAccountingDate
+      ? accountingDateWhere(
+          statusFilter,
+          dateFilter.gte as Date,
+          dateFilter.lte as Date
+        )
+      : null;
 
     const baseWhere: Record<string, unknown> = {
-      ...(campaignId && { items: { some: { campaignId } } }),
       ...(userId && { donorId: userId }),
       ...(referralId && isAdmin && { referralId }),
-      ...(!isAdmin && { donorId: session.user.id }),
-      ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
-      ...(statusFilter && ["PAID", "FAILED"].includes(statusFilter) && { status: statusFilter }),
+      ...(subscriptionOnly && { subscriptionId: { not: null } }),
+      ...(donationTypeFilter === "MONTHLY" && { subscriptionId: { not: null } }),
+      ...(!dashboardReader && { donorId: session.user.id }),
+      ...(!useAccountingDate && Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
     };
-    if (categoryId && isAdmin) {
-      baseWhere.OR = [
-        { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-        { categoryItems: { some: { categoryId } } },
-      ];
+
+    // Resolve project/category links using their scalar ObjectId columns first.
+    // This keeps the main donation query on Donation fields and avoids a slow
+    // nested relation traversal on the high-volume dashboard listing.
+    const relatedFilters: Record<string, unknown>[] = [];
+    const relationIds = await resolveDonationRelationFilterIds({
+      campaignId,
+      categoryId: dashboardReader ? categoryId : null,
+    });
+    if (campaignId && campaignId !== "all") {
+      const donationIds = relationIds.campaignDonationIds ?? [];
+      relatedFilters.push(donationWhereForIds(donationIds));
     }
 
-    // Free-text donor search (name OR email), admin-only. Kept OUT of `baseWhere`
-    // and AND-composed below because `baseWhere.OR` is already taken by the
-    // category filter — putting a second OR there would silently overwrite it.
-    const searchWhere =
-      search && isAdmin
-        ? {
-            donor: {
-              is: {
-                OR: [
-                  { name: { contains: search, mode: "insensitive" as const } },
-                  { email: { contains: search, mode: "insensitive" as const } },
-                ],
-              },
-            },
-          }
+    if (categoryId && categoryId !== "all" && isAdmin) {
+      relatedFilters.push(donationWhereForIds(relationIds.categoryDonationIds ?? []));
+    }
+
+    // Search donor/project/category fields in their owning collections first,
+    // then join back through scalar IDs. The old mixed OR also applied
+    // `contains` to the ObjectId-backed donation id, which made every non-empty
+    // search fail on MongoDB.
+    let searchWhere: Record<string, unknown> | null = null;
+    if (search && isAdmin) {
+      const [
+        matchingDonors,
+        matchingDonations,
+        matchingCampaigns,
+        matchingCampaignTranslations,
+        matchingCategories,
+        matchingCategoryTranslations,
+      ] = await Promise.all([
+        prisma.user.findMany({
+          where: userWhereForDonorSearch(search),
+          select: { id: true },
+        }),
+        prisma.donation.findMany({
+          where: { providerOrderId: { contains: search, mode: "insensitive" } },
+          select: { id: true },
+        }),
+        prisma.campaign.findMany({
+          where: campaignWhereForDonationSearch(search),
+          select: { id: true },
+        }),
+        prisma.campaignTranslation.findMany({
+          where: campaignTranslationWhereForDonationSearch(search),
+          select: { campaignId: true },
+        }),
+        prisma.category.findMany({
+          where: categoryWhereForDonationSearch(search),
+          select: { id: true },
+        }),
+        prisma.categoryTranslation.findMany({
+          where: categoryTranslationWhereForDonationSearch(search),
+          select: { categoryId: true },
+        }),
+      ]);
+      const donorIds = matchingDonors.map(({ id }) => id);
+      const campaignIds = [...new Set([
+        ...matchingCampaigns.map(({ id }) => id),
+        ...matchingCampaignTranslations.map(({ campaignId }) => campaignId),
+      ])];
+      const categoryIds = [...new Set([
+        ...matchingCategories.map(({ id }) => id),
+        ...matchingCategoryTranslations.map(({ categoryId }) => categoryId),
+      ])];
+      const [campaignDonationLinks, categoryDonationLinks] = await Promise.all([
+        campaignIds.length > 0
+          ? prisma.donationItem.findMany({
+              where: { campaignId: { in: campaignIds } },
+              select: { donationId: true },
+            })
+          : Promise.resolve([]),
+        categoryIds.length > 0
+          ? prisma.donationCategoryItem.findMany({
+              where: { categoryId: { in: categoryIds } },
+              select: { donationId: true },
+            })
+          : Promise.resolve([]),
+      ]);
+      const matchingDonationIds = [
+        ...new Set([
+          ...matchingDonations.map(({ id }) => id),
+          ...campaignDonationLinks.map(({ donationId }) => donationId),
+          ...categoryDonationLinks.map(({ donationId }) => donationId),
+          ...(/^[a-f0-9]{24}$/i.test(search) ? [search] : []),
+        ]),
+      ];
+      if (donorIds.length === 0 && matchingDonationIds.length === 0) {
+        return NextResponse.json({
+          donations: [],
+          pagination: { total: 0, pages: 0, page, limit },
+        });
+      }
+      searchWhere = donationWhereForDonorSearch(donorIds, matchingDonationIds);
+    }
+
+    const localeWhere = dashboardLocaleWhere(localeFilter);
+    const countryWhere = dashboardCountryWhere(countryFilter);
+
+    // ONE_TIME means "no subscriptionId". MongoDB may store it as null or
+    // omit the field entirely; cover both with isSet:false || null.
+    const donationTypeWhere =
+      donationTypeFilter === "ONE_TIME"
+        ? { OR: [{ subscriptionId: null }, { subscriptionId: { isSet: false } }] }
         : null;
 
-    const localeWhere =
-      localeFilter && localeFilter !== "all"
-        ? localeFilter === "__unset"
-          ? { OR: [{ locale: null }, { locale: "" }] }
-          : { locale: localeFilter }
-        : null;
+    const frequencyWhere = donationFrequencyWhere(frequencyFilter);
 
-    const countryWhere =
-      countryFilter && countryFilter !== "all"
-        ? countryFilter === "__unset"
-          ? { OR: [{ donorCountryCode: null }, { donorCountryCode: "" }] }
-          : { donorCountryCode: countryFilter.toUpperCase() }
-        : null;
+    // ناجح / قيد التأكيد / فاشل, as the tables show them.
+    const statusWhere = donationStatusWhere(statusFilter);
 
-    const extraFilters = [searchWhere, localeWhere, countryWhere].filter((w) => w != null);
+    const providerWhere = isAdmin ? donationProviderWhere(searchParams.get("provider")) : null;
+    // Keep prior audited behavior: suppress superseded failures in the
+    // expressly opted-in operational overview, never in donor/audit history.
+    const hideRecoveredFailures = isAdmin && searchParams.get("hideRecoveredFailures") === "1" && statusFilter !== "FAILED";
+    const recoveredViewWhere = hideRecoveredFailures
+      ? { OR: [{ status: { not: "FAILED" } }, { overviewRecoveredByDonationId: null }, { overviewRecoveredByDonationId: { isSet: false } }] }
+      : null;
+    const extraFilters = [...relatedFilters, searchWhere, localeWhere, countryWhere, donationTypeWhere, frequencyWhere, statusWhere, providerWhere, accountingWhere, recoveredViewWhere].filter(
+      (w) => w != null
+    );
     const where: Record<string, unknown> =
       extraFilters.length > 0 ? { AND: [baseWhere, ...extraFilters] } : baseWhere;
 
-    const orderBy =
-      sortBy === "amount"
-        ? { amountUSD: sortOrder }
-        : { createdAt: sortOrder };
+    const dateSortField = dashboardDonationDateSortField(
+      useAccountingDate ? "accounting" : null,
+      statusFilter,
+      sortBy
+    );
+    // The revenue accounting view is paged while reconciling chart totals.
+    // When many donations share paidAt/createdAt (or amount), a stable _id
+    // tie-breaker prevents duplicate/omitted records between adjacent pages.
+    // Keep legacy list orderBy shape unchanged for existing callers.
+    const primaryOrder: Prisma.DonationOrderByWithRelationInput =
+      { [dateSortField]: sortOrder };
+    const orderBy: Prisma.DonationOrderByWithRelationInput | Prisma.DonationOrderByWithRelationInput[] =
+      useAccountingDate ? [primaryOrder, { id: sortOrder }] : primaryOrder;
 
     const total = await prisma.donation.count({ where });
     const donations = await prisma.donation.findMany({
       where,
+      // Defense in depth: don't fetch bearer receipt keys, card payloads or
+      // private reconciliation state at all. providerRaw is retained server-
+      // side ONLY to derive securityMode, and stripped before serialization.
+      omit: {
+        accessToken: true, cardDetails: true,
+        originalDonorId: true, providerAuthCode: true, providerHostRefNum: true,
+        paypalOrderId: true, paypalCaptureId: true,
+        bankOperations: true, bankOperationLock: true,
+        bankOperationsRevision: true, bankLastInquiry: true,
+        reconciliationLeaseToken: true, reconciliationLeaseUntil: true,
+        reconciliationNextAt: true, reconciliationCheckedAt: true,
+        // Attribution and conversion timestamps remain server-side input for
+        // the revenue team's source badge. The serializer strips them for
+        // donors and sanitizes legacy snapshots for revenue readers.
+      },
       include: {
-        donor: { select: { id: true, name: true, email: true, image: true } },
+        donor: { select: { id: true, name: true, email: true, image: true, password: true, verifiedAt: true, registeredAt: true, emailVerified: true, _count: { select: { accounts: true } } } },
         items: { include: { campaign: { select: { id: true, title: true, images: true } } } },
         categoryItems: { include: { category: { select: { id: true, name: true } } } },
         comments: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -130,17 +303,45 @@ export async function GET(request: NextRequest) {
       skip,
       take: limit,
     });
+    // Subscription payment sequence: is this row the signup charge or the Nth
+    // automatic renewal? Stripe's `billingReason` is authoritative when present;
+    // for legacy rows we fall back to the row's position within its subscription.
+    // Ranked over the whole subscription (not just this page) so paging can't
+    // change a donation's cycle number.
+    const pageSubscriptionIds = [
+      ...new Set(donations.map((d) => d.subscriptionId).filter(Boolean) as string[]),
+    ];
+    const siblings = pageSubscriptionIds.length ? await prisma.donation.findMany({
+      where: { subscriptionId: { in: pageSubscriptionIds } },
+      select: { id: true, subscriptionId: true, status: true, paidAt: true, createdAt: true, billingReason: true, providerTxnType: true },
+    }) : [];
+    const sequenceById = subscriptionPaymentSequence(siblings);
+    const financialById = await loadDonationFinancialSummaries(prisma, donations.filter(row => ["ALBARAKA", "PAYFOR"].includes(row.provider || "")).map(row => row.id));
+
+    // `type` stays MONTHLY for every plan charge (older screens key off it); `frequency` is the
+    // plan's real cadence.
+    const frequencyOf = await loadSubscriptionFrequencies(prisma, pageSubscriptionIds);
 
     const formattedDonations = donations.map((donation) => ({
-      ...donation,
+      // Compute derived gateway evidence from the complete server-side row,
+      // then serialize only the donor-visible subset; never expose bearer
+      // receipt tokens, raw provider responses, stored card payloads or locks.
+      ...donationListSafeFields(donation, { revenueAuthorized: isAdmin }),
+      securityMode: donationPaymentEvidence(donation).securityMode,
       type: donation.subscriptionId ? ("MONTHLY" as const) : ("ONE_TIME" as const),
+      frequency: donation.subscriptionId ? frequencyOf(donation.subscriptionId) : null,
+      subscriptionCycle: sequenceById.get(donation.id)?.subscriptionCycle ?? null,
+      renewalNumber: sequenceById.get(donation.id)?.renewalNumber ?? null,
+      testCycle: sequenceById.get(donation.id)?.testCycle ?? null,
+      isRecurringCharge: sequenceById.get(donation.id)?.isRecurringCharge ?? donationPaymentEvidence(donation).isRecurringCharge,
+      financialSummary: financialById.get(donation.id) ?? null,
       fees: donation.fees,
       teamSupport: donation.teamSupport,
       // Legacy rows can have paymentMethod unset in MongoDB even though every
       // current create path sets CARD or PAYPAL. Default to CARD on read so
       // table cells / receipts never render blank.
       paymentMethod: donation.paymentMethod ?? "CARD",
-      donor: donation.donor,
+      donor: { id: donation.donor.id, name: donation.donor.name, email: donation.donor.email, image: donation.donor.image, accountStatus: donorAccountStatus(donation.donor) },
       campaigns: donation.items.map((item) => ({ id: item.campaign.id, title: item.campaign.title, images: item.campaign.images })),
       categories: (donation.categoryItems ?? []).map((ci) => ({ id: ci.category.id, name: ci.category.name })),
       referral: donation.referral ? { id: donation.referral.id, code: donation.referral.code, name: donation.referral.name } : null,
@@ -161,21 +362,27 @@ export async function GET(request: NextRequest) {
 // POST /api/donations - Create a new donation
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-
     const body = await request.json();
-    const forwardedFor = request.headers.get("x-forwarded-for");
-    const clientIp =
-      forwardedFor?.split(",")[0]?.trim() ||
-      request.headers.get("x-real-ip") ||
-      undefined;
+    if (!body || typeof body !== "object" || Array.isArray(body) || !isOrderType(body.type ?? "ONE_TIME")) {
+      return NextResponse.json({ error: "Unsupported donation type" }, { status: 400 });
+    }
+    // Legacy dialogs and the Minbar checkout must create the same provider-linked
+    // plan. The old monthly path omitted provider/card linkage and could never renew.
+    if (isRecurringFrequency(body.type)) {
+      return createCartDonation(new NextRequest(request.url, {
+        method: "POST", headers: request.headers, body: JSON.stringify(body),
+      }));
+    }
+    const session = await getServerSession(authOptions);
+    const clientIp = getTrackingClientIp(request.headers);
     const userAgent = request.headers.get("user-agent")?.slice(0, 500) || undefined;
     const attribution = sanitizeDonationAttribution({
       ...((body.attribution && typeof body.attribution === "object" && !Array.isArray(body.attribution)
         ? body.attribution
         : {}) as Record<string, unknown>),
-      ...(userAgent ? { user_agent: userAgent } : {}),
-      ...(clientIp ? { client_ip: clientIp } : {}),
+      user_agent: userAgent,
+      client_ip: clientIp,
+      client_ip_address: undefined,
     });
 
     const {
@@ -184,7 +391,6 @@ export async function POST(request: NextRequest) {
       currency,
       teamSupport = 0,
       coverFees = false,
-      type = "ONE_TIME",
       paymentMethod,
       referralCode,
       referralId: bodyReferralId,
@@ -202,11 +408,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    if (type !== "ONE_TIME") {
-      return NextResponse.json({ error: "Only one-time donations are supported." }, { status: 400 });
-    }
 
-    // Resolve donorId — authenticated user or guest upsert
+    const paymentRoute = await resolveNewCardPaymentRoute(request.headers, { method: paymentMethod, type: "ONE_TIME", currency: normalizeDonationCurrencyCode(currency), phone: body.routingPhone ?? guest?.phone, userId: session?.user?.id });
+    if (paymentRoute && body.expectedGateway && body.expectedGateway !== paymentRoute.gateway) return NextResponse.json({ error: "Payment route changed. Please confirm the updated payment method.", code: "PAYMENT_ROUTING_CHANGED", gateway: paymentRoute.gateway }, { status: 409 });
+
+    // Resolve donorId  authenticated user or guest upsert
     let donorId: string;
     let donorName: string | null = null;
     if (session?.user?.id) {
@@ -361,15 +567,16 @@ export async function POST(request: NextRequest) {
         ? String(donationLocale).toLowerCase()
         : null;
 
-    // Create the Donation (transaction).
+    // One-time: create a single Donation (transaction) only
     const donation = await prisma.$transaction(async (tx) => {
       const d = await tx.donation.create({
         data: {
+          accessToken: mintDonationAccessToken(),
           amount: totalAmount,
           amountUSD: donationTotalUsd,
           teamSupport,
           coverFees,
-          currency,
+          currency: currencyNorm,
           fees: coverFees ? fees : 0,
           totalAmount: finalTotalAmount,
           status: "PAID",
@@ -380,6 +587,7 @@ export async function POST(request: NextRequest) {
           referralId: referralId ?? undefined,
           paymentMethod,
           cardDetails: null,
+          ...(paymentRoute ? { provider: paymentRoute.gateway, providerRaw: { paymentRouting: paymentRoute } as unknown as Prisma.InputJsonValue } : {}),
           items: hasCampaignItems
             ? {
                 create: campaignItemsResolved.map((item) => ({
@@ -434,8 +642,8 @@ export async function POST(request: NextRequest) {
       messageAr: `${donorName ?? "متبرع"} بدأ عملية دفع تبرع لمرة واحدة (≈ ${donationTotalUsd.toFixed(0)} USD)`,
       entityType: "Donation",
       entityId: donation.id,
-      metadata: { amountUSD: donationTotalUsd, status: "PENDING", provider: "PAYFOR" },
-      stream: auditStreamForRole(actorRole),
+      metadata: { amountUSD: donationTotalUsd, status: "PENDING", provider: paymentRoute?.gateway ?? null },
+      stream: "SITE",
     });
 
     return NextResponse.json({

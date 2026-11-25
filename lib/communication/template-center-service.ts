@@ -53,6 +53,9 @@ const TRIGGER_EVENT_LABELS: Record<string, string> = {
   DONATION_FAILED: "فشل تبرع",
   FIRST_DONATION: "أول تبرع",
   USER_REGISTERED: "حساب جديد",
+  SUBSCRIPTION_CREATED: "اشتراك جديد",
+  SUBSCRIPTION_PAYMENT: "دفعة اشتراك",
+  SUBSCRIPTION_CANCELLED: "إلغاء اشتراك",
   DONATION_LAPSED: "تذكير بالتبرّع",
 };
 

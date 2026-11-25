@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { getCountries } from "libphonenumber-js";
 import { toast } from "react-hot-toast";
 import { AlertTriangle, Loader2, Plus, Search, X } from "lucide-react";
+import Image from "next/image";
 
 import {
   Dialog,
@@ -22,6 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { dashDir, dt, getDashLocale } from "@/lib/dashboard/i18n";
+import { manualDonationRecordFields, type ManualDonationProvider } from "@/lib/donations/manual-donation-provider";
 
 interface CampaignOption {
   id: string;
@@ -55,6 +59,20 @@ interface Props {
 
 const CURRENCIES = ["USD", "EUR", "GBP", "TRY", "SAR", "AED", "EGP", "KWD", "QAR"];
 
+const MANUAL_PROVIDER_OPTIONS: Array<{
+  value: ManualDonationProvider;
+  label: string;
+  logo?: string;
+}> = [
+  { value: "CASH", label: "نقدي / كاش" },
+  { value: "BANK", label: "حساب بنكي" },
+  { value: "PAYFOR", label: "Ziraat Payfor" },
+  { value: "ALBARAKA", label: "Albaraka Türk" },
+  { value: "STRIPE", label: "Stripe" },
+  { value: "PAYPAL", label: "PayPal", logo: "/paypal.webp" },
+  { value: "CHARITY_GIVING", label: "Charity Giving", logo: "/charity-giving.png" },
+];
+
 /**
  * Admin "manually add donation" dialog. The server marks the row PAID + paidAt
  * immediately and increments campaign/category currentAmount, so this is the
@@ -78,11 +96,15 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
   const [newDonorPhone, setNewDonorPhone] = useState("");
   const [newDonorEmail, setNewDonorEmail] = useState("");
 
+  const requestId = useRef<string | null>(null);
+  const [donorCountryCode, setDonorCountryCode] = useState("");
+  const [submissionError, setSubmissionError] = useState("");
+  const locale = getDashLocale();
+  const countryNames = useMemo(() => new Intl.DisplayNames([locale], { type: "region" }), [locale]);
   const [currency, setCurrency] = useState("USD");
-  // `provider` is the gateway/rail label stored on Donation.provider
-  // ("BANK" / "PAYFOR" / "ALBARAKA"). All are card-style rails, so
-  // Donation.paymentMethod is always CARD here.
-  const [provider, setProvider] = useState<"BANK" | "PAYFOR" | "ALBARAKA">("BANK");
+  // These values label the external source of a donation already collected.
+  // Saving this form records the donation; it never creates a gateway charge.
+  const [provider, setProvider] = useState<ManualDonationProvider>("BANK");
   const [teamSupport, setTeamSupport] = useState("0");
   const [notes, setNotes] = useState("");
   const [editableItems, setEditableItems] = useState<EditableItem[]>([
@@ -149,7 +171,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
       }>;
       setDonorResults(users.slice(0, 25));
     } catch {
-      toast.error("فشل البحث عن المتبرعين");
+      toast.error(dt("فشل البحث عن المتبرعين"));
       setDonorResults([]);
     } finally {
       setDonorSearching(false);
@@ -177,6 +199,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
     (donorMode === "EXISTING" && donor != null) ||
     (donorMode === "NEW" && newDonorName.trim().length > 0) ||
     donorMode === "UNKNOWN";
+  const selectedProvider = MANUAL_PROVIDER_OPTIONS.find((option) => option.value === provider) ?? MANUAL_PROVIDER_OPTIONS[0];
   const canSave =
     !submitting &&
     donorPickerValid &&
@@ -237,32 +260,36 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
               }
             : { mode: "UNKNOWN" as const };
 
+      requestId.current ??= Array.from(crypto.getRandomValues(new Uint8Array(12)), value => value.toString(16).padStart(2, "0")).join("");
+      setSubmissionError("");
       const res = await axios.post(`/api/admin/donations`, {
+        requestId: requestId.current,
+        donorCountryCode: donorCountryCode || null,
         donor: donorPayload,
         items,
         categoryItems,
         currency,
         teamSupport: teamSupportNumber,
-        // All three rails (BANK / PAYFOR / ALBARAKA) are card-style for the
-        // donation schema; the `provider` field is what distinguishes them.
-        paymentMethod: "CARD",
-        provider,
+        // This records the source of an already-collected donation. It must
+        // never select or invoke a checkout/payment rail.
+        ...manualDonationRecordFields(provider),
         notes: notes.trim() || null,
       });
       const created = res.data?.donorCreated === true;
       toast.success(
         created
-          ? "تم إنشاء المتبرع وتسجيل التبرع"
+          ? dt("تم إنشاء المتبرع وتسجيل التبرع")
           : donorMode === "UNKNOWN"
-            ? "تم تسجيل تبرع متبرع غير معروف"
-            : "تم إضافة التبرع وتحديث الإجماليات"
+            ? dt("تم تسجيل تبرع متبرع غير معروف")
+            : dt("تم إضافة التبرع وتحديث الإجماليات")
       );
       onCreated();
       onClose();
     } catch (err) {
-      console.error("[Create Donation] save failed:", err);
-      const message = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(message || "فشل في إضافة التبرع");
+      const code = axios.isAxiosError(err) ? err.response?.data?.code : null;
+      const message = code === "MANUAL_DONATION_FX_UNAVAILABLE" ? dt("سعر الصرف غير متاح مؤقتًا. بياناتك محفوظة هنا؛ أعد المحاولة بعد قليل.") : code === "MANUAL_DONATION_RETRY_CONFLICT" ? dt("تم استخدام هذا الطلب لتبرع آخر. حدّث قائمة التبرعات للتحقق قبل إضافة تبرع جديد.") : dt("تعذر حفظ التبرع. حاول مرة أخرى.");
+      setSubmissionError(message);
+      toast.error(message);
     } finally {
       setSubmitting(false);
       setShowConfirm(false);
@@ -271,25 +298,22 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
 
   return (
     <Dialog open onOpenChange={(open) => (!open && !submitting ? onClose() : null)}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        <DialogHeader className="text-right">
-          <DialogTitle>إضافة تبرع يدوي</DialogTitle>
+      <DialogContent className="w-[calc(100%-1rem)] min-w-0 rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto" dir={dashDir()}>
+        <DialogHeader className="pr-8 text-start">
+          <DialogTitle>{dt("إضافة تبرع يدوي")}</DialogTitle>
           <DialogDescription className="text-xs leading-relaxed">
-            يُسجَّل التبرع كناجح فورًا ويُضاف إلى إجماليات المشاريع/الحملات
-            المرتبطة. استخدمها لتسجيل المدفوعات النقدية أو التحويلات البنكية
-            التي تمّت خارج بوابة الدفع.
-          </DialogDescription>
+            {dt("يُسجَّل التبرع كناجح فورًا ويُضاف إلى إجماليات المشاريع/الحملات المرتبطة. استخدمها لتسجيل المدفوعات النقدية أو التحويلات البنكية التي تمّت خارج بوابة الدفع.")}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 text-right text-sm">
+        <div className="space-y-4 text-start text-sm">
           {/* Donor */}
           <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-700">المتبرع</label>
+            <label className="text-xs font-medium text-slate-700">{dt("المتبرع")}</label>
             <div className="inline-flex w-full rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[11px]">
               {[
-                { value: "EXISTING" as const, label: "متبرع موجود" },
-                { value: "NEW" as const, label: "متبرع جديد" },
-                { value: "UNKNOWN" as const, label: "غير معروف" },
+                { value: "EXISTING" as const, label: dt("متبرع موجود") },
+                { value: "NEW" as const, label: dt("متبرع جديد") },
+                { value: "UNKNOWN" as const, label: dt("غير معروف") },
               ].map((opt) => (
                 <button
                   type="button"
@@ -310,7 +334,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
               <>
                 {donor ? (
                   <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                    <div className="text-right">
+                    <div className="text-start">
                       <p className="font-medium text-slate-800">{donor.name || "—"}</p>
                       <p className="text-[11px] text-slate-500">
                         {donor.email || donor.phone || donor.id}
@@ -323,8 +347,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                       onClick={() => setDonor(null)}
                       className="h-7 text-xs"
                     >
-                      تغيير
-                    </Button>
+                      {dt("تغيير")}</Button>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -338,7 +361,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                             void runDonorSearch();
                           }
                         }}
-                        placeholder="ابحث بالاسم أو البريد أو الهاتف"
+                        placeholder={dt("ابحث بالاسم أو البريد أو الهاتف")}
                         className="h-8 text-xs"
                       />
                       <Button
@@ -353,8 +376,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                         ) : (
                           <Search className="w-3.5 h-3.5" />
                         )}
-                        بحث
-                      </Button>
+                        {dt("بحث")}</Button>
                     </div>
                     {donorResults.length > 0 && (
                       <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
@@ -367,7 +389,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                               setDonorResults([]);
                               setDonorSearch("");
                             }}
-                            className="w-full text-right px-3 py-2 text-xs hover:bg-slate-50"
+                            className="w-full text-start px-3 py-2 text-xs hover:bg-slate-50"
                           >
                             <div className="font-medium text-slate-800">{u.name || "—"}</div>
                             <div className="text-[11px] text-slate-500">
@@ -385,21 +407,19 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
             {donorMode === "NEW" && (
               <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
                 <p className="text-[11px] text-slate-500">
-                  سيتم إنشاء حساب متبرع جديد. الاسم مطلوب — البريد والهاتف اختياريان.
-                  إذا أدخلت بريدًا موجودًا، سيُربط التبرع بالمتبرع الحالي تلقائيًا.
-                </p>
+                  {dt("سيتم إنشاء حساب متبرع جديد. الاسم مطلوب  البريد والهاتف اختياريان. إذا أدخلت بريدًا موجودًا، سيُربط التبرع بالمتبرع الحالي تلقائيًا.")}</p>
                 <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-slate-600">الاسم *</label>
+                  <label className="text-[11px] font-medium text-slate-600">{dt("الاسم *")}</label>
                   <Input
                     value={newDonorName}
                     onChange={(e) => setNewDonorName(e.target.value)}
-                    placeholder="مثال: أحمد محمد"
+                    placeholder={dt("مثال: أحمد محمد")}
                     className="h-8 text-xs"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-600">الهاتف</label>
+                    <label className="text-[11px] font-medium text-slate-600">{dt("الهاتف")}</label>
                     <Input
                       value={newDonorPhone}
                       onChange={(e) => setNewDonorPhone(e.target.value)}
@@ -409,7 +429,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-medium text-slate-600">البريد</label>
+                    <label className="text-[11px] font-medium text-slate-600">{dt("البريد")}</label>
                     <Input
                       value={newDonorEmail}
                       onChange={(e) => setNewDonorEmail(e.target.value)}
@@ -426,21 +446,20 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
               <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-medium">سيتم تسجيل التبرع باسم "متبرع غير معروف".</p>
+                  <p className="font-medium">{dt("سيتم تسجيل التبرع باسم \"متبرع غير معروف\".")}</p>
                   <p>
-                    جميع التبرعات غير المعروفة تُسجَّل تحت نفس الحساب الموحد، فلا
-                    يمكن تخصيصها لشخص لاحقًا. استخدم هذا الخيار للتبرعات النقدية
-                    التي لا توجد لها معلومات متبرع.
-                  </p>
+                    {dt("جميع التبرعات غير المعروفة تُسجَّل تحت نفس الحساب الموحد، فلا يمكن تخصيصها لشخص لاحقًا. استخدم هذا الخيار للتبرعات النقدية التي لا توجد لها معلومات متبرع.")}</p>
                 </div>
               </div>
             )}
           </div>
 
           {/* Currency + payment + team support */}
+          <label className="block space-y-2 text-sm"><span>{dt("دولة المتبرع")}</span><select aria-label={dt("دولة المتبرع")} value={donorCountryCode} onChange={event => setDonorCountryCode(event.target.value)} className="w-full rounded-md border p-2"><option value="">{dt("تلقائي من بيانات المتبرع")}</option>{getCountries().map(code => <option key={code} value={code}>{countryNames.of(code)} ({code})</option>)}</select></label>
+          {submissionError ? <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{submissionError}</p> : null}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">العملة</label>
+              <label className="text-xs font-medium text-slate-700">{dt("العملة")}</label>
               <Select value={currency} onValueChange={(v) => setCurrency(v)}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
@@ -455,23 +474,53 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">طريقة الدفع</label>
+              <label className="text-xs font-medium text-slate-700">{dt("مصدر التبرع")}</label>
               <Select
                 value={provider}
-                onValueChange={(v) => setProvider(v as "BANK" | "PAYFOR" | "ALBARAKA")}
+                onValueChange={(v) => setProvider(v as ManualDonationProvider)}
               >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
+                <SelectTrigger className="h-8 text-xs" aria-label={dt("مصدر التبرع")}>
+                  <SelectValue>
+                  <span className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden">
+                    {selectedProvider.logo ? (
+                      <Image
+                        src={selectedProvider.logo}
+                        alt=""
+                        aria-hidden="true"
+                        width={60}
+                        height={20}
+                        className="h-5 w-[60px] shrink-0 rounded object-contain"
+                      />
+                    ) : null}
+                    <span className="min-w-0 truncate" title={selectedProvider.label}>
+                      {["BANK", "CASH"].includes(selectedProvider.value) ? dt(selectedProvider.label) : selectedProvider.label}
+                    </span>
+                  </span>
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="BANK" className="text-xs">حساب بنكي</SelectItem>
-                  <SelectItem value="PAYFOR" className="text-xs">Ziraat Payfor</SelectItem>
-                  <SelectItem value="ALBARAKA" className="text-xs">Albaraka Türk</SelectItem>
+                  {MANUAL_PROVIDER_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value} className="text-xs">
+                      <span className="flex items-center gap-2">
+                        {option.logo ? (
+                          <Image
+                            src={option.logo}
+                            alt=""
+                            aria-hidden="true"
+                            width={76}
+                            height={20}
+                            className="h-5 w-[76px] shrink-0 rounded object-contain"
+                          />
+                        ) : null}
+                        <span>{["BANK", "CASH"].includes(option.value) ? dt(option.label) : option.label}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700">دعم الفريق</label>
+              <label className="text-xs font-medium text-slate-700">{dt("دعم الفريق")}</label>
               <input
                 type="number"
                 min="0"
@@ -487,7 +536,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
           {/* Line items */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-slate-700">عناصر التبرع</label>
+              <label className="text-xs font-medium text-slate-700">{dt("عناصر التبرع")}</label>
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
@@ -497,8 +546,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                   onClick={() => addLine("campaign")}
                   disabled={loadingFilters}
                 >
-                  <Plus className="h-3 w-3 ms-1" /> مشروع
-                </Button>
+                  <Plus className="h-3 w-3 ms-1" /> {dt(" مشروع")}</Button>
                 <Button
                   type="button"
                   variant="outline"
@@ -507,15 +555,13 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                   onClick={() => addLine("category")}
                   disabled={loadingFilters}
                 >
-                  <Plus className="h-3 w-3 ms-1" /> حملة
-                </Button>
+                  <Plus className="h-3 w-3 ms-1" /> {dt(" حملة")}</Button>
               </div>
             </div>
 
             {editableItems.length === 0 ? (
               <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-500">
-                أضف على الأقل مشروعًا أو حملة واحدة.
-              </p>
+                {dt("أضف على الأقل مشروعًا أو حملة واحدة.")}</p>
             ) : (
               <div className="space-y-2">
                 {editableItems.map((it, idx) => {
@@ -532,7 +578,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                             : "bg-emerald-50 text-emerald-700"
                         }`}
                       >
-                        {it.kind === "campaign" ? "مشروع" : "حملة"}
+                        {it.kind === "campaign" ? dt("مشروع") : dt("حملة")}
                       </span>
                       <Select
                         value={it.refId || undefined}
@@ -540,14 +586,13 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                       >
                         <SelectTrigger className="flex-1 h-8 text-xs">
                           <SelectValue
-                            placeholder={it.kind === "campaign" ? "اختر مشروعًا" : "اختر حملة"}
+                            placeholder={it.kind === "campaign" ? dt("اختر مشروعًا") : dt("اختر حملة")}
                           />
                         </SelectTrigger>
                         <SelectContent>
                           {options.length === 0 ? (
                             <SelectItem value="__none" disabled>
-                              لا توجد خيارات
-                            </SelectItem>
+                              {dt("لا توجد خيارات")}</SelectItem>
                           ) : (
                             options.map((o) => (
                               <SelectItem key={o.id} value={o.id}>
@@ -572,7 +617,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                         type="button"
                         onClick={() => removeLine(idx)}
                         className="text-rose-500 hover:text-rose-700"
-                        aria-label="حذف السطر"
+                        aria-label={dt("حذف السطر")}
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -583,7 +628,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
             )}
 
             <div className="flex items-center justify-between rounded-lg bg-slate-100 px-3 py-2 text-xs">
-              <span className="text-slate-600">إجمالي العناصر</span>
+              <span className="text-slate-600">{dt("إجمالي العناصر")}</span>
               <span className="font-bold text-slate-900" dir="ltr">
                 {amountSum + teamSupportNumber} {currency}
               </span>
@@ -591,50 +636,45 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
 
             {hasDuplicateLine && (
               <p className="text-[11px] text-rose-600">
-                يوجد سطران للمشروع/الحملة نفسها — ادمجهما في سطر واحد.
-              </p>
+                {dt("يوجد سطران للمشروع/الحملة نفسها  ادمجهما في سطر واحد.")}</p>
             )}
           </div>
 
           {/* Notes */}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-700">ملاحظة (اختياري)</label>
+            <label className="text-xs font-medium text-slate-700">{dt("ملاحظة (اختياري)")}</label>
             <Input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="مثال: تحويل بنكي تم تأكيده يدويًا"
+              placeholder={dt("مثال: تحويل بنكي تم تأكيده يدويًا")}
               className="h-8 text-xs"
             />
           </div>
         </div>
 
-        <DialogFooter className="!justify-between flex-row-reverse">
+        <DialogFooter className="sticky bottom-0 z-10 !justify-between flex-row-reverse border-t bg-white py-3">
           <Button
             type="button"
             onClick={() => setShowConfirm(true)}
             disabled={!canSave}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
           >
-            تسجيل التبرع
-          </Button>
+            {dt("تسجيل التبرع")}</Button>
           <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-            إلغاء
-          </Button>
+            {dt("إلغاء")}</Button>
         </DialogFooter>
 
         {showConfirm && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl text-right" dir="rtl">
+            <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl text-start" dir={dashDir()}>
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div className="flex-1 space-y-1">
-                  <h3 className="text-sm font-bold text-slate-900">تأكيد إضافة التبرع</h3>
+                  <h3 className="text-sm font-bold text-slate-900">{dt("تأكيد إضافة التبرع")}</h3>
                   <p className="text-xs text-slate-600 leading-relaxed">
-                    سيتم تسجيل التبرع كناجح وإضافة قيمته إلى إجماليات
-                    المشاريع/الحملات. هل أنت متأكد؟
-                  </p>
+                    {dt("سيتم تسجيل التبرع كناجح وإضافة قيمته إلى إجماليات المشاريع/الحملات. هل أنت متأكد؟")}</p>
                 </div>
               </div>
               <div className="mt-4 flex justify-between gap-2">
@@ -647,10 +687,9 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                   {submitting ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin ms-2" />
-                      جاري التسجيل...
-                    </>
+                      {dt("جاري التسجيل...")}</>
                   ) : (
-                    "نعم، سجّل التبرع"
+                    dt("نعم، سجّل التبرع")
                   )}
                 </Button>
                 <Button
@@ -659,8 +698,7 @@ export function CreateDonationDialog({ onClose, onCreated }: Props) {
                   onClick={() => setShowConfirm(false)}
                   disabled={submitting}
                 >
-                  تراجع
-                </Button>
+                  {dt("تراجع")}</Button>
               </div>
             </div>
           </div>

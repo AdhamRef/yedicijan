@@ -1,3 +1,4 @@
+import { subscriptionLifecycleWhere } from "@/lib/donations/subscription-lifecycle";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from 'next-auth';
@@ -7,9 +8,15 @@ import {
   sanitizeDashboardPermissions,
   userCanViewUserProfilesInDashboard,
 } from '@/lib/dashboard/permissions';
-import { requireAdminSession } from '@/lib/dashboard/api-auth';
+import { requireAdminSession, isRevenueDashboardUser } from '@/lib/dashboard/api-auth';
+import { donationListSafeFields } from "@/lib/dashboard/donation-list-privacy";
 import { writeAuditLog } from '@/lib/audit-log';
 import { getBadgeIdsByUser } from '@/lib/badge-criteria';
+import { PAID_DONATION_FILTER } from '@/lib/dashboard/donation-usd-revenue';
+import { setProfileConsent, upsertProfileForUser } from '@/lib/communication/donor-communication-profile-service';
+
+import { donorAccountStatus } from "@/lib/dashboard/donor-account";
+import { loadDonationFinancialSummaries } from "@/lib/dashboard/donation-financial-summary";
 
 function roleLabelAr(r: string) {
   if (r === 'ADMIN') return 'مدير';
@@ -25,7 +32,7 @@ export async function GET(
   try {
     const { id } = await params;
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -43,7 +50,26 @@ export async function GET(
       where: { id },
       include: {
         donations: {
+          omit: {
+            accessToken: true, cardDetails: true, providerRaw: true,
+            originalDonorId: true, providerAuthCode: true, providerHostRefNum: true,
+            paypalOrderId: true, paypalCaptureId: true,
+            bankOperations: true, bankOperationLock: true, bankOperationsRevision: true, bankLastInquiry: true,
+            reconciliationLeaseToken: true, reconciliationLeaseUntil: true,
+            reconciliationNextAt: true, reconciliationCheckedAt: true,
+          },
           include: {
+            subscription: {
+              select: {
+                id: true,
+                status: true,
+                provider: true,
+                frequency: true,
+                amount: true,
+                currency: true,
+                nextBillingDate: true,
+              },
+            },
             items: {
               include: {
                 campaign: {
@@ -57,7 +83,7 @@ export async function GET(
           },
           orderBy: { createdAt: 'desc' },
         },
-        _count: { select: { donations: true } },
+        _count: { select: { donations: true, accounts: true } },
       },
     });
 
@@ -68,22 +94,38 @@ export async function GET(
       );
     }
 
-    const donationsForUser = user.donations.map((d) => ({
-      ...d,
-      type: 'ONE_TIME' as const,
-      /** Donation charge status (PAID / FAILED) — unchanged for revenue totals */
-      paymentStatus: d.status,
-    }));
+    const financialSummaries = await loadDonationFinancialSummaries(prisma, user.donations.filter(d => d.provider === 'ALBARAKA' || d.provider === 'PAYFOR').map(d => d.id));
+    const oneTimeDonations = user.donations.filter((d) => d.subscriptionId == null);
+    const monthlyDonations = user.donations.filter((d) => d.subscriptionId != null);
 
-    const [totalsRows, allBadges] = await Promise.all([
+    const withType = (d: typeof user.donations[0], type: 'ONE_TIME' | 'MONTHLY') => {
+      const sub = d.subscription;
+      return {
+        ...donationListSafeFields(d, { revenueAuthorized: isRevenueDashboardUser(session) }),
+        type,
+        /** Donation charge status (PAID / FAILED)  unchanged for revenue totals */
+        paymentStatus: d.status,
+        financialSummary: financialSummaries.get(d.id) ?? null,
+        status: type === 'MONTHLY' ? (sub?.status ?? null) : d.status,
+        /** The plan's cadence  DAILY | FRIDAY | MONTHLY. `type` stays "MONTHLY" for every plan: it means "recurring" to every consumer. */
+        frequency: type === 'MONTHLY' ? (sub?.frequency ?? 'MONTHLY') : null,
+        nextBillingDate: type === 'MONTHLY' ? (sub?.nextBillingDate ?? null) : null,
+        planAmount: type === 'MONTHLY' ? (sub?.amount ?? null) : null,
+        subscriptionProvider: type === 'MONTHLY' ? (sub?.provider ?? null) : null,
+      };
+    };
+
+    const donationsForUser = [
+      ...oneTimeDonations.map((d) => withType(d, 'ONE_TIME')),
+      ...monthlyDonations.map((d) => withType(d, 'MONTHLY')),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const [totalsRows, allBadges, activeSubs] = await Promise.all([
       prisma.donation.groupBy({
         by: ['donorId'],
-        where: {
-          donorId: id,
-          status: 'PAID',
-          // Only settled donations (paidAt set) count.
-          paidAt: { not: null },
-        },
+        // Successful donations only: PAID *and* settled. A PAID row with no paidAt is
+        // an abandoned or still-unconfirmed checkout, not money received.
+        where: { donorId: id, ...PAID_DONATION_FILTER },
         _sum: { totalAmount: true, amountUSD: true },
         _max: { createdAt: true },
         _count: { id: true },
@@ -92,15 +134,29 @@ export async function GET(
         select: { id: true, criteria: true },
         orderBy: { order: 'asc' },
       }),
+      prisma.subscription.findMany({
+        where: { donorId: id, AND: [subscriptionLifecycleWhere("ACTIVE")] },
+        select: { id: true, amountUSD: true, amount: true, currency: true },
+      }),
     ]);
     const t = totalsRows[0];
     const badgeIdsByUser =
       allBadges.length > 0 ? await getBadgeIdsByUser([id], allBadges) : new Map<string, string[]>();
 
-    // Distinct supported campaigns (settled donations only).
+    // Currently-active monthly recurring revenue from this donor (USD).
+    // Falls back to local-currency amount only when amountUSD wasn't captured
+    // at subscription create time.
+    const currentMonthlyMrrUSD = activeSubs.reduce(
+      (sum, s) => sum + (s.amountUSD ?? s.amount ?? 0),
+      0
+    );
+
+    // Distinct supported campaigns. Subscription donations count even without
+    // paidAt  they're treated as ناجح across dashboards/UI.
     const supportedCampaignIds = new Set<string>();
     for (const donation of user.donations) {
-      if (donation.status !== 'PAID' || donation.paidAt == null) continue;
+      if (donation.status !== 'PAID') continue;
+      if (donation.paidAt == null && donation.subscriptionId == null) continue;
       for (const item of donation.items) supportedCampaignIds.add(item.campaignId);
     }
 
@@ -109,7 +165,8 @@ export async function GET(
     // long-tail donor doesn't blow up the loop.
     const paidMonthKeys = new Set(
       user.donations
-        // Settlement-only, matching PAID_DONATION_FILTER.
+        // Settlement-only, matching PAID_DONATION_FILTER: an unsettled subscription row
+        // must not mark a month as "donated in" on the donor's streak.
         .filter((d) => d.status === 'PAID' && d.paidAt != null)
         .map((d) => {
           const dt = d.paidAt ?? d.createdAt;
@@ -135,6 +192,8 @@ export async function GET(
       totalDonatedAmountUSD: t?._sum.amountUSD ?? 0,
       lastDonationAt: t?._max.createdAt ?? null,
       badgeIds: badgeIdsByUser.get(id) ?? [],
+      currentMonthlyMrrUSD,
+      activeSubscriptionsCount: activeSubs.length,
       supportedCampaignsCount: supportedCampaignIds.size,
       streakMonths,
     };
@@ -146,11 +205,16 @@ export async function GET(
     const safeUser = {
       ...userWithoutPwd,
       hasPassword: Boolean(user.password),
+      accountStatus: donorAccountStatus(user),
       donations: donationsForUser,
       ...profileCard,
     };
 
-    return NextResponse.json({ user: safeUser });
+    return NextResponse.json({
+      user: safeUser,
+      oneTimeDonations: oneTimeDonations.map((d) => withType(d, 'ONE_TIME')),
+      monthlyDonations: monthlyDonations.map((d) => withType(d, 'MONTHLY')),
+    });
   } catch (error) {
     console.error('Error fetching user:', error);
     return NextResponse.json(
@@ -168,7 +232,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -197,6 +261,7 @@ export async function PUT(
       clarityId: rawClarityId,
     } = body;
 
+    if (role !== undefined && !["ADMIN", "STAFF", "DONOR"].includes(role)) return NextResponse.json({ error: "INVALID_ROLE" }, { status: 400 });
     const isSelf = session.user.id === id;
     const wantsAuthorityChange =
       role !== undefined || rawDashboardPermissions !== undefined;
@@ -207,8 +272,11 @@ export async function PUT(
       select: {
         role: true,
         dashboardPermissions: true,
+        updatedAt: true,
         name: true,
         email: true,
+        registeredAt: true,
+        emailVerified: true,
       },
     });
     if (!existing) {
@@ -216,6 +284,12 @@ export async function PUT(
     }
 
     const isAdmin = session.user.role === 'ADMIN';
+
+    // Established login addresses change only after proving the new address.
+    // Editing checkout/profile contact data cannot silently replace a credential.
+    if (email !== undefined && email !== existing.email && existing.role === "DONOR" && (isSelf || existing.registeredAt || existing.emailVerified)) {
+      return NextResponse.json({ error: "VERIFY_EMAIL_IN_LINKED_IDENTITIES" }, { status: 409 });
+    }
 
     if (!isSelf && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -273,12 +347,15 @@ export async function PUT(
 
       if (existingUser) {
         return NextResponse.json(
-          { error: 'Email already exists' },
-          { status: 400 }
+          { error: 'EMAIL_EXISTS' },
+          { status: 409 }
         );
       }
     }
 
+    if (isSelf && wantsAuthorityChange) return NextResponse.json({ error: "لا يمكنك تعديل دورك أو صلاحياتك من هذه الواجهة." }, { status: 409 });
+    if (existing.email?.endsWith("@deleted.invalid")) return NextResponse.json({ error: "ACCOUNT_CLOSED" }, { status: 410 });
+    if (body.updatedAt !== undefined && (typeof body.updatedAt !== "string" || new Date(body.updatedAt).getTime() !== existing.updatedAt.getTime())) return NextResponse.json({ error: "PROFILE_CONFLICT" }, { status: 409 });
     let nextDashboardPermissions: string[] | undefined;
 
     if (
@@ -324,11 +401,11 @@ export async function PUT(
       }
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id },
+    const update = (client: Pick<typeof prisma, "user">) => client.user.update({
+      where: { id, ...(body.updatedAt !== undefined ? { updatedAt: new Date(body.updatedAt) } : {}) },
       data: {
         ...(name !== undefined && { name }),
-        ...(email !== undefined && { email }),
+        ...(email !== undefined && { email, ...(email !== existing.email ? { emailVerified: null } : {}) }),
         ...(countryCode !== undefined && {
           countryCode: countryCode === "" ? null : countryCode,
         }),
@@ -368,6 +445,32 @@ export async function PUT(
       },
     });
 
+    // Lock the acting administrator before changing another account's authority.
+    // Concurrent cross-demotions then conflict instead of leaving no administrator.
+    const updatedUser = wantsAuthorityChange ? await prisma.$transaction(async tx => {
+      const actor = await tx.user.updateMany({ where: { id: session.user.id, role: "ADMIN" }, data: { updatedAt: new Date() } });
+      if (actor.count !== 1) throw new Error("AUTHORITY_CHANGED");
+      return update(tx);
+    }) : await update(prisma);
+
+    if (
+      updatedUser.role === 'DONOR'  &&
+      (email !== undefined || phone !== undefined || countryCode !== undefined || preferredLang !== undefined || emailNotifications !== undefined || smsNotifications !== undefined)
+    ) {
+      await upsertProfileForUser(id).catch(() => null);
+      if (emailNotifications !== undefined || smsNotifications !== undefined) {
+        await setProfileConsent(
+          id,
+          {
+            ...(emailNotifications !== undefined ? { emailOptIn: Boolean(emailNotifications) } : {}),
+            ...(smsNotifications !== undefined ? { smsOptIn: Boolean(smsNotifications) } : {}),
+            consentSource: isSelf ? 'donor-profile' : 'admin-user-profile',
+          },
+          { actorId: session.user.id, actorName: session.user.name, actorRole: session.user.role },
+        ).catch(() => null);
+      }
+    }
+
     if (isAdmin && wantsAuthorityChange) {
       const actor = session.user;
       const targetName = existing.name ?? existing.email ?? id;
@@ -388,8 +491,13 @@ export async function PUT(
       });
     }
 
-    return NextResponse.json(updatedUser);
+    const { password: _password, ...safeUpdatedUser } = updatedUser;
+    return NextResponse.json({ ...safeUpdatedUser, hasPassword: Boolean(_password) });
   } catch (error) {
+    const code = (error as { code?: string })?.code;
+    if (code === "P2025" || code === "P2034") return NextResponse.json({ error: "PROFILE_CONFLICT" }, { status: 409 });
+    if (code === "P2002") return NextResponse.json({ error: "EMAIL_EXISTS" }, { status: 409 });
+    if (error instanceof Error && error.message === "AUTHORITY_CHANGED") return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     console.error('Error updating user:', error);
     return NextResponse.json(
       { error: 'Failed to update user' },
@@ -398,7 +506,20 @@ export async function PUT(
   }
 }
 
-// DELETE /api/users/[id] - Delete user (admin only)
+/** Placeholder identity written over a deleted account. `.invalid` is a reserved
+ * TLD, so nothing is ever delivered to it, and the id keeps `email` unique. */
+const DELETED_DONOR_NAME = 'متبرع محذوف';
+function deletedEmailFor(id: string) {
+  return `deleted+${id}@deleted.invalid`;
+}
+
+// DELETE /api/users/[id] - Close an account (admin only).
+//
+// Financial records are append-only, so this never deletes the user row or
+// anything that hangs off it financially. Donations, subscriptions, receipts
+// and certificates keep pointing at the same donorId. What goes is the person:
+// their personal data is overwritten, sign-in is made impossible, and saved
+// cards, OAuth links, sessions and cart are removed.
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -409,9 +530,13 @@ export async function DELETE(
     const adminDenied = requireAdminSession(session);
     if (adminDenied) return adminDenied;
 
+    if (session!.user.id === id) {
+      return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, role: true },
     });
 
     if (!user) {
@@ -421,10 +546,61 @@ export async function DELETE(
       );
     }
 
+    if (user.role === "ADMIN") return NextResponse.json({ error: "ADMIN_ACCOUNT_CHANGE_ROLE_FIRST" }, { status: 409 });
+
+    // A live plan would keep charging a card whose owner no longer has an
+    // account to manage it. Cancel it first (the monthly dashboard cancels at
+    // the provider), then close the account.
+    const livePlans = await prisma.subscription.count({
+      where: { donorId: id, status: { in: ['ACTIVE', 'PAUSED'] } },
+    });
+    if (livePlans > 0) {
+      return NextResponse.json(
+        {
+          error: 'ACTIVE_SUBSCRIPTIONS',
+          message: `This donor has ${livePlans} active or paused recurring plan(s). Cancel them before deleting the account.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    const donationCount = await prisma.donation.count({ where: { donorId: id } });
+
     await prisma.$transaction(async (tx) => {
-      await tx.donation.deleteMany({ where: { donorId: id } });
-      await tx.subscription.deleteMany({ where: { donorId: id } });
-      await tx.user.delete({ where: { id } });
+      const current = await tx.user.findUnique({ where: { id }, select: { role: true } });
+      if (!current || current.role === "ADMIN") throw new Error("ACCOUNT_CHANGED");
+      if (await tx.subscription.count({ where: { donorId: id, status: { in: ["ACTIVE", "PAUSED"] } } })) throw new Error("ACTIVE_SUBSCRIPTIONS");
+      await tx.account.deleteMany({ where: { userId: id } });
+      await tx.donorLoginIdentity.deleteMany({ where: { userId: id } });
+      await tx.donorLoginChallenge.updateMany({ where: { OR: [{ linkUserId: id }, { invitationUserId: id }] }, data: { consumed: true } });
+      await tx.session.deleteMany({ where: { userId: id } });
+      await tx.cartItem.deleteMany({ where: { userId: id } });
+      // Inactive plans retain their history but cannot reference a removed card.
+      await tx.subscription.updateMany({ where: { donorId: id, status: { notIn: ["ACTIVE", "PAUSED"] } }, data: { paymentCardId: null } });
+      await tx.creditCard.deleteMany({ where: { userId: id } });
+      await tx.donorCommunicationProfile.updateMany({ where: { userId: id }, data: { email: null, phone: null, doNotContact: true, emailOptIn: false, smsOptIn: false, whatsappOptIn: false } });
+      await tx.user.update({
+        where: { id },
+        data: {
+          name: DELETED_DONOR_NAME,
+          email: deletedEmailFor(id),
+          emailVerified: null,
+          image: null,
+          password: null,
+          phone: null,
+          birthdate: null,
+          gender: null,
+          city: null,
+          region: null,
+          clarityId: null,
+          country: null, countryCode: null, countryName: null,
+          registeredAt: null, verifiedAt: null,
+          role: 'DONOR',
+          dashboardPermissions: [],
+          emailNotifications: false,
+          smsNotifications: false,
+        },
+      });
     });
 
     const actor = session!.user;
@@ -433,17 +609,23 @@ export async function DELETE(
       actorName: actor.name,
       actorRole: actor.role ?? 'ADMIN',
       action: 'USER_DELETE',
-      messageAr: `${actor.name ?? 'مدير'} حذف المستخدم ${user.name ?? user.email ?? id}`,
-      messageEn: `${actor.name ?? 'Admin'} deleted user ${user.email}`,
+      messageAr: `${actor.name ?? 'مدير'} حذف حساب المستخدم ${user.name ?? user.email ?? id} (أُخفيت بياناته الشخصية وبقيت سجلاته المالية: ${donationCount} تبرع)`,
+      messageEn: `${actor.name ?? 'Admin'} closed and anonymized user ${user.email ?? id}; ${donationCount} donation record(s) kept`,
       entityType: 'User',
       entityId: id,
+      metadata: { previousRole: user.role, donationsKept: donationCount },
     });
 
     return NextResponse.json(
-      { message: 'User, donations and subscriptions deleted successfully' },
+      {
+        message: 'Account closed. Personal data removed; donation and subscription records kept.',
+        donationsKept: donationCount,
+      },
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof Error && ["ACCOUNT_CHANGED", "ACTIVE_SUBSCRIPTIONS"].includes(error.message)) return NextResponse.json({ error: error.message }, { status: 409 });
+    if ((error as { code?: string })?.code === "P2034") return NextResponse.json({ error: "ACCOUNT_CHANGED" }, { status: 409 });
     console.error('Error deleting user:', error);
     return NextResponse.json(
       { error: 'Failed to delete user' },
@@ -451,3 +633,4 @@ export async function DELETE(
     );
   }
 }
+

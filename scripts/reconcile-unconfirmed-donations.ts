@@ -1,7 +1,7 @@
 /**
  * Manual runner for the same reconciliation the daily cron performs.
  *
- * Dry run by default — pass --apply to write.
+ * Dry run by default  pass --apply to write.
  *
  *   npx tsx scripts/reconcile-unconfirmed-donations.ts
  *   npx tsx scripts/reconcile-unconfirmed-donations.ts --apply
@@ -20,13 +20,19 @@ const staleAfterHours = staleArg ? Number(staleArg.split("=")[1]) : 48;
 async function main() {
   const summary = await reconcileUnconfirmedDonations({ dryRun: !APPLY, staleAfterHours });
 
-  console.log(`${summary.dryRun ? "DRY RUN" : "APPLIED"} — scanned ${summary.scanned} unconfirmed donation(s)\n`);
+  console.log(`${summary.dryRun ? "DRY RUN" : "APPLIED"}  scanned ${summary.scanned} unconfirmed donation(s)\n`);
+
+  console.log(`credited (paid at Stripe, webhook never arrived): ${summary.credited.length}`);
+  for (const c of summary.credited) {
+    console.log(`   ${c.donationId}  $${c.amountUSD.toFixed(2)}  paidAt=${c.paidAt.slice(0, 16)}`);
+  }
+  console.log(`   total recovered: $${summary.creditedTotalUSD.toFixed(2)}\n`);
 
   console.log(`marked FAILED (abandoned, older than ${staleAfterHours}h): ${summary.markedFailed.length}`);
   const failedUsd = summary.markedFailed.reduce((s, f) => s + f.amountUSD, 0);
   console.log(`   attempted value (never collected): $${failedUsd.toFixed(2)}\n`);
 
-  console.log(`left alone (newer than ${staleAfterHours}h): ${summary.leftAlone}`);
+  console.log(`left alone (too new, or still open at Stripe): ${summary.leftAlone}`);
 
   if (summary.errors.length) {
     console.log(`\nerrors: ${summary.errors.length}`);

@@ -8,5 +8,5 @@ export default async function CampaignsLayout({
   children: React.ReactNode;
 }) {
   await requireDashboardPagePermission("campaigns");
-  return children;
+  return <>{children}</>;
 }

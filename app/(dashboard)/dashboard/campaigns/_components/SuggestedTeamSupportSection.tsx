@@ -2,9 +2,12 @@
 
 import {
   forwardRef,
+  useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +27,7 @@ import {
   type SuggestedTeamSupportConfig,
 } from "@/lib/campaign/suggested-team-support";
 import { SUPPORTED_CURRENCY_OPTIONS } from "@/lib/supported-currencies";
+import { dashDir, dt } from "@/lib/dashboard/i18n";
 
 type Row = { id: string; currency: string; amountsStr: string };
 
@@ -50,6 +54,7 @@ export type SuggestedTeamSupportSectionRef = {
 };
 
 type Props = {
+  onValueChange?: (payload: SuggestedTeamSupportPayload | null) => void;
   initialConfig?: SuggestedTeamSupportConfig | null;
   /** Top-level label (Arabic) */
   label: string;
@@ -67,9 +72,10 @@ export const SuggestedTeamSupportSection = forwardRef<
   SuggestedTeamSupportSectionRef,
   Props
 >(function SuggestedTeamSupportSection(
-  { initialConfig, label, helpText, defaultPlaceholder, exceptionsLabel, exceptionsEmptyHint },
+  { initialConfig, label, helpText, defaultPlaceholder, exceptionsLabel, exceptionsEmptyHint, onValueChange },
   ref
 ) {
+  const defaultInputId = useId();
   const [amountsStr, setAmountsStr] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
 
@@ -88,22 +94,14 @@ export const SuggestedTeamSupportSection = forwardRef<
     );
   }, [stableKey]);
 
-  useImperativeHandle(ref, () => ({
-    getPayload: (): SuggestedTeamSupportPayload | null => {
-      const amounts = parseAmountsInput(amountsStr);
-      const byCurrency: Record<string, number[]> = {};
-      for (const r of rows) {
-        const code = r.currency.trim().toUpperCase();
-        if (!code) continue;
-        const arr = parseAmountsInput(r.amountsStr);
-        if (arr.length) byCurrency[code] = arr;
-      }
-      if (!amounts.length && Object.keys(byCurrency).length === 0) {
-        return null;
-      }
-      return { amounts, byCurrency };
-    },
-  }));
+  const notifyRef = useRef(onValueChange); notifyRef.current = onValueChange;
+  const readPayload = useCallback((): SuggestedTeamSupportPayload | null => {
+    const amounts = parseAmountsInput(amountsStr); const byCurrency: Record<string, number[]> = {};
+    for (const row of rows) { const code = row.currency.trim().toUpperCase(); const values = parseAmountsInput(row.amountsStr); if (code && values.length) byCurrency[code] = values; }
+    return amounts.length || Object.keys(byCurrency).length ? { amounts, byCurrency } : null;
+  }, [amountsStr, rows]);
+  useEffect(() => { notifyRef.current?.(readPayload()); }, [readPayload]);
+  useImperativeHandle(ref, () => ({ getPayload: readPayload }), [readPayload]);
 
   const addRow = () => setRows((prev) => [...prev, makeRow()]);
 
@@ -118,11 +116,11 @@ export const SuggestedTeamSupportSection = forwardRef<
   };
 
   return (
-    <div className="space-y-4 md:col-span-2" dir="rtl">
+    <div className="space-y-4 md:col-span-2" dir={dashDir()}>
       <div>
-        <Label htmlFor="suggested-team-support-default">{label}</Label>
+        <Label htmlFor={defaultInputId}>{label}</Label>
         <Input
-          id="suggested-team-support-default"
+          id={defaultInputId}
           className="mt-1.5 font-mono text-left"
           dir="ltr"
           value={amountsStr}
@@ -143,8 +141,7 @@ export const SuggestedTeamSupportSection = forwardRef<
             className="gap-1"
           >
             <Plus className="w-4 h-4" />
-            إضافة عملة
-          </Button>
+            {dt("إضافة عملة")}</Button>
         </div>
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">{exceptionsEmptyHint}</p>
@@ -156,7 +153,7 @@ export const SuggestedTeamSupportSection = forwardRef<
                 className="flex flex-col sm:flex-row gap-2 sm:items-end border rounded-lg p-3"
               >
                 <div className="flex-1 min-w-[140px]">
-                  <Label className="text-xs text-muted-foreground">العملة</Label>
+                  <Label className="text-xs text-muted-foreground">{dt("العملة")}</Label>
                   <Select
                     value={row.currency}
                     onValueChange={(v) => updateRow(row.id, { currency: v })}
@@ -167,7 +164,7 @@ export const SuggestedTeamSupportSection = forwardRef<
                     <SelectContent>
                       {SUPPORTED_CURRENCY_OPTIONS.map((c) => (
                         <SelectItem key={c.code} value={c.code}>
-                          {c.code} — {c.name}
+                          {c.code}  {c.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -175,8 +172,7 @@ export const SuggestedTeamSupportSection = forwardRef<
                 </div>
                 <div className="flex-[2]">
                   <Label className="text-xs text-muted-foreground">
-                    المبالغ لهذه العملة
-                  </Label>
+                    {dt("المبالغ لهذه العملة")}</Label>
                   <Input
                     className="mt-1 font-mono text-left"
                     dir="ltr"
@@ -184,7 +180,7 @@ export const SuggestedTeamSupportSection = forwardRef<
                     onChange={(e) =>
                       updateRow(row.id, { amountsStr: e.target.value })
                     }
-                    placeholder="مثال: 5, 10, 25, 50, 100"
+                    placeholder={dt("مثال: 5, 10, 25, 50, 100")}
                   />
                 </div>
                 <Button
@@ -193,7 +189,7 @@ export const SuggestedTeamSupportSection = forwardRef<
                   size="icon"
                   className="shrink-0 text-destructive"
                   onClick={() => removeRow(row.id)}
-                  aria-label="حذف الصف"
+                  aria-label={dt("حذف الصف")}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>

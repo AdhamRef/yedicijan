@@ -1,0 +1,402 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import axios from 'axios';
+import { toast } from 'react-hot-toast';
+import { ArrowRight, Loader2 } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { errorMessage } from '@/lib/dashboard/client-error-message';
+import { useDashboardUnsavedChanges } from '@/hooks/useDashboardUnsavedChanges';
+import {
+  ContentTranslationTabs,
+  emptyTranslations,
+  filledLocaleCount,
+  type TranslationField,
+  type TranslationMap,
+} from '../../_components/ContentTranslationTabs';
+import { ImageUploadField } from '../../_components/ImageUploadField';
+import { LocaleChips } from '../../_components/LocaleChips';
+import { ContentPicker, type ContentOption } from './ContentPicker';
+import { BlocksEditor, emptyBlock, type BlockRow } from './BlocksEditor';
+import { dt, dtx } from "@/lib/dashboard/i18n";
+
+export const SUPER_CATEGORY_TRANSLATION_FIELDS: readonly TranslationField[] = [
+  { name: 'title', get label() { return dt("العنوان"); } },
+  { name: 'subtitle', get label() { return dt("العنوان الفرعي"); } },
+  { name: 'intro', get label() { return dt("المقدمة"); }, multiline: true },
+  { name: 'verseTranslation', get label() { return dt("ترجمة معنى الآية"); }, multiline: true },
+  { name: 'verseAttribution', get label() { return dt("نسبة الترجمة"); } },
+  { name: 'logoImage', get label() { return dt("شعار خاص بهذه اللغة (رابط)"); } },
+  { name: 'ctaPrimaryLabel', get label() { return dt("زر أول"); } },
+  { name: 'ctaSecondaryLabel', get label() { return dt("زر ثانٍ"); } },
+  { name: 'ctaTertiaryLabel', get label() { return dt("زر ثالث"); } },
+  { name: 'metaTitle', get label() { return dt("عنوان محركات البحث"); } },
+  { name: 'metaDescription', get label() { return dt("وصف محركات البحث"); }, multiline: true },
+];
+
+/** Kinds in the order the picker shows them, with their Arabic labels. */
+export const ITEM_KINDS: ReadonlyArray<{ kind: string; label: string; hint: string }> = [
+  { kind: 'CAMPAIGN', get label() { return dt("المشاريع"); }, get hint() { return dt("تظهر كبطاقات تبرع في قسم «المشاريع المرتبطة»."); } },
+  { kind: 'POST', get label() { return dt("المقالات"); }, get hint() { return dt("مقالات المدونة المرتبطة بهذا القسم."); } },
+  { kind: 'VIDEO', get label() { return dt("الفيديوهات"); }, get hint() { return dt("من مكتبة الفيديوهات (إنجازات، تزكيات، ميدان)."); } },
+  { kind: 'PLAYLIST', get label() { return dt("البرامج والسلاسل"); }, get hint() { return dt("قوائم التشغيل المرتبطة."); } },
+  { kind: 'COURSE', get label() { return dt("الدورات"); }, get hint() { return dt("الدورات والندوات المرتبطة."); } },
+  { kind: 'REPORT', get label() { return dt("التقارير"); }, get hint() { return dt("ملفات التقارير المنشورة."); } },
+  { kind: 'BOOKLET', get label() { return dt("الكتيبات"); }, get hint() { return dt("كتيبات المؤسسة."); } },
+];
+
+export type ItemsMap = Record<string, string[]>;
+
+export interface SuperCategoryFormValues {
+  slug: string;
+  title: string;
+  subtitle: string;
+  intro: string;
+  verseArabic: string;
+  verseTranslation: string;
+  verseAttribution: string;
+  heroImage: string;
+  logoImage: string;
+  accentColor: string;
+  heroVideoId: string;
+  heroVideoLocales: string[];
+  ctaPrimaryLabel: string;
+  ctaPrimaryHref: string;
+  ctaSecondaryLabel: string;
+  ctaSecondaryHref: string;
+  ctaTertiaryLabel: string;
+  ctaTertiaryHref: string;
+  metaTitle: string;
+  metaDescription: string;
+  isActive: boolean;
+  translations: TranslationMap;
+  items: ItemsMap;
+  blocks: BlockRow[];
+}
+
+export function emptySuperCategory(): SuperCategoryFormValues {
+  return {
+    slug: '',
+    title: '',
+    subtitle: '',
+    intro: '',
+    verseArabic: '',
+    verseTranslation: '',
+    verseAttribution: '',
+    heroImage: '',
+    logoImage: '',
+    accentColor: '#7C2318',
+    heroVideoId: '',
+    heroVideoLocales: [],
+    ctaPrimaryLabel: '',
+    ctaPrimaryHref: '',
+    ctaSecondaryLabel: '',
+    ctaSecondaryHref: '',
+    ctaTertiaryLabel: '',
+    ctaTertiaryHref: '',
+    metaTitle: '',
+    metaDescription: '',
+    isActive: true,
+    translations: emptyTranslations(SUPER_CATEGORY_TRANSLATION_FIELDS),
+    items: Object.fromEntries(ITEM_KINDS.map((k) => [k.kind, [] as string[]])),
+    blocks: [emptyBlock('CAMPAIGNS')],
+  };
+}
+
+type OptionsMap = Record<string, ContentOption[]>;
+
+export function SuperCategoryForm({
+  mode,
+  superCategoryId,
+  initial,
+}: {
+  mode: 'create' | 'edit';
+  superCategoryId?: string;
+  initial: SuperCategoryFormValues;
+}) {
+  const router = useRouter();
+  const [values, setValues] = useState<SuperCategoryFormValues>(initial);
+  const [saving, setSaving] = useState(false);
+  const [options, setOptions] = useState<OptionsMap>({});
+  const [saveMessage, setSaveMessage] = useState('');
+  const [savedSnapshot, setSavedSnapshot] = useState(initial);
+  const dirty = JSON.stringify(values) !== JSON.stringify(savedSnapshot);
+  useDashboardUnsavedChanges(dirty && !saving);
+
+  const leave = () => {
+    if (dirty && !window.confirm(dt("توجد تعديلات غير محفوظة. مغادرة المحرر؟"))) return;
+    router.push('/dashboard/super-categories');
+  };
+
+  /* Everything this page can link, fetched once. The picker only stores ids, so
+     without this it could not show a name for anything already chosen. */
+  useEffect(() => {
+    let live = true;
+    axios
+      .get('/api/super-categories/content-options')
+      .then((res) => { if (live) setOptions(res.data ?? {}); })
+      .catch((e) => { if (live) toast.error(errorMessage(e, dt("تعذّر تحميل قوائم المحتوى"))); });
+    return () => { live = false; };
+  }, []);
+
+  const set = <K extends keyof SuperCategoryFormValues>(key: K, v: SuperCategoryFormValues[K]) =>
+    setValues((prev) => ({ ...prev, [key]: v }));
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!values.title.trim()) return toast.error(dt("العنوان بالعربية مطلوب"));
+    if (!values.slug.trim()) return toast.error(dt("المعرّف (slug) مطلوب"));
+    if (mode === 'edit' && values.slug !== initial.slug)
+      return toast.error(dt("تغيير رابط منشور يتطلب تأكيدًا وتحويلًا دائمًا. لا يمكن تغييره من نموذج الترجمة."));
+    // The server deletes a locale row when its title is blank. Prevent a
+    // partially translated row from being silently discarded on Save All.
+    const orphan = Object.entries(values.translations).find(([, row]) =>
+      !row.title?.trim() && Object.entries(row).some(([key, text]) => key !== 'title' && text.trim())
+    );
+    if (orphan) return toast.error(dt("لغة {0}: اكتب العنوان أولًا حتى لا تُفقد حقول الترجمة عند الحفظ.", [orphan[0].toUpperCase()]));
+
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      const payload = {
+        ...values,
+        slug: mode === 'edit' ? initial.slug : values.slug.trim(),
+        title: values.title.trim(),
+        /* Posted whole; the API replaces both stored lists with exactly these. */
+        items: values.items,
+        blocks: values.blocks.map((b) => ({
+          ...b,
+          maxItems: b.maxItems.trim() ? Number(b.maxItems) : null,
+        })),
+      };
+
+      const response = mode === 'create'
+        ? await axios.post('/api/super-categories', payload)
+        : await axios.put(`/api/super-categories/${superCategoryId}`, payload);
+      const actual = response.data?.translations;
+      // Require complete server confirmation for both created and edited records.
+      // Check cleared fields and deleted locale rows as well as non-empty values.
+      if (!Array.isArray(actual)) throw new Error(dt("لم يعُد الخادم بقائمة الترجمات للتحقق من الحفظ. احتفظ بالمسودة وأعد التحميل."));
+      for (const [code, fields] of Object.entries(values.translations)) {
+        const stored = actual.find((row: { locale?: string }) => row.locale === code) as Record<string, unknown> | undefined;
+        if (!fields.title?.trim()) {
+          if (stored) throw new Error(dt("لغة {0} لم تُحذف من النسخة المحفوظة.", [code.toUpperCase()]));
+          continue;
+        }
+        if (!stored) throw new Error(dt("لم تُحفظ ترجمة اللغة {0}.", [code.toUpperCase()]));
+        for (const [key, text] of Object.entries(fields)) {
+          if (String(stored[key] ?? '').trim() !== text.trim())
+            throw new Error(dt("لم يتم تأكيد حفظ حقل {0} في اللغة {1}. احتفظ بالمسودة وراجع الحفظ.", [key, code.toUpperCase()]));
+        }
+      }
+      toast.success(mode === 'create' ? dt("تم إنشاء المشروع الكبير") : dt("تم حفظ جميع لغات المشروع الكبير"));
+      setSavedSnapshot(values);
+      setSaveMessage(dt("حُفظت جميع اللغات مع محتوى الصفحة بنجاح."));
+      router.push('/dashboard/super-categories');
+      router.refresh();
+    } catch (err) {
+      const message = errorMessage(err, mode === 'create' ? dt("فشل في الإنشاء") : dt("فشل في الحفظ"));
+      setSaveMessage(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const translated = filledLocaleCount(values.translations, 'title');
+  const linkedTotal = Object.values(values.items).reduce((sum, ids) => sum + ids.length, 0);
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Button type="button" variant="ghost" size="sm" onClick={leave}>
+          <ArrowRight className="me-1 h-4 w-4" />
+          {dt("رجوع")}</Button>
+        <h1 className="text-lg font-bold">{mode === 'create' ? dt("قسم كبير جديد") : dt("تعديل المشروع الكبير")}</h1>
+      </div>
+
+      {/* ── Identity ─────────────────────────────────────────────────── */}
+      <Card className="space-y-4 p-4">
+        <h2 className="text-sm font-bold">{dt("التعريف")}</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("العنوان (بالعربية) *")}</span>
+            <Input value={values.title} onChange={(e) => set('title', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("المعرّف (slug) *")}</span>
+            <Input dir="ltr" value={values.slug} readOnly={mode === 'edit'} aria-readonly={mode === 'edit'} onChange={(e) => set('slug', e.target.value)} />
+            {mode === 'edit' ? <span className="block text-[11px] text-amber-700">{dt("الرابط المنشور ثابت. تعديل الرابط يتطلب مسارًا منفصلًا يحفظ تحويل 301.")}</span> : null}
+            <span className="block text-[11px] text-slate-500">
+              {dt("الصفحة تصبح على الرابط ")}<span dir="ltr">{dtx("/{lang}/المشاريع/{0}", [values.slug || 'slug'])}</span>
+            </span>
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("العنوان الفرعي")}</span>
+            <Input value={values.subtitle} onChange={(e) => set('subtitle', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("لون القسم")}</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(values.accentColor) ? values.accentColor : '#7C2318'}
+                onChange={(e) => set('accentColor', e.target.value)}
+                className="h-9 w-12 cursor-pointer rounded border"
+              />
+              <Input dir="ltr" value={values.accentColor} onChange={(e) => set('accentColor', e.target.value)} />
+            </div>
+          </label>
+          <label className="space-y-1.5 md:col-span-2">
+            <span className="text-xs font-semibold text-slate-600">{dt("المقدمة (بالعربية)")}</span>
+            <Textarea rows={3} value={values.intro} onChange={(e) => set('intro', e.target.value)} />
+          </label>
+        </div>
+
+        <label className="flex items-center gap-2">
+          <Switch checked={values.isActive} onCheckedChange={(v) => set('isActive', v)} />
+          <span className="text-sm">{dt("منشور")}</span>
+        </label>
+      </Card>
+
+      {/* ── Hero ─────────────────────────────────────────────────────── */}
+      <Card className="space-y-4 p-4">
+        <h2 className="text-sm font-bold">{dt("الواجهة")}</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <ImageUploadField label={dt("صورة الواجهة")} value={values.heroImage} onChange={(url) => set('heroImage', url)} previewClass="w-48 h-28" />
+          <ImageUploadField label={dt("شعار المشروع")} value={values.logoImage} onChange={(url) => set('logoImage', url)} previewClass="w-40 h-24" />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("الآية (تُعرض بالعربية دائمًا)")}</span>
+            <Textarea dir="rtl" rows={2} value={values.verseArabic} onChange={(e) => set('verseArabic', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("ترجمة معنى الآية (للعربية تُترك فارغة)")}</span>
+            <Textarea rows={2} value={values.verseTranslation} onChange={(e) => set('verseTranslation', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("نسبة الترجمة")}</span>
+            <Input value={values.verseAttribution} onChange={(e) => set('verseAttribution', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("فيديو الواجهة (رابط أو معرّف يوتيوب)")}</span>
+            <Input dir="ltr" value={values.heroVideoId} onChange={(e) => set('heroVideoId', e.target.value)} />
+          </label>
+        </div>
+
+        <LocaleChips
+          value={values.heroVideoLocales}
+          onChange={(next) => set('heroVideoLocales', next)}
+          hint={dt("اللغات التي يظهر فيها فيديو الواجهة. اتركها فارغة ليظهر في كل اللغات  وحدّدها إذا كان التسجيل بلغة واحدة بلا ترجمة.")}
+        />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {([
+            ['ctaPrimaryLabel', 'ctaPrimaryHref', dt("الزر الأول")],
+            ['ctaSecondaryLabel', 'ctaSecondaryHref', dt("الزر الثاني")],
+            ['ctaTertiaryLabel', 'ctaTertiaryHref', dt("الزر الثالث")],
+          ] as const).map(([labelKey, hrefKey, title]) => (
+            <div key={labelKey} className="grid grid-cols-2 gap-2">
+              <label className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-600">{dtx("{0}  النص", [title])}</span>
+                <Input value={values[labelKey]} onChange={(e) => set(labelKey, e.target.value)} />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-600">{dt("الوجهة")}</span>
+                <Input dir="ltr" placeholder="#bundle" value={values[hrefKey]} onChange={(e) => set(hrefKey, e.target.value)} />
+              </label>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-500">
+          {dt("الوجهة يمكن أن تكون ارتساءً داخل الصفحة مثل ")}<span dir="ltr">#bundle</span>  {dt("  وهو مُعرّف الارتساء المكتوب في القسم  أو رابطًا كاملًا.")}</p>
+      </Card>
+
+      {/* ── Linked content ───────────────────────────────────────────── */}
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold">{dt("المحتوى المرتبط")}</h2>
+          <span className="text-xs text-slate-500">{dtx("{0} عنصر", [linkedTotal])}</span>
+        </div>
+        <p className="text-xs text-slate-500">
+          {dt("اختر المحتوى الذي يخص هذا القسم. ما يظهر منه على الصفحة  وبأي ترتيب بين الأقسام  تحدده أقسام الصفحة بالأسفل.")}</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {ITEM_KINDS.map(({ kind, label, hint }) => (
+            <ContentPicker
+              key={kind}
+              label={label}
+              description={hint}
+              options={options[kind] ?? []}
+              value={values.items[kind] ?? []}
+              onChange={(next) => set('items', { ...values.items, [kind]: next })}
+            />
+          ))}
+        </div>
+      </Card>
+
+      {/* ── Page sections ────────────────────────────────────────────── */}
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold">{dt("أقسام الصفحة")}</h2>
+          <span className="text-xs text-slate-500">{dtx("{0} قسم", [values.blocks.length])}</span>
+        </div>
+        <p className="text-xs text-slate-500">
+          {dt("تُعرض بالترتيب الظاهر هنا، أسفل الواجهة مباشرة.")}</p>
+        <BlocksEditor
+          rows={values.blocks}
+          onChange={(next) => set('blocks', next)}
+          playlists={options.PLAYLIST ?? []}
+        />
+      </Card>
+
+      {/* ── SEO ──────────────────────────────────────────────────────── */}
+      <Card className="space-y-4 p-4">
+        <h2 className="text-sm font-bold">{dt("محركات البحث")}</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("عنوان الصفحة")}</span>
+            <Input value={values.metaTitle} onChange={(e) => set('metaTitle', e.target.value)} />
+          </label>
+          <label className="space-y-1.5">
+            <span className="text-xs font-semibold text-slate-600">{dt("وصف الصفحة")}</span>
+            <Textarea rows={2} value={values.metaDescription} onChange={(e) => set('metaDescription', e.target.value)} />
+          </label>
+        </div>
+        <p className="text-[11px] text-slate-500">{dt("يُستخدم العنوان والمقدمة تلقائيًا عند ترك هذين الحقلين فارغين.")}</p>
+      </Card>
+
+      {/* ── Translations ─────────────────────────────────────────────── */}
+      <Card className="space-y-3 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold">{dt("الترجمات")}</h2>
+          <span className="text-xs text-slate-500">{dtx("{0} لغة مترجمة", [translated])}</span>
+        </div>
+        <ContentTranslationTabs
+          fields={SUPER_CATEGORY_TRANSLATION_FIELDS}
+          source={{ title: values.title, subtitle: values.subtitle, intro: values.intro, verseAttribution: values.verseAttribution, ctaPrimaryLabel: values.ctaPrimaryLabel, ctaSecondaryLabel: values.ctaSecondaryLabel, ctaTertiaryLabel: values.ctaTertiaryLabel, metaTitle: values.metaTitle, metaDescription: values.metaDescription }}
+          itemLabel="programme page"
+          requiredField="title"
+          value={values.translations}
+          onChange={(next) => set('translations', next)}
+        />
+      </Card>
+
+      {saveMessage ? <p role="status" className="rounded-lg border p-3 text-sm">{saveMessage}</p> : null}
+      <div className="flex gap-2">
+        <Button type="submit" disabled={saving || !dirty && mode === 'edit'}>
+          {saving && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+          {mode === 'create' ? dt("إنشاء") : dt("حفظ جميع اللغات")}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => router.push('/dashboard/super-categories')}>
+          {dt("إلغاء")}</Button>
+      </div>
+    </form>
+  );
+}

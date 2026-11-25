@@ -209,7 +209,7 @@ test("editing any field after a successful test invalidates the previous candida
   const { service } = setup({ env: { NODE_ENV: "test", ELASTIC_EMAIL_SENDER_EMAIL: "verified@example.org", ELASTIC_EMAIL_SENDER_NAME: "Gozbebekleri" } });
   const first = await service.saveProviderSettings("ELASTIC_EMAIL", [{ key: "API_KEY", value: "xkeysib-first-api-key-value-123456" }], actor);
   await service.testProviderConnection("ELASTIC_EMAIL", actor);
-  const second = await service.saveProviderSettings("ELASTIC_EMAIL", [{ key: "SENDER_NAME", value: "Yedicihan" }], actor);
+  const second = await service.saveProviderSettings("ELASTIC_EMAIL", [{ key: "SENDER_NAME", value: "Gözbebekleri" }], actor);
   assert.notEqual(first.snapshot.candidate.version, second.snapshot.candidate.version);
   await expectCode(service.activateProviderCandidate("ELASTIC_EMAIL", first.snapshot.candidate.version!, actor), "CANDIDATE_VERSION_MISMATCH");
   await expectCode(service.activateProviderCandidate("ELASTIC_EMAIL", second.snapshot.candidate.version!, actor), "CANDIDATE_NOT_VERIFIED");
@@ -225,7 +225,7 @@ test("provider activation commits all candidate fields together", async () => {
   const version = staged.snapshot.candidate.version!;
   await service.testProviderConnection("ELASTIC_EMAIL", actor);
   await service.activateProviderCandidate("ELASTIC_EMAIL", version, actor);
-  const values = await service.getResolvedProviderValues("ELASTIC_EMAIL", actor);
+  const { values } = await service.getActiveRuntimeResolution("ELASTIC_EMAIL", actor);
   assert.equal(values.API_KEY, "xkeysib-atomic-api-key-value-123456");
   assert.equal(values.SENDER_EMAIL, "verified@example.org");
   assert.equal(values.SENDER_NAME, "Gozbebekleri");

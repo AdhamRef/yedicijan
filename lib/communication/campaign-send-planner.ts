@@ -1,5 +1,5 @@
 import { getCampaign } from "./campaign-service";
-import { loadCampaignRecipients, type CampaignRecipient } from "./campaign-recipient-service";
+import { countCampaignAudience, loadCampaignRecipients, type CampaignRecipient } from "./campaign-recipient-service";
 import { evaluateCoverageGate } from "./campaign-approval-service";
 import { listSenders } from "./sender-service";
 import { getActiveCommunicationRuntimeBundle } from "./runtime-config";
@@ -11,7 +11,10 @@ export type SendPlan = {
   campaignId: string;
   channel: string | null;
   status: string | null;
+  /** Contacts in this batch, including explicit skips. */
   total: number;
+  /** Full selected audience, not guaranteed delivery. */
+  audienceTotal: number;
   eligible: number;
   skipped: number;
   reasons: Record<string, number>;
@@ -21,16 +24,19 @@ export type SendPlan = {
   willSend: boolean;
   blocked?: string;
   truncated: boolean;
+  nextCursor: string | null;
+  exhausted: boolean;
   recipients: CampaignRecipient[];
-  skippedList: { userId: string; locale: string; reason: string }[];
+  skippedList: { cursorId: string; userId: string; name: string | null; email: string | null; phone: string | null; locale: string; reason: string }[];
 };
 
-export async function planCampaignSend(campaignId: string, opts: { batchSize?: number } = {}): Promise<SendPlan> {
+/** Build one page. The executor persists its cursor, including all-skipped pages. */
+export async function planCampaignSend(campaignId: string, opts: { batchSize?: number; cursor?: string | null } = {}): Promise<SendPlan> {
   const batchSize = Math.min(opts.batchSize ?? 200, 1000);
   const empty: SendPlan = {
-    campaignId, channel: null, status: null, total: 0, eligible: 0, skipped: 0, reasons: {},
+    campaignId, channel: null, status: null, total: 0, audienceTotal: 0, eligible: 0, skipped: 0, reasons: {},
     coverage: { ok: false, undecided: [] }, providerReady: false, senderReady: false, willSend: false,
-    truncated: false, recipients: [], skippedList: [],
+    truncated: false, nextCursor: opts.cursor ?? null, exhausted: true, recipients: [], skippedList: [],
   };
   const campaign = await getCampaign(campaignId);
   if (!campaign) return { ...empty, blocked: "NOT_FOUND" };
@@ -39,18 +45,30 @@ export async function planCampaignSend(campaignId: string, opts: { batchSize?: n
   if (!campaign.templateGroupId) return { ...empty, blocked: "NO_TEMPLATE" };
   if (!isCommunicationChannel(campaign.channel)) return { ...empty, blocked: "INVALID_CHANNEL" };
   const channel: CommunicationChannelId = campaign.channel;
-  const gate = await evaluateCoverageGate(campaignId);
-  const coverage = { ok: gate.ok, undecided: gate.undecided };
-  if (!gate.ok) return { ...empty, coverage, blocked: "LANGUAGE_COVERAGE_INCOMPLETE" };
-  const { recipients, skipped, truncated } = await loadCampaignRecipients(channel, campaign.audienceSegmentKey, { limit: batchSize });
+  const [{ recipients, skipped, truncated, nextCursor, exhausted }, audienceTotal] = await Promise.all([
+    loadCampaignRecipients(channel, campaign.audienceSegmentKey, { limit: batchSize, cursor: opts.cursor ?? null }),
+    countCampaignAudience(campaign.audienceSegmentKey),
+  ]);
   const reasons: Record<string, number> = {};
   for (const item of skipped) reasons[item.reason] = (reasons[item.reason] ?? 0) + 1;
+  const batchLocaleCounts: Record<string, number> = {};
+  for (const recipient of recipients) batchLocaleCounts[recipient.locale] = (batchLocaleCounts[recipient.locale] ?? 0) + 1;
+  const gate = await evaluateCoverageGate(campaignId, batchLocaleCounts);
+  const coverage = { ok: gate.ok, undecided: gate.undecided };
   const partial: SendPlan = {
-    ...empty, channel, coverage, truncated,
+    ...empty, channel, coverage, truncated, nextCursor, exhausted, audienceTotal,
     total: recipients.length + skipped.length, eligible: recipients.length, skipped: skipped.length,
     reasons, recipients, skippedList: skipped,
   };
-  if (!recipients.length) return { ...partial, blocked: "NO_ELIGIBLE_RECIPIENTS" };
+  if (!gate.ok) return { ...partial, blocked: "LANGUAGE_COVERAGE_INCOMPLETE" };
+
+  if (!recipients.length) {
+    // A final all-skipped page still needs to be archived. Previously it was
+    // treated as exhausted before the executor recorded its rows and reasons.
+    // No provider readiness is claimed and no provider call is needed for skips.
+    if (skipped.length > 0 || !exhausted) return { ...partial, willSend: false };
+    return { ...partial, blocked: opts.cursor ? "AUDIENCE_EXHAUSTED" : "NO_ELIGIBLE_RECIPIENTS" };
+  }
 
   const runtime = await getActiveCommunicationRuntimeBundle();
   if (channel === "SMS") {

@@ -39,7 +39,7 @@ export const toDateString = (date: Date) => {
 
 export function getUrl() {
   if (process.env.NODE_ENV === "development") {
-    return process.env.NEXT_PUBLIC_APP_URL || "https://yedicihan.org";
+    return process.env.NEXT_PUBLIC_APP_URL || "https://minberiaksa.org";
   } else {
     return process.env.NEXT_PUBLIC_WEB_URL || "https://ub.cafe";
   }
@@ -65,13 +65,13 @@ export const toBase64 = (str: string) =>
     ? Buffer.from(str).toString("base64")
     : window.btoa(str);
 
-export const delay = (ms: any) => new Promise((resolve) => setTimeout(resolve, ms));
+export const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function isValidUrl(url: string) {
   try {
     new URL(url);
     return true;
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -82,7 +82,7 @@ export function getUrlFromString(str: string) {
     if (str.includes(".") && !str.includes(" ")) {
       return new URL(`https://${str}`).toString();
     }
-  } catch (e) {
+  } catch {
     return null;
   }
 }

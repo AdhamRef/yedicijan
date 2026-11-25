@@ -1,0 +1,621 @@
+import { createHash, randomUUID } from "node:crypto";
+import { validateWorkspaceSettings } from "./workspace-settings";
+import { saveWorkspaceRelations } from "./workspace-relations";
+import { SUPPORTED_LOCALES } from "../locales";
+import { pickLocaleSlug, slugify } from "../slug";
+import { HAS_IMPACT_BACKING_CAMPAIGNS } from "./site-capabilities";
+import {
+  CONFIG,
+  titleKeyFor,
+  fieldsFor,
+  hasText,
+  rows,
+  statuses,
+  text,
+  validateChanges,
+  changedTextValues,
+  valuesFor,
+  type ContentKind,
+  type ContentRecord,
+  type TextValues,
+} from "./contracts";
+
+export interface Delegate {
+  findUnique(args: object): Promise<ContentRecord | null>;
+  findFirst(args: object): Promise<ContentRecord | null>;
+  findMany(args: object): Promise<ContentRecord[]>;
+  update(args: object): Promise<ContentRecord>;
+  create(args: object): Promise<ContentRecord>;
+  upsert(args: object): Promise<ContentRecord>;
+  deleteMany?(args: object): Promise<unknown>;
+}
+export interface Store {
+  model(name: string): Delegate;
+  transaction<T>(fn: (tx: Store) => Promise<T>): Promise<T>;
+}
+export class ContentError extends Error {
+  constructor(
+    message: string,
+    public status = 400,
+  ) {
+    super(message);
+  }
+}
+export function fingerprint(value: unknown): string {
+  function stable(v: unknown): unknown {
+    if (v instanceof Date) return v.toISOString();
+    if (Array.isArray(v)) return v.map(stable);
+    if (v && typeof v === "object")
+      return Object.fromEntries(
+        Object.entries(v)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([k, val]) => [k, stable(val)]),
+      );
+    return v;
+  }
+  return createHash("sha256")
+    .update(JSON.stringify(stable(value)))
+    .digest("hex");
+}
+export function includeFor(kind: ContentKind) {
+  return {
+    translations: true,
+    ...(["playlists", "courses"].includes(kind) ? { videos: { orderBy: { order: "asc" } } } : {}),
+    ...(kind === "campaigns" && HAS_IMPACT_BACKING_CAMPAIGNS
+      ? { impactCampaign: { select: { id: true } } }
+      : {}),
+    ...(kind === "campaigns"
+      ? {
+          updates: {
+            include: { translations: true },
+            orderBy: { createdAt: "desc" },
+          },
+        }
+      : {}),
+    ...(kind === "categories"
+      ? {
+          values: { include: { translations: true }, orderBy: { order: "asc" } },
+          infoCards: { include: { translations: true }, orderBy: { order: "asc" } },
+        }
+      : {}),
+    ...(kind === "super-categories"
+      ? {
+          blocks: {
+            include: { translations: true },
+            orderBy: { order: "asc" },
+          },
+          items: { orderBy: { order: "asc" } },
+        }
+      : {}),
+  };
+}
+export async function readContent(db: Store, kind: ContentKind, id: string) {
+  const row = await db
+    .model(CONFIG[kind].model)
+    .findUnique({ where: { id }, include: includeFor(kind) });
+  if (!row) throw new ContentError("المحتوى غير موجود", 404);
+  if (kind === "campaigns" && row.impactCampaign)
+    throw new ContentError("مشاريع تسوية الأثر تُدار من محرر الأثر المتخصص");
+  if (kind === "campaigns") {
+    const updates = rows(row.updates);
+    if (updates.length) {
+      const videos = await db.model("video").findMany({ where: { sourceUpdateId: { in: updates.map(update => update.id) } }, select: { id: true, sourceUpdateId: true } });
+      row.updates = updates.map(update => ({ ...update, libraryVideoId: videos.find(video => video.sourceUpdateId === update.id)?.id || null }));
+    }
+  }
+  return row;
+}
+export function documentFor(kind: ContentKind, row: ContentRecord) {
+  const base = valuesFor(kind, row, "ar");
+  const locales = statuses(kind, row);
+  const reviews =
+    row.editorReviews && typeof row.editorReviews === "object"
+      ? (row.editorReviews as Record<string, string>)
+      : {};
+  return {
+    id: text(row.id),
+    kind,
+    title: text(row.title || row.name || row.question),
+    slug: text(row.slug),
+    slugs: Object.fromEntries(
+      SUPPORTED_LOCALES.map((locale) => [
+        locale,
+        pickLocaleSlug(
+          text(row.slug),
+          rows(row.translations) as { locale: string; slug?: string | null }[],
+          locale,
+        ) || text(row.id),
+      ]),
+    ),
+    revision: fingerprint(row),
+    fields: fieldsFor(kind, row),
+    source: base,
+    values: Object.fromEntries(
+      Object.keys(locales).map((locale) => [
+        locale,
+        valuesFor(kind, row, locale),
+      ]),
+    ),
+    statuses: Object.fromEntries(
+      Object.entries(locales).map(([locale, status]) => [
+        locale,
+        {
+          ...status,
+          reviewed:
+            reviews[locale] ===
+            fingerprint([base, valuesFor(kind, row, locale)]),
+        },
+      ]),
+    ),
+    previousSlugs: rows(row.slugChanges),
+    settings: row,
+  };
+}
+function dataFor(changes: TextValues) {
+  return Object.fromEntries(
+    Object.entries(changes).map(([key, value]) => [
+      key,
+      key === "amountLabels"
+        ? value
+            .split("\n")
+            .map((v) => v.trim())
+            .filter(Boolean)
+        : value,
+    ]),
+  );
+}
+type SaveContentInput = {
+  kind: ContentKind;
+  id: string;
+  locale: string;
+  revision: string;
+  changes: unknown;
+  reviewed?: boolean;
+  settings?: unknown;
+};
+
+async function persistContentLocale(tx: Store, input: SaveContentInput, row: ContentRecord, parentPatch?: ContentRecord) {
+  const { kind, id, locale } = input, cfg = CONFIG[kind];
+  let changes: TextValues, settings: ContentRecord;
+  try {
+    if (!input.changes || typeof input.changes !== "object" || Array.isArray(input.changes)) throw new Error("حقول غير صالحة");
+    // Historical metadata can exceed today's budgets. Preserve it untouched;
+    // validate only actual edits rather than blocking unrelated changes.
+    changes = validateChanges(fieldsFor(kind, row), changedTextValues(input.changes as TextValues, valuesFor(kind, row, locale)));
+    settings = validateWorkspaceSettings(kind, row, input.settings);
+    if (locale === "ar" && ["reports", "booklets"].includes(kind) && "fileUrl" in settings) changes.fileUrl = String(settings.fileUrl);
+  } catch (error) {
+    throw new ContentError(
+      `${locale.toUpperCase()}: ${error instanceof Error ? error.message : "حقول غير صالحة"}`,
+    );
+  }
+  const categorySet = settings.categories as
+    | { set: { id: string }[] }
+    | undefined;
+  if (categorySet) {
+    const found = await tx
+      .model("category")
+      .findMany({ where: { id: { in: categorySet.set.map((x) => x.id) } } });
+    if (found.length !== categorySet.set.length)
+      throw new ContentError("أحد التصنيفات غير موجود");
+  }
+  const current = valuesFor(kind, row, locale),
+    next = { ...current, ...changes };
+  for (const [key, model] of [
+    ["categoryId", "postCategory"],
+    ["campaignId", "campaign"],
+    ["donateCampaignId", "campaign"],
+  ]) {
+    if (settings[key]) {
+      const linked = await tx
+        .model(model)
+        .findUnique({ where: { id: settings[key] } });
+      if (!linked || linked.isDeleted)
+        throw new ContentError("المحتوى المرتبط غير موجود");
+      if (
+        key === "donateCampaignId" &&
+        (!Array.isArray(linked.categoryIds) ||
+          !linked.categoryIds.includes(id))
+      )
+        throw new ContentError("مشروع التبرع يجب أن ينتمي لهذا التصنيف");
+    }
+  }
+  for (const [key, model] of [
+    ["campaignIds", "campaign"],
+    ["achievementVideoIds", "video"],
+  ]) {
+    if (Array.isArray(settings[key]) && (settings[key] as unknown[]).length) {
+      const found = await tx
+        .model(model)
+        .findMany({ where: { id: { in: settings[key] } } });
+      if (
+        found.length !== (settings[key] as unknown[]).length ||
+        found.some((r) => r.isDeleted)
+      )
+        throw new ContentError("أحد عناصر المحتوى المرتبط غير موجود");
+    }
+  }
+  const parentChanges = Object.fromEntries(
+    Object.entries(changes).filter(([key]) => !key.includes(".")),
+  );
+  const titleKey = titleKeyFor(kind);
+  // Child translations are independent of the page translation. Editing a
+  // block or shared settings must not require creating a placeholder parent
+  // title/slug; actual parent text writes still require their locale's title.
+  if ((locale === "ar" || Object.keys(parentChanges).length > 0) && !hasText(next[titleKey]))
+    throw new ContentError("العنوان مطلوب قبل الحفظ");
+  // Touch the parent in the same transaction as every translation/child write.
+  // A concurrent legacy form therefore conflicts with this save too.
+  const reviews =
+    row.editorReviews && typeof row.editorReviews === "object"
+      ? { ...(row.editorReviews as Record<string, string>) }
+      : {};
+  if (input.reviewed)
+    reviews[locale] = fingerprint([
+      locale === "ar" ? next : valuesFor(kind, row, "ar"),
+      next,
+    ]);
+  else delete reviews[locale];
+  // The campaign's Arabic gallery remains the sole source of its base cover.
+  // `image` is a translation-only override, not a Campaign database column.
+  if (kind === "campaigns" && locale === "ar") {
+    if (parentChanges.image) throw new ContentError("عدّل الغلاف الافتراضي من صور المشروع");
+    delete parentChanges.image;
+  }
+  const parentData = {
+    editorVersion: randomUUID(),
+    editorReviews: reviews,
+    ...settings,
+    ...(locale === "ar" ? dataFor(parentChanges) : {}),
+  };
+  if (parentPatch) Object.assign(parentPatch, parentData);
+  else await tx.model(cfg.model).update({ where: { id }, data: parentData });
+  // Keep the transaction-local snapshot current using the values just written,
+  // instead of re-reading every locale and child from MongoDB after each edit.
+  Object.assign(row, Object.fromEntries(Object.entries(parentData).filter(([key]) => key !== "categories")));
+  if (locale !== "ar" && Object.keys(parentChanges).length) {
+    const key = `${cfg.parentKey}_locale`,
+      where = { [key]: { [cfg.parentKey]: id, locale } };
+    const data = dataFor(parentChanges);
+    const existingTranslation = rows(row.translations).find((entry) => entry.locale === locale);
+    if (["campaigns", "categories", "blog", "super-categories"].includes(kind) && !text(existingTranslation?.slug)) {
+      data.slug = await generateEditorialSlug(tx, kind, next[titleKey], id);
+      await reserveEditorialSlug(tx, kind, String(data.slug), id);
+    }
+    await tx.model(cfg.translationModel).upsert({
+      where,
+      create: {
+        [cfg.parentKey]: id,
+        locale,
+        [titleKey]: next[titleKey],
+        ...(kind === "campaigns"
+          ? { description: next.description || "" }
+          : {}),
+        ...data,
+      },
+      update: data,
+    });
+    row.translations = [...rows(row.translations).filter(entry => entry.locale !== locale), { ...existingTranslation, locale, [titleKey]: next[titleKey], ...data }];
+  }
+  const childModels: Record<string, [string, string, string]> = {
+    values: ["categoryValue", "categoryValueTranslation", "valueId"],
+    infoCards: ["categoryInfoCard", "categoryInfoCardTranslation", "cardId"],
+    blocks: [
+      "superCategoryBlock",
+      "superCategoryBlockTranslation",
+      "blockId",
+    ],
+  };
+  const grouped = new Map<string, TextValues>();
+  for (const [key, value] of Object.entries(changes))
+    if (key.includes(".")) {
+      const [group, childId, field] = key.split("."),
+        mapKey = `${group}.${childId}`;
+      grouped.set(mapKey, { ...grouped.get(mapKey), [field]: value });
+    }
+  for (const [key, data] of grouped) {
+    const [group, childId] = key.split("."),
+      [model, translationModel, foreignKey] = childModels[group];
+    const child = rows(row[group]).find(entry => entry.id === childId);
+    if (locale === "ar") {
+      await tx.model(model).update({ where: { id: childId }, data });
+      if (child) Object.assign(child, data);
+    } else {
+      const required =
+        group === "values" ? "label" : group === "infoCards" ? "title" : null;
+      const full = Object.fromEntries(
+        fieldsFor(kind, row)
+          .filter((f) => f.key.startsWith(key + "."))
+          .map((f) => [f.key.split(".")[2], next[f.key]]),
+      );
+      if (required && !hasText(full[required]))
+        throw new ContentError("أكمل عنوان البطاقة أو القيمة قبل الحفظ");
+      await tx.model(translationModel).upsert({
+        where: {
+          [`${foreignKey}_locale`]: { [foreignKey]: childId, locale },
+        },
+        create: { [foreignKey]: childId, locale, ...full },
+        update: data,
+      });
+      if (child) child.translations = [...rows(child.translations).filter(entry => entry.locale !== locale), { ...rows(child.translations).find(entry => entry.locale === locale), locale, ...full, ...data }];
+    }
+  }
+  await saveWorkspaceRelations(tx, kind, id, row, input.settings);
+  return { changes, settings };
+}
+
+function verifyContentSave(kind: ContentKind, saved: ContentRecord, locale: string, changes: TextValues, settings: ContentRecord) {
+  const actual = valuesFor(kind, saved, locale);
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === "categories") continue;
+    if (fingerprint(saved[key] ?? null) !== fingerprint(value ?? null))
+      throw new ContentError(
+        "لم تُحفظ إعدادات العنصر كاملة. لم يُعتمد التعديل.",
+        500,
+      );
+  }
+  if (
+    Object.keys(changes).some((key) =>
+      key === "amountLabels"
+        ? text(actual[key]) !== text(dataFor(changes)[key])
+        : actual[key] !== changes[key],
+    )
+  )
+    throw new ContentError("لم تُحفظ كل الحقول. لم يُعتمد التعديل.", 500);
+}
+
+export async function saveContent(db: Store, input: SaveContentInput) {
+  return db.transaction(async tx => {
+    const row = await readContent(tx, input.kind, input.id);
+    if (fingerprint(row) !== input.revision) throw new ContentError("عدّل زميل هذا المحتوى. احتفظ بتعديلاتك ثم أعد تحميل النسخة الحالية.", 409);
+    const changed = await persistContentLocale(tx, input, structuredClone(row));
+    const saved = await readContent(tx, input.kind, input.id);
+    verifyContentSave(input.kind, saved, input.locale, changed.changes, changed.settings);
+    return documentFor(input.kind, saved);
+  });
+}
+export async function saveWorkspace(
+  db: Store,
+  input: {
+    kind: ContentKind;
+    id: string;
+    revision: string;
+    locale: string;
+    changes: unknown;
+    reviewed?: boolean;
+    settings?: unknown;
+    localeChanges?: Record<string, unknown>;
+  },
+) {
+  return db.transaction(async (tx) => {
+    const original = await readContent(tx, input.kind, input.id);
+    if (fingerprint(original) !== input.revision) throw new ContentError("عدّل زميل هذا المحتوى. احتفظ بتعديلاتك ثم أعد تحميل النسخة الحالية.", 409);
+    const working = structuredClone(original), parentPatch: ContentRecord = {};
+    const verification: { locale: string; changes: TextValues; settings: ContentRecord }[] = [];
+    const locales = { ...input.localeChanges, [input.locale]: input.changes };
+    const relationKeys = input.kind === "super-categories" ? ["blocks", "items"] : input.kind === "categories" ? ["values", "infoCards"] : ["videos"];
+    const scalarSettings =
+      ["super-categories", "playlists", "courses", "categories"].includes(input.kind) &&
+      input.settings &&
+      typeof input.settings === "object" &&
+      !Array.isArray(input.settings)
+        ? Object.fromEntries(
+            Object.entries(input.settings).filter(
+              ([key]) => !relationKeys.includes(key),
+            ),
+          )
+        : input.settings;
+    let settingsApplied = false;
+    for (const [locale, changes] of Object.entries(locales).sort(([a], [b]) =>
+      a === "ar" ? -1 : b === "ar" ? 1 : 0,
+    )) {
+      if (!changes || typeof changes !== "object" || Array.isArray(changes)) throw new ContentError(`${locale.toUpperCase()}: حقول غير صالحة`);
+      const edited = changedTextValues(changes as TextValues, valuesFor(input.kind, working, locale));
+      const hasSettings = !settingsApplied && scalarSettings && typeof scalarSettings === "object" && Object.keys(scalarSettings).length > 0;
+      if (locale !== input.locale && !Object.keys(edited).length && !hasSettings) continue;
+      const written = await persistContentLocale(tx, {
+        ...input,
+        locale,
+        changes,
+        reviewed: locale === input.locale && input.reviewed,
+        settings: settingsApplied ? undefined : scalarSettings,
+      }, working, parentPatch);
+      verification.push({ locale, ...written });
+      settingsApplied = true;
+    }
+    try {
+      await saveWorkspaceRelations(
+        tx,
+        input.kind,
+        input.id,
+        original,
+        input.settings,
+      );
+    } catch (error) {
+      throw new ContentError(
+        error instanceof Error ? error.message : "علاقات محتوى غير صالحة",
+      );
+    }
+    // One parent write still detects concurrent legacy/editor saves and rolls
+    // back every child/locale write on conflict. Verify all edits in one read.
+    await tx.model(CONFIG[input.kind].model).update({ where: { id: input.id }, data: parentPatch });
+    const final = await readContent(tx, input.kind, input.id);
+    for (const written of verification) verifyContentSave(input.kind, final, written.locale, written.changes, written.settings);
+    if (input.kind === "videos" && final.sourceUpdateId) {
+      const sourceUpdate = await tx.model("update").findUnique({ where: { id: final.sourceUpdateId } });
+      if (sourceUpdate) await tx.model("update").update({ where: { id: final.sourceUpdateId }, data: {
+        title: text(final.title), description: text(final.description), image: final.thumbnail || null,
+        videoUrl: final.url || (final.youtubeId ? `https://www.youtube.com/watch?v=${final.youtubeId}` : null),
+        translations: { upsert: rows(final.translations).map(translation => ({
+          where: { updateId_locale: { updateId: final.sourceUpdateId, locale: translation.locale } },
+          create: { locale: translation.locale, title: text(translation.title), description: text(translation.description) },
+          update: { title: text(translation.title), description: text(translation.description) },
+        })) },
+      } });
+    }
+    return documentFor(input.kind, final);
+  });
+}
+export async function changeCategorySlug(
+  db: Store,
+  input: {
+    id: string;
+    revision: string;
+    slug: string;
+    confirmation: string;
+    actor: string;
+    locale?: string;
+  },
+) {
+  const slug = input.slug.trim();
+  const locale = input.locale || "ar";
+  if (!(SUPPORTED_LOCALES as readonly string[]).includes(locale))
+    throw new ContentError("لغة غير صالحة");
+  if (
+    !/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u.test(slug) ||
+    slug.length > 150 ||
+    /^[a-f0-9]{24}$/i.test(slug)
+  )
+    throw new ContentError("استخدم حروفًا وأرقامًا وشرطات للرابط");
+  if (input.confirmation !== slug)
+    throw new ContentError("اكتب الرابط الجديد لتأكيد التغيير");
+  return db.transaction(async (tx) => {
+    const row = await readContent(tx, "categories", input.id);
+    if (fingerprint(row) !== input.revision)
+      throw new ContentError("تغير التصنيف. أعد تحميله أولًا.", 409);
+    const current =
+      pickLocaleSlug(
+        text(row.slug),
+        rows(row.translations) as { locale: string; slug?: string | null }[],
+        locale,
+      ) || "";
+    if (current === slug) return documentFor("categories", row);
+    if (locale !== "ar" && !hasText(valuesFor("categories", row, locale).name))
+      throw new ContentError("احفظ عنوان هذه اللغة قبل تخصيص رابطها");
+    const collision = await tx.model("category").findFirst({
+      where: {
+        id: { not: input.id },
+        OR: [
+          { slug },
+          { previousSlugs: { has: slug } },
+          { translations: { some: { slug } } },
+        ],
+      },
+    });
+    if (collision)
+      throw new ContentError("هذا الرابط مستخدم أو محفوظ لتصنيف آخر", 409);
+    await reserveEditorialSlug(tx, "categories", slug, input.id);
+    if (current) await reserveEditorialSlug(tx, "categories", current, input.id);
+    const previous = Array.isArray(row.previousSlugs)
+      ? row.previousSlugs.filter((v): v is string => typeof v === "string")
+      : [];
+    if (current) previous.push(current);
+    const history = [
+      ...rows(row.slugChanges),
+      {
+        from: current,
+        to: slug,
+        locale,
+        at: new Date().toISOString(),
+        actor: input.actor,
+      },
+    ];
+    await tx.model("category").update({
+      where: { id: input.id },
+      data: {
+        ...(locale === "ar" ? { slug } : {}),
+        previousSlugs: [...new Set(previous)].filter((v) => v !== slug),
+        slugChanges: history,
+        editorVersion: randomUUID(),
+      },
+    });
+    if (locale !== "ar")
+      await tx.model("categoryTranslation").upsert({
+        where: { categoryId_locale: { categoryId: input.id, locale } },
+        create: {
+          categoryId: input.id,
+          locale,
+          name: valuesFor("categories", row, locale).name,
+          slug,
+        },
+        update: { slug },
+      });
+    return documentFor(
+      "categories",
+      await readContent(tx, "categories", input.id),
+    );
+  });
+}
+
+/** Locale slugs share one namespace per kind because public URLs accept any locale's slug. */
+export async function generateEditorialSlug(db: Store, kind: ContentKind, title: string, id: string) {
+  const base = slugify(title) || "content";
+  for (let suffix = 1; suffix <= 1000; suffix++) {
+    const slug = suffix === 1 ? base : base + "-" + suffix;
+    const collision = await db.model(CONFIG[kind].model).findFirst({
+      where: { id: { not: id }, OR: [{ slug }, { previousSlugs: { has: slug } }, { translations: { some: { slug } } }] },
+    });
+    const sharedPath = ["campaigns", "super-categories"].includes(kind);
+    const other = sharedPath ? await db.model(kind === "campaigns" ? "superCategory" : "campaign").findFirst({ where: { OR: [{ slug }, { previousSlugs: { has: slug } }, { translations: { some: { slug } } }] } }) : null;
+    const alias = sharedPath ? await db.model("campaignSlugRedirect").findFirst({ where: { slug, ...(kind === "campaigns" ? { campaignId: { not: id } } : {}) } }) : null;
+    const namespace = sharedPath ? "projects" : kind;
+    const reservation = await db.model("contentRouteReservation").findUnique({ where: { id: namespace + ":" + slug } });
+    const reserved = reservation && (reservation.kind !== kind || reservation.contentId !== id);
+    if (!collision && !alias && !other && !reserved) return slug;
+  }
+  throw new ContentError("تعذر إنشاء رابط فريد", 409);
+}
+
+export async function changeEditorialSlug(
+  db: Store,
+  input: { kind: ContentKind; id: string; revision: string; locale: string; slug: string; confirmation: string; actor: string },
+) {
+  if (input.kind === "categories") return changeCategorySlug(db, input);
+  if (!["campaigns", "blog", "super-categories"].includes(input.kind)) throw new ContentError("هذا المحتوى لا يملك رابطًا مستقلًا");
+  const { kind, id, locale } = input, slug = input.slug.trim();
+  if (!(SUPPORTED_LOCALES as readonly string[]).includes(locale) || !/^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$/u.test(slug) || slug.length > 150 || /^[a-f0-9]{24}$/i.test(slug))
+    throw new ContentError("استخدم حروفًا وأرقامًا وشرطات للرابط");
+  if (input.confirmation !== slug) throw new ContentError("اكتب الرابط الجديد لتأكيد التغيير");
+  return db.transaction(async (tx) => {
+    const row = await readContent(tx, kind, id);
+    if (fingerprint(row) !== input.revision) throw new ContentError("تغير المحتوى. أعد تحميله أولًا.", 409);
+    const own = valuesFor(kind, row, locale);
+    if (!hasText(own.title)) throw new ContentError("احفظ عنوان هذه اللغة قبل تخصيص رابطها");
+    const current = pickLocaleSlug(text(row.slug), rows(row.translations) as { locale: string; slug?: string | null }[], locale) || "";
+    if (current === slug) return documentFor(kind, row);
+    const available = await generateEditorialSlug(tx, kind, slug, id);
+    if (available !== slug) throw new ContentError("هذا الرابط مستخدم أو محفوظ لمحتوى آخر", 409);
+    await reserveEditorialSlug(tx, kind, slug, id);
+    if (current) await reserveEditorialSlug(tx, kind, current, id);
+    const previous = Array.isArray(row.previousSlugs) ? row.previousSlugs.filter((v): v is string => typeof v === "string") : [];
+    if (current) previous.push(current);
+    await tx.model(CONFIG[kind].model).update({ where: { id }, data: {
+      ...(locale === "ar" ? { slug } : {}),
+      previousSlugs: [...new Set(previous)].filter((value) => value !== slug),
+      slugChanges: [...rows(row.slugChanges), { from: current, to: slug, locale, at: new Date().toISOString(), actor: input.actor }],
+      editorVersion: randomUUID(),
+    } });
+    if (kind === "campaigns" && current) {
+      const alias = await tx.model("campaignSlugRedirect").findFirst({ where: { locale, slug: current } });
+      if (alias && alias.campaignId !== id) throw new ContentError("تعارض في سجل الروابط", 409);
+      if (!alias) await tx.model("campaignSlugRedirect").create({ data: { campaignId: id, locale, slug: current } });
+    }
+    if (locale !== "ar") {
+      const cfg = CONFIG[kind];
+      await tx.model(cfg.translationModel).upsert({
+        where: { [cfg.parentKey + "_locale"]: { [cfg.parentKey]: id, locale } },
+        create: { [cfg.parentKey]: id, locale, title: own.title, ...(kind === "campaigns" ? { description: own.description || "" } : {}), slug },
+        update: { slug },
+      });
+    }
+    return documentFor(kind, await readContent(tx, kind, id));
+  });
+}
+
+export async function reserveEditorialSlug(db: Store, kind: ContentKind, slug: string, contentId: string) {
+  const namespace = ["campaigns", "super-categories"].includes(kind) ? "projects" : kind;
+  const id = namespace + ":" + slug, model = db.model("contentRouteReservation");
+  const current = await model.findUnique({ where: { id } });
+  if (current && (current.kind !== kind || current.contentId !== contentId)) throw new ContentError("هذا الرابط محفوظ لمحتوى آخر", 409);
+  if (!current) await model.create({ data: { id, kind, contentId } });
+}

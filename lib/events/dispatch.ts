@@ -1,6 +1,9 @@
+import { PAYMENT_RECEIPT_EVENTS, isPaymentReceiptEvent, paymentReceiptEvent, paymentReceiptTriggerGroups, canFallbackReceipt } from "./payment-receipt-policy";
 import { prisma } from "@/lib/prisma";
 import { track as vercelTrack } from "@vercel/analytics/server";
-import { loadContext, loadContextForDonation, mergeText, type TemplateContext } from "@/lib/templates/variables";
+import { loadContext, loadContextForDonation, loadContextForSubscription, mergeText, type TemplateContext } from "@/lib/templates/variables";
+import { containsMonthlyCadence, recurringNotificationText, recurringNotificationDocument } from "@/lib/templates/recurring-cadence";
+import { automaticEmailHtml } from "@/lib/templates/font";
 import { renderEmailHtml, renderEmailSubject } from "@/lib/templates/render";
 import { writeAuditLog } from "@/lib/audit-log";
 import { triggerEventLabelAr } from "@/lib/dashboard/audit-log-display";
@@ -9,40 +12,60 @@ import type { TReaderDocument } from "@usewaypoint/email-builder";
 import { notifyDonationEvent } from "@/lib/telegram/notify";
 import { sendDonationServerConversions } from "@/lib/tracking/donation-conversion-server";
 import { upsertProfileForUser } from "@/lib/communication/donor-communication-profile-service";
-import { sendAutomaticEmailMessage, sendAutomaticWhatsappMessage, resolveMetaTemplateMapping, type AutomaticOutcome } from "@/lib/communication/automatic-message-dispatcher";
-import { listSenders } from "@/lib/communication/sender-service";
-import { getActiveCommunicationRuntimeBundle } from "@/lib/communication/runtime-config";
+import { sendAutomaticEmailMessage, sendAutomaticWhatsappMessage, sendAutomaticSmsMessage, resolveMetaTemplateMapping, type AutomaticOutcome } from "@/lib/communication/automatic-message-dispatcher";
+import { loadSenderRoutingSnapshot, resolveSenderFromSnapshot, type SenderResolution, type SenderRoutingSnapshot } from "@/lib/communication/sender-resolution";
 import type { CommunicationPurposeId } from "@/lib/communication/communication-runtime-types";
 import type { SupportedLocale } from "@/lib/locales";
+import { donationAttachments, type EmailAttachment } from "@/lib/certificates/generate";
+import { ensureDonationDocuments } from "@/lib/certificates/issue";
+import { getServerBaseUrl } from "@/lib/server-base-url";
+import { localizeDonationFailureLinks } from "@/lib/templates/localize-donation-failure-link";
+import { donationNotificationDocument, donationNotificationText, donationNotificationParameters, isDonationMoneyNotificationEvent } from "@/lib/templates/donation-money";
 
 export type MessageTriggerEvent = "DONATION_PAID" | "DONATION_FAILED" | "FIRST_DONATION" | "USER_REGISTERED" | "SUBSCRIPTION_CREATED" | "SUBSCRIPTION_PAYMENT" | "SUBSCRIPTION_CANCELLED" | "DONATION_LAPSED";
-export interface EventDispatchInput { userId?: string; donationId?: string }
-interface DispatchResult { triggers: number; emailsSent: number; whatsappSent: number; errors: number }
-
-/** Resolved sender identities shared by every send in one dispatch/batch run. */
-export interface TriggerSendConfig {
-  emailIdentity: string | null;
-  whatsappSender: { id: string | null; phoneNumberId: string | null } | null;
-}
+export interface EventDispatchInput { userId?: string; donationId?: string; subscriptionId?:string }
+interface DispatchResult { triggers: number; emailsSent: number; whatsappSent: number; smsSent: number; skipped: number; errors: number; skipReasons: Record<string, number> }
 
 /**
- * Resolve the email/WhatsApp sender identities once. Batch senders (the DONATION_LAPSED cron)
- * resolve this a single time and reuse it across hundreds of recipients.
+ * The sender tables and routing rules for one dispatch/batch run.
+ *
+ * This used to be a single resolved identity, picked before any recipient was known: the first
+ * enabled WhatsApp sender with a phone number, and the first enabled email sender. Every donor in a
+ * batch therefore got the same number regardless of their locale or country, while a campaign to
+ * those same donors routed properly  so one donor could hold two WhatsApp threads with the
+ * organisation, one per code path. The snapshot is read once, as before, but the DECISION is now
+ * made per recipient by `lib/communication/sender-resolution.ts`, the one resolver every outbound
+ * path shares.
  */
-export async function resolveTriggerSendConfig(): Promise<TriggerSendConfig> {
-  const [senders, runtime] = await Promise.all([listSenders().catch(() => []), getActiveCommunicationRuntimeBundle()]);
-  const emailSenderRow = senders.find((sender) => sender.channel === "EMAIL" && sender.enabled)?.senderEmail ?? null;
-  const emailIdentity = emailSenderRow || (runtime.elasticEmail.configured ? runtime.elasticEmail.values.senderEmail : null);
-  const metaSenderRow = senders.find((sender) => sender.channel === "WHATSAPP" && sender.enabled && sender.phoneNumberId);
-  const whatsappSender = metaSenderRow
-    ? { id: metaSenderRow.id, phoneNumberId: metaSenderRow.phoneNumberId }
-    : runtime.meta.configured
-      ? { id: null, phoneNumberId: runtime.meta.values.defaultPhoneNumberId }
-      : null;
-  return { emailIdentity, whatsappSender };
+export interface TriggerSendConfig {
+  email: SenderRoutingSnapshot;
+  whatsapp: SenderRoutingSnapshot;
 }
 
-export type TriggerSendOutcome = { channel: "EMAIL" | "WHATSAPP"; outcome: AutomaticOutcome; reason?: string };
+/** Read the sender tables once. Batch senders reuse this across hundreds of recipients. */
+export async function resolveTriggerSendConfig(): Promise<TriggerSendConfig> {
+  const [email, whatsapp] = await Promise.all([
+    loadSenderRoutingSnapshot("EMAIL"),
+    loadSenderRoutingSnapshot("WHATSAPP"),
+  ]);
+  return { email, whatsapp };
+}
+
+/** The per-recipient decision: the recipient's locale and country, and this message's purpose. */
+export function resolveTriggerSender(
+  config: TriggerSendConfig,
+  channel: "EMAIL" | "WHATSAPP",
+  request: { locale?: string | null; country?: string | null; purpose?: CommunicationPurposeId },
+): SenderResolution {
+  return resolveSenderFromSnapshot(channel === "EMAIL" ? config.email : config.whatsapp, {
+    locale: request.locale ?? null,
+    country: request.country ?? null,
+    purpose: request.purpose ?? "TRANSACTIONAL",
+    template: channel === "WHATSAPP",
+  });
+}
+
+export type TriggerSendOutcome = { channel: "EMAIL" | "WHATSAPP" | "SMS"; outcome: AutomaticOutcome; reason?: string };
 
 /**
  * Render one trigger's template for one recipient and hand it to the provider layer.
@@ -51,102 +74,371 @@ export type TriggerSendOutcome = { channel: "EMAIL" | "WHATSAPP"; outcome: Autom
 export async function sendTriggerMessage(
   trigger: { channel: string; templateId: string },
   ctx: TemplateContext,
-  opts: { event: MessageTriggerEvent; locale: SupportedLocale; config: TriggerSendConfig; donationId?: string | null; purpose?: CommunicationPurposeId }
+  opts: { event: MessageTriggerEvent; locale: SupportedLocale; config: TriggerSendConfig; donationId?: string | null; purpose?: CommunicationPurposeId; attachments?: EmailAttachment[] }
 ): Promise<TriggerSendOutcome | null> {
   const { event, locale, config } = opts;
   const variables = ctx as unknown as Record<string, unknown>;
   const donationId = opts.donationId ?? null;
+  const frequency=event.startsWith("SUBSCRIPTION_")?ctx.subscription?.frequency:undefined;
+  // Only donation-scoped transactional notifications upgrade legacy amount
+  // display slots. Marketing/history templates keep their original semantics.
+  const moneyContext: Pick<TemplateContext, "donation"> = donationId && isDonationMoneyNotificationEvent(event) ? ctx : {};
 
   if (trigger.channel === "EMAIL") {
     const tpl = await prisma.emailTemplate.findUnique({ where: { id: trigger.templateId } });
     if (!tpl) return null;
     const variant = resolveEmailVariant(tpl, locale);
-    const html = await renderEmailHtml(variant.document as TReaderDocument, ctx);
-    const subject = renderEmailSubject(variant.subject, ctx);
-    const response = await sendAutomaticEmailMessage({ triggerEvent: event, templateId: tpl.id, templateName: tpl.name, locale, recipientUserId: ctx.user.id, recipientName: ctx.user.name || null, recipientEmail: ctx.user.email ?? null, renderedSubject: subject, renderedBody: html, senderEmail: config.emailIdentity, variables, donationId, purpose: opts.purpose });
+    const html = localizeDonationFailureLinks(
+      automaticEmailHtml(await renderEmailHtml(recurringNotificationDocument(donationNotificationDocument(variant.document as TReaderDocument, moneyContext, locale),frequency,locale), ctx, variant.resolvedLocale), locale),
+      locale,
+    );
+    const subject = renderEmailSubject(recurringNotificationText(donationNotificationText(variant.subject, moneyContext, locale),frequency,locale), ctx);
+    const exactEmail = (tpl.translations as Record<string, { subject?: string; document?: unknown }> | null)?.[locale];
+    const renderingError = event.startsWith("SUBSCRIPTION_") && !frequency && (containsMonthlyCadence(variant.subject, locale) || containsMonthlyCadence(JSON.stringify(variant.document), locale))
+      ? "RECURRING_TEMPLATE_CADENCE_MISMATCH"
+      : locale !== "ar" && (!exactEmail?.subject?.trim() || !exactEmail?.document) ? "EXACT_TEMPLATE_LANGUAGE_REQUIRED" : undefined;
+    const routed = resolveTriggerSender(config, "EMAIL", { locale, country:ctx.user.countryCode || null, purpose: opts.purpose });
+    /* A routing refusal is the answer, not a prompt to fall back to the default identity. */
+    if (!routed.ok) return { channel: "EMAIL", outcome: "SKIPPED", reason: routed.reason };
+    const response = await sendAutomaticEmailMessage({ triggerEvent: event, templateId: tpl.id, templateName: tpl.name, locale, recipientUserId: ctx.user.id, recipientName: ctx.user.name || null, recipientEmail: ctx.user.email ?? null, renderedSubject: subject, renderedBody: html, senderEmail: routed.sender.senderEmail, variables, donationId, purpose: opts.purpose, attachments: opts.attachments, renderingError });
     return { channel: "EMAIL", outcome: response.outcome, reason: response.reason };
+  }
+
+  if (trigger.channel === "SMS") {
+    const tpl = await prisma.smsTemplate.findUnique({ where: { id: trigger.templateId } });
+    if (!tpl) return null;
+    const variant = resolveWhatsappBody(tpl, locale);
+    const body = localizeDonationFailureLinks(mergeText(recurringNotificationText(donationNotificationText(variant.body, moneyContext, locale),frequency,locale), ctx), locale);
+    const response = await sendAutomaticSmsMessage({
+      triggerEvent: event,
+      templateId: tpl.id,
+      templateName: tpl.name,
+      locale,
+      recipientUserId: ctx.user.id,
+      recipientName: ctx.user.name || null,
+      recipientPhone: ctx.user.phone || null,
+      country: ctx.user.countryCode || null,
+      renderedBody: body,
+      renderingError: event.startsWith("SUBSCRIPTION_") && !frequency && containsMonthlyCadence(variant.body, locale) ? "RECURRING_TEMPLATE_CADENCE_MISMATCH" : variant.resolvedLocale && variant.resolvedLocale !== locale ? "EXACT_TEMPLATE_LANGUAGE_REQUIRED" : undefined,
+      variables,
+      donationId,
+      purpose: opts.purpose,
+    });
+    return { channel: "SMS", outcome: response.outcome, reason: response.reason };
   }
 
   if (trigger.channel === "WHATSAPP") {
     const tpl = await prisma.whatsappTemplate.findUnique({ where: { id: trigger.templateId } });
     if (!tpl) return null;
     const variant = resolveWhatsappBody(tpl, locale);
-    const body = mergeText(variant.body, ctx);
-    const response = await sendAutomaticWhatsappMessage({ triggerEvent: event, templateId: tpl.id, templateName: tpl.name, locale, recipientUserId: ctx.user.id, recipientName: ctx.user.name || null, recipientPhone: ctx.user.phone ?? null, renderedBody: body, metaTemplate: resolveMetaTemplateMapping(tpl, locale), sender: config.whatsappSender, variables, donationId, purpose: opts.purpose });
+    // Existing approved Meta schemas still have separate numeric/currency slots.
+    // New receipt families carry the complete summary in one approved slot.
+    const legacyMoney = { donation: { amountBreakdown: moneyContext.donation?.amountBreakdown, notificationAmount: moneyContext.donation?.notificationAmount } };
+    const body = localizeDonationFailureLinks(mergeText(donationNotificationText(variant.body, legacyMoney), ctx), locale);
+    const routed = resolveTriggerSender(config, "WHATSAPP", { locale, country:ctx.user.countryCode || null, purpose: opts.purpose });
+    if (!routed.ok) return { channel: "WHATSAPP", outcome: "SKIPPED", reason: routed.reason };
+    const metaTemplate = await resolveMetaTemplateMapping(tpl, locale, routed.sender.businessAccountId, { exactLanguage: true });
+    const cadenceError=event.startsWith("SUBSCRIPTION_")&&frequency!=="MONTHLY"&&(containsMonthlyCadence(variant.body,locale)||containsMonthlyCadence(JSON.stringify(metaTemplate?.componentsSchema??[]),locale))?"RECURRING_TEMPLATE_CADENCE_MISMATCH":undefined;
+    /* Meta's placeholders are positional, and the local template's variable catalog says which
+       token each position carries. Each one is rendered against this recipient's context through
+       the same merge the body uses, so the parameters and the body cannot disagree. */
+    const templateValues: Record<string, string> = {};
+    (metaTemplate?.positionalNames ?? []).forEach((name, index) => {
+      const value = mergeText(`{{${name}}}`, ctx);
+      templateValues[name] = value;
+      templateValues[String(index + 1)] = value;
+    });
+    const notificationValues = metaTemplate ? donationNotificationParameters({ values: templateValues, scopedNames: metaTemplate.scopedNames, positionalNames: metaTemplate.positionalNames, componentsSchema: metaTemplate.componentsSchema, notificationAmount: moneyContext.donation?.notificationAmount }) : templateValues;
+    const response = await sendAutomaticWhatsappMessage({ triggerEvent: event, templateId: tpl.id, templateName: tpl.name, locale, recipientUserId: ctx.user.id, recipientName: ctx.user.name || null, recipientPhone: ctx.user.phone ?? null, renderedBody: body, metaTemplate, templateValues: notificationValues, sender: { id: routed.sender.id, phoneNumberId: routed.sender.phoneNumberId, businessAccountId: routed.sender.businessAccountId }, variables, donationId, purpose: opts.purpose, renderingError: cadenceError || (variant.resolvedLocale && variant.resolvedLocale !== locale ? "EXACT_TEMPLATE_LANGUAGE_REQUIRED" : undefined) });
     return { channel: "WHATSAPP", outcome: response.outcome, reason: response.reason };
   }
 
   return null;
 }
 
-export async function dispatchEvent(event: MessageTriggerEvent, input: EventDispatchInput): Promise<DispatchResult> {
-  const result: DispatchResult = { triggers: 0, emailsSent: 0, whatsappSent: 0, errors: 0 };
-  if (input.donationId && (event === "DONATION_PAID" || event === "DONATION_FAILED" || event === "FIRST_DONATION")) void notifyDonationEvent(event, input.donationId);
-  try {
-    const triggers = await prisma.messageTrigger.findMany({ where: { event, enabled: true } });
-    result.triggers = triggers.length;
-    if (!triggers.length) return result;
-    const ctx: TemplateContext | null = input.donationId ? await loadContextForDonation(input.donationId) : input.userId ? await loadContext(input.userId) : null;
-    if (!ctx) {
-      await writeAuditLog({ actorRole: "SYSTEM", action: "EVENT_DISPATCH_NO_CONTEXT", messageAr: `تعذّر إرسال الرسائل التلقائية عند «${triggerEventLabelAr(event)}» — بيانات المستلم غير متاحة`, metadata: { event, ...input }, stream: "TEAM" });
-      return result;
-    }
-    const locale = pickLocale({ recipientLang: ctx.user.preferredLang });
-    const config = await resolveTriggerSendConfig();
+/** Donation-scoped events that must reach the donor once per donation, however many times
+ * the payment is confirmed (replayed webhook, reconciliation job, gateway callback retry). */
+const ONCE_PER_DONATION: ReadonlySet<MessageTriggerEvent> = new Set([
+  "DONATION_PAID",
+  "FIRST_DONATION",
+  "DONATION_FAILED",
+  "SUBSCRIPTION_CREATED",
+  "SUBSCRIPTION_PAYMENT",
+]);
 
-    for (const trigger of triggers) {
-      try {
-        const sent = await sendTriggerMessage(trigger, ctx, { event, locale, config, donationId: input.donationId ?? null });
-        if (!sent) continue;
-        if (sent.outcome === "SENT") {
-          if (sent.channel === "EMAIL") result.emailsSent += 1;
-          else result.whatsappSent += 1;
-        } else if (sent.outcome === "FAILED") {
-          result.errors += 1;
-        }
-      } catch {
-        result.errors += 1;
-      }
+export function dispatchClaimKey(event: MessageTriggerEvent, donationId: string): string {
+  return `${isPaymentReceiptEvent(event) ? "PAYMENT_RECEIPT" : event}:${donationId}`;
+}
+
+/**
+ * Recoverable once-per-donation claim.
+ *
+ * A plain permanent insert prevented duplicates, but it also turned a serverless crash into a
+ * permanent lost notification: the claim could be committed and the function terminated before
+ * WhatsApp/email was sent. Claims are now short leases. A completed dispatch stays deduplicated;
+ * an interrupted dispatch can be reclaimed after the lease expires.
+ */
+const DISPATCH_CLAIM_LEASE_MS = 10 * 60 * 1000;
+type DispatchClaim = { acquired: boolean; token: string | null };
+
+async function claimDispatch(event: MessageTriggerEvent, donationId: string): Promise<DispatchClaim> {
+  const isDuplicate = (value: unknown) => /E11000|duplicate key/i.test(String(value));
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  const now = new Date();
+  const leaseExpiresAt = new Date(now.getTime() + DISPATCH_CLAIM_LEASE_MS);
+  const key = dispatchClaimKey(event, donationId);
+
+  try {
+    if (isPaymentReceiptEvent(event)) {
+      // Respect receipts already handled by releases with event-specific keys.
+      // Old in-flight claims stay with their existing delivery/outbox recovery.
+      const legacy = await prisma.$runCommandRaw({find:"EventDispatchClaim",filter:{_id:{$in:PAYMENT_RECEIPT_EVENTS.map(name=>`${name}:${donationId}`)}},limit:1,singleBatch:true}) as {cursor?:{firstBatch?:unknown[]}};
+      if (legacy.cursor?.firstBatch?.length) return {acquired:false,token:null};
     }
-    // Only record a dispatch that actually did something. A trigger that matched
-    // no recipient produced «حدث تلقائي DONATION_FAILED — 0 بريد، 0 واتساب»,
-    // which says nothing and drowned the rows that do.
-    const didSomething = result.emailsSent > 0 || result.whatsappSent > 0 || result.errors > 0;
-    if (didSomething) {
-      const parts = [
-        result.emailsSent ? `${result.emailsSent} بريد` : null,
-        result.whatsappSent ? `${result.whatsappSent} واتساب` : null,
-        result.errors ? `${result.errors} فشل` : null,
-      ].filter(Boolean);
+    const inserted = (await prisma.$runCommandRaw({
+      insert: "EventDispatchClaim",
+      documents: [{
+        _id: key,
+        event,
+        donationId,
+        state: "IN_PROGRESS",
+        token,
+        createdAt: { $date: now.toISOString() },
+        updatedAt: { $date: now.toISOString() },
+        leaseExpiresAt: { $date: leaseExpiresAt.toISOString() },
+      }],
+    })) as { n?: number; writeErrors?: Array<{ code?: number; errmsg?: string }> };
+
+    const duplicate = inserted.writeErrors?.some((e) => e.code === 11000 || isDuplicate(e.errmsg));
+    if (!duplicate) return { acquired: true, token };
+
+    const takeover = (await prisma.$runCommandRaw({
+      findAndModify: "EventDispatchClaim",
+      query: {
+        _id: key,
+        state: "IN_PROGRESS",
+        leaseExpiresAt: { $lte: { $date: now.toISOString() } },
+      },
+      update: {
+        $set: {
+          token,
+          updatedAt: { $date: now.toISOString() },
+          leaseExpiresAt: { $date: leaseExpiresAt.toISOString() },
+        },
+      },
+      new: true,
+    })) as { value?: { token?: string } | null };
+
+    return { acquired: takeover.value?.token === token, token: takeover.value?.token === token ? token : null };
+  } catch (error) {
+    if (isDuplicate(error instanceof Error ? error.message : error)) return { acquired: false, token: null };
+    if (isPaymentReceiptEvent(event)) {
+      console.error("Receipt claim unavailable; delivery deferred", { event, donationId });
+      return { acquired: false, token: null };
+    }
+    console.error("claimDispatch failed; dispatching anyway", { event, donationId, error: error instanceof Error ? error.message : String(error) });
+    // Fail open for availability. A null token means there is no claim to complete.
+    return { acquired: true, token: null };
+  }
+}
+
+async function completeDispatchClaim(event: MessageTriggerEvent, donationId: string, token: string | null): Promise<void> {
+  if (!token) return;
+  const now = new Date();
+  await prisma.$runCommandRaw({
+    findAndModify: "EventDispatchClaim",
+    query: { _id: dispatchClaimKey(event, donationId), token, state: "IN_PROGRESS" },
+    update: {
+      $set: {
+        state: "COMPLETED",
+        completedAt: { $date: now.toISOString() },
+        updatedAt: { $date: now.toISOString() },
+      },
+      $unset: { token: "", leaseExpiresAt: "" },
+    },
+    new: false,
+  }).catch((error) => {
+    console.error("completeDispatchClaim failed", { event, donationId, error: error instanceof Error ? error.message : String(error) });
+  });
+}
+
+export async function dispatchEvent(event: MessageTriggerEvent, input: EventDispatchInput): Promise<DispatchResult> {
+  const result: DispatchResult = { triggers: 0, emailsSent: 0, whatsappSent: 0, smsSent: 0, skipped: 0, errors: 0, skipReasons: {} };
+  let claimToken: string | null = null;
+  let claimed = false;
+
+  if (input.donationId && (event === "DONATION_PAID" || event === "DONATION_FAILED" || event === "FIRST_DONATION")) void notifyDonationEvent(event, input.donationId);
+
+  try {
+    // Do not consume the once-per-donation claim until we know there is actual work and a
+    // renderable recipient. This keeps a temporarily missing trigger/context retryable.
+    let triggers = await prisma.messageTrigger.findMany({ where: { event: input.donationId && isPaymentReceiptEvent(event) ? { in: [...PAYMENT_RECEIPT_EVENTS] } : event, enabled: true }, orderBy: { id: "asc" } });
+    result.triggers = triggers.length;
+    if (!triggers.length) {
       await writeAuditLog({
         actorRole: "SYSTEM",
-        action: "EVENT_DISPATCH",
-        // The raw enum key used to leak into the message; label it instead.
-        messageAr: `رسائل تلقائية عند «${triggerEventLabelAr(event)}» — ${parts.join("، ")}`,
-        metadata: { event, ...input, ...result },
+        action: "EVENT_DISPATCH_NO_TRIGGERS",
+        messageAr: `لا توجد رسائل تلقائية مفعّلة عند «${triggerEventLabelAr(event)}»`,
+        metadata: { event, ...input },
         stream: "TEAM",
       });
+      return result;
     }
-  } catch {
+
+    if (input.donationId && isPaymentReceiptEvent(event) && event !== "DONATION_PAID") {
+      // The generic and recurring callbacks can race; documents must exist
+      // before whichever one wins the shared receipt claim loads its links.
+      try { await ensureDonationDocuments(input.donationId); } catch { console.error("Receipt documents unavailable", { donationId: input.donationId }); }
+    }
+    const ctx: TemplateContext | null = input.donationId ? await loadContextForDonation(input.donationId) : input.subscriptionId ? await loadContextForSubscription(input.subscriptionId,input.userId) : input.userId ? await loadContext(input.userId) : null;
+    if (!ctx) {
+      await writeAuditLog({ actorRole: "SYSTEM", action: "EVENT_DISPATCH_NO_CONTEXT", messageAr: `تعذّر إرسال الرسائل التلقائية عند «${triggerEventLabelAr(event)}»  بيانات المستلم غير متاحة`, metadata: { event, ...input }, stream: "TEAM" });
+      return result;
+    }
+
+    let triggerGroups = triggers.map(trigger => [trigger]);
+    if (input.donationId && isPaymentReceiptEvent(event)) {
+      if (ctx.donation?.settled === false) {
+        result.skipped++; result.skipReasons.PAYMENT_NOT_CONFIRMED = 1; return result;
+      }
+      event = paymentReceiptEvent({ ...ctx.donation, subscription: ctx.subscription });
+      // All paid callbacks for this donation now share the actual receipt event
+      // and its existing idempotent claim, rather than sending two receipts.
+      triggerGroups = paymentReceiptTriggerGroups(triggers, event);
+      triggers = triggerGroups.flat(); result.triggers = triggerGroups.length;
+      if (!triggerGroups.length) return result;
+    }
+
+    if (input.donationId && ONCE_PER_DONATION.has(event)) {
+      const claim = await claimDispatch(event, input.donationId);
+      if (!claim.acquired) return result;
+      claimed = true;
+      claimToken = claim.token;
+    }
+
+    const locale = pickLocale({ override: ctx.donation?.locale, recipientLang: ctx.user.preferredLang });
+    const config = await resolveTriggerSendConfig();
+
+    let attachments: EmailAttachment[] | undefined;
+    if (isPaymentReceiptEvent(event) && input.donationId && triggers.some((trigger) => trigger.channel === "EMAIL")) {
+      attachments = await donationPaidAttachments(input.donationId);
+    }
+
+    for (const group of triggerGroups) for (const trigger of group) {
+      try {
+        const sent = await sendTriggerMessage(trigger, ctx, { event, locale, config, donationId: input.donationId ?? null, attachments });
+        if (!sent) {
+          result.skipped += 1;
+          result.skipReasons.TEMPLATE_NOT_FOUND = (result.skipReasons.TEMPLATE_NOT_FOUND ?? 0) + 1;
+          continue;
+        }
+        if (sent.outcome === "SENT") {
+          if (sent.channel === "EMAIL") result.emailsSent += 1;
+          else if (sent.channel === "WHATSAPP") result.whatsappSent += 1;
+          else result.smsSent += 1;
+        } else if (sent.outcome === "SKIPPED") {
+          result.skipped += 1;
+          const reason = sent.reason ?? "SKIPPED";
+          result.skipReasons[reason] = (result.skipReasons[reason] ?? 0) + 1;
+        } else {
+          result.errors += 1;
+        }
+        if (!input.donationId || !isPaymentReceiptEvent(event) || !canFallbackReceipt(sent)) break;
+      } catch (error) {
+        result.errors += 1;
+        console.error("sendTriggerMessage failed", {
+          event,
+          donationId: input.donationId ?? null,
+          channel: trigger.channel,
+          templateId: trigger.templateId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        break; // An uncertain send must not fall through to a second receipt.
+      }
+    }
+
+    const parts = [
+      result.emailsSent ? `${result.emailsSent} بريد` : null,
+      result.whatsappSent ? `${result.whatsappSent} واتساب` : null,
+      result.smsSent ? `${result.smsSent} SMS` : null,
+      result.skipped ? `${result.skipped} متخطى` : null,
+      result.errors ? `${result.errors} فشل` : null,
+    ].filter(Boolean);
+
+    await writeAuditLog({
+      actorRole: "SYSTEM",
+      action: "EVENT_DISPATCH",
+      messageAr: `رسائل تلقائية عند «${triggerEventLabelAr(event)}»  ${parts.join("، ") || "لم يتم إرسال شيء"}`,
+      metadata: { event, ...input, ...result },
+      stream: "TEAM",
+    });
+
+    // Only a run that reached the end becomes permanently deduplicated. A process killed after
+    // acquiring the claim leaves an expiring lease and can be recovered on a later callback/retry.
+    if (claimed && input.donationId) {
+      await completeDispatchClaim(event, input.donationId, claimToken);
+    }
+  } catch (error) {
     result.errors += 1;
+    console.error("dispatchEvent failed", { event, ...input, error: error instanceof Error ? error.message : String(error) });
+    // Do not complete the claim here: the lease is intentionally left recoverable.
   }
   return result;
 }
 
+/** The PDFs for a confirmed donation, or nothing if they cannot be produced right now. */
+async function donationPaidAttachments(donationId: string): Promise<EmailAttachment[] | undefined> {
+  try {
+    const docs = await ensureDonationDocuments(donationId);
+    if (!docs) return undefined;
+    return await donationAttachments(docs, await getServerBaseUrl());
+  } catch (error) {
+    console.error("dispatchEvent DONATION_PAID attachments failed", { donationId, error: error instanceof Error ? error.message : String(error) });
+    return undefined;
+  }
+}
+
 export async function dispatchDonationPaid(donationId: string): Promise<void> {
+  // Preserve the FAILED payment record; only link a strictly matched, later
+  // bank-confirmed retry for the operational dashboard's compact view.
+  // Never delay receipts or gateway settlement if optional display bookkeeping fails.
+  try {
+    const { linkRecoveredFailedAttempts } = await import("@/lib/dashboard/donation-overview-recovery");
+    await linkRecoveredFailedAttempts(donationId);
+  } catch (error) {
+    console.error("dispatchDonationPaid overview recovery match failed", {
+      donationId, reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+  /* Serials are minted here, at confirmation, before anything is sent 
+     `DONATION_LOGIC_SPEC §2`. Idempotent: a replayed webhook finds the same
+     records. A failure is logged and never blocks the notifications. */
+  try {
+    await ensureDonationDocuments(donationId);
+  } catch (error) {
+    console.error("dispatchDonationPaid issue documents failed", { donationId, error: error instanceof Error ? error.message : String(error) });
+  }
   await dispatchEvent("DONATION_PAID", { donationId });
+  /* Gifted lines: tell the recipient, with a certificate in their name.
+     Per-line idempotent; a failure is logged and the rest still runs. */
+  try {
+    const { deliverDonationGifts } = await import("@/lib/donations/gift-delivery");
+    await deliverDonationGifts(donationId);
+  } catch (error) {
+    console.error("dispatchDonationPaid gift delivery failed", { donationId, error: error instanceof Error ? error.message : String(error) });
+  }
   try {
     const capi = await sendDonationServerConversions(donationId);
     if (!capi.ok && !capi.skipped) console.error("dispatchDonationPaid CAPI returned not-ok", { donationId, reason: capi.reason ?? capi.error ?? null });
   } catch { console.error("dispatchDonationPaid CAPI failed", { donationId }); }
   try {
-    const donation = await prisma.donation.findUnique({ where: { id: donationId }, select: { donorId: true, amount: true, amountUSD: true, currency: true, paymentMethod: true, provider: true, locale: true } });
+    const donation = await prisma.donation.findUnique({ where: { id: donationId }, select: { donorId: true, amount: true, amountUSD: true, currency: true, subscriptionId: true, paymentMethod: true, provider: true, locale: true } });
     if (!donation) return;
     try { await upsertProfileForUser(donation.donorId, { donationLocale: donation.locale }); } catch { console.error("dispatchDonationPaid profile sync failed", { donationId }); }
     const paidCount = await prisma.donation.count({ where: { donorId: donation.donorId, status: "PAID" } });
     if (paidCount === 1) await dispatchEvent("FIRST_DONATION", { donationId });
     try {
-      await vercelTrack("donation_paid_server", { donation_id: donationId, amount: donation.amount ?? 0, amount_usd: donation.amountUSD ?? donation.amount ?? 0, currency: donation.currency ?? "USD", donation_type: "ONE_TIME", payment_method: donation.paymentMethod ?? null, gateway: donation.provider ?? null, is_first_donation: paidCount === 1 });
+      await vercelTrack("donation_paid_server", { donation_id: donationId, amount: donation.amount ?? 0, amount_usd: donation.amountUSD ?? donation.amount ?? 0, currency: donation.currency ?? "USD", donation_type: donation.subscriptionId ? "SUBSCRIPTION" : "ONE_TIME", payment_method: donation.paymentMethod ?? null, gateway: donation.provider ?? null, is_first_donation: paidCount === 1 });
     } catch { console.error("Vercel donation_paid_server track failed"); }
   } catch { console.error("dispatchDonationPaid first-donation check failed", { donationId }); }
 }

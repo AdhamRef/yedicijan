@@ -4,6 +4,7 @@ import { getOperationsOverview } from "@/lib/operations/service";
 import { buildOperationsCommandCenterOverview } from "@/lib/operations/command-center/command-center-service";
 import type { MarketingPlatformConnection } from "@prisma/client";
 import { serializeConnection } from "@/lib/marketing/connection-serializer";
+import { dt } from "@/lib/dashboard/i18n";
 
 export type ExecutiveRiskLevel = "HIGH" | "MEDIUM" | "LOW";
 
@@ -43,18 +44,18 @@ export async function buildExecutiveSystemOverview(
     risks.push({
       id: "provider-readiness",
       level: marketing.summary.providerNeedsWork >= 5 ? "HIGH" : "MEDIUM",
-      title: "تكاملات تحتاج استكمال",
-      reason: `يوجد ${marketing.summary.providerNeedsWork} مزود أو اتصال يحتاج مراجعة قبل الاعتماد التشغيلي الكامل.`,
+      title: dt("تكاملات تحتاج استكمال"),
+      reason: dt("يوجد {0} مزود أو اتصال يحتاج مراجعة قبل الاعتماد التشغيلي الكامل.", [marketing.summary.providerNeedsWork]),
       href: "/dashboard/marketing/connections/catalog",
     });
   }
 
   // The "مهام إنتاج محجوبة" and "مواد جاهزة للتسويق" risks both linked into /dashboard/operations,
   // removed with التشغيل. A risk card exists to be acted on, and there is no page left to act on
-  // these — the underlying counts still feed the summary figures below.
+  // these  the underlying counts still feed the summary figures below.
 
   // The "توصيات تسويق عاجلة" risk linked into /dashboard/marketing/recommendations, which was
-  // removed along with the marketing overview and performance pages — same reasoning as above:
+  // removed along with the marketing overview and performance pages  same reasoning as above:
   // a risk card with nowhere to go is not a risk card. The count still feeds the summary below.
 
   return {

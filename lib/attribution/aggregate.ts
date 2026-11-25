@@ -1,7 +1,7 @@
 /**
  * Pure aggregation helpers shared by all `/api/admin/ads/*` routes.
  * Each function takes already-fetched donation rows (with the minimum fields
- * needed) and produces dashboard-ready aggregates. No DB access here — keeps
+ * needed) and produces dashboard-ready aggregates. No DB access here  keeps
  * the routes thin and unit-testable, and lets the same logic run client-side
  * in the future if we add a "what-if" filter UI.
  *
@@ -48,7 +48,7 @@ export interface AggregateDonationInput {
   conversionFailedEventsSentAt: Date | null;
   donorId: string;
   donorCountryCode: string | null;
-  /** First donation ever (across all time) for this donor — used to flag new-donor revenue. */
+  /** First donation ever (across all time) for this donor  used to flag new-donor revenue. */
   isFirstEverDonation: boolean;
 }
 
@@ -61,7 +61,7 @@ interface SubAggregate {
 
 export interface BreakdownRow {
   key: string;
-  /** Human label — name when available, otherwise id (utm_campaign / utm_content / placement / etc.). */
+  /** Human label  name when available, otherwise id (utm_campaign / utm_content / placement / etc.). */
   label: string;
   /** Display name (e.g. utm_campaign value). Null when only a platform id is known. */
   name: string | null;
@@ -78,7 +78,7 @@ export interface BreakdownRow {
   paymentSuccessRate: number;
   /** Average confidence (0–1) across paid-ad donations in this group. */
   trackingHealthPct: number;
-  /** Same value scaled 0–100 — handy for quick `>= 75` comparisons. */
+  /** Same value scaled 0–100  handy for quick `>= 75` comparisons. */
   avgConfidence: number;
   /** Distinct donors who paid in this group. */
   uniqueDonors: number;
@@ -90,6 +90,8 @@ export interface BreakdownRow {
   revenueShare: number;
   /** Share of total paid count across all rows in the breakdown (0–1). */
   donationShare: number;
+  /** Revenue from monthly subscriptions specifically (subscriptionId != null). */
+  monthlyRevenueUSD: number;
   // ── dimension-specific extras (populated by aggregateBreakdownExtended)
   bestPlatform?: {
     key: AdPlatform;
@@ -211,6 +213,7 @@ interface MutableRow {
   paidCount: number;
   failedCount: number;
   totalAttempts: number;
+  monthlyRevenueUSD: number;
   donorSet: Set<string>;
   newDonorSet: Set<string>;
   returningDonorSet: Set<string>;
@@ -258,6 +261,7 @@ export function aggregateBreakdown(
       paidCount: 0,
       failedCount: 0,
       totalAttempts: 0,
+      monthlyRevenueUSD: 0,
       donorSet: new Set<string>(),
       newDonorSet: new Set<string>(),
       returningDonorSet: new Set<string>(),
@@ -286,8 +290,9 @@ export function aggregateBreakdown(
       if (PAID_ATTRIBUTION_STATUSES.has(source.status)) {
         row.paidConfidenceSum += source.confidence;
         row.paidConfidenceCount += 1;
-        row.paidAdRevenueUSD += amount;
+
       }
+      if (source.paidEvidence) row.paidAdRevenueUSD += amount;
       // sub-aggregates for country / placement enrichment
       const subPlat = getOrInit(row.byPlatform, source.platform, () => ({
         key: source.platform,
@@ -376,7 +381,7 @@ export function aggregateBreakdown(
     if (dimension === "country" || dimension === "placement") {
       let bp: SubAggregate | null = null;
       for (const s of r.byPlatform.values()) {
-        if (s.key === "organic") continue;
+        if (s.key === "organic" || s.key === "unknown") continue;
         if (!bp || s.revenueUSD > bp.revenueUSD) bp = s;
       }
       if (bp && r.revenueUSD > 0) {
@@ -442,6 +447,7 @@ export function aggregateBreakdown(
       paidCount: r.paidCount,
       failedCount: r.failedCount,
       totalAttempts: r.totalAttempts,
+      monthlyRevenueUSD: 0,
       avgDonationUSD: Math.round(avg * 100) / 100,
       paymentSuccessRate: Math.round(successRate * 10000) / 10000,
       trackingHealthPct: Math.round(trackingHealth * 10000) / 10000,
@@ -472,9 +478,12 @@ export interface AttributionRevenueSplit {
   organic: number;
   direct: number;
   tracking_issue: number;
+  unknown: number;
 }
 
 export interface OverviewResult {
+  unattributedRevenueUSD: number;
+  paidUnattributedCount: number;
   adRevenueUSD: number;
   organicRevenueUSD: number;
   totalRevenueUSD: number;
@@ -500,6 +509,8 @@ export interface OverviewResult {
 export function computeOverview(donations: AggregateDonationInput[]): OverviewResult {
   let adRevenueUSD = 0;
   let organicRevenueUSD = 0;
+  let unattributedRevenueUSD = 0;
+  let paidUnattributedCount = 0;
   let paidAdCount = 0;
   let paidOrganicCount = 0;
   let failedCount = 0;
@@ -517,6 +528,7 @@ export function computeOverview(donations: AggregateDonationInput[]): OverviewRe
     organic: 0,
     direct: 0,
     tracking_issue: 0,
+    unknown: 0,
   };
   const revenueByStatus: AttributionRevenueSplit = {
     verified: 0,
@@ -527,6 +539,7 @@ export function computeOverview(donations: AggregateDonationInput[]): OverviewRe
     organic: 0,
     direct: 0,
     tracking_issue: 0,
+    unknown: 0,
   };
 
   for (const d of donations) {
@@ -550,7 +563,7 @@ export function computeOverview(donations: AggregateDonationInput[]): OverviewRe
       organicRevenueUSD += amount;
       paidOrganicCount += 1;
       if (d.isFirstEverDonation) newDonorsOrg.add(d.donorId);
-    } else {
+    } else if (source.paidEvidence) {
       adRevenueUSD += amount;
       paidAdCount += 1;
       if (d.isFirstEverDonation) newDonorsAd.add(d.donorId);
@@ -558,10 +571,13 @@ export function computeOverview(donations: AggregateDonationInput[]): OverviewRe
         paidAdConfidenceSum += source.confidence;
         paidAdConfidenceCount += 1;
       }
+    } else {
+      unattributedRevenueUSD += amount;
+      paidUnattributedCount += 1;
     }
   }
 
-  const totalRevenue = adRevenueUSD + organicRevenueUSD;
+  const totalRevenue = adRevenueUSD + organicRevenueUSD + unattributedRevenueUSD;
   const adShare = totalRevenue > 0 ? adRevenueUSD / totalRevenue : 0;
   const trackingHealth =
     paidAdConfidenceCount > 0
@@ -569,8 +585,9 @@ export function computeOverview(donations: AggregateDonationInput[]): OverviewRe
       : 0;
 
   const platforms = aggregateBreakdown(donations, "platform").filter(
-    (r) => r.platform !== "organic"
+    (r) => r.platform !== "organic" && r.platform !== "unknown" && (r.adRevenueShare ?? 0) > 0
   );
+  platforms.sort((a,b) => (b.revenueUSD * (b.adRevenueShare ?? 0)) - (a.revenueUSD * (a.adRevenueShare ?? 0)));
   const campaigns = aggregateBreakdown(donations, "campaign");
   const ads = aggregateBreakdown(donations, "ad");
   const countries = aggregateBreakdown(donations, "country").filter(
@@ -580,6 +597,8 @@ export function computeOverview(donations: AggregateDonationInput[]): OverviewRe
   const round2 = (n: number) => Math.round(n * 100) / 100;
 
   return {
+    unattributedRevenueUSD: round2(unattributedRevenueUSD),
+    paidUnattributedCount,
     adRevenueUSD: round2(adRevenueUSD),
     organicRevenueUSD: round2(organicRevenueUSD),
     totalRevenueUSD: round2(totalRevenue),
@@ -605,6 +624,7 @@ export function computeOverview(donations: AggregateDonationInput[]): OverviewRe
       organic: round2(revenueByStatus.organic),
       direct: round2(revenueByStatus.direct),
       tracking_issue: round2(revenueByStatus.tracking_issue),
+      unknown: round2(revenueByStatus.unknown),
     },
   };
 }
@@ -662,6 +682,7 @@ export function buildDiagnosticRows(
     organic: 0,
     direct: 0,
     tracking_issue: 0,
+    unknown: 0,
   };
   const issueCounts: DiagnosticIssueCounts = {
     total: 0,

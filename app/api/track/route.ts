@@ -1,3 +1,4 @@
+import { getTrackingClientIp } from "@/lib/tracking/client-ip";
 /**
  * POST /api/track
  *
@@ -112,10 +113,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, reason: "missing event" }, { status: 400 });
     }
 
-    const clientIp =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      undefined;
+    const clientIp = getTrackingClientIp(req.headers);
 
     const row = await getRawTrackingSettings();
     const facebookPixelId = trackingString(row, "facebookPixelId") || trackingString(row, "metaPixelId");
@@ -178,6 +176,7 @@ async function mirrorMetaCanonical(
     fbc: u.fbc ?? event.session?.fbc ?? null,
     client_ip: clientIp ?? u.ip ?? null,
     user_agent: u.user_agent ?? null,
+    subscription_id: u.subscription_id ?? null,
   };
 
   const custom_data: MetaCustomData = {};

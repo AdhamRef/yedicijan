@@ -4,6 +4,7 @@ import { loadContextForDonation } from "@/lib/templates/variables";
 import { pickLocale } from "@/lib/templates/locale-resolver";
 import { donorChannelEligibility } from "@/lib/communication/audience-service";
 import { resolveTriggerSendConfig, sendTriggerMessage } from "./dispatch";
+import { SETTLED_DONATION_WHERE, reminderPreviousAttemptWindows, reminderFailureBackoffDays } from "./donation-lapsed-policy";
 import {
   DEFAULT_COOLDOWN_DAYS,
   DEFAULT_LAPSE_DAYS,
@@ -14,22 +15,23 @@ import {
 } from "./catalog";
 
 /**
- * DONATION_LAPSED — the "donate again" re-engagement reminder.
+ * DONATION_LAPSED  the "donate again" re-engagement reminder.
  *
  * Unlike every other MessageTrigger event this one is NOT fired by a webhook: nothing happens in the
  * system when a donor goes quiet. It is evaluated on a schedule (daily, via
  * /api/cron/donation-reminders) by scanning every donor's most recent PAID donation and reminding the
- * ones whose last gift is older than the trigger's `lapseDays` (default 30 — "last donated last
+ * ones whose last gift is older than the trigger's `lapseDays` (default 30  "last donated last
  * month").
  *
  * Safety rules, in order:
- *   1. The trigger must exist and be `enabled` — the dashboard checkbox is the on/off switch.
- *   2. Marketing consent is enforced with the same `donorChannelEligibility` rules campaigns use
+ *   1. The trigger must exist and be `enabled`  the dashboard checkbox is the on/off switch.
+ *   2. Donors with an active recurring subscription are never reminded (they are already giving).
+ *   3. Marketing consent is enforced with the same `donorChannelEligibility` rules campaigns use
  *      (doNotContact / emailOptIn / emailNotifications / whatsappOptIn).
- *   3. A donor is reminded at most once per `cooldownDays`, and never twice for the same lapse —
+ *   4. A donor is reminded at most once per `cooldownDays`, and never twice for the same lapse 
  *      idempotency is read from CommunicationDelivery (the archive source of truth), so a re-run of
  *      the cron on the same day cannot double-send.
- *   4. Each run is bounded by `maxPerRun` so a first run over a large donor base cannot time out or
+ *   5. Each run is bounded by `maxPerRun` so a first run over a large donor base cannot time out or
  *      blast the whole list at once; the remainder is picked up by the next run.
  */
 
@@ -37,8 +39,8 @@ export const DEFAULT_MAX_PER_RUN = 200;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Delivery statuses that mean "this donor was already reminded" — everything except dead ends. */
-const REMINDER_COUNTED_STATUSES = ["DRAFT", "QUEUED", "RENDERED", "SENT_TO_PROVIDER", "SENT", "DELIVERED", "READ", "OPENED", "CLICKED", "REPLIED", "UNSUBSCRIBED"];
+/** Delivery statuses that mean "this donor was already reminded"  everything except dead ends. */
+// Reminder cooldown and bounded failure retry windows are defined in donation-lapsed-policy.ts.
 
 export type LapsedTriggerSummary = {
   triggerId: string;
@@ -90,18 +92,19 @@ type DonorRow = {
 };
 
 /**
- * Most recent PAID donation per donor. Uses `createdAt` (not `paidAt`) because legacy PAID rows
- * can have a null `paidAt` — the same rule `loadContext` uses for `{{totals.lastAt}}`.
+ * Most recent CONFIRMED payment per donor, measured by paidAt rather than
+ * createdAt. A bank transfer may be confirmed days after the donation record
+ * was created; the lapse clock must start at confirmation, not checkout.
  */
 async function loadLastPaidDonationByDonor(): Promise<Map<string, { at: Date; donationId: string }>> {
   const grouped = await prisma.donation.groupBy({
     by: ["donorId"],
-    where: { status: "PAID" },
-    _max: { createdAt: true },
+    where: SETTLED_DONATION_WHERE,
+    _max: { paidAt: true },
   });
   const out = new Map<string, { at: Date; donationId: string }>();
   for (const row of grouped) {
-    if (row._max.createdAt) out.set(row.donorId, { at: row._max.createdAt, donationId: "" });
+    if (row._max.paidAt) out.set(row.donorId, { at: row._max.paidAt, donationId: "" });
   }
   return out;
 }
@@ -110,9 +113,9 @@ async function loadLastPaidDonationByDonor(): Promise<Map<string, { at: Date; do
 async function attachLastDonationIds(donorIds: string[], lastByDonor: Map<string, { at: Date; donationId: string }>): Promise<void> {
   if (!donorIds.length) return;
   const rows = await prisma.donation.findMany({
-    where: { donorId: { in: donorIds }, status: "PAID" },
-    select: { id: true, donorId: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
+    where: { donorId: { in: donorIds }, ...SETTLED_DONATION_WHERE },
+    select: { id: true, donorId: true, paidAt: true },
+    orderBy: [{ paidAt: "desc" }, { id: "desc" }],
   });
   for (const row of rows) {
     const entry = lastByDonor.get(row.donorId);
@@ -138,34 +141,46 @@ export async function runDonationLapsedReminders(
   summary.donorsScanned = lastByDonor.size;
   if (!lastByDonor.size) return summary;
 
+  // Fail closed if active-plan membership cannot be read: do not remind an active donor.
+  const activeSubscribers = new Set(
+    (await prisma.subscription.findMany({ where: { status: "ACTIVE" }, select: { donorId: true } })).map((s) => s.donorId)
+  );
+
   const config = await resolveTriggerSendConfig();
   let budget = maxPerRun;
 
   for (const trigger of triggers) {
     const lapseDays = normalizeLapseDays(trigger.lapseDays);
     const cooldownDays = normalizeCooldownDays(trigger.cooldownDays);
-    const channel = trigger.channel === "WHATSAPP" ? "WHATSAPP" : "EMAIL";
+    const channel =
+      trigger.channel === "WHATSAPP"
+        ? "WHATSAPP"
+        : trigger.channel === "SMS"
+          ? "SMS"
+          : "EMAIL";
     const row: LapsedTriggerSummary = { triggerId: trigger.id, channel, templateId: trigger.templateId, lapseDays, cooldownDays, candidates: 0, sent: 0, skipped: 0, failed: 0, reasons: {} };
     summary.byTrigger.push(row);
 
     const lapseCutoff = new Date(now.getTime() - lapseDays * DAY_MS);
     const cooldownCutoff = new Date(now.getTime() - cooldownDays * DAY_MS);
+    const failureRetryCutoff = new Date(now.getTime() - reminderFailureBackoffDays(cooldownDays) * DAY_MS);
 
     // Most-recently-lapsed first: donors who just crossed the threshold convert best, and this keeps
     // the bounded run from getting permanently stuck on the oldest tail of the list.
     const candidateIds = [...lastByDonor.entries()]
-      .filter(([, last]) => last.at <= lapseCutoff)
+      .filter(([donorId, last]) => last.at <= lapseCutoff && !activeSubscribers.has(donorId))
       .sort((a, b) => b[1].at.getTime() - a[1].at.getTime())
       .map(([donorId]) => donorId);
     row.candidates = candidateIds.length;
     if (!candidateIds.length) continue;
 
-    // Only the head of the list can be reached within this run's budget — checking the whole donor
+    // Only the head of the list can be reached within this run's budget  checking the whole donor
     // base would grow the `$in` without bound. The headroom keeps the run from stalling when most of
     // the head has already been reminded.
     const checkIds = candidateIds.slice(0, budget * 10 + 100);
 
-    // Idempotency: anyone already reminded with this template since the cooldown cutoff is out.
+    // Idempotency: successful/reserved messages use the regular cooldown; FAILED/SKIPPED
+    // attempts use a bounded retry backoff to prevent daily repeat failures.
     // CommunicationDelivery is the archive source of truth (SentMessage is only a best-effort mirror),
     // and the record is written BEFORE the provider call, so a crash mid-send can't cause a re-send.
     const priorDeliveries = await prisma.communicationDelivery.findMany({
@@ -173,14 +188,13 @@ export async function runDonationLapsedReminders(
         templateId: trigger.templateId,
         origin: "TRIGGER",
         recipientUserId: { in: checkIds },
-        status: { in: REMINDER_COUNTED_STATUSES },
-        createdAt: { gte: cooldownCutoff },
+        OR: reminderPreviousAttemptWindows(cooldownCutoff, failureRetryCutoff),
       },
       select: { recipientUserId: true },
-    }).catch(() => []);
+    });
 
-    // The query is already bounded by cooldownCutoff, so anything it returns is a reminder inside the
-    // cooldown window — that donor is out. Once the cooldown lapses they become a candidate again
+    // The query is bounded by status-specific windows. Successful attempts respect the
+    // full cooldown, failed/skipped attempts the shorter retry backoff.
     // (and if they donated in the meantime they simply stop being lapsed).
     const remindedRecently = new Set(priorDeliveries.map((d) => d.recipientUserId).filter(Boolean) as string[]);
 
@@ -189,7 +203,7 @@ export async function runDonationLapsedReminders(
       if (remindedRecently.has(donorId)) {
         row.skipped += 1;
         summary.skipped += 1;
-        bump(row.reasons, "ALREADY_REMINDED");
+        bump(row.reasons, "ALREADY_ATTEMPTED_IN_COOLDOWN_OR_RETRY_BACKOFF");
         continue;
       }
       eligibleIds.push(donorId);
@@ -207,9 +221,9 @@ export async function runDonationLapsedReminders(
     });
     const donorById = new Map(donors.map((d) => [d.id, d]));
 
+    // Fail closed if stop-communication preferences cannot be read.
     const profiles = await prisma.donorCommunicationProfile
-      .findMany({ where: { userId: { in: batchIds } }, select: { userId: true, whatsappOptIn: true, emailOptIn: true, smsOptIn: true, doNotContact: true } })
-      .catch(() => []);
+      .findMany({ where: { userId: { in: batchIds } }, select: { userId: true, emailOptIn: true, smsOptIn: true, doNotContact: true, consentSource: true } });
     const profileById = new Map(profiles.map((p) => [p.userId, p]));
 
     await attachLastDonationIds(batchIds, lastByDonor);
@@ -219,7 +233,8 @@ export async function runDonationLapsedReminders(
       const donor = donorById.get(donorId);
       if (!donor) { row.skipped += 1; summary.skipped += 1; bump(row.reasons, "DONOR_NOT_FOUND"); continue; }
 
-      // Re-engagement is marketing, not a receipt — consent is mandatory.
+      // Re-engagement is marketing. WhatsApp follows explicit STOP and the shared frequency limit;
+      // email and SMS continue to follow their channel preferences.
       const eligibility = donorChannelEligibility(
         { email: donor.email, phone: donor.phone, emailNotifications: donor.emailNotifications, smsNotifications: donor.smsNotifications },
         channel,
@@ -244,11 +259,11 @@ export async function runDonationLapsedReminders(
       }
 
       try {
-        // Context is loaded from the last donation so the template can use {{donation.*}} —
-        // "your last gift of $X on <date>" — alongside {{user.*}} and {{totals.*}}.
+        // Context is loaded from the last donation so the template can use {{donation.*}} 
+        // "your last gift of $X on <date>"  alongside {{user.*}} and {{totals.*}}.
         const ctx = await loadContextForDonation(donationId);
         if (!ctx) { row.skipped += 1; summary.skipped += 1; bump(row.reasons, "NO_CONTEXT"); continue; }
-        const locale = pickLocale({ recipientLang: ctx.user.preferredLang });
+        const locale = pickLocale({ override: ctx.donation?.locale, recipientLang: ctx.user.preferredLang });
         const result = await sendTriggerMessage(trigger, ctx, { event: "DONATION_LAPSED", locale, config, donationId, purpose: "MARKETING" });
         if (!result) { row.skipped += 1; summary.skipped += 1; bump(row.reasons, "TEMPLATE_MISSING"); continue; }
         if (result.outcome === "SENT") { row.sent += 1; summary.sent += 1; bump(row.reasons, "SENT"); }
@@ -267,11 +282,11 @@ export async function runDonationLapsedReminders(
     actorRole: opts.actorRole ?? "SYSTEM",
     action: dryRun ? "DONATION_LAPSED_REMINDERS_PREVIEW" : "DONATION_LAPSED_REMINDERS_RUN",
     messageAr: dryRun
-      ? `معاينة تذكير التبرّع — ${summary.sent} مرشّح للإرسال، ${summary.skipped} تخطّي`
-      : `تذكير التبرّع مجددًا — ${summary.sent} أُرسل، ${summary.skipped} تخطّي${summary.failed ? `، ${summary.failed} فشل` : ""}`,
+      ? `معاينة تذكير التبرّع  ${summary.sent} مرشّح للإرسال، ${summary.skipped} تخطّي`
+      : `تذكير التبرّع مجددًا  ${summary.sent} أُرسل، ${summary.skipped} تخطّي${summary.failed ? `، ${summary.failed} فشل` : ""}`,
     messageEn: dryRun
-      ? `Donation reminder preview — ${summary.sent} would send, ${summary.skipped} skipped`
-      : `Donation reminders — sent ${summary.sent}, skipped ${summary.skipped}, failed ${summary.failed}`,
+      ? `Donation reminder preview  ${summary.sent} would send, ${summary.skipped} skipped`
+      : `Donation reminders  sent ${summary.sent}, skipped ${summary.skipped}, failed ${summary.failed}`,
     entityType: "MessageTrigger",
     metadata: { ...summary, externalCall: !dryRun && summary.sent > 0 },
     stream: "TEAM",

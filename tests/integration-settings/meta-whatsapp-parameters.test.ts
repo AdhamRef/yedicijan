@@ -1,0 +1,241 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildMetaComponents } from "../../lib/communication/providers/meta-whatsapp/parameters";
+import { buildStandardMetaComponents } from "../../lib/communication/meta-template-components";
+import { metaParameterName } from "../../lib/communication/meta-parameter-name";
+
+test("Meta parameter builder maps scoped header/body variables independently", () => {
+  const result = buildMetaComponents({
+    componentsSchema: [
+      { type: "HEADER", format: "TEXT", text: "Hello {{1}}" },
+      { type: "BODY", text: "Amount {{1}} {{2}}" },
+    ],
+    values: {
+      "user.name": "Amina",
+      "donation.amount": "25",
+      "donation.currency": "USD",
+    },
+    scopedNames: {
+      "header.1": "user.name",
+      "body.1": "donation.amount",
+      "body.2": "donation.currency",
+    },
+  });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.components, [
+    { type: "header", parameters: [{ type: "text", text: "Amina" }] },
+    { type: "body", parameters: [{ type: "text", text: "25" }, { type: "text", text: "USD" }] },
+  ]);
+});
+
+test("Meta parameter builder fails safely when a dynamic URL button value is missing", () => {
+  const result = buildMetaComponents({
+    componentsSchema: [
+      { type: "BODY", text: "Thank you" },
+      { type: "BUTTONS", buttons: [{ type: "URL", text: "Open", url: "https://example.com/{{1}}" }] },
+    ],
+    values: {},
+    scopedNames: { "button.0.1": "donation.id" },
+  });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.reason, "TEMPLATE_PARAMETER_MISSING");
+});
+
+test("Meta authentication template requires OTP and sends it to body and OTP button", () => {
+  const missing = buildMetaComponents({
+    componentsSchema: [
+      { type: "BODY", add_security_recommendation: true },
+      { type: "BUTTONS", buttons: [{ type: "OTP", otp_type: "COPY_CODE", text: "Copy Code" }] },
+    ],
+    values: {},
+  });
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, "AUTHENTICATION_OTP_MISSING");
+
+  const built = buildMetaComponents({
+    componentsSchema: [
+      { type: "BODY", add_security_recommendation: true },
+      { type: "BUTTONS", buttons: [{ type: "OTP", otp_type: "COPY_CODE", text: "Copy Code" }] },
+    ],
+    values: { "otp.code": "123456" },
+  });
+  assert.equal(built.ok, true);
+  if (!built.ok) return;
+  assert.deepEqual(built.components, [
+    { type: "body", parameters: [{ type: "text", text: "123456" }] },
+    { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: "123456" }] },
+  ]);
+});
+
+test("Meta location header requires coordinates and builds an exact location parameter", () => {
+  const missing = buildMetaComponents({
+    componentsSchema: [{ type: "HEADER", format: "LOCATION" }, { type: "BODY", text: "Visit us" }],
+    values: {},
+  });
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, "TEMPLATE_HEADER_LOCATION_MISSING");
+
+  const built = buildMetaComponents({
+    componentsSchema: [{ type: "HEADER", format: "LOCATION" }, { type: "BODY", text: "Visit us" }],
+    values: {},
+    headerLocation: { latitude: 41.0082, longitude: 28.9784, name: "Office", address: "Istanbul" },
+  });
+  assert.equal(built.ok, true);
+  if (!built.ok) return;
+  assert.deepEqual(built.components[0], {
+    type: "header",
+    parameters: [{
+      type: "location",
+      location: { latitude: 41.0082, longitude: 28.9784, name: "Office", address: "Istanbul" },
+    }],
+  });
+});
+
+
+test("Meta standard template builder uses documented named body parameters when body is the only dynamic component", () => {
+  const built = buildStandardMetaComponents({
+    body: "Donation {{donation.amount}} {{donation.currency}}",
+    header: { type: "NONE" },
+    headerText: "",
+    footerText: "Thank you",
+    buttons: [{ type: "URL", text: "Open", url: "https://example.com/donate" }],
+  });
+
+  assert.equal(built.parameterFormat, "named");
+  assert.deepEqual(built.components, [
+    {
+      type: "BODY",
+      text: "Donation {{donation_amount}} {{donation_currency}}",
+      example: {
+        body_text_named_params: [
+          { param_name: "donation_amount", example: "50" },
+          { param_name: "donation_currency", example: "USD" },
+        ],
+      },
+    },
+    { type: "FOOTER", text: "Thank you" },
+    { type: "BUTTONS", buttons: [{ type: "URL", text: "Open", url: "https://example.com/donate" }] },
+  ]);
+});
+
+test("Meta standard template builder falls back to positional when header or URL is dynamic", () => {
+  const built = buildStandardMetaComponents({
+    body: "Donation {{donation.amount}}",
+    header: { type: "TEXT" },
+    headerText: "Hello {{user.name}}",
+    footerText: "",
+    buttons: [{ type: "URL", text: "Open", url: "https://example.com/{{donation.id}}" }],
+  });
+
+  assert.equal(built.parameterFormat, "positional");
+  assert.deepEqual(built.components, [
+    {
+      type: "HEADER",
+      format: "TEXT",
+      text: "Hello {{1}}",
+      example: { header_text: ["أحمد"] },
+    },
+    {
+      type: "BODY",
+      text: "Donation {{1}}",
+      example: { body_text: [["50"]] },
+    },
+    {
+      type: "BUTTONS",
+      buttons: [{ type: "URL", text: "Open", url: "https://example.com/{{1}}", example: ["65f12abc..."] }],
+    },
+  ]);
+});
+
+test("Meta send builder supplies parameter_name for named body templates", () => {
+  const result = buildMetaComponents({
+    componentsSchema: [
+      { type: "BODY", text: "Donation {{donation_amount}} {{donation_currency}}" },
+    ],
+    values: {
+      "donation.amount": "25",
+      "donation.currency": "USD",
+    },
+    positionalNames: ["donation.amount", "donation.currency"],
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(result.components, [
+    {
+      type: "body",
+      parameters: [
+        { type: "text", text: "25", parameter_name: "donation_amount" },
+        { type: "text", text: "USD", parameter_name: "donation_currency" },
+      ],
+    },
+  ]);
+});
+
+
+test("Meta parameter names never exceed the provider's 20-character send limit", () => {
+  const compact = metaParameterName("donation.campaignTitle");
+  assert.ok(compact.length <= 20);
+  assert.match(compact, /^[a-z][a-z0-9_]*$/);
+  assert.equal(compact, metaParameterName("donation.campaignTitle"));
+  assert.notEqual(compact, metaParameterName("donation.campaignName"));
+});
+
+test("Meta publisher uses the same compact name that the send builder can map back to semantics", () => {
+  const published = buildStandardMetaComponents({
+    body: "Project {{donation.campaignTitle}} amount {{donation.totalAmount}}",
+    header: { type: "NONE" },
+    headerText: "",
+    footerText: "",
+    buttons: [],
+  });
+  assert.equal(published.parameterFormat, "named");
+  const body = published.components[0] as { text: string };
+  const campaignName = metaParameterName("donation.campaignTitle");
+  const totalName = metaParameterName("donation.totalAmount");
+  assert.match(body.text, new RegExp(`\\{\\{${campaignName}\\}\\}`));
+  assert.match(body.text, new RegExp(`\\{\\{${totalName}\\}\\}`));
+
+  const sent = buildMetaComponents({
+    componentsSchema: published.components,
+    values: {
+      "donation.campaignTitle": "Water for Gaza",
+      "donation.totalAmount": "25",
+    },
+    positionalNames: ["donation.campaignTitle", "donation.totalAmount"],
+  });
+  assert.equal(sent.ok, true);
+  if (!sent.ok) return;
+  assert.deepEqual(sent.components, [{
+    type: "body",
+    parameters: [
+      { type: "text", text: "Water for Gaza", parameter_name: campaignName },
+      { type: "text", text: "25", parameter_name: totalName },
+    ],
+  }]);
+});
+
+test("old approved schemas with overlong parameter names fail locally instead of calling Meta", () => {
+  const result = buildMetaComponents({
+    componentsSchema: [
+      { type: "BODY", text: "Project {{donation_campaign_title}}" },
+    ],
+    values: { "donation.campaignTitle": "Water for Gaza" },
+    positionalNames: ["donation.campaignTitle"],
+  });
+  assert.equal(result.ok, false);
+  if (result.ok) return;
+  assert.equal(result.reason, "META_TEMPLATE_PARAMETER_NAME_INVALID");
+});
+
+test("component-scoped parameters override flattened positions for donation certificate buttons",()=>{
+  const result=buildMetaComponents({componentsSchema:[{type:"BODY",text:"Hello {{1}}"},{type:"BUTTONS",buttons:[{type:"URL",text:"Certificate",url:"https://example.test/thanks/{{1}}"}]}],values:{"1":"Donor Name","user.name":"Donor Name","donation.id":"507f1f77bcf86cd799439011"},scopedNames:{"body.1":"user.name","button.0.1":"donation.id"},positionalNames:["user.name","donation.id"]});
+  assert.equal(result.ok,true);if(!result.ok)return;
+  assert.deepEqual(result.components[1],{type:"button",sub_type:"url",index:"0",parameters:[{type:"text",text:"507f1f77bcf86cd799439011"}]});
+});
+test("a missing scoped URL value cannot fall back to the donor name in global position one",()=>{
+  const result=buildMetaComponents({componentsSchema:[{type:"BUTTONS",buttons:[{type:"URL",text:"Certificate",url:"https://example.test/thanks/{{1}}"}]}],values:{"1":"Donor Name"},scopedNames:{"button.0.1":"donation.id"}});
+  assert.equal(result.ok,false);if(result.ok)return;assert.equal(result.reason,"TEMPLATE_PARAMETER_MISSING");assert.match(result.detail,/donation.id/);
+});

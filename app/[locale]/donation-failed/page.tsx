@@ -26,11 +26,18 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import BankAccountsBlock from "../bank-transfer/_components/BankAccountsBlock";
+import { restoreCheckoutAttempt } from "@/lib/minbar/cart";
+import { miaPath, slugFor } from "@/lib/minbar/routes";
+import { withDonationToken } from "@/lib/donations/access-token-link";
+import { donationDetailsUrl, rememberGuestDonationAccess, resolveGuestDonationAccess } from "@/lib/donations/guest-access-client";
 import {
   resolvePaymentError,
   type PaymentErrorKey,
   type ResolvedPaymentError,
 } from "@/lib/donations/payment-error-catalog";
+
+// User-provided donation form. It is independent of the original checkout attempt.
+const CHARITY_GIVING_IFRAME_URL = "https://charitygiving.net/iframe/eyJpdiI6IkxubFNEQnNnbU50R2V4dG5TeHg0dVE9PSIsInZhbHVlIjoiVkkwYkdUcnpwRHFsczd4dkRLY0Z2QT09IiwibWFjIjoiYjI5NTU5ZGZmZjdhMjllNTgwMzk2NTlhNTdlYzY3MjQwYWNiMjM1MzFmNjMxYjA1NTBmZGI4MDIxYTM4ODRjMyIsInRhZyI6IiJ9";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$",
@@ -53,6 +60,7 @@ interface DonationDetails {
   providerProcReturnCode?: string | null;
   providerErrorMessage?: string | null;
   providerTxnResult?: string | null;
+  subscriptionId?: string | null;
   items?: Array<{
     id: string;
     amount: number;
@@ -60,7 +68,7 @@ interface DonationDetails {
   }>;
 }
 
-/** Icon picker per error key — visual cue that matches the explanation. */
+/** Icon picker per error key  visual cue that matches the explanation. */
 const ERROR_ICONS: Record<PaymentErrorKey, typeof AlertCircle> = {
   insufficientFunds: WalletCards,
   cardDeclined: CreditCard,
@@ -87,28 +95,43 @@ export default function DonationFailedPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const donationId = searchParams?.get("donationId") ?? "";
+  const requestToken = searchParams?.get("t") ?? "";
 
   const [donation, setDonation] = useState<DonationDetails | null>(null);
   const [loading, setLoading] = useState(Boolean(donationId));
   const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
+    setDonation(null);
+    setLoading(Boolean(donationId));
     if (!donationId) return;
+    const url = donationDetailsUrl(donationId, requestToken);
+    if (!url) { setLoading(false); return; }
     let cancelled = false;
+    const controller = new AbortController();
     (async () => {
       try {
-        const res = await axios.get(`/api/donations/${donationId}`);
-        if (!cancelled) setDonation(res.data as DonationDetails);
-      } catch (err) {
-        console.error("Failed to load donation:", err);
+        const res = await axios.get(url, { signal: controller.signal, timeout: 15_000 });
+        if (cancelled) return;
+        const details = res.data as DonationDetails;
+        if (details.paidAt) {
+          // An old failure link must never invite a second payment for a settled order.
+          window.location.replace(withDonationToken(
+            `${miaPath("donationSuccess", locale)}/${donationId}`,
+            resolveGuestDonationAccess(donationId, requestToken),
+          ));
+          return;
+        }
+        setDonation(details);
+      } catch {
+        // Axios errors can contain the credential-bearing request URL.
+        if (!cancelled) console.error("Could not load donation details");
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [donationId]);
+    return () => { cancelled = true; controller.abort(); };
+  }, [donationId, requestToken, locale]);
 
   const resolved: ResolvedPaymentError = useMemo(
     () =>
@@ -155,26 +178,82 @@ export default function DonationFailedPage() {
     ? `${CURRENCY_SYMBOLS[donation.currency] ?? donation.currency + " "}${donation.totalAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
     : null;
 
+  const isMonthly = Boolean(donation?.subscriptionId);
+
   const handleRetry = async () => {
     if (!donation || retrying) return;
+    if (donation.paidAt) {
+      window.location.replace(withDonationToken(
+        `${miaPath("donationSuccess", locale)}/${donation.id}`,
+        resolveGuestDonationAccess(donation.id, requestToken),
+      ));
+      return;
+    }
     setRetrying(true);
 
+    // The primary checkout preserves the basket for every online method.
+    if (restoreCheckoutAttempt(donation.id)) {
+      window.location.assign(miaPath("checkout", locale));
+      return;
+    }
+
+    /* The 3-D Secure card rails (PayFor, Albaraka) take the card on our own
+       checkout, so a retry is the same basket back on that form. Checkout kept
+       the basket aside under this order before the bank redirect; putting it
+       back sends the donor straight to the card fields, in their own currency.
+       No clone is created here: it could never be charged from this page, and
+       every one used to be left behind as an abandoned order. */
+    const cardRail = ["PAYFOR", "ALBARAKA", "STRIPE"].includes((donation.provider ?? "").toUpperCase());
+    if (cardRail) {
+      toast.success(t("retry.payforHint"));
+      router.push(`/${slugFor("projects", locale)}`);
+      return;
+    }
+
+    // Monthly subscriptions can't be cloned  send the donor back to the
+    // campaign page where the regular dialog handles the subscribe flow.
+    if (isMonthly) {
+      // Fallback to /campaigns since we don't have the campaign id stored
+      router.push(`/${slugFor("projects", locale)}`);
+      return;
+    }
+
     try {
-      const res = await axios.post(`/api/donations/${donation.id}/retry`);
+      const res = await axios.post(`/api/donations/${donation.id}/retry`, {
+        t: resolveGuestDonationAccess(donation.id, requestToken),
+      });
       const newId = res.data?.id as string | undefined;
       if (!newId) throw new Error("retry returned no id");
+      rememberGuestDonationAccess(newId, res.data?.accessToken);
 
-      // Every one-time donation now runs on a 3D Secure rail (PayFor for lira,
-      // Albaraka otherwise), and both start from a signed form that needs the card
-      // re-entered — there is no hosted URL to hand the donor. So the retry always
-      // bounces back to the campaign dialog, which reopens the right flow.
-      // (`newId` is the fresh clone the dialog will settle.)
-      void newId;
-      toast.success(t("retry.payforHint"));
-      router.push("/campaigns");
-      return;
-    } catch (err) {
-      console.error("retry failed:", err);
+      // Pick the next-step URL by provider. STRIPE → checkout session URL.
+      // The 3D Secure rails (PAYFOR, ALBARAKA) start from a signed form that needs
+      // card details, so there's nothing to redirect to  bounce those donors back
+      // to the campaign dialog. Default to Stripe for everything else.
+      const provider = (donation.provider ?? "STRIPE").toUpperCase();
+      /* PayPal: a new PayPal order for the clone, built by the server from
+         the stored amount, and straight back to PayPal. */
+      if (provider === "PAYPAL" || res.data?.paymentMethod === "PAYPAL") {
+        const order = await axios.post("/api/paypal/orders", {
+          donationId: newId,
+          locale,
+          ...(res.data?.accessToken ? { t: res.data.accessToken } : {}),
+        });
+        const approveUrl = order.data?.approveUrl as string | undefined;
+        if (!approveUrl) throw new Error("paypal returned no url");
+        window.location.href = approveUrl;
+        return;
+      }
+      // Stripe path  create a new Checkout Session and redirect.
+      const checkout = await axios.post("/api/stripe/checkout", {
+        donationId: newId,
+        locale,
+      });
+      const url = checkout.data?.url as string | undefined;
+      if (!url) throw new Error("stripe returned no url");
+      window.location.href = url;
+    } catch {
+      console.error("Could not prepare donation retry");
       toast.error(t("retry.failed"));
       setRetrying(false);
     }
@@ -202,10 +281,42 @@ export default function DonationFailedPage() {
             {t("description")}
           </p>
           <p className="mt-3 text-white/70 text-xs sm:text-sm">{t("reassurance")}</p>
+          <a
+            href="#donate-again"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-[#A5243D] shadow-lg shadow-rose-900/25 transition-transform hover:-translate-y-0.5"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            {t("alternate.cta")}
+          </a>
         </div>
       </section>
 
       <div className="max-w-3xl mx-auto px-4 py-8 sm:py-10 space-y-6 sm:space-y-8">
+        {/* ───────────── Donate again: hosted card form ──────────────────── */}
+        {/* A separate, hosted payment page that does not depend on the card
+            rails that just failed  the first thing a donor sees, so trying
+            again is one step, not a hunt through the advice below. */}
+        <section
+          id="donate-again"
+          className="scroll-mt-6 rounded-2xl border-2 border-[#A5243D]/30 bg-white shadow-xl shadow-[#A5243D]/10 ring-4 ring-[#A5243D]/5 overflow-hidden"
+        >
+          <div className="bg-gradient-to-br from-[#A5243D] to-[#7D1830] px-5 py-4 sm:px-7 sm:py-5 text-white">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 border border-white/25 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {t("alternate.badge")}
+            </span>
+            <h2 className="mt-2 text-xl sm:text-2xl font-extrabold leading-tight">{t("alternate.title")}</h2>
+            <p className="mt-1 text-sm text-white/85 leading-relaxed">{t("alternate.description")}</p>
+          </div>
+          <iframe
+            src={CHARITY_GIVING_IFRAME_URL}
+            title={t("alternate.title")}
+            allow="payment"
+            className="block w-full border-0 bg-white"
+            style={{ height: 760 }}
+          />
+        </section>
+
         {/* ───────────── Loading skeleton (waiting on donation fetch) ─────── */}
         {loading && (
           <Card className="p-6 flex items-center justify-center gap-3 text-gray-500">
@@ -248,7 +359,7 @@ export default function DonationFailedPage() {
               </div>
             </div>
 
-            {/* What to do — actionable steps */}
+            {/* What to do  actionable steps */}
             <div className="mt-5 sm:mt-6 ps-0 sm:ps-16">
               <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide mb-3 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -275,7 +386,7 @@ export default function DonationFailedPage() {
               </ul>
             </div>
 
-            {/* Raw provider message — hidden by default to avoid scaring donors */}
+            {/* Raw provider message  hidden by default to avoid scaring donors */}
             {donation?.providerErrorMessage && (
               <details className="mt-5 sm:mt-6 ps-0 sm:ps-16 group">
                 <summary className="text-xs font-medium text-gray-500 hover:text-gray-700 cursor-pointer select-none inline-flex items-center gap-1.5">
@@ -318,13 +429,18 @@ export default function DonationFailedPage() {
                   </p>
                   <p className="text-2xl font-extrabold text-gray-900 mt-0.5">
                     {formattedAmount}
+                    {isMonthly && (
+                      <span className="text-sm font-medium text-gray-500 ms-1.5">
+                        {t("retry.perMonth")}
+                      </span>
+                    )}
                   </p>
                 </div>
                 <Badge
                   variant="outline"
                   className="border-[#A5243D]/30 text-[#A5243D] bg-[#A5243D]/5"
                 >
-                  {t("retry.oneTime")}
+                  {isMonthly ? t("retry.monthly") : t("retry.oneTime")}
                 </Badge>
               </div>
               {donation.items && donation.items.length > 0 && (
@@ -358,7 +474,7 @@ export default function DonationFailedPage() {
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              {t("retry.cta")}
+              {isMonthly ? t("retry.ctaMonthly") : t("retry.cta")}
               <Arrow className="w-4 h-4" />
             </Button>
             <p className="text-xs text-gray-500 mt-2.5">{t("retry.securedBy")}</p>
@@ -371,7 +487,7 @@ export default function DonationFailedPage() {
             <h3 className="text-lg font-bold text-gray-900 mb-2">{t("noDonation.title")}</h3>
             <p className="text-sm text-gray-600 mb-5">{t("noDonation.description")}</p>
             <Link
-              href="/campaigns"
+              href={`/${slugFor("projects", locale)}`}
               className="inline-flex items-center gap-2 bg-[#A5243D] hover:bg-[#7D1830] text-white font-semibold text-sm px-5 py-2.5 rounded-full transition-colors"
             >
               {t("noDonation.cta")}

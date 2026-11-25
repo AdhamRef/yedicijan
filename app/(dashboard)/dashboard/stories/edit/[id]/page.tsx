@@ -1,0 +1,88 @@
+'use client';
+
+import { use, useEffect, useState } from 'react';
+import axios from 'axios';
+import { Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { errorMessage } from '@/lib/dashboard/client-error-message';
+import { translationsFromRows } from '../../../_components/ContentTranslationTabs';
+import {
+  StoryForm,
+  STORY_TRANSLATION_FIELDS,
+  emptyStory,
+  type StoryFormValues,
+} from '../../_components/StoryForm';
+import { SLIDE_TRANSLATION_FIELDS, emptySlide, type SlideRow } from '../../_components/StorySlidesEditor';
+import { dt } from "@/lib/dashboard/i18n";
+
+type ApiSlide = {
+  id: string; mediaType: 'IMAGE' | 'VIDEO'; mediaUrl: string; durationSeconds: number;
+  caption: string | null; ctaLabel: string | null; ctaKind: string | null; ctaValue: string | null;
+  translations: Array<{ locale: string; caption: string | null; ctaLabel: string | null }>;
+};
+
+export default function EditStoryPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const [initial, setInitial] = useState<StoryFormValues | null>(null);
+  const [missing, setMissing] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    axios
+      .get(`/api/stories/${id}`)
+      .then((res) => {
+        if (!live) return;
+        const s = res.data;
+        setInitial({
+          ...emptyStory(),
+          slug: s.slug ?? '',
+          title: s.title ?? '',
+          image: s.image ?? '',
+          isActive: s.isActive !== false,
+          startsAt: s.startsAt ?? '',
+          endsAt: s.endsAt ?? '',
+          translations: translationsFromRows(s.translations ?? [], STORY_TRANSLATION_FIELDS),
+          slides: ((s.slides ?? []) as ApiSlide[]).map<SlideRow>((sl) => ({
+            ...emptySlide(),
+            id: sl.id,
+            mediaType: sl.mediaType === 'VIDEO' ? 'VIDEO' : 'IMAGE',
+            mediaUrl: sl.mediaUrl ?? '',
+            durationSeconds: String(sl.durationSeconds ?? 5),
+            caption: sl.caption ?? '',
+            ctaLabel: sl.ctaLabel ?? '',
+            ctaKind: sl.ctaKind ?? '',
+            ctaValue: sl.ctaValue ?? '',
+            /* Nullable columns come back as null; the tabs want strings. */
+            translations: translationsFromRows(
+              (sl.translations ?? []).map((t) => ({ locale: t.locale, caption: t.caption ?? '', ctaLabel: t.ctaLabel ?? '' })),
+              SLIDE_TRANSLATION_FIELDS
+            ),
+          })),
+        });
+      })
+      .catch((e) => {
+        if (!live) return;
+        setMissing(true);
+        toast.error(errorMessage(e, dt("تعذّر تحميل القصة")));
+      });
+    return () => {
+      live = false;
+    };
+  }, [id]);
+
+  if (missing) {
+    return <p className="py-24 text-center text-sm text-slate-500">{dt("القصة غير موجودة.")}</p>;
+  }
+
+  if (!initial) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  /* Keyed on the id so navigating between two stories remounts the form with
+     the new row instead of keeping the previous one's edits in state. */
+  return <StoryForm key={id} mode="edit" storyId={id} initial={initial} />;
+}

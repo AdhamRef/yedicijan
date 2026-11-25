@@ -1,28 +1,34 @@
+import { runAfterResponse } from "@/lib/events/after-response";
 import { NextRequest, NextResponse } from "next/server";
-import { publicOrigin } from "@/lib/public-origin";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { dispatchEvent } from "@/lib/events/dispatch";
 import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversion-server";
+import { mergePayForProviderRaw, payForErrorMessage, redactPayForResponse } from "@/lib/payfor";
+import { paymentPublicOrigin } from "@/lib/payment-public-origin";
+import { isValidLocale } from "@/lib/locales";
 
 export async function POST(req: NextRequest) {
-  const origin = publicOrigin(req);
+  const origin = paymentPublicOrigin(req.url);
+  const redirect = (url: URL) => NextResponse.redirect(url, 303);
   const { searchParams } = new URL(req.url);
   const donationId = searchParams.get("donationId") || "";
-  const locale = (searchParams.get("locale") || "en").toLowerCase();
+  const requestedLocale = (searchParams.get("locale") || "en").toLowerCase();
+  const locale = isValidLocale(requestedLocale) ? requestedLocale : "en";
 
   if (!donationId) {
-    return NextResponse.redirect(new URL(`/${locale}/donation-failed`, origin));
+    return redirect(new URL(`/${locale}/donation-failed`, origin));
   }
 
   const form = await req.formData();
   const raw = Object.fromEntries(form.entries());
 
-  console.error("[PayFor FAIL] Bank response:", JSON.stringify(raw, null, 2));
+  console.error("[PayFor FAIL] Bank response:", JSON.stringify(redactPayForResponse(raw), null, 2));
 
   const orderId = String(raw.OrderId || raw.orderId || "");
   const procReturnCode = String(raw.ProcReturnCode || raw.procReturnCode || "");
   const txnResult = String(raw.TxnResult || raw.txnResult || "");
-  const errorMessage = String(raw.ErrMsg || raw.ErrorMessage || raw.errorMessage || "Payment failed");
+  const errorMessage = payForErrorMessage(raw) || "Payment failed";
 
   try {
     const donation = await prisma.donation.findUnique({
@@ -39,20 +45,20 @@ export async function POST(req: NextRequest) {
           providerProcReturnCode: procReturnCode || null,
           providerTxnResult: txnResult || null,
           providerErrorMessage: errorMessage || null,
-          providerRaw: raw as Record<string, unknown>,
+          providerRaw: mergePayForProviderRaw(donation.providerRaw, raw) as Prisma.InputJsonValue,
         },
       });
-      void dispatchEvent("DONATION_FAILED", { donationId });
+      runAfterResponse(() => dispatchEvent("DONATION_FAILED", { donationId }));
       // Seed Meta with the failed attempt so lookalike audiences can include
       // donors-who-tried. Browser pixel fires the matching DonateFailed hit
-      // with event_id `${donationId}_failed` — same id here for dedup.
+      // with event_id `${donationId}_failed`  same id here for dedup.
       void sendDonationFailedConversions(donationId);
     }
   } catch (e) {
     console.error("[PayFor FAIL] Callback error:", e);
   }
 
-  return NextResponse.redirect(
+  return redirect(
     new URL(
       `/${locale}/donation-failed?donationId=${encodeURIComponent(donationId)}`,
       origin

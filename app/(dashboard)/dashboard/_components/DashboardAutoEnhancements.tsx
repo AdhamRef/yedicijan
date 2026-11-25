@@ -7,6 +7,8 @@ import { SaveStatusNotice, type SaveStatusState } from "./SaveStatusNotice";
 import { SmartSeoWorkbenchCard } from "./SmartSeoWorkbenchCard";
 import { SeoTextImproverCard } from "./SeoTextImproverCard";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "@/lib/locales";
+import { dt } from "@/lib/dashboard/i18n";
+import { isUnifiedContentEditorPath } from "@/lib/content-editor/editor-routes";
 
 type LocaleCode = SupportedLocale;
 type SeoContentType = "campaign" | "category" | "blog";
@@ -41,12 +43,21 @@ const localeByLabel: Record<string, LocaleCode> = {
   Español: "es",
   Deutsch: "de",
 };
+/* The Arabic tab is labelled in the interface language. */
+localeByLabel[dt("العربية")] = "ar";
 
 const supportedLocales: LocaleCode[] = [...SUPPORTED_LOCALES];
 
-function isDashboardSaveRequest(method?: string, url?: string) {
+/**
+  * A predicate rather than a plain boolean, so the two values it vouches for are narrowed to
+  * strings for the caller. A request only qualifies when both are present, which is exactly what
+  * the save-status event needs  the alternative was coercing an absent method or url into the
+  * event payload, where it would have reached listeners as the string "undefined".
+  */
+function isDashboardSaveRequest(method?: string, url?: string): method is string {
   const m = String(method || "GET").toUpperCase();
   const u = String(url || "");
+  if (!method || !url) return false;
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(m)) return false;
   return /\/api\/(campaigns|categories|posts)(\/|\?|$)/.test(u);
 }
@@ -55,6 +66,9 @@ function dispatchSaveEvent(detail: SaveEventDetail) {
   window.dispatchEvent(new CustomEvent<SaveEventDetail>("dashboard-save-status", { detail }));
 }
 
+/** An XHR carrying the two properties this module's `open` patch attaches for its `send` patch. */
+type TrackedXhr = XMLHttpRequest & { __dashboardMethod?: string; __dashboardUrl?: string };
+
 function patchNetworkSaveEvents() {
   if (typeof window === "undefined" || window.__dashboardSaveStatusPatched) return;
   window.__dashboardSaveStatusPatched = true;
@@ -62,16 +76,20 @@ function patchNetworkSaveEvents() {
   const originalOpen = window.XMLHttpRequest.prototype.open;
   const originalSend = window.XMLHttpRequest.prototype.send;
 
-  window.XMLHttpRequest.prototype.open = function patchedOpen(method: string, url: string | URL, ...rest: any[]) {
-    (this as any).__dashboardMethod = method;
-    (this as any).__dashboardUrl = String(url);
-    return originalOpen.call(this, method, url, ...rest as [boolean?, string?, string?]);
+  /* `this` inside a prototype patch is the XHR instance, but a plain function expression has no way
+     to know that  so every `this` here was an implicit `any`, and the tracked method/url were too.
+     Annotating the receiver types all of it, and a small marker interface replaces the `as any`
+     casts that were standing in for the two properties this patch attaches. */
+  window.XMLHttpRequest.prototype.open = function patchedOpen(this: TrackedXhr, method: string, url: string | URL, ...rest: unknown[]) {
+    this.__dashboardMethod = method;
+    this.__dashboardUrl = String(url);
+    return (originalOpen as unknown as (...args: unknown[]) => void).call(this, method, url, ...rest);
   } as typeof window.XMLHttpRequest.prototype.open;
 
-  window.XMLHttpRequest.prototype.send = function patchedSend(...args: any[]) {
-    const method = (this as any).__dashboardMethod;
-    const url = (this as any).__dashboardUrl;
-    const shouldTrack = isDashboardSaveRequest(method, url);
+  window.XMLHttpRequest.prototype.send = function patchedSend(this: TrackedXhr, ...args: unknown[]) {
+    const method = this.__dashboardMethod;
+    const url = this.__dashboardUrl;
+    const shouldTrack = isDashboardSaveRequest(method, url) && url !== undefined;
     if (shouldTrack) {
       dispatchSaveEvent({ phase: "start", method, url });
       this.addEventListener("loadend", () => {
@@ -79,14 +97,14 @@ function patchNetworkSaveEvents() {
         dispatchSaveEvent({ phase: ok ? "success" : "error", method, url, status: this.status });
       });
     }
-    return originalSend.apply(this, args as [Document | XMLHttpRequestBodyInit | null | undefined]);
+    return (originalSend as unknown as (...a: unknown[]) => void).apply(this, args);
   } as typeof window.XMLHttpRequest.prototype.send;
 
   const originalFetch = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const method = init?.method || (input instanceof Request ? input.method : "GET");
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    const shouldTrack = isDashboardSaveRequest(method, url);
+    const shouldTrack = isDashboardSaveRequest(method, url) && url !== undefined;
     if (shouldTrack) dispatchSaveEvent({ phase: "start", method, url });
     try {
       const response = await originalFetch(input, init);
@@ -172,14 +190,15 @@ function readProjectSeoSnapshot() {
   const editor = activePanel?.querySelector(".ProseMirror") as HTMLElement | null;
   const title = titleInput?.value || "";
   const description = editor?.innerText || "";
-  const imageCount = Math.max(0, document.querySelectorAll('img[alt^="صورة "]').length);
+  const imageCount = Math.max(0, document.querySelectorAll(`img[alt^="صورة "], img[alt^="${dt("صورة {0}", [""])}"]`).length);
   return { locale, title, description, imageCount };
 }
 
 function currentPageType(pathname: string): SeoContentType | null {
+  if (isUnifiedContentEditorPath(pathname)) return null;
   if (pathname.includes("/dashboard/campaigns/edit/")) return "campaign";
   if (pathname.includes("/dashboard/categories/edit/")) return "category";
-  if (pathname.includes("/dashboard/blog")) return "blog";
+  if (pathname.includes("/dashboard/blog/settings/")) return "blog";
   return null;
 }
 
@@ -249,14 +268,14 @@ function statusForPath(pathname: string, detail: SaveEventDetail): SaveStatusSta
   const isBlog = pathname.includes("/dashboard/blog");
   if (!isProject && !isCategory && !isBlog) return null;
 
-  const label = isProject ? "المشروع" : isCategory ? "الحملة" : "المقال";
+  const label = isProject ? dt("المشروع") : isCategory ? dt("الحملة") : dt("المقال");
   if (detail.phase === "start") {
-    return { type: "saving", message: `جاري حفظ ${label}...`, detail: "لا تغادر الصفحة حتى يكتمل الحفظ" };
+    return { type: "saving", message: dt("جاري حفظ {0}...", [label]), detail: dt("لا تغادر الصفحة حتى يكتمل الحفظ") };
   }
   if (detail.phase === "success") {
-    return { type: "success", message: `تم تحديث ${label} بنجاح`, detail: "أنت ما زلت داخل صفحة التعديل" };
+    return { type: "success", message: dt("تم تحديث {0} بنجاح", [label]), detail: dt("أنت ما زلت داخل صفحة التعديل") };
   }
-  return { type: "error", message: `فشل تحديث ${label}`, detail: detail.status ? `رمز الخطأ: ${detail.status}` : "راجع البيانات ثم حاول مرة أخرى" };
+  return { type: "error", message: dt("فشل تحديث {0}", [label]), detail: detail.status ? dt("رمز الخطأ: {0}", [detail.status]) : dt("راجع البيانات ثم حاول مرة أخرى") };
 }
 
 export function DashboardAutoEnhancements() {
@@ -272,9 +291,9 @@ export function DashboardAutoEnhancements() {
   // SEO workbench shows on both new + edit campaign pages. Placement is
   // controlled by the page's <div id="dashboard-project-seo-anchor" /> sentinel.
   const isProjectForm =
-    pathname.includes("/dashboard/campaigns/edit/") ||
+    !isUnifiedContentEditorPath(pathname) && (pathname.includes("/dashboard/campaigns/edit/") ||
     pathname.endsWith("/dashboard/campaigns/new") ||
-    pathname.includes("/dashboard/campaigns/new/");
+    pathname.includes("/dashboard/campaigns/new/"));
   const hasTextImprover = Boolean(currentPageType(pathname));
 
   // This component is mounted by the shell on all 151 dashboard routes, but everything it

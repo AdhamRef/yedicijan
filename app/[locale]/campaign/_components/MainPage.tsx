@@ -14,8 +14,6 @@ import {
   Loader2,
   MoreHorizontal,
   Play,
-  Twitter,
-  Facebook,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
@@ -23,9 +21,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "react-hot-toast";
 import Modal from "@/app/[locale]/components/Modal";
-import { useCurrency } from "@/context/CurrencyContext";
-import SignInDialog from "@/components/SignInDialog";
 import DonationSidebar from "../_components/DonationSidebar";
+import { publicCampaignImage, publicCampaignImages } from "@/lib/minbar/project-image-fallback";
 
 // Types
 interface Category {
@@ -52,6 +49,9 @@ interface Campaign {
     title: string;
     description: string;
     image: string | null;
+    /* /api/campaigns/[id] selects this; the interface omitted it, so the three reads below were
+       unchecked even though the video thumbnail and modal depend on it. */
+    videoUrl?: string | null;
     createdAt: string;
   }>;
 }
@@ -68,6 +68,8 @@ interface Comment {
   user: {
     name: string;
     image: string;
+    /* /api/campaigns/[id]/comments selects this; it is what the delete control is gated on. */
+    email?: string | null;
   };
 }
 
@@ -191,7 +193,7 @@ export const dummyComments = [
   },
   {
     id: "comment_7",
-    text: "ربنا يبارك فيكم ويجعله في ميزان حسناتكم. شيء جميل أن نرى الناس تساعد بعضها. الله يعطيكم يدي جيهان على الجهود المبذولة 🙏",
+    text: "ربنا يبارك فيكم ويجعله في ميزان حسناتكم. شيء جميل أن نرى الناس تساعد بعضها. الله يعطيكم منبر الأقصي على الجهود المبذولة 🙏",
     createdAt: "2024-01-13T08:15:00Z",
     user: {
       name: "ليلى الحربي",
@@ -229,7 +231,6 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [showDescriptionButton, setShowDescriptionButton] = useState(false);
   const descriptionRef = useRef<HTMLDivElement>(null);
-  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isUpdateExpanded, setIsUpdateExpanded] = useState<{
     [key: string]: boolean;
   }>({});
@@ -283,8 +284,6 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
 
     campaign?.updates?.forEach((update) => {
       if (updateRefs.current[update.id]) {
-        const shouldShowButton =
-          updateRefs.current[update.id]?.scrollHeight! > 150;
         setIsUpdateExpanded((prev) => ({
           ...prev,
           [update.id]: prev[update.id] || false,
@@ -382,6 +381,9 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
 
 
 
+  const displayImages = publicCampaignImages(campaign.images);
+  const displayCover = publicCampaignImage(campaign.images);
+
   return (
     <>
     <main className="min-h-screen bg-[#fefefe] relative">
@@ -393,7 +395,7 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
         className="overflow-hidden shadow-lg sm:hidden"
       >
         <img
-          src={campaign.images[0] || "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg"}
+          src={displayCover}
           alt={`${campaign.title} - Campaign Image`}
           className="w-full h-[500px] max-sm:h-[300px] object-cover transform"
         />
@@ -425,7 +427,7 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
               className="max-sm:hidden rounded-2xl overflow-hidden mb-6 max-sm:mb-4 shadow-lg"
             >
               <img
-                src={campaign.images[0] || "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg"}
+                src={displayCover}
                 alt={`${campaign.title} - Campaign Image`}
                 className="w-full h-[500px] max-sm:h-[300px] object-cover transform"
               />
@@ -476,10 +478,10 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
             </div>
 
             {/* Image Gallery */}
-            {campaign.images.length > 1 && (
+            {displayImages.length > 1 && (
               <>
                 <div className="flex gap-3 overflow-x-auto pb-2">
-                  {campaign.images.map((image, index) => (
+                  {displayImages.map((image, index) => (
                     <button
                       key={index}
                       onClick={() => {
@@ -533,7 +535,8 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
                           )}
                         </p>
                         <div
-                          ref={(el) => (updateRefs.current[update.id] = el)}
+                          /* Braced: an assignment expression here would be read as a cleanup function. */
+                          ref={(el) => { updateRefs.current[update.id] = el; }}
                           className={`relative ${
                             !isUpdateExpanded[update.id]
                               ? "max-h-[150px] overflow-hidden"
@@ -544,12 +547,12 @@ const MainPage = ({ id, locale }: {id:string; locale?: string}) => {
                             {update.description}
                           </p>
                           {!isUpdateExpanded[update.id] &&
-                            updateRefs.current[update.id]?.scrollHeight! >
+                            (updateRefs.current[update.id]?.scrollHeight ?? 0) >
                               150 && (
                               <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-[#fefefe] to-transparent" />
                             )}
                         </div>
-                        {updateRefs.current[update.id]?.scrollHeight! > 150 && (
+                        {(updateRefs.current[update.id]?.scrollHeight ?? 0) > 150 && (
                           <button
                             onClick={() =>
                               setIsUpdateExpanded((prev) => ({

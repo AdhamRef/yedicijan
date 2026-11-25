@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 /**
  * MongoDB stores an optional field that was never written as **absent**, not as null.
  * Prisma's `{ field: null }` only matches an explicit null, so it silently misses every
- * row where the field was simply never set — and on this database that is the majority:
+ * row where the field was simply never set  and on this database that is the majority:
  *
  *   Donation.subscriptionId  →  46 explicit null, 1172 absent
  *   Donation.paidAt          →   6 explicit null,  425 absent
@@ -11,14 +11,14 @@ import type { Prisma } from "@prisma/client";
  *
  * The failure mode is silent and expensive: `{ subscriptionId: null }` matched 41 of the
  * 1022 one-time paid donations on the revenue cards, and `{ paidAt: null }` failing to
- * find an unsettled row once made a payment webhook create a duplicate donation for
- * a charge it had already recorded.
+ * find an unsettled row is what made the Stripe webhook create a duplicate donation for
+ * an invoice it had already recorded.
  *
- * `{ field: { not: null } }` is NOT affected — it correctly excludes both absent and null.
+ * `{ field: { not: null } }` is NOT affected  it correctly excludes both absent and null.
  * Only the "is empty" direction needs this helper.
  *
  * IMPORTANT: the returned predicate contains a top-level `OR`. Always compose it under
- * `AND` (or `donationWhereAll` below) — spreading it into another object that also carries
+ * `AND` (or `donationWhereAll` below)  spreading it into another object that also carries
  * an `OR` silently drops one of them, which is a separate live bug on the revenue cards.
  */
 type NullableDonationField =

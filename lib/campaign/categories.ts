@@ -2,7 +2,7 @@
 //
 // The schema stores `categoryIds: String[]` on Campaign (mirrored as `campaignIds`
 // on Category, managed implicitly by Prisma). Per-category ordering lives in
-// `categoryPriorities` as `{ [categoryId]: number }` — lower number = higher
+// `categoryPriorities` as `{ [categoryId]: number }`  lower number = higher
 // priority on that category's page; absent key = unprioritized for that category.
 
 import type { Prisma } from "@prisma/client";
@@ -81,7 +81,7 @@ export function resolveCampaignCategoryIds(c: {
 /**
  * Build a Prisma `where` clause matching campaigns that belong to a given
  * category. Uses the m2m array via `has`. Exposed for routes that filter
- * donations by a campaign's category.
+ * donations/subscriptions by a campaign's category.
  */
 export function campaignInCategoryWhere(
   categoryId: string,

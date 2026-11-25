@@ -1,6 +1,6 @@
 /**
  * USD-base exchange rates: persisted in MongoDB, refreshed from ExchangeRate-API on a schedule.
- * All server conversions read from DB (with short in-memory TTL) — not the external API per request.
+ * All server conversions read from DB (with short in-memory TTL)  not the external API per request.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -98,7 +98,7 @@ export async function loadRatesFromDatabase(): Promise<{
 }
 
 /**
- * Rates for server-side conversion (donations, gateway charges, etc.).
+ * Rates for server-side conversion (donations, Stripe, etc.).
  * Reads DB; 45s memory cache. If no row, refreshes from API once (bootstrap).
  */
 export async function getUsdBaseRatesForServer(): Promise<Record<string, number>> {
@@ -116,39 +116,6 @@ export async function getUsdBaseRatesForServer(): Promise<Record<string, number>
   return await refreshExchangeRatesFromApi();
 }
 
-export function convertAmountInCurrencyToTry(
-  amount: number,
-  fromCurrency: string,
-  rates: Record<string, number>
-): number {
-  const from = String(fromCurrency || "USD")
-    .trim()
-    .toUpperCase();
-  if (from === "TRY") return amount;
-  const rFrom = rates[from];
-  const rTry = rates.TRY;
-  if (!rFrom || !rTry || rFrom <= 0 || rTry <= 0) {
-    throw new Error(`Missing USD-base rate for ${from} or TRY`);
-  }
-  const usd = amount / rFrom;
-  const tryAmount = usd * rTry;
-  return Math.round(tryAmount * 100) / 100;
-}
-
-/** Same USD-base conversion as `convertAmountInCurrencyToTry`, to any target currency. */
-export function convertAmountBetweenCurrencies(
-  amount: number,
-  fromCurrency: string,
-  toCurrency: string,
-  rates: Record<string, number>
-): number {
-  const from = String(fromCurrency || "USD").trim().toUpperCase();
-  const to = String(toCurrency || "USD").trim().toUpperCase();
-  if (from === to) return amount;
-  const rFrom = from === "USD" ? 1 : rates[from];
-  const rTo = to === "USD" ? 1 : rates[to];
-  if (!rFrom || !rTo || rFrom <= 0 || rTo <= 0) {
-    throw new Error(`Missing USD-base rate for ${from} or ${to}`);
-  }
-  return Math.round((amount / rFrom) * rTo * 100) / 100;
-}
+/* Re-exported so every existing `from "@/lib/exchange/rates-service"` import keeps
+   working. The implementations live in ./convert, which has no Prisma dependency. */
+export { convertAmountInCurrencyToTry, convertAmountInCurrencyToUsd } from "./convert";

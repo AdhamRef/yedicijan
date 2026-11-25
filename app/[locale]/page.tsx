@@ -1,9 +1,51 @@
+import { preload } from "react-dom";
+import { heroPosterSources } from "@/lib/minbar/hero-poster";
+import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { LOCALE_SEO, buildPageMetadata, SITE_URL } from "@/lib/seo";
+import { unstable_cache } from "next/cache";
+import { getPublicServerSession } from "@/lib/auth/public-session";
+import { LOCALE_SEO } from "@/lib/seo";
+import { siteIdentitySchemas, withInstitutionalHomeIdentity } from "@/lib/site-identity";
 import type { Locale } from "@/lib/seo";
-import HomePageContent from "./_components/homepage/HomePageContent";
-import type { SlideItem } from "./_components/homepage/HeroSlider";
+import { listProjects } from "@/lib/minbar/projects";
+import { readQuickDonation } from "@/lib/minbar/quick-donation-read";
+import { selectQuickDonationProjectOptions } from "@/lib/minbar/quick-donation-display";
+import { readHomeLayout, resolveHomeLists, visibleSections } from "@/lib/minbar/home-layout-read";
+import MinbarMessages from "@/components/minbar/MinbarMessages";
+import HomePage from "@/components/minbar/home/HomePage";
+import PageBanners from "@/components/minbar/banners/PageBanners";
+
+/**
+ * Namespaces this page renders, on top of the shell bundle: its own copy, the
+ * official impact figures' labels, and the verse strips (the hero's Al-Isra 1
+ * and the 'Ibādan Lanā banner's Al-Isra 5).
+ */
+const NAMESPACES = ["homepage", "achievements", "quran"] as const;
+
+/**
+ * Everything the homepage shows except the visitor's session, read together
+ * and cached per locale for a minute. Uncached, these ~15 MongoDB queries ran
+ * on every visit and kept the server ~1.7 s from sending the first byte
+ * (PageSpeed: LCP breakdown, "time to first byte"). Dashboard edits, raised
+ * amounts and new posts show within 60 s. All of it is plain JSON (strings,
+ * numbers), which `unstable_cache` requires.
+ */
+const cachedHomeData = unstable_cache(
+  async (locale: string) => {
+    const projectsRead = listProjects(locale);
+    const layoutRead = readHomeLayout();
+    const [projects, quick, layout, lists] = await Promise.all([
+      projectsRead,
+      readQuickDonation(),
+      layoutRead,
+      layoutRead.then((l) => resolveHomeLists(locale, l, projectsRead)),
+    ]);
+    const quickProjects = selectQuickDonationProjectOptions(quick, projects);
+    return { quick, quickProjects, layout, lists };
+  },
+  ["minbar-home-data"],
+  { revalidate: 60, tags: ["minbar-home"] }
+);
 
 interface Props {
   params: Promise<{ locale: string }>;
@@ -12,137 +54,63 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale } = await params;
   const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
-  return buildPageMetadata(locale, {
+  return withInstitutionalHomeIdentity(await buildManagedPageMetadata("home", locale, {
     title: seo.title,
     description: seo.description,
     path: "/",
     keywords: seo.keywords,
-  });
+  }), locale);
 }
 
 /**
- * Resolve the request's own origin. We try the actual incoming request host first
- * (works in every environment), then fall back to env vars, then to the hardcoded
- * SITE_URL — making sure SSR self-fetches always reach the same deployment they
- * were rendered from.
+ * Homepage  the Minbar Al-Aqsa design, ported from
+ * `Minbar/الصفحة الرئيسية.dc.html`.
+ *
+ * Projects are read here rather than fetched from the client so the urgent rail
+ * and the quick-donation bar's destination list are in the first HTML response.
+ * `PRODUCTION_SEO_CONTRACT.md` requires server-rendered metadata and content 
+ * a client-only fetch would leave the homepage's project copy out of the index.
  */
-async function baseUrl(): Promise<string> {
-  try {
-    const h = await headers();
-    const host = h.get("x-forwarded-host") ?? h.get("host");
-    const proto = h.get("x-forwarded-proto") ?? "https";
-    if (host) return `${proto}://${host}`;
-  } catch {
-    /* fall through */
-  }
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
-  }
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return SITE_URL;
-}
-
-/**
- * Fetch with a hard timeout so a slow/hanging API can never block the SSR render.
- * PSI / Lighthouse aborts the audit if the document takes longer than ~60 s, returning
- * ERROR with no LCP value — capping each upstream request at 3 s keeps total SSR latency
- * bounded even under degraded backends.
- */
-async function safeFetch<T>(url: string, fallback: T, revalidateSeconds = 300, timeoutMs = 3000): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      next: { revalidate: revalidateSeconds },
-      signal: controller.signal,
-    });
-    if (!res.ok) return fallback;
-    return (await res.json()) as T;
-  } catch {
-    return fallback;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
- * Build a Cloudinary-hosted, format-negotiated, mobile-first hero URL at the given width.
- * Cloudinary serves AVIF/WebP automatically via f_auto and aggressive compression via q_auto:eco.
- */
-function buildHeroSrc(src: string, width: number): string {
-  if (!src.includes("res.cloudinary.com")) return src;
-  return src.replace(
-    /\/upload\//,
-    `/upload/f_auto,q_auto:eco,w_${width},c_limit/`
-  );
-}
-
-export default async function HomePage({ params }: Props) {
+export default async function Home({ params }: Props) {
   const { locale } = await params;
-  const base = await baseUrl();
+  const poster = heroPosterSources(locale);
+  preload(poster.src, { as: "image", imageSrcSet: poster.srcSet, imageSizes: poster.sizes, fetchPriority: "high" });
 
-  // Fetch every above-the-fold data source server-side and pass them to the client tree
-  // as initial state. This eliminates the empty-section → skeleton → real-content swap
-  // (which was the root cause of CLS=0.92) and avoids a client waterfall on hydration.
-  // All requests run in parallel with a 3 s hard timeout each.
-  const [slidesData, campaignsData, categoriesData, postsData] = await Promise.all([
-    safeFetch<{ items?: SlideItem[] }>(
-      `${base}/api/slides?locale=${locale}`,
-      { items: [] }
-    ),
-    safeFetch<{ items?: unknown[]; nextCursor?: string | null; hasMore?: boolean }>(
-      `${base}/api/campaigns?limit=5&sortBy=priority&locale=${locale}`,
-      { items: [], hasMore: false }
-    ),
-    safeFetch<{ items?: unknown[] }>(
-      `${base}/api/categories?locale=${locale}&limit=12&sortBy=order`,
-      { items: [] }
-    ),
-    safeFetch<{ items?: unknown[] }>(
-      `${base}/api/posts?locale=${locale}&limit=3`,
-      { items: [] }
-    ),
+  // Every section's content is read here, in parallel, so the whole homepage is
+  // in the first HTML response rather than filled in by client fetches. Which
+  // sections show, in what order, and which items each list picks are the
+  // dashboard's homepage layout (`lib/minbar/home-layout.ts`); its defaults are
+  // the approved design. The quick-donation select lists whatever its own
+  // settings allow, which may be every project.
+  const [{ quick, quickProjects, layout, lists }, session] = await Promise.all([
+    cachedHomeData(locale),
+    getPublicServerSession(),
   ]);
 
-  const initialSlides = Array.isArray(slidesData?.items) ? slidesData.items : [];
-  const firstHeroImage = initialSlides[0]?.image ?? null;
-  const initialCampaigns = (campaignsData?.items as Parameters<typeof HomePageContent>[0]["initialCampaigns"]) ?? [];
-  const initialNextCursor = campaignsData?.nextCursor ?? null;
-  const initialHasMore = Boolean(campaignsData?.hasMore);
-  const initialCategories = (categoriesData?.items as Parameters<typeof HomePageContent>[0]["initialCategories"]) ?? [];
-  const initialPosts = (postsData?.items as Parameters<typeof HomePageContent>[0]["initialPosts"]) ?? [];
-
-  // Preload the LCP image with a srcset that matches what the browser will actually
-  // request. We use Cloudinary URLs directly (not the /_next/image proxy) so the
-  // preload fires immediately without waiting for the Next.js image optimizer round-trip.
-  const preloadSrcSet = firstHeroImage
-    ? [
-        `${buildHeroSrc(firstHeroImage, 640)} 640w`,
-        `${buildHeroSrc(firstHeroImage, 1024)} 1024w`,
-        `${buildHeroSrc(firstHeroImage, 1536)} 1536w`,
-      ].join(", ")
-    : null;
+  const organisationSchema = siteIdentitySchemas(locale);
 
   return (
     <>
-      {preloadSrcSet && firstHeroImage && (
-        <link
-          rel="preload"
-          as="image"
-          imageSrcSet={preloadSrcSet}
-          imageSizes="100vw"
-          fetchPriority="high"
-        />
-      )}
-      <HomePageContent
-        firstHeroImage={firstHeroImage}
-        initialSlides={initialSlides}
-        initialCampaigns={initialCampaigns}
-        initialNextCursor={initialNextCursor}
-        initialHasMore={initialHasMore}
-        initialCategories={initialCategories}
-        initialPosts={initialPosts}
+      {/* `PRODUCTION_SEO_CONTRACT.md` § Structured Data: Organization + WebSite
+          on the homepage only, and nothing describing data the page does not
+          actually show. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(organisationSchema) }}
       />
+      <MinbarMessages locale={locale} namespaces={NAMESPACES}>
+        <HomePage
+          sections={visibleSections(layout)}
+          lists={lists}
+          quick={{ config: quick, projects: quickProjects }}
+          banners={{
+            top: <PageBanners locale={locale} page="home" slot="top" />,
+            middle: <PageBanners locale={locale} page="home" slot="middle" />,
+            bottom: <PageBanners locale={locale} page="home" slot="bottom" />,
+          }}
+          signedIn={!!session?.user}
+        />
+      </MinbarMessages>
     </>
   );
 }

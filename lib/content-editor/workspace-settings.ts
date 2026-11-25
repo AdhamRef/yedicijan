@@ -1,0 +1,252 @@
+import { normalizeVideoSource } from "../content/video-platform";
+import { amountsByCurrency } from "../content/category-page-write";
+import { parseSuggestedDonations } from "../campaign/suggested-donations";
+import { parseSuggestedShareCounts } from "../campaign/campaign-modes";
+import { parseShareLabels } from "../campaign/share-labels";
+import { settingsFields } from "./workspace";
+import { SUPPORTED_LOCALES } from "../locales";
+import { parseIstanbulSchedule, validateSchedule, safeEditorUrl } from "./urls";
+export { safeEditorUrl } from "./urls";
+import type { ContentKind, ContentRecord } from "./contracts";
+import { BANNER_PAGES } from "../minbar/banner-placements";
+export function validateWorkspaceSettings(
+  kind: ContentKind,
+  row: ContentRecord,
+  input: unknown,
+): ContentRecord {
+  if (input === undefined) return {};
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("إعدادات غير صالحة");
+  const result: ContentRecord = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (kind === "categories" && ["values", "infoCards"].includes(key)) continue;
+    const spec = settingsFields(kind, row).find((f) => f.key === key);
+    if (kind === "categories" && key === "currencyOverrides" && spec) {
+      if (!Array.isArray(value) || value.length > 20) throw new Error("استثناءات العملات غير صالحة");
+      const byCurrency: Record<string, number[]> = {};
+      for (const raw of value) {
+        if (!raw || typeof raw !== "object" || typeof raw.currency !== "string" || typeof raw.amountsStr !== "string") throw new Error("صف عملة غير صالح");
+        if (!raw.amountsStr.trim()) continue;
+        const code = raw.currency.trim().toUpperCase();
+        if (!/^[A-Z]{3}$/.test(code) || code === "USD" || code in byCurrency) throw new Error("عملة غير صالحة أو مكررة");
+        const parts = raw.amountsStr.replace(/[٠-٩]/g, (digit: string) => String(digit.charCodeAt(0) - 1632)).replace(/[۰-۹]/g, (digit: string) => String(digit.charCodeAt(0) - 1776)).split(/[,،;\n]+/).map((part: string) => part.trim()).filter(Boolean);
+        if (!parts.length || parts.length > 12 || parts.some((part: string) => !/^\d+$/.test(part) || Number(part) <= 0 || Number(part) > 1e9)) throw new Error("أدخل مبالغ صحيحة موجبة مفصولة بفواصل");
+        byCurrency[code] = [...new Set(parts.map(Number))] as number[];
+      }
+      result.suggestedByCurrency = amountsByCurrency(byCurrency); continue;
+    }
+    if (kind === "super-categories" && key === "heroImageLocales") {
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("صور اللغات غير صالحة");
+      const locales: Record<string, string> = {};
+      for (const [locale, url] of Object.entries(value)) {
+        if (!(SUPPORTED_LOCALES as readonly string[]).includes(locale) || typeof url !== "string" || url.length > 2048 || !safeEditorUrl(url)) throw new Error("رابط صورة اللغة غير صالح");
+        if (url.trim()) locales[locale] = url.trim();
+      }
+      result.heroImageLocales = locales;
+      continue;
+    }
+    if (kind === "campaigns" && ["suggestedDonations", "suggestedShareCounts", "shareLabels"].includes(key)) {
+      if (!value || typeof value !== "object" || Array.isArray(value) || JSON.stringify(value).length > 16000) throw new Error("إعدادات المبالغ أو الوحدات غير صالحة");
+      result[key] = key === "suggestedDonations" ? parseSuggestedDonations(value) : key === "suggestedShareCounts" ? parseSuggestedShareCounts(value) : parseShareLabels(value) || {};
+      continue;
+    }
+    if ((["playlists", "courses"].includes(kind) && key === "videos") || (kind === "super-categories" && ["blocks", "items"].includes(key)))
+      continue;
+    if (kind === "videos" && key === "url") {
+      if (typeof value !== "string") throw new Error("رابط فيديو غير صالح");
+      if (!value.trim()) { result.url = null; continue; }
+      const source = normalizeVideoSource({ url: value });
+      if (source.presentation.provider === "invalid" || (value.trim().startsWith("<") && !source.presentation.embedUrl)) throw new Error("كود التضمين أو رابط الفيديو غير مدعوم");
+      result.url = source.url; result.youtubeId = source.youtubeId; continue;
+    }
+    if (!spec) throw new Error("إعداد غير مسموح: " + key);
+    if (spec.type === "boolean") {
+      if (typeof value !== "boolean") throw new Error("قيمة التفعيل غير صالحة");
+      result[key] = value;
+    } else if (spec.type === "number") {
+      if (
+        typeof value !== "number" ||
+        !Number.isFinite(value) ||
+        value < 0 ||
+        value > 1e9
+      )
+        throw new Error("قيمة مالية أو ترتيب غير صالح");
+      if (
+        ["order", "priority", "statDoneValue", "statGoalValue"].includes(key) &&
+        !Number.isInteger(value)
+      )
+        throw new Error("الترتيب يجب أن يكون عددًا صحيحًا");
+      result[key] = value;
+    } else if (
+      ["images", "numbers"].includes(spec.type) ||
+      [
+        "categoryIds",
+        "campaignIds",
+        "locales",
+        "placements",
+        "heroVideoLocales",
+        "localeFilter",
+        "achievementVideoIds",
+      ].includes(key)
+    ) {
+      if (!Array.isArray(value) || value.length > 100)
+        throw new Error("قائمة غير صالحة");
+      if (
+        spec.type === "numbers" &&
+        value.some(
+          (v) =>
+            typeof v !== "number" || !Number.isFinite(v) || v <= 0 || v > 1e9,
+        )
+      )
+        throw new Error("المبالغ المقترحة غير صالحة");
+      if (
+        spec.type !== "numbers" &&
+        value.some((v) => typeof v !== "string" || v.length > 2048)
+      )
+        throw new Error("قائمة غير صالحة");
+      if (
+        spec.type === "images" &&
+        value.some((v) => !safeEditorUrl(String(v)))
+      )
+        throw new Error("رابط صورة غير صالح");
+      if (
+        ["categoryIds", "campaignIds", "achievementVideoIds"].includes(key) &&
+        value.some((v) => !/^[a-f0-9]{24}$/i.test(String(v)))
+      )
+        throw new Error("معرّف غير صالح");
+      if (
+        ["locales", "heroVideoLocales", "localeFilter"].includes(key) &&
+        value.some(
+          (v) => !(SUPPORTED_LOCALES as readonly string[]).includes(String(v)),
+        )
+      )
+        throw new Error("لغة غير مفعلة");
+      if (
+        key === "placements" &&
+        value.some(
+          (v) =>
+            !BANNER_PAGES.some((p) =>
+              p.slots.some((s) => `${p.key}:${s.key}` === v),
+            ),
+        )
+      )
+        throw new Error("موضع غير صالح");
+      if (kind === "blog" && key === "campaignIds" && value.length > 3)
+        throw new Error("اختر ثلاثة مشاريع على الأكثر");
+      if (
+        kind === "categories" &&
+        key === "suggestedAmounts" &&
+        value.some((v) => !Number.isInteger(v))
+      )
+        throw new Error("مبالغ صندوق التصنيف أعداد صحيحة موجبة");
+      result[key] = [...new Set(value)];
+    } else {
+      if (typeof value !== "string" || value.length > 2048)
+        throw new Error("قيمة إعداد غير صالحة");
+      if (spec.options && !spec.options.some(([k]) => k === value))
+        throw new Error("خيار غير صالح");
+      if (["heroVideoId", "youtubeId", "introVideoId"].includes(key) && value && !/^[A-Za-z0-9_-]{11}$/.test(value))
+        throw new Error("معرّف فيديو YouTube غير صالح");
+      if (
+        key === "heroVideoUrl" &&
+        value &&
+        !/^[A-Za-z0-9_-]{11}$/.test(value) &&
+        (!/^https?:\/\//.test(value) || !safeEditorUrl(value))
+      )
+        throw new Error("رابط فيديو الواجهة غير صالح");
+      if (
+        key === "accentColor" &&
+        value &&
+        !/^#[a-f0-9]{3}(?:[a-f0-9]{3})?$/i.test(value)
+      )
+        throw new Error("استخدم لونًا بصيغة #RRGGBB");
+      if (["url", "image"].includes(spec.type) && !safeEditorUrl(value))
+        throw new Error("وجهة غير آمنة");
+      if (
+        ["categoryId", "campaignId", "donateCampaignId"].includes(key) &&
+        value &&
+        !/^[a-f0-9]{24}$/i.test(value)
+      )
+        throw new Error("معرّف غير صالح");
+      if (spec.type === "date") {
+        const parsed = value ? parseIstanbulSchedule(value) : null;
+        if (value && !parsed) throw new Error("موعد غير صالح");
+        result[key] = parsed;
+      } else
+        result[key] =
+          value ||
+          ([
+            "pageTemplate",
+            "categoryId",
+            "campaignId",
+            "donateCampaignId",
+            "sharePriceUSD",
+          ].includes(key)
+            ? null
+            : "");
+    }
+  }
+  const next = { ...row, ...result };
+  if (kind === "campaigns") {
+    for (const [key, nativeKey, arrayKey] of [
+      ["defaultDonationAmounts", "suggestedDonations", "amounts"],
+      ["defaultShareCounts", "suggestedShareCounts", "counts"],
+    ]) {
+      if (key in result) {
+        const values = result[key] as number[];
+        if (
+          !values.length ||
+          values.length > 20 ||
+          (key === "defaultShareCounts" &&
+            values.some((v) => !Number.isInteger(v) || v > 1000000))
+        )
+          throw new Error("أضف من قيمة إلى عشرين قيمة مقترحة صالحة");
+        const previous = row[nativeKey];
+        result[nativeKey] = {
+          ...(previous &&
+          typeof previous === "object" &&
+          !Array.isArray(previous)
+            ? previous
+            : {}),
+          [arrayKey]: values,
+        };
+        delete result[key];
+      }
+    }
+    if (
+      row.fundraisingMode === "IMPACT" &&
+      Object.keys(result).some((k) =>
+        [
+          "goalType",
+          "targetAmount",
+          "fundraisingMode",
+          "sharePriceUSD",
+        ].includes(k),
+      )
+    )
+      throw new Error("إعدادات تبرع مشاريع الأثر تُدار من محرر الأثر المتخصص");
+    if (result.isActive === true && row.editorArchived === true)
+      result.editorArchived = false;
+    if (next.goalType === "FIXED" && Number(next.targetAmount) < 1)
+      throw new Error("أضف هدفًا أكبر من صفر");
+    if (next.fundraisingMode === "SHARES" && Number(next.sharePriceUSD) <= 0)
+      throw new Error("أضف سعر السهم");
+    if (next.goalType === "OPEN" && "goalType" in result)
+      result.targetAmount = 0;
+    if ("categoryIds" in result) {
+      const ids = result.categoryIds as string[];
+      if (!ids.length) throw new Error("اختر تصنيفًا واحدًا على الأقل");
+      delete result.categoryIds;
+      result.categories = { set: ids.map((id) => ({ id })) };
+    }
+  }
+  if (
+    kind === "urgent-banners" &&
+    !validateSchedule(
+      next.startsAt ? new Date(String(next.startsAt)) : null,
+      next.endsAt ? new Date(String(next.endsAt)) : null,
+    )
+  )
+    throw new Error("نهاية الظهور يجب أن تكون بعد البداية");
+  return result;
+}

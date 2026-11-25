@@ -1,35 +1,80 @@
+import { donationEditTotals } from "@/lib/donations/edit-totals";
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/options';
-import { Prisma } from '@prisma/client';
+import { Prisma, SubscriptionStatus } from '@prisma/client';
 import { userHasDashboardPermission } from '@/lib/dashboard/permissions';
+import { isRevenueDashboardUser } from '@/lib/dashboard/api-auth';
+import { donationListSafeFields } from "@/lib/dashboard/donation-list-privacy";
 import { convertAmountInCurrencyToUsd, normalizeDonationCurrencyCode } from '@/lib/exchange/convert-amount-in-currency-to-usd';
 import {
   writeAuditLog,
   auditActorFromDashboardSession,
+  auditActorFromSiteSession,
+  auditStreamForRole,
 } from '@/lib/audit-log';
+import { reconcileStripeDonation } from "@/lib/donations/reconcile-stripe-donation";
+import { reconcilePayPalDonation } from "@/lib/donations/paypal-donation";
+import { DONATION_TOKEN_PARAM, donationTokenMatches } from "@/lib/donations/access-token";
+import {
+  applyPlanStatusAtProvider,
+  ProviderSyncError,
+  type PlanStatus,
+  type ProviderResult,
+} from "@/lib/donations/subscription-provider-control";
 import {
   recomputeCampaignCurrentAmount as sharedRecomputeCampaign,
   recomputeCategoryCurrentAmount as sharedRecomputeCategory,
 } from "@/lib/campaign/current-amount";
 
-// GET /api/donations/[id] - Get donation (transaction) by ID
+/* `reconcileStripeDonation` moved to lib/donations/reconcile-stripe-donation.ts
+   so the success page can run the same self-heal before issuing documents. */
+
+// GET /api/donations/[id] - Get donation (transaction) by ID; include type/status from subscription when applicable
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json({ error: 'Donation ID required' }, { status: 400 });
+    if (!/^[a-f0-9]{24}$/i.test(id)) {
+      return NextResponse.json({ error: 'Valid donation ID required' }, { status: 400 });
     }
     const session = await getServerSession(authOptions);
+
+    // An ID is not authorization. Check only the fields required for access
+    // BEFORE calling either payment provider or performing a settlement.
+    // This also avoids loading private donor details for unauthorized guests.
+    const access = await prisma.donation.findUnique({
+      where: { id },
+      select: { donorId: true, accessToken: true },
+    });
+    if (!access) {
+      return NextResponse.json({ error: 'Donation not found' }, { status: 404 });
+    }
+    const canViewAllDonations = Boolean(session?.user) &&
+      (userHasDashboardPermission(session!.user, 'revenue') ||
+       userHasDashboardPermission(session!.user, 'donationsEdit'));
+    const presented = request.nextUrl.searchParams.get(DONATION_TOKEN_PARAM);
+    const isOwner = Boolean(session?.user) && session!.user.id === access.donorId;
+    if (!canViewAllDonations && !isOwner &&
+        !donationTokenMatches(access.accessToken, presented)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Authorized owner/staff or valid guest bearer only. Stripe's self-heal
+    // preserves the existing success-page semantics, but unknown IDs and
+    // unauthorized requests cannot cause gateway calls or financial writes.
+    await reconcileStripeDonation(id);
+    if (isRevenueDashboardUser(session)) {
+      await reconcilePayPalDonation(id).catch((err) => console.error("[donation GET] PayPal reconcile failed:", id, err));
+    }
 
     const donation = await prisma.donation.findUnique({
       where: { id },
       omit: {
-        cardDetails: true,
+        cardDetails: true, bankOperations: true, bankOperationLock: true, bankOperationsRevision: true, bankLastInquiry: true,
       },
       include: {
         donor: {
@@ -44,6 +89,14 @@ export async function GET(
             countryCode: true,
             city: true,
             region: true,
+          },
+        },
+        subscription: {
+          select: {
+            status: true,
+            frequency: true,
+            nextBillingDate: true,
+            lastBillingDate: true,
           },
         },
         items: {
@@ -72,6 +125,9 @@ export async function GET(
             },
           },
         },
+        /* Waqf shares/metres are part of `amount` too; the edit dialog lists
+           them so its line total adds up to the donation. */
+        waqfItems: { select: { id: true, unit: true, count: true, unitPrice: true, amount: true } },
       },
     });
 
@@ -82,29 +138,34 @@ export async function GET(
       );
     }
 
-    // Guest donations have no session — the unguessable donation id acts as
-    // the access token (same posture as a payment-session id). For
-    // authenticated users, still require ownership or revenue-dashboard
-    // permission to prevent cross-account snooping.
-    if (session) {
-      const canViewAllDonations =
-        userHasDashboardPermission(session.user, 'revenue') ||
-        userHasDashboardPermission(session.user, 'donationsEdit');
-      if (!canViewAllDonations && session.user.id !== donation.donorId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // Re-check after reconciliation: donor ownership or guest access may
+    // have changed between reads, so stale authorization must never expose
+    // a reassigned donation or a rotated receipt token.
+    const stillOwner = Boolean(session?.user) && session!.user.id === donation.donorId;
+    if (!canViewAllDonations && !stillOwner &&
+        !donationTokenMatches(donation.accessToken, presented)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const sub = donation.subscription;
+    // Access to the record may be granted by a guest bearer. That token is
+    // needed only for the authorization check above, not in the response.
+    // Do not send raw PSP or stored card payloads to guests/owners/staff.
     const response = {
-      ...donation,
+      ...donationListSafeFields(donation, { revenueAuthorized: isRevenueDashboardUser(session) }),
       type: donation.subscriptionId ? ('MONTHLY' as const) : ('ONE_TIME' as const),
       // Default to CARD on read for legacy rows where the field was never
       // written. Every current create path sets CARD or PAYPAL explicitly,
       // so this only kicks in for historical donations.
       paymentMethod: donation.paymentMethod ?? 'CARD',
       paymentStatus: donation.status,
+      subscriptionStatus: sub?.status ?? null,
+      /** DAILY | FRIDAY | MONTHLY on a plan; null on a one-time gift. */
+      frequency: sub?.frequency ?? null,
+      nextBillingDate: sub?.nextBillingDate ?? null,
+      lastBillingDate: sub?.lastBillingDate ?? null,
     };
-    return NextResponse.json(response);
+    return NextResponse.json(response, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Error fetching donation:', error);
     return NextResponse.json(
@@ -114,8 +175,197 @@ export async function GET(
   }
 }
 
+// PUT /api/donations/[id] - Update the linked subscription's status. The billing
+// cadence is owned by Stripe (the donor can't pick a day), so only `status` is
+// writable here.
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { status } = body;
+
+    const currentDonation = await prisma.donation.findUnique({
+      where: { id },
+      include: {
+        items: true,
+        subscription: {
+          select: {
+            id: true,
+            status: true,
+            nextBillingDate: true,
+            lastBillingDate: true,
+            provider: true,
+            stripeSubscriptionId: true,
+            payforToken: true,
+          },
+        },
+      },
+    });
+
+    if (!currentDonation) {
+      return NextResponse.json(
+        { error: 'Donation not found' },
+        { status: 404 }
+      );
+    }
+
+    const isAdmin = isRevenueDashboardUser(session);
+    // Billing updates are institution-only, including the older donation-based endpoint.
+
+    if (!currentDonation.subscriptionId) {
+      return NextResponse.json(
+        { error: 'Only subscriptions can be updated; this donation is one-time' },
+        { status: 400 }
+      );
+    }
+
+    const sub = currentDonation.subscription;
+    if (!sub) {
+      return NextResponse.json(
+        { error: 'Subscription not found' },
+        { status: 404 }
+      );
+    }
+
+    const updates: { status?: SubscriptionStatus } = {};
+    if (status !== undefined) {
+      if (!['ACTIVE', 'PAUSED', 'CANCELLED'].includes(String(status))) {
+        return NextResponse.json(
+          { error: 'Invalid status; use ACTIVE, PAUSED or CANCELLED' },
+          { status: 400 }
+        );
+      }
+      updates.status = status as SubscriptionStatus;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      const out = await prisma.donation.findUnique({
+        where: { id },
+        omit: { cardDetails: true, bankOperations: true, bankOperationLock: true, bankOperationsRevision: true, bankLastInquiry: true },
+        include: {
+          donor: { select: { name: true, email: true, image: true } },
+          subscription: { select: { status: true, frequency: true, nextBillingDate: true, lastBillingDate: true } },
+          items: { include: { campaign: { select: { title: true, images: true, translations: { select: { locale: true, title: true } } } } } },
+          categoryItems: { include: { category: { select: { name: true, image: true, translations: { select: { locale: true, name: true } } } } } },
+        },
+      });
+      if (!out) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      const s = out.subscription;
+      return NextResponse.json({
+        ...out,
+        type: 'MONTHLY' as const,
+        status: s?.status ?? null,
+        nextBillingDate: s?.nextBillingDate ?? null,
+        lastBillingDate: s?.lastBillingDate ?? null,
+      });
+    }
+
+    if (!isAdmin) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    if (sub.status === 'CANCELLED' && updates.status && updates.status !== 'CANCELLED') {
+      return NextResponse.json(
+        { error: 'A cancelled plan cannot be reactivated. Start a new plan instead.' },
+        { status: 409 }
+      );
+    }
+
+    // Change the plan at the payment provider first; only a confirmed change
+    // is written locally. See lib/donations/subscription-provider-control.ts.
+    let providerResult: ProviderResult | null = null;
+    if (updates.status) {
+      try {
+        providerResult = await applyPlanStatusAtProvider(sub, updates.status as PlanStatus);
+      } catch (err) {
+        if (err instanceof ProviderSyncError) {
+          return NextResponse.json(
+            { error: err.message, code: err.code, providerConfirmed: false },
+            { status: err.httpStatus }
+          );
+        }
+        throw err;
+      }
+    }
+
+    await prisma.subscription.update({
+      where: { id: currentDonation.subscriptionId },
+      data: updates,
+    });
+
+    const subActor = isAdmin
+      ? auditActorFromDashboardSession(session!)
+      : auditActorFromSiteSession(session!);
+    const subStream = isAdmin
+      ? ("TEAM" as const)
+      : auditStreamForRole(subActor.actorRole);
+    await writeAuditLog({
+      ...subActor,
+      action: "SUBSCRIPTION_UPDATE",
+      messageAr: `${subActor.actorName ?? "مستخدم"} عدّل الاشتراك الشهري المرتبط بالتبرع (${Object.keys(updates).join("، ")})`,
+      entityType: "Subscription",
+      entityId: currentDonation.subscriptionId!,
+      metadata: {
+        donationId: id,
+        ...(updates.status !== undefined && {
+          before: sub.status,
+          status: updates.status,
+          rail: providerResult?.rail,
+          providerStatus: providerResult?.providerStatus,
+          providerPaused: providerResult?.providerPaused,
+        }),
+      },
+      stream: subStream,
+    });
+
+    const updatedDonation = await prisma.donation.findUnique({
+      where: { id },
+      omit: { cardDetails: true, bankOperations: true, bankOperationLock: true, bankOperationsRevision: true, bankLastInquiry: true },
+      include: {
+        donor: { select: { name: true, email: true, image: true } },
+        subscription: { select: { status: true, nextBillingDate: true, lastBillingDate: true } },
+        items: { include: { campaign: { select: { title: true, images: true, translations: { select: { locale: true, title: true } } } } } },
+        categoryItems: { include: { category: { select: { name: true, image: true, translations: { select: { locale: true, name: true } } } } } },
+      },
+    });
+
+    if (!updatedDonation) {
+      return NextResponse.json({ error: 'Donation not found' }, { status: 404 });
+    }
+
+    const s = updatedDonation.subscription;
+    return NextResponse.json({
+      ...updatedDonation,
+      type: 'MONTHLY' as const,
+      status: s?.status ?? null,
+      nextBillingDate: s?.nextBillingDate ?? null,
+      lastBillingDate: s?.lastBillingDate ?? null,
+    });
+  } catch (error) {
+    console.error('Error updating donation:', error);
+    return NextResponse.json(
+      { error: 'Failed to update donation', details: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
 /** A donation only contributed to campaign/category totals if it was actually
- * paid. Mirrors webhook semantics — increments happen on paidAt set. Using a
+ * paid. Mirrors webhook semantics  increments happen on paidAt set. Using a
  * blanket decrement (the legacy DELETE behavior) corrupts totals for any row
  * that was abandoned mid-checkout (status=PAID, paidAt=null).
  */
@@ -179,6 +429,21 @@ export async function DELETE(
       return NextResponse.json(
         { error: 'Donation not found' },
         { status: 404 }
+      );
+    }
+
+    /* Financial records are append-only. A donation with `paidAt` is money that
+       was received: it may carry a receipt, a certificate, a provider charge and
+       campaign revenue. It is corrected through PATCH (status/amount/items, with
+       audit), never erased. Only never-paid rows (abandoned checkouts, FAILED
+       charges, unconfirmed transfers) may be removed. */
+    if (donation.paidAt !== null) {
+      return NextResponse.json(
+        {
+          error: 'FINANCIAL_RECORD_IMMUTABLE',
+          message: 'A paid donation cannot be deleted. Correct it with an edit instead.',
+        },
+        { status: 409 }
       );
     }
 
@@ -253,18 +518,29 @@ export async function PATCH(
 
     const body = (await request.json()) as {
       status?: 'PAID' | 'FAILED';
+      currency?: string;
+      provider?: string;
       confirmPaidAt?: boolean;
+      teamSupport?: number;
       items?: { campaignId: string; amount: number }[];
       categoryItems?: { categoryId: string; amount: number }[];
     };
 
     const existing = await prisma.donation.findUnique({
       where: { id },
-      include: { items: true, categoryItems: true },
+      include: { items: true, categoryItems: true, waqfItems: { select: { id: true, amount: true, amountUSD: true } } },
     });
     if (!existing) {
       return NextResponse.json({ error: 'Donation not found' }, { status: 404 });
     }
+
+    if ((body.currency !== undefined && (typeof body.currency !== "string" || !/^[A-Z]{3}$/.test(body.currency))) || (body.provider !== undefined && (typeof body.provider !== "string" || !["CASH", "BANK", "BANK_TRANSFER", "PAYFOR", "ALBARAKA", "STRIPE", "PAYPAL", "CHARITY_GIVING", "MANUAL"].includes(body.provider)))) return NextResponse.json({ error: "Invalid currency or provider" }, { status: 400 });
+    const currencyChanged = body.currency !== undefined && body.currency !== existing.currency;
+    if (body.teamSupport !== undefined &&
+      (typeof body.teamSupport !== "number" || !Number.isFinite(body.teamSupport) || body.teamSupport < 0 || body.teamSupport > 1_000_000_000)) {
+      return NextResponse.json({ error: 'Invalid team support; use a non-negative amount' }, { status: 400 });
+    }
+    const nextTeamSupport = body.teamSupport ?? existing.teamSupport;
 
     const nextStatus = body.status ?? existing.status;
     if (nextStatus !== 'PAID' && nextStatus !== 'FAILED') {
@@ -274,8 +550,8 @@ export async function PATCH(
       );
     }
 
-    const itemsInput = Array.isArray(body.items) ? body.items : null;
-    const catItemsInput = Array.isArray(body.categoryItems) ? body.categoryItems : null;
+    let itemsInput = Array.isArray(body.items) ? body.items : null;
+    let catItemsInput = Array.isArray(body.categoryItems) ? body.categoryItems : null;
 
     if (itemsInput) {
       for (const it of itemsInput) {
@@ -296,7 +572,7 @@ export async function PATCH(
       const nextLineCount =
         (itemsInput ?? existing.items).length +
         (catItemsInput ?? existing.categoryItems).length;
-      if (nextLineCount === 0) {
+      if (nextLineCount === 0 && existing.waqfItems.length === 0) {
         return NextResponse.json(
           { error: 'Donation must keep at least one item' },
           { status: 400 }
@@ -340,7 +616,14 @@ export async function PATCH(
       }
     }
 
-    const currencyCode = normalizeDonationCurrencyCode(existing.currency);
+    const sameLines = (next: { amount: number }[] | null, previous: { amount: number }[], key: string) => next !== null && JSON.stringify(next.map(row => [Reflect.get(row, key), Number(row.amount)]).sort()) === JSON.stringify(previous.map(row => [Reflect.get(row, key), Number(row.amount)]).sort());
+    if (!currencyChanged && sameLines(itemsInput, existing.items, "campaignId")) itemsInput = null;
+    if (!currencyChanged && sameLines(catItemsInput, existing.categoryItems, "categoryId")) catItemsInput = null;
+    if (currencyChanged) {
+      itemsInput ??= existing.items.map(({ campaignId, amount }) => ({ campaignId, amount }));
+      catItemsInput ??= existing.categoryItems.map(({ categoryId, amount }) => ({ categoryId, amount }));
+    }
+    const currencyCode = normalizeDonationCurrencyCode(body.currency ?? existing.currency);
     const itemAmountUSD = async (amount: number) =>
       convertAmountInCurrencyToUsd(amount, currencyCode);
 
@@ -365,16 +648,21 @@ export async function PATCH(
         )
       : null;
 
+    const newWaqfItems = currencyChanged ? await Promise.all(existing.waqfItems.map(async row => ({ id: row.id, amountUSD: await itemAmountUSD(row.amount) }))) : [];
+
     // Derived donation-level fields (only if items/categoryItems changed).
+    // Waqf lines are not edited here, but they are part of the donation's
+    // amount: leaving them out would shrink the donation by their value.
     const newLineSum = (newItems ?? existing.items).reduce((s, i) => s + i.amount, 0)
-      + (newCatItems ?? existing.categoryItems).reduce((s, i) => s + i.amount, 0);
+      + (newCatItems ?? existing.categoryItems).reduce((s, i) => s + i.amount, 0)
+      + existing.waqfItems.reduce((s, i) => s + i.amount, 0);
 
     const newAmount = (newItems || newCatItems) ? newLineSum : existing.amount;
-    // totalAmount = donation amount + teamSupport + fees(if coverFees). Preserve
-    // teamSupport/fees as-is — the admin is editing the donation portion only.
-    const carriedExtras = existing.teamSupport + (existing.coverFees ? existing.fees : 0);
-    const newTotalAmount = (newItems || newCatItems) ? newAmount + carriedExtras : existing.totalAmount;
-    const newAmountUSD = (newItems || newCatItems)
+    const moneyChanged = currencyChanged || !!(newItems || newCatItems) || nextTeamSupport !== existing.teamSupport;
+    const newTotalAmount = moneyChanged
+      ? donationEditTotals(newAmount, nextTeamSupport, existing.fees, existing.coverFees).totalAmount
+      : existing.totalAmount;
+    const newAmountUSD = moneyChanged
       ? await convertAmountInCurrencyToUsd(newTotalAmount, currencyCode)
       : existing.amountUSD;
     // Stamp paidAt when:
@@ -469,12 +757,16 @@ export async function PATCH(
         }
       }
 
+      for (const row of newWaqfItems) await tx.donationWaqfItem.update({ where: { id: row.id }, data: { amountUSD: row.amountUSD } });
       await tx.donation.update({
         where: { id },
         data: {
+          currency: currencyCode,
+          ...(body.provider !== undefined ? { provider: body.provider } : {}),
           amount: newAmount,
           amountUSD: newAmountUSD,
           totalAmount: newTotalAmount,
+          teamSupport: nextTeamSupport,
           status: nextStatus,
           ...(shouldStampPaidAt && { paidAt: nextPaidAt }),
           // Self-heal legacy rows: any admin edit stamps paymentMethod=CARD
@@ -490,6 +782,26 @@ export async function PATCH(
       for (const categoryId of touchedCategoryIds) {
         await recomputeCategoryCurrentAmount(tx, categoryId);
       }
+
+      // A bank-transfer donation carries a receipt claim that the finance page
+      // reads. An admin settling or failing the donation from this generic
+      // dialog must leave the claim telling the same story, or the receipt
+      // would still sit in the review queue after the money was counted.
+      if (existing.provider === 'BANK_TRANSFER') {
+        const reviewer = auditActorFromDashboardSession(session);
+        const claim = await tx.bankTransferClaim.findUnique({ where: { donationId: id }, select: { id: true, status: true } });
+        if (claim && nextStatus === 'PAID' && nextPaidAt !== null && claim.status !== 'CONFIRMED') {
+          await tx.bankTransferClaim.update({
+            where: { id: claim.id },
+            data: { status: 'CONFIRMED', reviewedAt: new Date(), reviewedById: reviewer.actorId, reviewedByName: reviewer.actorName ?? null, rejectionReason: null },
+          });
+        } else if (claim && nextStatus === 'FAILED' && claim.status !== 'REJECTED') {
+          await tx.bankTransferClaim.update({
+            where: { id: claim.id },
+            data: { status: 'REJECTED', reviewedAt: new Date(), reviewedById: reviewer.actorId, reviewedByName: reviewer.actorName ?? null, rejectionReason: 'تعذّر مطابقة التحويل مع الحساب البنكي' },
+          });
+        }
+      }
     });
 
     const actor = auditActorFromDashboardSession(session);
@@ -502,6 +814,8 @@ export async function PATCH(
       metadata: {
         before: {
           amount: existing.amount,
+          teamSupport: existing.teamSupport,
+          totalAmount: existing.totalAmount,
           amountUSD: existing.amountUSD,
           status: existing.status,
           paidAt: existing.paidAt,
@@ -509,7 +823,11 @@ export async function PATCH(
           categoryItems: existing.categoryItems.map((i) => ({ categoryId: i.categoryId, amount: i.amount })),
         },
         after: {
+          currency: currencyCode,
+          ...(body.provider !== undefined ? { provider: body.provider } : {}),
           amount: newAmount,
+          teamSupport: nextTeamSupport,
+          totalAmount: newTotalAmount,
           amountUSD: newAmountUSD,
           status: nextStatus,
           paidAt: nextPaidAt,
@@ -525,6 +843,7 @@ export async function PATCH(
 
     const refreshed = await prisma.donation.findUnique({
       where: { id },
+      omit: { bankOperations: true, bankOperationLock: true, bankOperationsRevision: true, bankLastInquiry: true },
       include: {
         donor: { select: { id: true, name: true, email: true, image: true } },
         items: { include: { campaign: { select: { id: true, title: true, images: true } } } },

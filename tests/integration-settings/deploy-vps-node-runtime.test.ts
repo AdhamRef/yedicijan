@@ -1,0 +1,139 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+
+for (const failReload of [false, true]) {
+  test(`VPS ${failReload ? "restart fallback" : "reload"} pins the selected Node interpreter`, () => {
+    const script = readFileSync("scripts/deploy-vps.sh", "utf8");
+    const activation = script.slice(script.indexOf('NODE_INTERPRETER='), script.indexOf('# vercel.json crons'));
+    const root = mkdtempSync(join(tmpdir(), "deploy-interpreter-"));
+    try {
+      const bin = join(root, "node bin");
+      mkdirSync(bin);
+      writeFileSync(join(bin, "node"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+      writeFileSync(join(bin, "pm2"), [
+        "#!/bin/sh",
+        'printf "%s\\n" "$@" >> "$PM2_FIXTURE_LOG"',
+        'printf "%s\\n" "--call-end--" >> "$PM2_FIXTURE_LOG"',
+        'if [ "$1" = "reload" ] && [ "$PM2_FIXTURE_FAIL_RELOAD" = "1" ]; then exit 1; fi',
+        "exit 0",
+      ].join("\n"), { mode: 0o755 });
+      const calls = join(root, "calls");
+      const result = spawnSync("/bin/bash", ["-c", `set -euo pipefail\n${activation}`], {
+        env: { PATH: `${bin}:/usr/bin:/bin`, APP: "fixture-app", ROOT: root, NODE_ENV: "test", PM2_FIXTURE_LOG: calls, PM2_FIXTURE_FAIL_RELOAD: failReload ? "1" : "0" },
+        encoding: "utf8",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      const interpreter = join(bin, "node");
+      const expected = ["reload", "fixture-app", "--interpreter", interpreter, "--update-env", "--call-end--"];
+      if (failReload) expected.push("restart", "fixture-app", "--interpreter", interpreter, "--update-env", "--call-end--");
+      assert.deepEqual(readFileSync(calls, "utf8").trim().split("\n"), expected);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+test("VPS deploy activates a Node and npm toolchain in a non-interactive shell", () => {
+  const script = readFileSync("scripts/deploy-vps.sh", "utf8");
+  const resolver = script.slice(script.indexOf("ensure_node_toolchain()"), script.indexOf("APP=\"${PM2_APP"));
+  assert.match(resolver, /command -v node/);
+  assert.match(resolver, /command -v npm/);
+  assert.match(resolver, /\. "\$NVM_DIR\/nvm\.sh"/);
+  assert.match(resolver, /nvm use --silent default/);
+  assert.match(resolver, /sort -V/);
+  assert.match(script, /ensure_node_toolchain\n\nAPP=/);
+});
+
+test("VPS deploy installs and selects the package-required Node major from NVM", () => {
+  const script = readFileSync("scripts/deploy-vps.sh", "utf8");
+  const resolver = script.slice(script.indexOf("ensure_node_toolchain()"), script.indexOf("APP=\"${PM2_APP"));
+  const root = mkdtempSync(join(tmpdir(), "deploy-node-test-"));
+  try {
+    const emptyPath = join(root, "empty-path");
+    const nvmHome = join(root, ".nvm");
+    const oldNodeBin = join(nvmHome, "versions/node/v22.23.3/bin");
+    mkdirSync(emptyPath, { recursive: true });
+    mkdirSync(oldNodeBin, { recursive: true });
+    writeFileSync(join(nvmHome, "nvm.sh"), [
+      "nvm() {",
+      "  case \"$1\" in",
+      "    use)",
+      "      case \"$3\" in",
+      "        default|v22.23.3) PATH=\"$NVM_DIR/versions/node/v22.23.3/bin:/usr/bin:/bin:$PATH\" ;;",
+      "        v24.22.1) PATH=\"$NVM_DIR/versions/node/v24.22.1/bin:/usr/bin:/bin:$PATH\" ;;",
+      "        *) return 1 ;;",
+      "      esac",
+      "      export PATH",
+      "      ;;",
+      "    install)",
+      "      [[ \"$2\" == 24 ]] || return 1",
+      "      local bin=\"$NVM_DIR/versions/node/v24.22.1/bin\"",
+      "      /bin/mkdir -p \"$bin\"",
+      "      /bin/cat >\"$bin/node\" <<'NODE'",
+      "#!/bin/sh",
+      "case \"$1\" in",
+      "  -e) printf '24.x' ;;",
+      "  -p) printf '24' ;;",
+      "  -v) printf 'v24.22.1' ;;",
+      "esac",
+      "NODE",
+      "      /bin/cat >\"$bin/npm\" <<'NPM'",
+      "#!/bin/sh",
+      "exit 0",
+      "NPM",
+      "      /bin/chmod 755 \"$bin/node\" \"$bin/npm\"",
+      "      ;;",
+      "    version) printf 'v24.22.1' ;;",
+      "    *) return 1 ;;",
+      "  esac",
+      "}",
+    ].join("\n"));
+    const oldNode = join(oldNodeBin, "node");
+    writeFileSync(oldNode, [
+      "#!/bin/sh",
+      "case \"$1\" in",
+      "  -e) printf '24.x' ;;",
+      "  -p) printf '22' ;;",
+      "  -v) printf 'v22.23.3' ;;",
+      "esac",
+    ].join("\n"));
+    chmodSync(oldNode, 0o755);
+    const oldNpm = join(oldNodeBin, "npm");
+    writeFileSync(oldNpm, "#!/bin/sh\nexit 0\n");
+    chmodSync(oldNpm, 0o755);
+
+    const result = spawnSync("/bin/bash", ["-c", `${resolver}\nensure_node_toolchain\nprintf '%s\\n%s\\n' \"$(command -v node)\" \"$(command -v npm)\"`], {
+      env: { PATH: emptyPath, NVM_DIR: nvmHome, NODE_ENV: "test" },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const requiredNodeBin = join(nvmHome, "versions/node/v24.22.1/bin");
+    assert.deepEqual(result.stdout.trim().split("\n").slice(-2), [join(requiredNodeBin, "node"), join(requiredNodeBin, "npm")]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const scenario of ["reviewed", "wrong-source", "auth-failed"] as const) test(`VPS source acquisition: ${scenario}`, () => {
+  const script = readFileSync("scripts/deploy-vps.sh", "utf8");
+  const start = script.indexOf('if [[ -n "${MINBER_REVIEWED_SOURCE_SHA:-}" ]]');
+  const sourceStep = script.slice(start, script.indexOf('lock_after=', start));
+  const root = mkdtempSync(join(tmpdir(), "deploy-source-")), bin = join(root, "bin"), log = join(root, "calls");
+  try {
+    mkdirSync(bin);
+    writeFileSync(join(bin,"git"), ['#!/bin/bash', 'printf "%s\\n" "$*" >> "$FIXTURE_LOG"',
+      'if [[ "$1" == rev-parse ]]; then printf "%s" "$FIXTURE_HEAD"; exit 0; fi',
+      '[[ "$GIT_TERMINAL_PROMPT" == 0 && "$GCM_INTERACTIVE" == never ]] || exit 92',
+      'exit 128',
+    ].join("\n"), {mode:0o755});
+    const sha="a".repeat(40);
+    const result=spawnSync("bash",["-c",'set -euo pipefail\nexport GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never\n'+sourceStep+'\necho build-started'],{
+      env:{NODE_ENV:"test",PATH:`${bin}:/usr/bin:/bin`,BRANCH:sha,FIXTURE_HEAD:sha,FIXTURE_LOG:log,
+        ...(scenario==="auth-failed"?{}:{MINBER_REVIEWED_SOURCE_SHA:scenario==="wrong-source"?"b".repeat(40):sha})}, encoding:"utf8",timeout:5000,
+    });
+    if(scenario==="reviewed") {assert.equal(result.status,0,result.stderr);assert.match(result.stdout,/build-started/);assert.doesNotMatch(readFileSync(log,"utf8"),/pull|fetch/);}
+    else {assert.notEqual(result.status,0);assert.doesNotMatch(result.stdout,/build-started/);assert.match(result.stderr,scenario==="auth-failed"?/GIT_SOURCE_UNAVAILABLE/:/does not match HEAD/);}
+  } finally {rmSync(root,{recursive:true,force:true});}
+});

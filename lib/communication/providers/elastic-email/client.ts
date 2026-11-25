@@ -1,6 +1,6 @@
 import { getActiveElasticEmailRuntimeConfig, RUNTIME_FAILURE, type ActiveRuntimeConfig, type ElasticEmailRuntimeValues } from "../../runtime-config";
 import { ELASTIC_EMAIL_REASONS, mapElasticEmailError, scrubElasticEmail } from "./errors";
-import { buildElasticEmailPayload, readElasticEmailMessageId, ELASTIC_EMAIL_ENDPOINT } from "./payload";
+import { buildElasticEmailPayload, readElasticEmailMessageId, ELASTIC_EMAIL_ENDPOINT, ELASTIC_EMAIL_MARKETING_ENDPOINT } from "./payload";
 import type { ElasticEmailInput, ElasticEmailSendResult } from "./types";
 
 /**
@@ -8,7 +8,7 @@ import type { ElasticEmailInput, ElasticEmailSendResult } from "./types";
  *
  * Endpoint: POST https://api.elasticemail.com/v4/emails/transactional
  * Auth:     X-ElasticEmail-ApiKey header (never logged, never returned to a caller).
- * Response: { MessageID, TransactionID } — MessageID is stored as the providerMessageId so the
+ * Response: { MessageID, TransactionID }  MessageID is stored as the providerMessageId so the
  *           webhook can later advance the delivery to DELIVERED/OPENED/CLICKED/FAILED.
  */
 
@@ -41,7 +41,8 @@ export async function sendElasticEmail(input: ElasticEmailInput, runtime?: Elast
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const res = await fetch(ELASTIC_EMAIL_ENDPOINT, {
+    const endpoint = input.marketing ? ELASTIC_EMAIL_MARKETING_ENDPOINT : ELASTIC_EMAIL_ENDPOINT;
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "X-ElasticEmail-ApiKey": cfg.values.apiKey,
@@ -60,8 +61,11 @@ export async function sendElasticEmail(input: ElasticEmailInput, runtime?: Elast
       parsed = raw;
     }
 
-    if (!res.ok) {
-      const { reason, detail } = mapElasticEmailError(res.status, parsed, cfg.values.apiKey);
+    const explicitError = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      && ((parsed as Record<string, unknown>).Success === false || (parsed as Record<string, unknown>).success === false
+        || Boolean((parsed as Record<string, unknown>).Error || (parsed as Record<string, unknown>).error));
+    if (!res.ok || explicitError) {
+      const { reason, detail } = mapElasticEmailError(res.ok ? 400 : res.status, parsed, cfg.values.apiKey);
       return { ok: false, reason, detail };
     }
 

@@ -1,11 +1,16 @@
-'use client';
+"use client";
 
+import { ProjectFilterOrderDialog } from "@/components/dashboard/ProjectFilterOrderDialog";
+
+import { CategoryLinkedProjects } from "@/components/dashboard/CategoryLinkedProjects";
+import { useSession } from "next-auth/react";
+import { TranslationOverview } from "@/components/dashboard/content-editor/TranslationOverview";
 import { useEffect, useState } from 'react';
 import { useLocale } from 'next-intl';
 import {useRouter} from 'next/navigation';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
-import { Plus, Pencil, Trash2, Loader2, ArrowUpDown, Search, Crown, Archive, PowerOff, RotateCcw, Globe } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, ArrowUpDown, Search, Crown, Archive, PowerOff, RotateCcw, Globe, CheckCircle2, FolderOpen } from 'lucide-react';
 import { PageHeader } from '@/components/dashboard/PageHeader';
 import { FilterBar } from '@/components/dashboard/FilterBar';
 import { EmptyState } from '@/components/dashboard/EmptyState';
@@ -44,8 +49,11 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ReorderDialog } from './_components/ReorderDialog';
+import { DashboardLocaleSwitcher } from '../_components/DashboardLocaleSwitcher';
 import { CategoryCampaignPriorityDialog } from './_components/CategoryCampaignPriorityDialog';
 import { ContentLocalizationAuditCard } from '../_components/ContentLocalizationAuditCard';
+import { dashDir, dt, dtx } from "@/lib/dashboard/i18n";
+import { ContentMetricStrip } from '@/components/dashboard/content-editor/ContentMetricStrip';
 
 interface Category {
   id: string;
@@ -55,13 +63,31 @@ interface Category {
   campaigns: {
     id: string;
   }[];
+  campaignCount?: number;
+  archivedCampaignCount?: number;
+  deletedCampaignCount?: number;
+  linkedCampaignCount?: number;
   order: number;
   isActive: boolean;
 }
 
+const categoryProjectTotal = (category: Category) => category.linkedCampaignCount ?? (category.campaignCount ?? category.campaigns?.length ?? 0) + (category.archivedCampaignCount ?? 0);
+function categoryDeleteMessage(error: unknown) {
+  const data = axios.isAxiosError(error) ? error.response?.data : null;
+  if (data?.code === "CATEGORY_HAS_REFERENCES") {
+    const refs = data.references ?? {};
+    return dt("لا يمكن الحذف: {0} مشروع قائم، {1} تبرع، {2} اشتراك، {3} ارتباط بصفحة. انقل المشاريع أو استخدم الأرشفة لحفظ السجلات المالية.", [refs.projects ?? 0, refs.donations ?? 0, refs.subscriptions ?? 0, refs.pages ?? 0]);
+  }
+  if (data?.code === "CATEGORY_CHANGED_RELOAD") return dt("تغير التصنيف أثناء الحذف؛ حدّث القائمة وأعد المحاولة.");
+  if (axios.isAxiosError(error) && error.response?.status === 403) return dt("ليست لديك صلاحية حذف التصنيفات.");
+  return dt("تعذر حذف التصنيف. أعد المحاولة أو راجع اتصال الخادم.");
+}
+
 export default function CategoriesPage() {
   const router = useRouter();
-  const locale = useLocale() as string;
+  const uiLocale = useLocale() as string;
+  /* The language the table shows names in  every one the site publishes. */
+  const [locale, setLocale] = useState<string>(uiLocale || 'ar');
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortField, setSortField] = useState<keyof Category>('name');
@@ -71,9 +97,12 @@ export default function CategoriesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [campaignsFilter, setCampaignsFilter] = useState<'all' | 'with' | 'without'>('all');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [deleteProblems, setDeleteProblems] = useState<{ id: string; name: string; message: string }[]>([]);
   const [itemsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [priorityDialog, setPriorityDialog] = useState<{ id: string; name: string } | null>(null);
+  const { data: session } = useSession();
+  const [linkedCategoryId, setLinkedCategoryId] = useState<string | null>(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [archiveSearch, setArchiveSearch] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -100,19 +129,19 @@ export default function CategoriesPage() {
   const fetchCategories = async () => {
     try {
       // Request localized categories and counts only for performance.
-      // isActiveFalse=true returns archived categories too — the dashboard
+      // isActiveFalse=true returns archived categories too  the dashboard
       // needs both the active table and the archive viewer.
-      const response = await axios.get('/api/categories/detailed', {
-        params: {
-          locale: locale || 'ar',
-          counts: true,
-          includeCampaigns: false,
-          limit: 200,
-          isActiveFalse: true,
-        }
-      });
-
-      const payload = response.data?.items || response.data || [];
+      const payload: Category[] = [];
+      let cursor: string | null = null;
+      const seen = new Set<string>();
+      do {
+        const response: { data: { items: Category[]; hasMore: boolean; nextCursor: string | null } } = await axios.get('/api/categories/detailed', { params: { locale: locale || 'ar', counts: true, includeCampaigns: false, limit: 100, isActiveFalse: true, ...(cursor ? { cursor } : {}) } });
+        payload.push(...response.data.items);
+        if (response.data.hasMore && !response.data.nextCursor) throw new Error('CATEGORY_CURSOR_MISSING');
+        cursor = response.data.hasMore ? response.data.nextCursor : null;
+        if (cursor && seen.has(cursor)) throw new Error('CATEGORY_CURSOR_STALLED');
+        if (cursor) seen.add(cursor);
+      } while (cursor);
 
       // Normalize categories to ensure `campaigns` array exists (may be omitted for performance)
       const normalized: Category[] = payload.map((c: any) => ({
@@ -122,16 +151,19 @@ export default function CategoriesPage() {
         image: c.image ?? null,
         order: c.order ?? 0,
         isActive: c.isActive !== false,
-        // If full campaigns were not returned, keep an empty array and preserve `campaignCount` via type cast when needed
+        // If full campaigns were not returned, keep an empty array and preserve the aggregate count.
         campaigns: Array.isArray(c.campaigns) ? c.campaigns : [],
         // attach a readable campaignCount for display when available
-        ...(typeof c.campaignCount === 'number' ? { campaignCount: c.campaignCount } : {})
+        ...(typeof c.campaignCount === 'number' ? { campaignCount: c.campaignCount } : {}),
+        archivedCampaignCount: typeof c.archivedCampaignCount === 'number' ? c.archivedCampaignCount : 0,
+        deletedCampaignCount: typeof c.deletedCampaignCount === 'number' ? c.deletedCampaignCount : 0,
+        ...(typeof c.linkedCampaignCount === 'number' ? { linkedCampaignCount: c.linkedCampaignCount } : {}),
       }));
 
       setCategories(normalized);
     } catch (error) {
       console.error('Error fetching categories:', error);
-      toast.error('فشل في تحميل الحملات');
+      toast.error(dt("فشل في تحميل التصنيفات"));
     } finally {
       setLoading(false);
     }
@@ -141,45 +173,44 @@ export default function CategoriesPage() {
     if (actionLoading) return;
     setActionLoading(category.id);
     try {
-      const res = await axios.patch(`/api/categories/${category.id}`, { isActive: nextActive });
-      const cascaded = res.data?.cascadedCampaigns ?? 0;
+      await axios.patch(`/api/categories/${category.id}`, { isActive: nextActive });
       setCategories(prev => prev.map(c => c.id === category.id ? { ...c, isActive: nextActive } : c));
       toast.success(
         nextActive
-          ? `تم تفعيل الحملة وتفعيل ${cascaded} مشروع تابع`
-          : `تم تعطيل الحملة وتعطيل ${cascaded} مشروع تابع`
+          ? dt("تم تفعيل التصنيف دون تغيير حالة المشاريع التابعة")
+          : dt("تم أرشفة التصنيف دون تغيير حالة المشاريع التابعة")
       );
     } catch (err: any) {
-      const msg = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'تعذّر تحديث حالة الحملة';
-      toast.error(typeof msg === 'string' ? msg : 'تعذّر تحديث حالة الحملة');
+      const msg = axios.isAxiosError(err) ? err.response?.data?.error || err.message : dt("تعذّر تحديث حالة التصنيف");
+      toast.error(typeof msg === 'string' ? msg : dt("تعذّر تحديث حالة التصنيف"));
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleDeactivate = (category: Category) => {
-    const count = (category as any).campaignCount ?? category.campaigns.length;
+    const count = categoryProjectTotal(category);
     setConfirmDialog({
       open: true,
-      title: 'تعطيل الحملة',
+      title: dt("تعطيل التصنيف"),
       description: count > 0
-        ? `سيتم إخفاء حملة "${category.name}" من الموقع، وسيتم تعطيل جميع المشاريع التابعة لها (${count} مشروع). يمكنك إعادة التفعيل لاحقاً.`
-        : `سيتم إخفاء حملة "${category.name}" من الموقع. يمكنك إعادة تفعيلها في أي وقت.`,
-      actionLabel: 'تعطيل',
+        ? dt("سيتم نقل التصنيف \"{0}\" إلى الأرشيف وإخفاؤه من قوائم التصنيفات العامة. المشاريع التابعة له ({1} مشروع) ستبقى منشورة ولن تتغير حالتها.", [category.name, count])
+        : dt("سيتم نقل التصنيف \"{0}\" إلى الأرشيف وإخفاؤه من قوائم التصنيفات العامة.", [category.name]),
+      actionLabel: dt("تعطيل"),
       actionClassName: 'bg-amber-600 hover:bg-amber-700 text-white',
       onConfirm: () => setActive(category, false),
     });
   };
 
   const handleReactivate = (category: Category) => {
-    const count = (category as any).campaignCount ?? category.campaigns.length;
+    const count = categoryProjectTotal(category);
     setConfirmDialog({
       open: true,
-      title: 'إعادة تفعيل الحملة',
+      title: dt("إعادة تفعيل التصنيف"),
       description: count > 0
-        ? `سيتم نشر حملة "${category.name}" على الموقع، وسيتم إعادة تفعيل جميع المشاريع التابعة لها (${count} مشروع).`
-        : `سيتم نشر حملة "${category.name}" على الموقع مجدداً.`,
-      actionLabel: 'تفعيل',
+        ? dt("سيتم إعادة التصنيف \"{0}\" إلى قوائم التصنيفات العامة. المشاريع التابعة له ({1} مشروع) لن تتغير حالتها.", [category.name, count])
+        : dt("سيتم إعادة التصنيف \"{0}\" إلى قوائم التصنيفات العامة.", [category.name]),
+      actionLabel: dt("تفعيل"),
       actionClassName: 'bg-emerald-600 hover:bg-emerald-700 text-white',
       onConfirm: () => setActive(category, true),
     });
@@ -195,28 +226,33 @@ export default function CategoriesPage() {
   };
 
   const handleDelete = async (category: Category) => {
-    const count = (category as any).campaignCount ?? (category.campaigns?.length ?? 0);
+    const count = categoryProjectTotal(category);
     if (count > 0) {
-      toast.error('لا يمكن حذف حملة تحتوي على مشاريع');
+      toast.error(dt("لا يمكن حذف تصنيف تحتوي على مشاريع"));
       return;
     }
     setCategoryToDelete(category);
   };
 
   const handleBulkDelete = async () => {
-    if (!window.confirm(`هل أنت متأكد من حذف ${selectedCategories.length} حملة؟`)) return;
+    if (!window.confirm(dt("هل أنت متأكد من حذف {0} تصنيف؟", [selectedCategories.length]))) return;
     
     setDeleteLoading(true);
+    setDeleteProblems([]);
+    const failures: { id: string; name: string; message: string }[] = [];
+    let deleted = 0;
     try {
-      await Promise.all(
-        selectedCategories.map(id => axios.delete(`/api/categories/${id}`))
-      );
-      toast.success('تم حذف الحملات المحددة بنجاح');
-      fetchCategories();
-      setSelectedCategories([]);
-    } catch (error) {
-      console.error('Error deleting categories:', error);
-      toast.error('فشل في حذف الحملات');
+      // Serial writes avoid competing MongoDB transactions when categories
+      // share deleted projects. Keep each result, including partial success.
+      for (const id of selectedCategories) {
+        try { await axios.delete(`/api/categories/${id}`, { timeout: 45000 }); deleted++; }
+        catch (error) { failures.push({ id, name: categories.find(c => c.id === id)?.name ?? id, message: categoryDeleteMessage(error) }); }
+      }
+      setDeleteProblems(failures);
+      setSelectedCategories(failures.map(row => row.id));
+      if (deleted) toast.success(dt("تم حذف {0} تصنيف بنجاح", [deleted]));
+      if (failures.length) toast.error(dt("تعذر حذف {0} تصنيف؛ راجع الأسباب الموضحة", [failures.length]));
+      await fetchCategories();
     } finally {
       setDeleteLoading(false);
     }
@@ -226,13 +262,17 @@ export default function CategoriesPage() {
     if (!categoryToDelete) return;
 
     setDeleteLoading(true);
+    setDeleteProblems([]);
     try {
-      await axios.delete(`/api/categories/${categoryToDelete.id}`);
-      toast.success('تم حذف الحملة بنجاح');
-      fetchCategories();
+      await axios.delete(`/api/categories/${categoryToDelete.id}`, { timeout: 45000 });
+      toast.success(dt("تم حذف التصنيف بنجاح"));
+      setSelectedCategories(previous => previous.filter(id => id !== categoryToDelete.id));
+      await fetchCategories();
     } catch (error) {
       console.error('Error deleting category:', error);
-      toast.error('فشل في حذف الحملة');
+      const message = categoryDeleteMessage(error);
+      setDeleteProblems([{ id: categoryToDelete.id, name: categoryToDelete.name, message }]);
+      toast.error(message);
     } finally {
       setDeleteLoading(false);
       setCategoryToDelete(null);
@@ -267,7 +307,7 @@ export default function CategoriesPage() {
       category.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (category.description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
 
-    const count = (category as any).campaignCount ?? category.campaigns.length;
+    const count = categoryProjectTotal(category);
     const matchesCampaignsFilter =
       campaignsFilter === 'all' ||
       (campaignsFilter === 'with' && count > 0) ||
@@ -309,8 +349,9 @@ export default function CategoriesPage() {
   return (
     <div>
       <PageHeader
-        title="الحملات"
-        description="إدارة الحملات ومشاريعها"
+        eyebrow={dt("المشاريع والتصنيفات")}
+        title={dt("التصنيفات")}
+        description={dt("نظّم المشاريع ضمن تصنيفات واضحة، وراجع الظهور والترجمات وترتيب المشاريع داخل كل تصنيف.")}
         icon={Globe}
         actions={
           <>
@@ -322,18 +363,18 @@ export default function CategoriesPage() {
                 className="gap-2"
               >
                 {deleteLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                حذف ({selectedCategories.length})
-              </Button>
+                {dtx("حذف ({0})", [selectedCategories.length])}</Button>
             )}
+            <DashboardLocaleSwitcher value={locale} onChange={setLocale} className="h-10 w-[190px]" />
             <ReorderDialog categories={categories} onReorder={fetchCategories} />
+            <ProjectFilterOrderDialog locale={locale} />
             <Button
               variant="outline"
               className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
               onClick={() => setArchiveOpen(true)}
             >
               <Archive className="w-4 h-4" />
-              أرشيف الحملات
-              {archivedCategories.length > 0 && (
+              {dt("أرشيف التصنيفات")}{archivedCategories.length > 0 && (
                 <span className="bg-amber-100 text-amber-700 text-xs font-bold px-1.5 py-0.5 rounded-full">
                   {archivedCategories.length}
                 </span>
@@ -344,35 +385,53 @@ export default function CategoriesPage() {
               className="bg-brand hover:bg-brand-dark gap-2"
             >
               <Plus className="w-4 h-4" />
-              حملة جديدة
-            </Button>
+              {dt("تصنيف جديد")}</Button>
           </>
         }
       />
 
       <div className="mb-4">
-        <ContentLocalizationAuditCard section="categories" />
+        <ContentMetricStrip items={[
+          { label: dt("التصنيفات النشطة"), value: categories.filter((category) => category.isActive).length, detail: dt("متاحة في قوائم الموقع"), icon: CheckCircle2, tone: "green" },
+          { label: dt("في الأرشيف"), value: archivedCategories.length, detail: dt("مخفية دون حذف المشاريع"), icon: Archive, tone: "slate" },
+          { label: dt("بها مشاريع"), value: categories.filter((category) => Number(categoryProjectTotal(category)) > 0).length, detail: dt("تصنيفات مرتبطة بمشاريع"), icon: FolderOpen, tone: "brand" },
+          { label: dt("إجمالي الارتباطات الحالية"), value: categories.reduce((sum, category) => sum + Number(categoryProjectTotal(category)), 0), detail: dt("تصنيفات مرتبطة بمشاريع"), icon: Globe, tone: "amber" },
+        ]} />
+      </div>
+      <div className="mb-4">
+        <TranslationOverview kind="categories" scopeIds={filteredCategories.map(c=>c.id)}>
+          <ContentLocalizationAuditCard section="categories" />
+        </TranslationOverview>
+      </div>
+
+      <div className="mb-4">
+
       </div>
 
       <FilterBar
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
-        searchPlaceholder="ابحث عن حملة..."
+        searchPlaceholder={dt("ابحث عن تصنيف...")}
       >
         <Select
           value={campaignsFilter}
           onValueChange={(value: 'all' | 'with' | 'without') => setCampaignsFilter(value)}
         >
           <SelectTrigger className="h-9 w-full sm:w-[180px]">
-            <SelectValue placeholder="المشاريع" />
+            <SelectValue placeholder={dt("المشاريع")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">جميع الحملات</SelectItem>
-            <SelectItem value="with">حملات بها مشاريع</SelectItem>
-            <SelectItem value="without">حملات بدون مشاريع</SelectItem>
+            <SelectItem value="all">{dt("جميع التصنيفات")}</SelectItem>
+            <SelectItem value="with">{dt("حملات بها مشاريع")}</SelectItem>
+            <SelectItem value="without">{dt("حملات بدون مشاريع")}</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>
+
+      {deleteProblems.length ? <div role="alert" className="mb-4 space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <p className="font-bold">{dt("تصنيفات لم يتم حذفها")}</p>
+        {deleteProblems.map(row => <p key={row.id}><strong>{row.name}:</strong> {row.message}</p>)}
+      </div> : null}
 
       <div className="rounded-lg border border-border bg-card overflow-hidden overflow-x-auto">
         <Table>
@@ -382,6 +441,7 @@ export default function CategoriesPage() {
                 <input
                   type="checkbox"
                   checked={filteredCategories.length > 0 && selectedCategories.length === filteredCategories.length}
+                  disabled={deleteLoading}
                   onChange={handleSelectAllCategories}
                   className="rounded border-input accent-primary"
                 />
@@ -391,14 +451,13 @@ export default function CategoriesPage() {
                 onClick={() => handleSort('name')}
               >
                 <div className="flex items-center gap-2">
-                  اسم الحملة
-                  <ArrowUpDown className="w-4 h-4" />
+                  {dt("اسم التصنيف")}<ArrowUpDown className="w-4 h-4" />
                 </div>
               </TableHead>
-              <TableHead className="text-start">الوصف</TableHead>
-              <TableHead className="text-start">عدد المشاريع</TableHead>
-              <TableHead className="text-start">الصورة</TableHead>
-              <TableHead className="text-center">الإجراءات</TableHead>
+              <TableHead className="text-start">{dt("الوصف")}</TableHead>
+              <TableHead className="text-start">{dt("عدد المشاريع")}</TableHead>
+              <TableHead className="text-start">{dt("الصورة")}</TableHead>
+              <TableHead className="text-center">{dt("الإجراءات")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -409,13 +468,14 @@ export default function CategoriesPage() {
                   <input
                     type="checkbox"
                     checked={selectedCategories.includes(category.id)}
+                    disabled={deleteLoading}
                     onChange={() => handleSelectCategory(category.id)}
                   className="rounded border-input accent-primary"
                 />
               </TableCell>
               <TableCell className="font-medium">{category.name}</TableCell>
-                <TableCell className='max-w-[300px] truncate pl-12'>{category.description || 'لا يوجد وصف'}</TableCell>
-                <TableCell>{(category as any).campaignCount ?? 0}</TableCell>
+                <TableCell className='max-w-[300px] truncate pe-12'>{category.description || dt("لا يوجد وصف")}</TableCell>
+                <TableCell><button type="button" className="underline" onClick={() => setLinkedCategoryId(category.id)} aria-label={dt("عرض المشاريع المرتبطة بالتصنيف: {0}", [category.name])}>{dt("عرض المشاريع المرتبطة")}</button> · {categoryProjectTotal(category)}{category.archivedCampaignCount ? <span className="ms-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{dt("{0} مشاريع مؤرشفة", [category.archivedCampaignCount])}</span> : null}{category.deletedCampaignCount ? <span className="ms-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">{dt("{0} مشاريع في المحذوفات", [category.deletedCampaignCount])}</span> : null}</TableCell>
                 <TableCell>
                   {category.image ? (
                     <img
@@ -424,7 +484,7 @@ export default function CategoriesPage() {
                       className="w-10 h-10 rounded-lg object-cover"
                     />
                   ) : (
-                    'لا توجد صورة'
+                    dt("لا توجد صورة")
                   )}
                 </TableCell>
                 <TableCell>
@@ -434,15 +494,18 @@ export default function CategoriesPage() {
                       size="icon"
                       onClick={() => setPriorityDialog({ id: category.id, name: category.name })}
                       className="text-amber-600 hover:bg-amber-50"
-                      title="أولويات المشاريع داخل الحملة"
+                      aria-label={dt("ترتيب المشاريع داخل التصنيف: {0}", [category.name])}
+                      title={dt("ترتيب المشاريع داخل التصنيف: {0}", [category.name])}
                     >
                       <Crown className="w-4 h-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => router.push(`/dashboard/categories/edit/${category.id}`)}
+                      onClick={() => router.push(`/dashboard/content/categories/${category.id}`)}
                       className="text-primary hover:bg-primary/10"
+                      aria-label={dt("تعديل التصنيف: {0}", [category.name])}
+                      title={dt("تعديل التصنيف: {0}", [category.name])}
                     >
                       <Pencil className="w-4 h-4" />
                     </Button>
@@ -452,7 +515,8 @@ export default function CategoriesPage() {
                       onClick={() => handleDeactivate(category)}
                       className="text-amber-600 hover:bg-amber-50"
                       disabled={actionLoading === category.id}
-                      title="تعطيل الحملة وأرشفتها"
+                      aria-label={dt("أرشفة التصنيف: {0}", [category.name])}
+                      title={dt("أرشفة التصنيف دون تعطيل المشاريع: {0}", [category.name])}
                     >
                       {actionLoading === category.id
                         ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -463,7 +527,11 @@ export default function CategoriesPage() {
                       size="icon"
                       onClick={() => handleDelete(category)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      disabled={((category as any).campaignCount ?? category.campaigns.length) > 0}
+                      disabled={deleteLoading || categoryProjectTotal(category) > 0}
+                      aria-label={dt("حذف التصنيف: {0}", [category.name])}
+                      title={(categoryProjectTotal(category)) > 0
+                        ? dt("لا يمكن حذف تصنيف مرتبط بمشاريع: {0}", [category.name])
+                        : dt("حذف التصنيف: {0}", [category.name])}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -478,18 +546,17 @@ export default function CategoriesPage() {
                   <EmptyState
                     variant="inline"
                     icon={Globe}
-                    title="لا توجد حملات"
+                    title={dt("لا توجد تصنيفات")}
                     description={searchQuery || campaignsFilter !== 'all'
-                      ? "لا توجد حملة تطابق التصفية الحالية."
-                      : "الحملات تجمع المشاريع تحت مظلة واحدة. أنشئ أول حملة للبدء."}
+                      ? dt("لا توجد تصنيفات تطابق التصفية الحالية.")
+                      : dt("التصنيفات تجمع المشاريع تحت مظلة واحدة. أنشئ أول تصنيف للبدء.")}
                     action={
                       <Button
                         onClick={() => router.push('/dashboard/categories/new')}
                         className="bg-brand hover:bg-brand-dark gap-2"
                       >
                         <Plus className="w-4 h-4" />
-                        إضافة حملة جديدة
-                      </Button>
+                        {dt("إضافة تصنيف جديد")}</Button>
                     }
                   />
                 </TableCell>
@@ -508,10 +575,9 @@ export default function CategoriesPage() {
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
               >
-                السابق
-              </Button>
+                {dt("السابق")}</Button>
               <span className="text-sm text-gray-600">
-                صفحة {currentPage} من {totalPages}
+                {dtx("صفحة {0} من {1}", [currentPage, totalPages])}
               </span>
               <Button
                 variant="outline"
@@ -519,11 +585,10 @@ export default function CategoriesPage() {
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
               >
-                التالي
-              </Button>
+                {dt("التالي")}</Button>
             </div>
             <div className="text-sm text-gray-600">
-              إجمالي النتائج: {sortedCategories.length}
+              {dtx("إجمالي النتائج: {0}", [sortedCategories.length])}
             </div>
           </div>
         )}
@@ -540,21 +605,20 @@ export default function CategoriesPage() {
 
       {/* ── Archive viewer ── */}
       <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}>
-        <DialogContent className="max-w-3xl w-full max-h-[80vh] flex flex-col" dir="rtl">
+        <DialogContent className="max-w-3xl w-full max-h-[80vh] flex flex-col" dir={dashDir()}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-700">
               <Archive className="w-5 h-5" />
-              أرشيف الحملات المعطّلة ({archivedCategories.length})
-            </DialogTitle>
+              {dtx("أرشيف التصنيفات المعطّلة ({0})", [archivedCategories.length])}</DialogTitle>
           </DialogHeader>
 
           <div className="relative mb-3">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="بحث في الأرشيف..."
+              placeholder={dt("بحث في الأرشيف...")}
               value={archiveSearch}
               onChange={e => setArchiveSearch(e.target.value)}
-              className="pr-10"
+              className="ps-10"
             />
           </div>
 
@@ -562,22 +626,21 @@ export default function CategoriesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-right">اسم الحملة</TableHead>
-                  <TableHead className="text-right">عدد المشاريع</TableHead>
-                  <TableHead className="text-center w-40">إجراء</TableHead>
+                  <TableHead className="text-start">{dt("اسم التصنيف")}</TableHead>
+                  <TableHead className="text-start">{dt("عدد المشاريع")}</TableHead>
+                  <TableHead className="text-center w-40">{dt("إجراء")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredArchive.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center py-10 text-muted-foreground">
-                      لا توجد حملات في الأرشيف
-                    </TableCell>
+                      {dt("لا توجد تصنيفات في الأرشيف")}</TableCell>
                   </TableRow>
                 ) : filteredArchive.map(category => (
                   <TableRow key={category.id}>
                     <TableCell className="font-medium">{category.name}</TableCell>
-                    <TableCell>{(category as any).campaignCount ?? 0}</TableCell>
+                    <TableCell><button type="button" className="underline" onClick={() => setLinkedCategoryId(category.id)} aria-label={dt("عرض المشاريع المرتبطة بالتصنيف: {0}", [category.name])}>{dt("عرض المشاريع المرتبطة")}</button> · {categoryProjectTotal(category)}{category.archivedCampaignCount ? <span className="ms-2 inline-flex rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{dt("{0} مشاريع مؤرشفة", [category.archivedCampaignCount])}</span> : null}{category.deletedCampaignCount ? <span className="ms-2 inline-flex rounded-full bg-amber-50 px-2 py-1 text-xs text-amber-800">{dt("{0} مشاريع في المحذوفات", [category.deletedCampaignCount])}</span> : null}</TableCell>
                     <TableCell>
                       <Button
                         size="sm"
@@ -589,8 +652,7 @@ export default function CategoriesPage() {
                         {actionLoading === category.id
                           ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           : <RotateCcw className="w-3.5 h-3.5" />}
-                        إعادة تفعيل
-                      </Button>
+                        {dt("إعادة تفعيل")}</Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -600,18 +662,20 @@ export default function CategoriesPage() {
         </DialogContent>
       </Dialog>
 
+      {linkedCategoryId && <CategoryLinkedProjects categoryId={linkedCategoryId} admin={session?.user?.role === "ADMIN"} onClose={() => setLinkedCategoryId(null)} onDeleted={() => { void fetchCategories(); }} />}
+
       {/* ── Activate/deactivate confirm ── */}
       <AlertDialog
         open={confirmDialog.open}
         onOpenChange={open => setConfirmDialog(d => ({ ...d, open }))}
       >
-        <AlertDialogContent dir="rtl">
+        <AlertDialogContent dir={dashDir()}>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
             <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row-reverse gap-2">
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel>{dt("إلغاء")}</AlertDialogCancel>
             <AlertDialogAction
               className={confirmDialog.actionClassName}
               onClick={() => {
@@ -631,21 +695,19 @@ export default function CategoriesPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>هل أنت متأكد من حذف هذه الحملة؟</AlertDialogTitle>
+            <AlertDialogTitle>{dt("هل أنت متأكد من حذف هذه التصنيف؟")}</AlertDialogTitle>
             <AlertDialogDescription>
-              سيتم حذف الحملة نهائياً ولا يمكن التراجع عن هذا الإجراء.
-            </AlertDialogDescription>
+              {dt("سيتم حذف التصنيف نهائياً ولا يمكن التراجع عن هذا الإجراء.")} {dt("سجلات المشاريع المحذوفة وتبرعاتها ستبقى محفوظة.")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogCancel>{dt("إلغاء")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               className="bg-red-600 hover:bg-red-700 gap-2"
               disabled={deleteLoading}
             >
               {deleteLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              حذف
-            </AlertDialogAction>
+              {dt("حذف")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

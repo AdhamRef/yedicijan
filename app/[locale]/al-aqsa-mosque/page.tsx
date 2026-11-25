@@ -1,0 +1,76 @@
+import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+
+import { messagesFor } from "@/i18n/locale-messages";
+import { slugFor } from "@/lib/minbar/routes";
+import { verseBlock } from "@/lib/minbar/quran";
+import { listProjects } from "@/lib/minbar/projects";
+import { getCategoryPageByTemplate } from "@/lib/minbar/category-page";
+import MinbarMessages from "@/components/minbar/MinbarMessages";
+import AqsaPage from "@/components/minbar/aqsa/AqsaPage";
+import PageBanners from "@/components/minbar/banners/PageBanners";
+
+interface Props {
+  params: Promise<{ locale: string }>;
+}
+
+/** The page's own namespaces, on top of the shell bundle. */
+const NAMESPACES = ["aqsa", "homepage", "quran"] as const;
+
+/** Project figures change on donation, not per request. */
+export const revalidate = 60;
+
+/**
+ * Categories the design draws this page's project grid from, when no category
+ * is bound to the page (`Category.pageTemplate = "aqsa"`). A bound category
+ * supplies its own campaigns  all of them  and its editable parts.
+ */
+const REGIONS = ["region-al-aqsa", "region-al-quds", "al-aqsa", "al-quds"];
+
+/** How many project cards the "our role" grid shows without a bound category. */
+const PROJECT_LIMIT = 8;
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "aqsa" });
+  return buildManagedPageMetadata("aqsa", locale, {
+    title: t("pageTitle"),
+    description: t("seoDescription"),
+    path: `/${slugFor("aqsa", locale)}`,
+  });
+}
+
+/**
+ * The blessed Al-Aqsa Mosque  ported from `Minbar/المسجد الأقصى.dc.html`.
+ *
+ * The verse resolves on the server so it is in the HTML rather than appearing
+ * after hydration. Al-Isra 1 opens the page and is also the first of the
+ * mosque's stated virtues, so the same block is passed twice.
+ */
+export default async function Aqsa({ params }: Props) {
+  const { locale } = await params;
+
+  /* The mosque's category, when the dashboard has bound one to this page. Its
+     campaigns replace the region filter below, and its figures, values,
+     donation box, cards and achievements join the page's own copy. */
+  const category = await getCategoryPageByTemplate("aqsa", locale);
+  const projects = category
+    ? category.projects
+    : (await listProjects(locale)).filter((project) => project.region && REGIONS.includes(project.region)).slice(0, PROJECT_LIMIT);
+
+  const quran = messagesFor(locale).quran as Parameters<typeof verseBlock>[0];
+
+  return (
+    <MinbarMessages locale={locale} namespaces={NAMESPACES}>
+        <PageBanners locale={locale} page="aqsa" slot="top" />
+      <AqsaPage
+        verse={verseBlock(quran, "isra_1", locale)}
+        isra={verseBlock(quran, "isra_1", locale)}
+        projects={projects}
+        category={category}
+      />
+      <PageBanners locale={locale} page="aqsa" slot="bottom" />
+    </MinbarMessages>
+  );
+}

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getPublicTrackingConfig } from "@/lib/tracking/tracking-settings";
 
-// GET /api/tracking/config — public browser config only. No access tokens or API secrets.
+export const dynamic = "force-dynamic";
+
+// GET /api/tracking/config  public browser config only. No access tokens or API secrets.
 export async function GET() {
   try {
     const config = await getPublicTrackingConfig();
@@ -9,6 +11,11 @@ export async function GET() {
   } catch (e) {
     console.error("Error fetching tracking config:", e);
     return NextResponse.json({
+      // Database read failure must not silently re-enable a previously disabled recorder.
+      clarityProjectId: null,
+      clarityEnabled: false,
+      googleTagManagerId: null,
+      googleTagManagerEnabled: false,
       facebookPixelId: null,
       gaMeasurementId: null,
       googleAdsConversionId: null,

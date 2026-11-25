@@ -12,7 +12,7 @@ import { appendCurrencyQuery, getCurrencyCodeForLinks } from '@/lib/currency-lin
 import { getSocialLinks } from '@/lib/social-links';
 import { track } from '@vercel/analytics';
 
-const LOGO_URL = '/yedicijan_logo.png';
+const LOGO_URL = '/logometaminber.avif';
 
 const Footer = () => {
   const t = useTranslations('Footer');
@@ -35,33 +35,12 @@ const Footer = () => {
   useEffect(() => {
     const shouldSend = searchParams.get('footerMessageSent') === '1';
     if (!shouldSend || !session?.user?.id) return;
-    const run = async () => {
-      try {
-        const raw = window.sessionStorage.getItem(pendingMessageKey);
-        if (!raw) { router.replace(appendCurrencyQuery(pathname, getCurrencyCodeForLinks())); return; }
-        const parsed = JSON.parse(raw) as { body?: string; locale?: string };
-        const trimmed = (parsed.body || '').trim();
-        if (!trimmed) { window.sessionStorage.removeItem(pendingMessageKey); router.replace(appendCurrencyQuery(pathname, getCurrencyCodeForLinks())); return; }
-        const res = await fetch('/api/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body: trimmed, locale: parsed.locale || locale, subject: 'COMPLAINT' }),
-        });
-        if (!res.ok) throw new Error('Failed');
-        window.sessionStorage.removeItem(pendingMessageKey);
-        setBody('');
-        setSubmitMessage(t('sendSuccess'));
-        try { track('contact_message_sent', { source: 'footer_after_signin', subject: 'COMPLAINT', locale }); } catch {}
-        setTimeout(() => setSubmitMessage(''), 4000);
-      } catch {
-        try { track('contact_message_failed', { source: 'footer_after_signin', subject: 'COMPLAINT', locale }); } catch {}
-        setSubmitMessage(t('sendError'));
-        setTimeout(() => setSubmitMessage(''), 3000);
-      } finally {
-        router.replace(appendCurrencyQuery(pathname, getCurrencyCodeForLinks()));
-      }
-    };
-    run();
+    try {
+      const raw = window.sessionStorage.getItem(pendingMessageKey);
+      if (raw) { const parsed = JSON.parse(raw); if (typeof parsed.body === 'string') setBody(parsed.body); }
+      window.sessionStorage.removeItem(pendingMessageKey);
+    } catch {}
+    router.replace(appendCurrencyQuery(pathname, getCurrencyCodeForLinks()));
   }, [searchParams, session?.user?.id, pathname, router, t, locale]);
 
   useEffect(() => {
@@ -122,7 +101,7 @@ const Footer = () => {
   const isTr = locale === 'tr';
   const isAr = locale === 'ar';
 
-  // Built dynamically from the API — see useEffect above
+  // Built dynamically from the API  see useEffect above
 
   const quickLinks = [
     { label: isTr ? 'Hakkımızda' : isAr ? 'من نحن' : 'About Us', href: '/about-us' },
@@ -250,13 +229,13 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="mailto:info@yedicihan.org"
+                  href="mailto:info@minberiaksa.org"
                   className="flex items-center gap-3 text-sm text-white/70 hover:text-white transition-colors"
                 >
                   <span className="w-8 h-8 rounded-lg bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                     <Mail className="w-4 h-4 text-gold" />
                   </span>
-                  info@yedicihan.org
+                  info@minberiaksa.org
                 </a>
               </li>
             </ul>

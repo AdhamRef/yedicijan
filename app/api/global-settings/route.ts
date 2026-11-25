@@ -8,7 +8,10 @@ import {
   validateSuggestedTeamSupportBody,
 } from "@/lib/campaign/suggested-team-support";
 import { Prisma } from "@prisma/client";
-import { albarakaConfig, isAlbarakaConfigured } from "@/lib/albaraka";
+import { isMainGateway, parseMainGateway } from "@/lib/payment-gateway";
+import { albaraka2DConfig, isAlbarakaConfigured, isAlbarakaRecurringCheckoutReady } from "@/lib/albaraka";
+import { auditActorFromDashboardSession, writeAuditLog } from "@/lib/audit-log";
+import { parseCartUpsell, validateCartUpsellBody } from "@/lib/minbar/cart-upsell";
 
 /** Fetch the single GlobalSettings record, creating an empty one on first read. */
 async function getOrCreateSettings() {
@@ -19,24 +22,35 @@ async function getOrCreateSettings() {
   return prisma.globalSettings.create({ data: {} });
 }
 
-/** Public GET — exposes only the donation-flow defaults clients need. */
+/** Public GET  exposes only the donation-flow defaults clients need. */
 export async function GET() {
   try {
     const settings = await prisma.globalSettings.findFirst({
       orderBy: { createdAt: "asc" },
-      select: { suggestedTeamSupport: true, payforEnabled: true },
+      select: { suggestedTeamSupport: true, teamSupportEnabled: true, cartUpsell: true, payforEnabled: true, payforSaudiRoutingEnabled: true, mainGateway: true, allowAnyAmount: true },
     });
-    const albaraka = albarakaConfig();
+    const albaraka = albaraka2DConfig();
     return NextResponse.json({
       suggestedTeamSupport: parseSuggestedTeamSupport(settings?.suggestedTeamSupport),
-      // Default true — first read before any record exists must still let
-      // PayFor remain available for non-TRY donors.
+      // The basket's "support the team" step; default on before any record exists.
+      teamSupportEnabled: settings?.teamSupportEnabled ?? true,
+      // The basket's cross-sell campaigns; empty means the built-in suggestions.
+      cartUpsell: parseCartUpsell(settings?.cartUpsell),
+      // Default true  first read before any record exists must still let
+      // PayFor remain available for TRY donors.
       payforEnabled: settings?.payforEnabled ?? true,
+      payforSaudiRoutingEnabled: settings?.payforSaudiRoutingEnabled === true,
+      mainGateway: parseMainGateway(settings?.mainGateway),
+      // Off: every donation line is at least $1. On: any amount, as given.
+      allowAnyAmount: settings?.allowAnyAmount === true,
       // Neither flag is a secret; the checkout dialogs need them to decide whether
       // to render our own card form (Albaraka signs the card fields into the MAC,
       // so with the bank's hosted page turned on we must not collect them).
-      albarakaUseOOS: albaraka.useOOS,
+      // Both selectable modes retain our card form. 3D adds bank verification
+      // after submission; the bank-hosted card-entry (OOS) page is not used.
+      albarakaUseOOS: false,
       albarakaConfigured: isAlbarakaConfigured(albaraka),
+      albarakaRecurringReady: isAlbarakaRecurringCheckoutReady(),
     });
   } catch (e) {
     console.error("Error fetching global settings:", e);
@@ -48,9 +62,11 @@ export async function GET() {
 }
 
 /**
- * PUT — partial update. Each field has its own permission requirement:
+ * PUT  partial update. Each field has its own permission requirement:
  *   - suggestedTeamSupport → `campaigns` perm
  *   - payforEnabled       → `generalSettings` perm
+ *   - mainGateway         → `generalSettings` perm
+ *   - allowAnyAmount      → `generalSettings` perm
  * A single request mixing them must satisfy every matching check.
  */
 export async function PUT(request: NextRequest) {
@@ -64,21 +80,32 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    if (body.suggestedTeamSupport !== undefined) {
+    if (body.teamSupportEnabled !== undefined) {
+      const denied = requireAdminOrDashboardPermission(session, "campaigns");
+      if (denied) return denied;
+      if (typeof body.teamSupportEnabled !== "boolean") {
+        return NextResponse.json({ error: "teamSupportEnabled must be a boolean" }, { status: 400 });
+      }
+    }
+    if (body.suggestedTeamSupport !== undefined || body.cartUpsell !== undefined) {
       const denied = requireAdminOrDashboardPermission(session, "campaigns");
       if (denied) return denied;
     }
-    if (body.payforEnabled !== undefined) {
+    if (body.payforEnabled !== undefined || body.payforSaudiRoutingEnabled !== undefined || body.mainGateway !== undefined || body.allowAnyAmount !== undefined) {
       const denied = requireAdminOrDashboardPermission(session, "generalSettings");
       if (denied) return denied;
     }
 
     const updateData: Prisma.GlobalSettingsUpdateInput = {};
+    if (typeof body.teamSupportEnabled === "boolean") {
+      updateData.teamSupportEnabled = body.teamSupportEnabled;
+    }
 
     if (body.suggestedTeamSupport !== undefined) {
       try {
         if (body.suggestedTeamSupport === null) {
-          updateData.suggestedTeamSupport = Prisma.JsonNull;
+          /* MongoDB: an optional Json column is cleared with a plain null. */
+          updateData.suggestedTeamSupport = null;
         } else {
           const v = validateSuggestedTeamSupportBody(body.suggestedTeamSupport);
           if (v) {
@@ -88,6 +115,15 @@ export async function PUT(request: NextRequest) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Invalid suggestedTeamSupport";
         return NextResponse.json({ error: msg }, { status: 400 });
+      }
+    }
+
+    if (body.cartUpsell !== undefined) {
+      try {
+        updateData.cartUpsell =
+          body.cartUpsell === null ? null : (validateCartUpsellBody(body.cartUpsell) as unknown as Prisma.InputJsonValue);
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : "Invalid cartUpsell" }, { status: 400 });
       }
     }
 
@@ -101,28 +137,93 @@ export async function PUT(request: NextRequest) {
       updateData.payforEnabled = body.payforEnabled;
     }
 
-    // Turning PayFor off sends every one-time donation to Albaraka, so refuse it
-    // when Albaraka can't sign anything — that would leave no working rail at all.
-    if (body.payforEnabled === false && !isAlbarakaConfigured()) {
-      return NextResponse.json(
-        {
-          error:
-            "Cannot disable PayFor: Albaraka is not configured on the server (ALBARAKA_ENC_KEY is missing), so one-time donations would have no gateway.",
-        },
-        { status: 400 }
-      );
+    if (body.payforSaudiRoutingEnabled !== undefined) {
+      if (typeof body.payforSaudiRoutingEnabled !== "boolean") return NextResponse.json({ error: "payforSaudiRoutingEnabled must be a boolean" }, { status: 400 });
+      updateData.payforSaudiRoutingEnabled = body.payforSaudiRoutingEnabled;
+    }
+
+    if (body.allowAnyAmount !== undefined) {
+      if (typeof body.allowAnyAmount !== "boolean") {
+        return NextResponse.json({ error: "allowAnyAmount must be a boolean" }, { status: 400 });
+      }
+      updateData.allowAnyAmount = body.allowAnyAmount;
+    }
+
+    if (body.mainGateway !== undefined) {
+      if (!isMainGateway(body.mainGateway)) {
+        return NextResponse.json(
+          { error: 'mainGateway must be "STRIPE" or "ALBARAKA"' },
+          { status: 400 }
+        );
+      }
+      // Refuse to nominate a gateway that can't actually take a payment  without
+      // the encryption key every MAC we build would be rejected by the bank, and
+      // donors would hit a dead checkout.
+      if (body.mainGateway === "ALBARAKA" && !isAlbarakaConfigured()) {
+        return NextResponse.json(
+          {
+            error:
+              "Albaraka is not configured on the server (ALBARAKA_ENC_KEY is missing).",
+          },
+          { status: 400 }
+        );
+      }
+      updateData.mainGateway = body.mainGateway;
     }
 
     const existing = await getOrCreateSettings();
     const saved = await prisma.globalSettings.update({
       where: { id: existing.id },
       data: updateData,
-      select: { suggestedTeamSupport: true, payforEnabled: true },
+      select: { suggestedTeamSupport: true, teamSupportEnabled: true, cartUpsell: true, payforEnabled: true, payforSaudiRoutingEnabled: true, mainGateway: true, allowAnyAmount: true },
     });
+
+    // Gateway settings decide where every new donation's money goes, so each
+    // change is recorded with who, when, what it was, what it became and why.
+    const beforeGateway = parseMainGateway(existing.mainGateway);
+    const afterGateway = parseMainGateway(saved.mainGateway);
+    const beforePayfor = existing.payforEnabled ?? true;
+    const afterPayfor = saved.payforEnabled ?? true;
+    const beforeAnyAmount = existing.allowAnyAmount === true;
+    const afterAnyAmount = saved.allowAnyAmount === true;
+    if (session && (beforeGateway !== afterGateway || beforePayfor !== afterPayfor || beforeAnyAmount !== afterAnyAmount || existing.payforSaudiRoutingEnabled !== saved.payforSaudiRoutingEnabled)) {
+      const actor = auditActorFromDashboardSession(session);
+      const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 500) || null : null;
+      const parts: string[] = [];
+      if (existing.payforSaudiRoutingEnabled !== saved.payforSaudiRoutingEnabled) parts.push(`توجيه السعودية إلى PayFor: ${saved.payforSaudiRoutingEnabled === true}`);
+      if (beforeGateway !== afterGateway) parts.push(`البوابة الرئيسية من ${beforeGateway} إلى ${afterGateway}`);
+      if (beforePayfor !== afterPayfor) parts.push(`PayFor ${afterPayfor ? "مفعّل" : "معطّل"} (كان ${beforePayfor ? "مفعّلًا" : "معطّلًا"})`);
+      if (beforeAnyAmount !== afterAnyAmount) parts.push(`مبلغ التبرع: ${afterAnyAmount ? "أي مبلغ بعملة المتبرع" : "حد أدنى دولار واحد"}`);
+      await writeAuditLog({
+        ...actor,
+        stream: "TEAM",
+        action: "PAYMENT_GATEWAY_UPDATE",
+        messageAr: `${actor.actorName ?? "مسؤول"} غيّر إعدادات الدفع: ${parts.join("، ")}${reason ? `  السبب: ${reason}` : ""}`,
+        messageEn: `${actor.actorName ?? "Admin"} changed payment settings: gateway ${beforeGateway} → ${afterGateway}, PayFor ${beforePayfor} → ${afterPayfor}, allow any amount ${beforeAnyAmount} → ${afterAnyAmount}`,
+        entityType: "GlobalSettings",
+        entityId: existing.id,
+        metadata: {
+          oldSaudiRouting: existing.payforSaudiRoutingEnabled === true,
+          newSaudiRouting: saved.payforSaudiRoutingEnabled === true,
+          oldGateway: beforeGateway,
+          newGateway: afterGateway,
+          oldPayforEnabled: beforePayfor,
+          newPayforEnabled: afterPayfor,
+          oldAllowAnyAmount: beforeAnyAmount,
+          newAllowAnyAmount: afterAnyAmount,
+          reason,
+        },
+      });
+    }
 
     return NextResponse.json({
       suggestedTeamSupport: parseSuggestedTeamSupport(saved.suggestedTeamSupport),
+      teamSupportEnabled: saved.teamSupportEnabled,
+      cartUpsell: parseCartUpsell(saved.cartUpsell),
       payforEnabled: saved.payforEnabled,
+      payforSaudiRoutingEnabled: saved.payforSaudiRoutingEnabled === true,
+      mainGateway: parseMainGateway(saved.mainGateway),
+      allowAnyAmount: saved.allowAnyAmount === true,
     });
   } catch (e) {
     console.error("Error updating global settings:", e);

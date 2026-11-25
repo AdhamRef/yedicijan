@@ -4,13 +4,14 @@ import * as React from "react";
 import { CheckCircle2, CircleAlert, CircleDashed, Clipboard, Loader2, XCircle } from "lucide-react";
 import { INTEGRATION_UI_STATUS_LABEL, type IntegrationUiStatus } from "@/lib/integration-settings/ui";
 import { cn } from "@/lib/utils";
+import { dt } from "@/lib/dashboard/i18n";
 
 /**
  * Shared surface primitives for مزودو التواصل والإرسال.
  *
- * The page had grown three separate visual languages for the same idea — a
+ * The page had grown three separate visual languages for the same idea  a
  * status chip in the provider card, a differently-shaped one in `ui.tsx`, and a
- * third full-width tinted box for test results — plus two byte-identical blue
+ * third full-width tinted box for test results  plus two byte-identical blue
  * webhook panels. Everything was also set in `font-black`, from card titles down
  * to helper text, so nothing looked more important than anything else.
  *
@@ -18,7 +19,7 @@ import { cn } from "@/lib/utils";
  *  - radii: panels `rounded-xl`, blocks inside them `rounded-lg`, code `rounded-md`
  *  - weight: `font-semibold` for headings, `font-medium` for labels, never `font-black`
  *  - colour: the `brand` scale for brand blue (the file was full of raw `blue-*`,
- *    which is a different hue from `#025EB8` and visibly clashed with it);
+ *    which is a different hue from `#1F3F4F` and visibly clashed with it);
  *    emerald / amber / rose stay reserved for status meaning.
  */
 
@@ -146,11 +147,11 @@ export function Banner({
 
 /* ---------------------------------- pieces --------------------------------- */
 
-/** A read-only path/URL with its copy button — was hand-rolled in three places. */
+/** A read-only path/URL with its copy button  was hand-rolled in three places. */
 export function CopyableCode({
   value,
   onCopy,
-  copyLabel = "نسخ الرابط",
+  copyLabel = dt("نسخ الرابط"),
   className,
 }: {
   value: string;
@@ -194,7 +195,7 @@ export function CompletionMeter({ completed, total }: { completed: number; total
   return (
     <div>
       <div className="flex items-center justify-between text-[11px]">
-        <span className="font-medium text-slate-500">الإعدادات المكتملة</span>
+        <span className="font-medium text-slate-500">{dt("الإعدادات المكتملة")}</span>
         {/* dir="ltr" so bidi reordering can't render "1/6" as "6/1". */}
         <span className="font-semibold tabular-nums text-slate-700" dir="ltr">
           {completed}/{total}

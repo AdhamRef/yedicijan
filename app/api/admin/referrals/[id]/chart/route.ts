@@ -9,7 +9,8 @@ import {
   eachIstanbulDateKey,
   formatIstanbulDateKey,
   getIstanbulDateRange,
-} from "@/lib/admin/istanbul-calendar";
+  resolveChartStartKey,
+} from '@/lib/admin/istanbul-calendar';
 
 /** GET /api/admin/referrals/[id]/chart - Chart data for donations (transactions) attributed to this referral */
 export async function GET(
@@ -37,7 +38,7 @@ export async function GET(
     const campaignId = searchParams.get("campaignId");
     const country = searchParams.get("country")?.trim() ?? null;
 
-    const { startDate, endDate, startDateKey, endDateKey } = getIstanbulDateRange(period, startParam, endParam);
+    const { startDate, endDate, startDateKey, endDateKey, isAllTime } = getIstanbulDateRange(period, startParam, endParam);
     // Bucket by `paidAt` so a donation that settled at 00:30 Istanbul lands in
     // the new day's bar, even if its checkout row was created the prior evening.
     // status=PAID alone includes abandoned checkouts that never settled; require paidAt too.
@@ -69,6 +70,7 @@ export async function GET(
       select: {
         createdAt: true,
         paidAt: true,
+        subscriptionId: true,
         teamSupport: true,
         fees: true,
         amountUSD: true,
@@ -82,8 +84,10 @@ export async function GET(
     });
 
     type Bucket = {
-      amountPaid: number;
-      countPaid: number;
+      amountOneTime: number;
+      countOneTime: number;
+      amountMonthly: number;
+      countMonthly: number;
       teamSupport: number;
       fees: number;
     };
@@ -93,16 +97,23 @@ export async function GET(
       // PAID_DONATION_FILTER guarantees paidAt is not null here.
       const dateStr = formatIstanbulDateKey((d.paidAt ?? d.createdAt) as Date);
       const bucket = byDate.get(dateStr) ?? {
-        amountPaid: 0,
-        countPaid: 0,
+        amountOneTime: 0,
+        countOneTime: 0,
+        amountMonthly: 0,
+        countMonthly: 0,
         teamSupport: 0,
         fees: 0,
       };
-      // USD-labelled series must be summed in USD — see the same fix in
+      // USD-labelled series must be summed in USD  see the same fix in
       // app/api/admin/donations/chart/route.ts.
       const amount = donationRowUsdApprox(d);
-      bucket.amountPaid += amount;
-      bucket.countPaid += 1;
+      if (d.subscriptionId == null) {
+        bucket.amountOneTime += amount;
+        bucket.countOneTime += 1;
+      } else {
+        bucket.amountMonthly += amount;
+        bucket.countMonthly += 1;
+      }
       const localTotal = Number(d.totalAmount) || 0;
       if (localTotal > 0) {
         bucket.teamSupport += amount * ((Number(d.teamSupport) || 0) / localTotal);
@@ -115,17 +126,33 @@ export async function GET(
       date: string;
       amountUSD: number;
       count: number;
+      amountOneTime: number;
+      countOneTime: number;
+      amountMonthly: number;
+      countMonthly: number;
       teamSupport: number;
       fees: number;
     }[] = [];
-    for (const dateStr of eachIstanbulDateKey(startDateKey, endDateKey)) {
+    /* All-time queries from the epoch, so the axis starts at the first day with data rather than
+       at 1970  see `resolveChartStartKey`. Bounded periods are unchanged. */
+    const axisStartKey = resolveChartStartKey(isAllTime, startDateKey, endDateKey, byDate.keys());
+
+    for (const dateStr of eachIstanbulDateKey(axisStartKey, endDateKey)) {
       const b = byDate.get(dateStr);
+      const amountOneTime = b ? Number(Number(b.amountOneTime).toFixed(2)) : 0;
+      const amountMonthly = b ? Number(Number(b.amountMonthly).toFixed(2)) : 0;
+      const countOneTime = b?.countOneTime ?? 0;
+      const countMonthly = b?.countMonthly ?? 0;
       const teamSupport = b ? Number(Number(b.teamSupport).toFixed(2)) : 0;
       const fees = b ? Number(Number(b.fees).toFixed(2)) : 0;
       filledChartData.push({
         date: dateStr,
-        amountUSD: b ? Number(Number(b.amountPaid).toFixed(2)) : 0,
-        count: b?.countPaid ?? 0,
+        amountUSD: Number((amountOneTime + amountMonthly).toFixed(2)),
+        count: countOneTime + countMonthly,
+        amountOneTime,
+        countOneTime,
+        amountMonthly,
+        countMonthly,
         teamSupport,
         fees,
       });

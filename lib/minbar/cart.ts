@@ -1,0 +1,517 @@
+/**
+ * Minbar cart  client-side storage contract.
+ *
+ * Sources: `Minbar/DEVELOPER_HANDOFF.md` § "Cart Localization & Historical
+ * Snapshot Contract", `Minbar/DONATION_LOGIC_SPEC.md`, `Minbar/README.md`.
+ *
+ * The governing rule is:
+ *   CART = LIVE LOCALIZED REFERENCE · CONFIRMED ORDER = IMMUTABLE SNAPSHOT
+ *
+ * So an item stores identifiers only  `projectId` / `titleKey` / `typeKey` /
+ * `freqKey` / `currency` code  and the displayed wording is resolved at render
+ * time from the active locale. Switching language re-resolves the labels and
+ * must never add, remove, reorder or edit an item.
+ *
+ * `title` is a legacy/fallback field, not a source of truth: v1 carts stored a
+ * translated string as the item's identity, and those rows are migrated on read
+ * rather than dropped.
+ *
+ * SECURITY: this is client-controlled data. `DEVELOPER_HANDOFF` is explicit 
+ * "localStorage cart data … must never be trusted for final payment
+ * calculations". The server re-resolves every id and recomputes amount,
+ * currency and availability when an order is created; what is stored here is
+ * display state.
+ */
+
+import { parseLocalAmount, type LocalAmount } from "@/lib/minbar/donation-amount";
+
+/** Donation kind. Drives which proof path (receipt / certificate) applies. */
+export type CartTypeKey = "project" | "zakat" | "waqf" | "recurring" | "extra";
+
+/**
+ * Frequency. These are the historical frontend values and are deliberately kept
+ *  `RECURRING_DONATION_FLOW_MAP.md` requires the backend to normalise them to
+ * the official `donationMode`/`frequency` pair rather than reuse `freqKey` in
+ * any external API.
+ */
+export type CartFreqKey = "once" | "daily" | "friday" | "monthly";
+
+/**
+ * What a waqf row carries besides its amount: the unit, how many, and the
+ * two names the certificate prints. The certificate NUMBER is deliberately not
+ * here  `DONATION_LOGIC_SPEC §2` has the server mint it after payment, and a
+ * number kept in the basket would be one a donor could quote before paying.
+ */
+export interface CartWaqfDetails {
+  unit: "share" | "meter";
+  count: number;
+  /** The endower's name, as it should appear on the certificate. */
+  donorName: string;
+  /** Whom the waqf is endowed on behalf of. */
+  onBehalf: string;
+}
+
+/**
+ * A gift: the row is given in someone else's name. The thank-you certificate
+ * is issued to `recipientName`, and once the donation is confirmed the
+ * recipient is told on the chosen channels  a WhatsApp number, an email, or
+ * both  with the donor's note. Collected on the project page
+ * (`DonationPanel`), shown on the basket row, sent with the order as part of
+ * the line, and stored on `DonationItem`.
+ */
+export interface CartGiftDetails {
+  recipientName: string;
+  recipientPhone: string;
+  recipientEmail: string;
+  message: string;
+  channels: Array<"whatsapp" | "email">;
+  /** Whether the message to the recipient mentions the amount. */
+  showAmount: boolean;
+}
+
+/**
+ * When a recurring row charges, as the donor chose it on the recurring page:
+ * a day of the month (monthly only, 1–28) and a local wall-clock time in the
+ * donor's own timezone. Sent with the order; the server validates it and
+ * builds the plan's schedule rule from it.
+ */
+export interface CartRecurringSchedule {
+  dayOfMonth?: number;
+  hour: number;
+  minute: number;
+  notes?: string;
+}
+
+export interface MinbarCartItem {
+  /** Project slug from the projects source. Absent for non-project intentions. */
+  projectId?: string;
+  /**
+   * Category **id** (never a slug  category slugs differ per locale) when the
+   * row gives to a category as a whole rather than to one of its campaigns.
+   * The order carries it as a category item.
+   */
+  categoryId?: string;
+  /**
+   * i18n key for a generic destination that is not a project  e.g.
+   * `whereNeedGreatest`, `zakatToPalestine`, `generalBankTransfer`.
+   */
+  titleKey?: string;
+  typeKey?: CartTypeKey;
+  freqKey: CartFreqKey;
+  /** Numeric amount in `currency`. Stored as a number, never a formatted string. */
+  amount: number;
+  /** ISO 4217 code  never a symbol or a translated currency name. */
+  currency: string;
+  /**
+   * The amount exactly as the donor gave it in their own currency (typed, or
+   * an admin's preset in that currency); `amount` is then its USD value at
+   * the page's rate. Shown and charged as this figure while the donor is in
+   * that currency, so 1 TL stays 1 TL. See `lib/minbar/donation-amount.ts`.
+   */
+  local?: LocalAmount;
+  /** Identifier of the upsell suggestion that produced this item, if any. */
+  upsellId?: string;
+  /**
+   * Last-known display title. Fallback only, for legacy rows that could not be
+   * resolved to an id  never read in preference to the ids above.
+   */
+  title?: string;
+  /** Set when the "make it monthly" toggle converted this item, so it can be undone. */
+  _autoMonthly?: boolean;
+  /** Present on a waqf row (`typeKey: "waqf"`): the certificate's details. */
+  waqf?: CartWaqfDetails;
+  /** Present when the row is given in someone else's name. */
+  gift?: CartGiftDetails;
+  /**
+   * Number of shares on a سهوم campaign row; `amount` is then the count times
+   * the share price. Sent with the order so the receipt says "3 shares".
+   */
+  shareCount?: number;
+  /** Recurring rows from the recurring page: the chosen charge day and time. */
+  schedule?: CartRecurringSchedule;
+}
+
+export const CART_ITEMS_KEY = "mia_cart_items";
+export const CART_SCHEMA_KEY = "mia_cart_schema";
+/** Item count, kept separately so the header badge reads one small value. */
+export const CART_COUNT_KEY = "mia_basket";
+/** Fired on every write so the header badge updates without a reload. */
+export const CART_UPDATED_EVENT = "mia:basket-updated";
+
+export const CART_SCHEMA_VERSION = 2;
+
+export function canToggleCartMonthly(item: Pick<MinbarCartItem, "freqKey">): boolean {
+  return item.freqKey === "once" || item.freqKey === "monthly";
+}
+
+/** A monthly shortcut must never replace a daily or Friday commitment. */
+export function toggleCartMonthly(item: MinbarCartItem): MinbarCartItem {
+  if (!canToggleCartMonthly(item)) return item;
+  const next = { ...item, freqKey: item.freqKey === "monthly" ? "once" as const : "monthly" as const };
+  delete next._autoMonthly;
+  return next;
+}
+
+/** Legacy v1 → v2 type mapping, from `السلة.dc.html` → `Component.LEGACY_TYPES`. */
+const LEGACY_TYPES: Record<string, CartTypeKey> = {
+  مشروع: "project",
+  زكاة: "zakat",
+  وقف: "waqf",
+  دوري: "recurring",
+  إضافة: "extra",
+};
+
+/** Legacy v1 → v2 frequency mapping, from `Component.LEGACY_FREQS`. */
+const LEGACY_FREQS: Record<string, CartFreqKey> = {
+  "تبرع لمرة": "once",
+  "تبرع يومي": "daily",
+  "تبرع أسبوعياً": "friday",
+  "تبرع شهري": "monthly",
+};
+
+const isBrowser = () => typeof window !== "undefined";
+
+/**
+ * Parse an amount that may have been stored in the v1 shape (`"$100"`).
+ * Returns 0 for anything unparseable rather than NaN, so a corrupt row renders
+ * as a zero line the donor can see and fix instead of `NaN` or a silent drop.
+ */
+function parseAmount(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const digits = value.replace(/[^\d.,-]/g, "").replace(/,/g, "");
+    const n = Number.parseFloat(digits);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
+/** The waqf details of a stored row, or nothing if they are not all there. */
+function parseWaqf(value: unknown): CartWaqfDetails | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const unit = raw.unit === "meter" ? "meter" : raw.unit === "share" ? "share" : null;
+  const count = typeof raw.count === "number" && Number.isInteger(raw.count) && raw.count > 0 ? raw.count : null;
+  if (!unit || !count) return undefined;
+  return {
+    unit,
+    count,
+    donorName: typeof raw.donorName === "string" ? raw.donorName : "",
+    onBehalf: typeof raw.onBehalf === "string" ? raw.onBehalf : "",
+  };
+}
+
+/** The schedule of a stored row, or nothing if it is not a whole one. */
+function parseSchedule(value: unknown): CartRecurringSchedule | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const int = (v: unknown, min: number, max: number) => (typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : undefined);
+  const hour = int(raw.hour, 0, 23);
+  const minute = int(raw.minute, 0, 59);
+  if (hour === undefined || minute === undefined) return undefined;
+  const dayOfMonth = int(raw.dayOfMonth, 1, 28);
+  const notes = typeof raw.notes === "string" && raw.notes.trim() ? raw.notes.trim() : undefined;
+  return { hour, minute, ...(dayOfMonth ? { dayOfMonth } : {}), ...(notes ? { notes } : {}) };
+}
+
+/** The gift details of a stored row, or nothing without a recipient name. */
+function parseGift(value: unknown): CartGiftDetails | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const recipientName = typeof raw.recipientName === "string" ? raw.recipientName.trim() : "";
+  if (!recipientName) return undefined;
+  const channels = Array.isArray(raw.channels)
+    ? (raw.channels.filter((c): c is "whatsapp" | "email" => c === "whatsapp" || c === "email"))
+    : [];
+  return {
+    recipientName,
+    recipientPhone: typeof raw.recipientPhone === "string" ? raw.recipientPhone.trim() : "",
+    recipientEmail: typeof raw.recipientEmail === "string" ? raw.recipientEmail.trim() : "",
+    message: typeof raw.message === "string" ? raw.message : "",
+    channels,
+    showAmount: raw.showAmount !== false,
+  };
+}
+
+/**
+ * Bring one stored row up to schema v2.
+ *
+ * A row whose title cannot be resolved to an id keeps its stored title and is
+ * left in the cart. `DEVELOPER_HANDOFF` is explicit that an ambiguous match
+ * stays a legacy fallback  "لا تخمين صامت أبدًا"  and that an unresolved item
+ * is never silently deleted from someone's cart.
+ *
+ * @param resolveTitle Maps a display title in any of the 19 locales back to a
+ *                     project id. Supplied by the caller so this module has no
+ *                     dependency on the projects data.
+ */
+export function migrateItem(
+  raw: Record<string, unknown>,
+  resolveTitle?: (title: string) => string | undefined
+): MinbarCartItem {
+  const item: MinbarCartItem = {
+    projectId: typeof raw.projectId === "string" ? raw.projectId : undefined,
+    categoryId: typeof raw.categoryId === "string" ? raw.categoryId : undefined,
+    titleKey: typeof raw.titleKey === "string" ? raw.titleKey : undefined,
+    typeKey: (raw.typeKey as CartTypeKey) || LEGACY_TYPES[String(raw.type ?? "")] || undefined,
+    freqKey: (raw.freqKey as CartFreqKey) || LEGACY_FREQS[String(raw.frequency ?? "")] || "once",
+    amount: parseAmount(raw.amount),
+    currency: typeof raw.currency === "string" && raw.currency ? raw.currency : "USD",
+    upsellId: typeof raw.upsellId === "string" ? raw.upsellId : undefined,
+    title: typeof raw.title === "string" ? raw.title : undefined,
+    _autoMonthly: raw._autoMonthly === true || undefined,
+    waqf: parseWaqf(raw.waqf),
+    gift: parseGift(raw.gift),
+    local: parseLocalAmount(raw.local),
+    shareCount:
+      typeof raw.shareCount === "number" && Number.isInteger(raw.shareCount) && raw.shareCount > 0
+        ? raw.shareCount
+        : undefined,
+    schedule: parseSchedule(raw.schedule),
+  };
+
+  if (!item.projectId && !item.categoryId && !item.titleKey && item.title && resolveTitle) {
+    const resolved = resolveTitle(item.title);
+    if (resolved) item.projectId = resolved;
+  }
+
+  return item;
+}
+
+/** Read the cart, migrating legacy rows. Returns `[]` outside the browser. */
+export function readCart(resolveTitle?: (title: string) => string | undefined): MinbarCartItem[] {
+  if (!isBrowser()) return [];
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(CART_ITEMS_KEY) || "null");
+    if (!Array.isArray(stored)) return [];
+    return stored
+      .filter((row): row is Record<string, unknown> => !!row && typeof row === "object")
+      .map((row) => migrateItem(row, resolveTitle));
+  } catch {
+    // A corrupt value must not take the whole page down; an empty cart is
+    // recoverable, a thrown render is not.
+    return [];
+  }
+}
+
+/** Persist the cart, stamp the schema version and notify the header badge. */
+export function writeCart(items: MinbarCartItem[]): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.setItem(CART_ITEMS_KEY, JSON.stringify(items));
+    window.localStorage.setItem(CART_SCHEMA_KEY, String(CART_SCHEMA_VERSION));
+    window.localStorage.setItem(CART_COUNT_KEY, String(items.length));
+  } catch {
+    // Private-mode / quota failures leave the in-memory cart intact; the event
+    // below still fires so the UI stays consistent for this page view.
+  }
+  window.dispatchEvent(new CustomEvent(CART_UPDATED_EVENT));
+}
+
+/** Append an item and persist. Returns the new cart. */
+export function addToCart(item: MinbarCartItem): MinbarCartItem[] {
+  const next = [...readCart(), item];
+  writeCart(next);
+  return next;
+}
+
+/** Remove the item at `index` and persist. Returns the new cart. */
+export function removeFromCart(index: number): MinbarCartItem[] {
+  const next = readCart().filter((_, i) => i !== index);
+  writeCart(next);
+  return next;
+}
+
+/** Item count, read from the dedicated counter key. */
+export function readCartCount(): number {
+  if (!isBrowser()) return 0;
+  try {
+    const n = Number.parseInt(window.localStorage.getItem(CART_COUNT_KEY) || "0", 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Normalise a cart row to the official external contract
+ * (`RECURRING_DONATION_FLOW_MAP.md#canonical-contract`). The backend builds
+ * `donationMode`/`frequency` from `freqKey`; `freqKey` itself never appears in
+ * an outbound payload.
+ */
+export function toDonationContract(item: MinbarCartItem): {
+  donationMode: "one_time" | "recurring";
+  frequency: "daily" | "friday" | "monthly" | null;
+} {
+  if (item.freqKey === "once") return { donationMode: "one_time", frequency: null };
+  return { donationMode: "recurring", frequency: item.freqKey };
+}
+
+/**
+ * Empty the basket.
+ *
+ * Called once an order exists on the server  after checkout creates the
+ * donation, and before the donor is handed to a payment gateway. A donor
+ * returning from the bank must not find the same basket sitting there ready to
+ * be paid a second time.
+ */
+export function clearCart(): void {
+  writeCart([]);
+  clearTeamSupport();
+  writeTeamSupportRecurring(null);
+}
+
+// ── Last card attempt ────────────────────────────────────────────────────────
+//
+// The basket is emptied before the donor is handed to a bank's 3-D Secure page
+// (see `clearCart`). When the bank then declines, the donor lands on the
+// failure page with nothing to retry from. The basket is kept aside under the
+// order's id until then, so "try again" can put back exactly what the donor
+// chose, in their own currency, and return them to the card form.
+
+export const CART_LAST_ATTEMPT_KEY = "mia_cart_last_attempt";
+/** A declined donor retries within minutes; a day covers coming back later. */
+const LAST_ATTEMPT_TTL_MS = 24 * 60 * 60 * 1000;
+
+type LastAttempt = {
+  donationId: string;
+  at: number;
+  items: MinbarCartItem[];
+  teamSupport: number | null;
+  teamSupportVersion?: 2;
+  teamSupportLocal?: LocalAmount;
+  teamSupportRecurring: boolean | null;
+};
+
+/** Keep the basket aside for `donationId`, right before it is cleared for a payment redirect. */
+export function rememberCheckoutAttempt(donationId: string): void {
+  if (!isBrowser() || !donationId) return;
+  const attempt: LastAttempt = {
+    donationId,
+    at: Date.now(),
+    items: readCart(),
+    teamSupport: readTeamSupportChoice(),
+    teamSupportVersion: 2,
+    teamSupportLocal: readTeamSupportLocal(),
+    teamSupportRecurring: readTeamSupportRecurring(),
+  };
+  if (!attempt.items.length) return;
+  try {
+    window.localStorage.setItem(CART_LAST_ATTEMPT_KEY, JSON.stringify(attempt));
+  } catch {
+    /* Private mode / quota: retry then falls back to starting over. */
+  }
+}
+
+/**
+ * Put back the basket kept for `donationId`. Returns false when there is none
+ * (another device, cleared storage, a different or too-old order), in which
+ * case the caller sends the donor to start a new donation.
+ */
+export function restoreCheckoutAttempt(donationId: string): boolean {
+  if (!isBrowser() || !donationId) return false;
+  try {
+    const attempt = JSON.parse(window.localStorage.getItem(CART_LAST_ATTEMPT_KEY) || "null") as LastAttempt | null;
+    if (!attempt || attempt.donationId !== donationId || !Array.isArray(attempt.items) || !attempt.items.length) return false;
+    if (Date.now() - Number(attempt.at) > LAST_ATTEMPT_TTL_MS) return false;
+    writeCart(attempt.items.map((row) => migrateItem(row as unknown as Record<string, unknown>)));
+    if (attempt.teamSupportVersion === 2 && attempt.teamSupport !== null && attempt.teamSupport !== undefined) writeTeamSupport(attempt.teamSupport, parseLocalAmount(attempt.teamSupportLocal));
+    else clearTeamSupport();
+    writeTeamSupportRecurring(attempt.teamSupportRecurring ?? null);
+    window.localStorage.removeItem(CART_LAST_ATTEMPT_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ── Team support ─────────────────────────────────────────────────────────────
+//
+// "Support the team" belongs to the whole order, not to a campaign: it is
+// asked once, in the basket before checkout, and sent with the order. When
+// the basket holds a recurring row the amount is charged with every
+// instalment (it is part of the plan); when every row is one-time it is
+// charged once. Stored beside the cart so a reload keeps the choice, cleared
+// with it.
+
+export const CART_TEAM_SUPPORT_KEY = "mia_cart_team_support";
+
+/** Currency-tagged USD value. Ambiguous positive legacy numbers require a new choice. */
+function storedTeamSupport(): { amountUSD: number; local?: LocalAmount } | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = window.localStorage.getItem(CART_TEAM_SUPPORT_KEY);
+    if (raw === null) return null;
+    if (raw === "0") return { amountUSD: 0 };
+    const value = JSON.parse(raw);
+    if (!value || value.version !== 2 || !Number.isFinite(value.amountUSD) || value.amountUSD < 0) return null;
+    const local = parseLocalAmount(value.local);
+    if (value.local && !local) return null;
+    return { amountUSD: value.amountUSD, ...(local ? { local } : {}) };
+  } catch { return null; }
+}
+export function readTeamSupport(): number { return storedTeamSupport()?.amountUSD ?? 0; }
+export function readTeamSupportChoice(): number | null { return storedTeamSupport()?.amountUSD ?? null; }
+export function readTeamSupportLocal(): LocalAmount | undefined { return storedTeamSupport()?.local; }
+
+/** Exact local input is retained alongside the USD accounting value. */
+export function writeTeamSupport(amount: number, local?: LocalAmount): void {
+  if (!isBrowser()) return;
+  try {
+    const amountUSD = Number.isFinite(amount) && amount > 0 ? amount : 0;
+    window.localStorage.setItem(CART_TEAM_SUPPORT_KEY, JSON.stringify({ version: 2, amountUSD, ...(amountUSD && local ? { local } : {}) }));
+  } catch { /* Private mode; the in-memory choice remains available. */ }
+  window.dispatchEvent(new CustomEvent(CART_UPDATED_EVENT));
+}
+
+/** Forget the choice (the question is asked again next time). */
+export function clearTeamSupport(): void {
+  if (!isBrowser()) return;
+  try {
+    window.localStorage.removeItem(CART_TEAM_SUPPORT_KEY);
+  } catch {
+    /* Private mode. */
+  }
+  window.dispatchEvent(new CustomEvent(CART_UPDATED_EVENT));
+}
+
+/** Whether any row is a plan  which makes the team support recurring too. */
+export function cartHasRecurring(items: readonly MinbarCartItem[]): boolean {
+  return items.some((item) => item.freqKey !== "once");
+}
+
+/**
+ * Whether the team support rides along with every instalment of a recurring
+ * basket, or is charged once. `null` means the donor has not chosen  the
+ * default is "with the plan" when the basket has a recurring row. Only
+ * meaningful for a recurring basket; a one-time basket charges once.
+ */
+export const CART_TEAM_SUPPORT_RECURRING_KEY = "mia_cart_team_support_recurring";
+
+export function readTeamSupportRecurring(): boolean | null {
+  if (!isBrowser()) return null;
+  try {
+    const v = window.localStorage.getItem(CART_TEAM_SUPPORT_RECURRING_KEY);
+    return v === "1" ? true : v === "0" ? false : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeTeamSupportRecurring(value: boolean | null): void {
+  if (!isBrowser()) return;
+  try {
+    if (value === null) window.localStorage.removeItem(CART_TEAM_SUPPORT_RECURRING_KEY);
+    else window.localStorage.setItem(CART_TEAM_SUPPORT_RECURRING_KEY, value ? "1" : "0");
+  } catch {
+    /* Private mode; the in-memory choice still applies to this page view. */
+  }
+  window.dispatchEvent(new CustomEvent(CART_UPDATED_EVENT));
+}
+
+/** The effective choice: the donor's, else "with the plan" for a recurring basket. */
+export function teamSupportIsRecurring(items: readonly MinbarCartItem[], choice: boolean | null): boolean {
+  if (!cartHasRecurring(items)) return false;
+  return choice ?? true;
+}
+

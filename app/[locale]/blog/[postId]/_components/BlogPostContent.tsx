@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
+import type { JSONContent } from "@tiptap/react";
 import WysiwygEditor from "../../_components/wysiwyg/wysiwyg-editor";
-import { defaultEditorContent } from "../../_components/wysiwyg/default-content";
 
 interface BlogPostContentProps {
   content: string | null | undefined;
@@ -27,7 +27,7 @@ export default function BlogPostContent({ content }: BlogPostContentProps) {
     return (
       <div className="prose max-w-none [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:p-0 [&_.ProseMirror]:focus:outline-none">
         <WysiwygEditor
-          defaultValue={parsed}
+          defaultValue={parsed as JSONContent}
           isEditable={false}
           className="border-0 shadow-none p-0 min-h-0"
         />

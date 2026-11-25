@@ -14,12 +14,15 @@ export const DONATION_NOTIFY_SELECT = {
   status: true,
   paidAt: true,
   createdAt: true,
+  subscriptionId: true,
   provider: true,
   providerOrderId: true,
   providerErrorMessage: true,
   // Both feed the Arabic failure-reason mapper: PayFor puts the only real signal
-  // in the return code (its message is always the useless "Payment failed").
+  // in the return code (its message is always the useless "Payment failed"),
+  // and Stripe's stable decline_code lives inside the raw payload.
   providerProcReturnCode: true,
+  providerRaw: true,
   paymentMethod: true,
   donorCountryCode: true,
   attribution: true,
@@ -45,7 +48,7 @@ async function loadDonation(donationId: string): Promise<FormattableDonation | n
 }
 
 /**
- * True when this donation is the donor's first — they have no OTHER successful
+ * True when this donation is the donor's first  they have no OTHER successful
  * donation. Excluding the current row by id keeps the answer correct whether
  * that row is already PAID (success card) or FAILED (a brand-new donor whose
  * first attempt bounced), and mirrors the `paidCount === 1` rule that
@@ -66,7 +69,7 @@ async function isFirstTimeDonor(donorId: string | undefined, donationId: string)
 }
 
 /**
- * Fire-and-forget notification for a donation event. Errors are swallowed —
+ * Fire-and-forget notification for a donation event. Errors are swallowed 
  * the bot must never break the payment webhook. Call as `void notifyDonationEvent(...)`.
  */
 export async function notifyDonationEvent(

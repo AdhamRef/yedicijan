@@ -1,3 +1,4 @@
+import { dt, withReportLanguage } from "@/lib/dashboard/report-i18n";
 /**
  * GET /api/admin/referrals/[id]/export
  *
@@ -6,12 +7,13 @@
  *
  * Filters mirror the referral analytics page:
  *   format, start, end, categoryId, campaignId, status, locale, country,
- *   sortBy, sortOrder.
+ *   subscriptionOnly, sortBy, sortOrder.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { donationStatusWhere } from "@/lib/dashboard/donation-usd-revenue";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
@@ -19,15 +21,18 @@ import {
   buildDonationExport,
   buildContentDisposition,
   type DonationExportRow,
+  type SubscriptionExportRow,
   type ExportFilterDescriptor,
   type ExportFormat,
 } from "@/lib/dashboard/donation-export";
 import { istanbulDateKeysToUtcRange } from "@/lib/admin/istanbul-calendar";
+import { DASH_LOCALE_COOKIE, parseDashLocale } from "@/lib/dashboard/i18n";
 
-export async function GET(
+async function localizedGET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Sheet names, headers and labels in the dashboard's interface language.
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, "referrals");
@@ -55,6 +60,8 @@ export async function GET(
     const status = sp.get("status");
     const locale = sp.get("locale")?.trim() ?? null;
     const country = sp.get("country")?.trim() ?? null;
+    const subscriptionOnly = sp.get("subscriptionOnly") === "true" || sp.get("subscriptionOnly") === "1";
+    const donationType = sp.get("donationType");
     const limit = Math.min(parseInt(sp.get("limit") || "20000", 10) || 20000, 50000);
 
     const dateFilter: { gte?: Date; lte?: Date } = {};
@@ -71,8 +78,9 @@ export async function GET(
     const baseWhere: Prisma.DonationWhereInput = {
       referralId,
       ...(campaignId && campaignId !== "all" && { items: { some: { campaignId } } }),
+      ...(subscriptionOnly && { subscriptionId: { not: null } }),
+      ...(donationType === "MONTHLY" && { subscriptionId: { not: null } }),
       ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
-      ...(status && ["PAID", "FAILED"].includes(status) && { status: status as "PAID" | "FAILED" }),
     };
     if (categoryId && categoryId !== "all") {
       baseWhere.OR = [
@@ -82,6 +90,9 @@ export async function GET(
     }
 
     const donationFilters: Prisma.DonationWhereInput[] = [baseWhere];
+    // ناجح / قيد التأكيد / فاشل, as the tables show them.
+    const statusWhere = donationStatusWhere(status);
+    if (statusWhere) donationFilters.push(statusWhere);
     if (locale && locale !== "all") {
       donationFilters.push(
         locale === "__unset" ? { OR: [{ locale: null }, { locale: "" }] } : { locale }
@@ -93,6 +104,9 @@ export async function GET(
           ? { OR: [{ donorCountryCode: null }, { donorCountryCode: "" }] }
           : { donorCountryCode: country.toUpperCase() }
       );
+    }
+    if (donationType === "ONE_TIME") {
+      donationFilters.push({ OR: [{ subscriptionId: null }, { subscriptionId: { isSet: false } }] });
     }
     const where: Prisma.DonationWhereInput = donationFilters.length > 1 ? { AND: donationFilters } : baseWhere;
     const orderBy: Prisma.DonationOrderByWithRelationInput =
@@ -110,6 +124,37 @@ export async function GET(
       take: limit,
     });
 
+    // Pull subscriptions attributed to this referral for the secondary sheet
+    const subRows = await prisma.subscription.findMany({
+      where: { referralId },
+      include: {
+        donor: { select: { id: true, name: true, email: true, countryCode: true } },
+        items: { select: { campaign: { select: { id: true, title: true } } } },
+        categoryItems: { select: { category: { select: { id: true, name: true } } } },
+        referral: { select: { id: true, code: true, name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10000,
+    });
+    const subIds = subRows.map((s) => s.id);
+    const charges = subIds.length
+      ? await prisma.donation.groupBy({
+          by: ["subscriptionId"],
+          where: { subscriptionId: { in: subIds }, status: "PAID" },
+          _count: { _all: true },
+          _sum: { amount: true, amountUSD: true },
+        })
+      : [];
+    const chargeMap = new Map<string, { count: number; amount: number; amountUSD: number }>();
+    for (const c of charges) {
+      if (!c.subscriptionId) continue;
+      chargeMap.set(c.subscriptionId, {
+        count: c._count._all,
+        amount: Number(c._sum.amount ?? 0),
+        amountUSD: Number(c._sum.amountUSD ?? 0),
+      });
+    }
+
     const exportDonations: DonationExportRow[] = rows.map((d) => {
       const teamSupport = Number(d.teamSupport ?? 0);
       const fees = Number(d.coverFees ? d.fees ?? 0 : 0);
@@ -118,6 +163,7 @@ export async function GET(
       return {
         id: d.id,
         status: d.status,
+        type: d.subscriptionId ? "MONTHLY" : "ONE_TIME",
         createdAt: d.createdAt,
         paidAt: d.paidAt ?? null,
         donor: {
@@ -136,6 +182,10 @@ export async function GET(
         fees,
         totalAmount: total,
         coverFees: !!d.coverFees,
+        projectAllocations: [
+          ...d.items.map(i => ({ id: `campaign:${i.campaign.id}`, title: i.campaign.title, amount: Number(i.amount) })),
+          ...d.categoryItems.map(i => ({ id: `category:${i.category.id}`, title: i.category.name, amount: Number(i.amount) })),
+        ],
         campaigns: d.items.map((i) => ({ id: i.campaign.id, title: i.campaign.title })),
         categories: d.categoryItems.map((c) => ({ id: c.category.id, name: c.category.name })),
         referral: d.referral ? { id: d.referral.id, code: d.referral.code, name: d.referral.name } : null,
@@ -143,35 +193,68 @@ export async function GET(
         provider: d.provider ?? null,
         providerOrderId: d.providerOrderId ?? null,
         providerErrorMessage: d.providerErrorMessage ?? null,
+        subscriptionId: d.subscriptionId ?? null,
         comment: d.comment ?? null,
         attribution: (d.attribution as Record<string, unknown> | null) ?? null,
       };
     });
 
-    const filters: ExportFilterDescriptor[] = [];
-    filters.push({ label: "رمز الإحالة", value: referral.code });
-    if (referral.name) filters.push({ label: "اسم الإحالة", value: referral.name });
-    filters.push({
-      label: "الفترة",
-      value: startParam || endParam ? `${startParam ?? "—"} → ${endParam ?? "—"}` : "كل الوقت",
+    const exportSubscriptions: SubscriptionExportRow[] = subRows.map((s) => {
+      const c = chargeMap.get(s.id);
+      return {
+        id: s.id,
+        status: s.status,
+        donor: {
+          id: s.donor?.id ?? null,
+          name: s.donor?.name ?? null,
+          email: s.donor?.email ?? null,
+          phone: null,
+          countryCode: s.donor?.countryCode ?? null,
+        },
+        amount: Number(s.amount ?? 0),
+        amountUSD: s.amountUSD ?? null,
+        currency: s.currency,
+        teamSupport: Number(s.teamSupport ?? 0),
+        paymentMethod: s.paymentMethod ?? null,
+        createdAt: s.createdAt,
+        lastBillingDate: s.lastBillingDate ?? null,
+        nextBillingDate: s.nextBillingDate ?? null,
+        campaigns: s.items.map((i) => ({ id: i.campaign.id, title: i.campaign.title })),
+        categories: s.categoryItems.map((cat) => ({ id: cat.category.id, name: cat.category.name })),
+        referral: s.referral ? { id: s.referral.id, code: s.referral.code, name: s.referral.name } : null,
+        totalChargesCount: c?.count ?? 0,
+        totalChargesAmount: c?.amount ?? 0,
+        totalChargesAmountUSD: c?.amountUSD ?? 0,
+      };
     });
-    if (categoryId && categoryId !== "all") filters.push({ label: "القسم", value: categoryId });
-    if (campaignId && campaignId !== "all") filters.push({ label: "الحملة", value: campaignId });
-    if (status && status !== "all") filters.push({ label: "الحالة", value: status });
-    if (locale && locale !== "all") filters.push({ label: "اللغة", value: locale });
-    if (country && country !== "all") filters.push({ label: "الدولة", value: country });
-    filters.push({ label: "عدد التبرعات", value: String(rows.length) });
+
+    const filters: ExportFilterDescriptor[] = [];
+    filters.push({ label: dt("رمز الإحالة"), value: referral.code });
+    if (referral.name) filters.push({ label: dt("اسم الإحالة"), value: referral.name });
+    filters.push({
+      label: dt("الفترة"),
+      value: startParam || endParam ? `${startParam ?? "—"} → ${endParam ?? "—"}` : dt("كل الوقت"),
+    });
+    if (categoryId && categoryId !== "all") filters.push({ label: dt("القسم"), value: categoryId });
+    if (campaignId && campaignId !== "all") filters.push({ label: dt("الحملة"), value: campaignId });
+    if (status && status !== "all") filters.push({ label: dt("الحالة"), value: status });
+    if (locale && locale !== "all") filters.push({ label: dt("اللغة"), value: locale });
+    if (country && country !== "all") filters.push({ label: dt("الدولة"), value: country });
+    if (subscriptionOnly) filters.push({ label: dt("الاشتراكات فقط"), value: dt("نعم") });
+    filters.push({ label: dt("عدد التبرعات"), value: String(rows.length) });
+    filters.push({ label: dt("عدد الاشتراكات"), value: String(subRows.length) });
 
     const subtitle = referral.name
-      ? `الإحالة: ${referral.code} — ${referral.name}`
-      : `الإحالة: ${referral.code}`;
+      ? dt("الإحالة: {0}  {1}", [referral.code, referral.name])
+      : dt("الإحالة: {0}", [referral.code]);
 
     const out = await buildDonationExport({
       format,
-      title: "تقرير الإحالة",
+      title: dt("تقرير الإحالة"),
       subtitle,
       filters,
       donations: exportDonations,
+      subscriptions: exportSubscriptions.length > 0 ? exportSubscriptions : undefined,
     });
 
     return new NextResponse(out.body as unknown as BodyInit, {
@@ -186,4 +269,10 @@ export async function GET(
     console.error("export referral:", e);
     return NextResponse.json({ error: "Export failed" }, { status: 500 });
   }
+}
+
+
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const language = request.nextUrl.searchParams.get("reportLanguage") ?? parseDashLocale(request.cookies.get(DASH_LOCALE_COOKIE)?.value);
+  return withReportLanguage(language, () => localizedGET(request, context));
 }

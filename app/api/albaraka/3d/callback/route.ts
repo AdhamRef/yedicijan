@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { Prisma } from "@prisma/client";
+import { paymentPublicOrigin } from "@/lib/payment-public-origin";
+import { donationFieldEmpty, donationWhereAll } from "@/lib/donations/mongo-null";
+import { albaraka3DLinkageError } from "@/lib/donations/albaraka-3d-verification";
+import { isValidLocale } from "@/lib/locales";
 import { prisma } from "@/lib/prisma";
-import { publicOrigin } from "@/lib/public-origin";
 import {
   ALBARAKA_PAYMENT_MAC_PARAMS,
   albarakaConfig,
@@ -12,24 +14,29 @@ import {
   albarakaService,
   isAlbarakaApproved,
   isAlbarakaConfigured,
+  isAlbarakaTransportFailure,
   type AlbarakaServiceResponse,
 } from "@/lib/albaraka";
-import { sendDonationFailedConversions } from "@/lib/tracking/donation-conversion-server";
-import { dispatchDonationPaid, dispatchEvent } from "@/lib/events/dispatch";
+import { failAlbarakaDonation, settleAlbarakaDonation } from "@/lib/donations/albaraka-settlement";
+import { withDonationToken } from "@/lib/donations/access-token";
+import { completeSubscriptionCardVerification } from "@/lib/donations/subscription-card-verification";
+
+// Calls Albaraka's /Sale, which only accepts the project's Static IPs (sin1).
+export const preferredRegion = "sin1";
 
 /**
  * POST /api/albaraka/3d/callback
  *
- * Albaraka posts the 3D verification result back here (single return URL — there is
+ * Albaraka posts the 3D verification result back here (single return URL  there is
  * no separate ok/fail pair like PayFor's). Three gates before any money moves:
  *
  *   1. MacNew must match what we recompute over the returned parameters, proving the
  *      amount / order / verdict weren't rewritten in the browser round-trip.
  *   2. The order must be the one we started, for the amount we started it with.
  *   3. MdStatus must be 1 (full 3D). The bank explicitly recommends stopping otherwise,
- *      and "half 3D" (2/3/4) would need a non-3D terminal we don't have.
+ *      and "half 3D" (2/3/4) must never silently downgrade the donor's 3D choice.
  *
- * Only then do we call /Sale to actually capture — 3D verification alone is not a charge.
+ * Only then do we call /Sale to actually capture  3D verification alone is not a charge.
  */
 
 type RequestSnapshot = {
@@ -37,6 +44,7 @@ type RequestSnapshot = {
   amount?: number;
   currencyCode?: string;
   transactionType?: string;
+  mode?: string;
 };
 
 function readRequestSnapshot(raw: unknown): RequestSnapshot {
@@ -44,11 +52,6 @@ function readRequestSnapshot(raw: unknown): RequestSnapshot {
   const req = (raw as Record<string, unknown>).albarakaRequest;
   if (!req || typeof req !== "object") return {};
   return req as RequestSnapshot;
-}
-
-/** Prisma's Json input type doesn't accept a plain index signature without a nudge. */
-function asJson(value: Record<string, unknown>): Prisma.InputJsonValue {
-  return value as Prisma.InputJsonValue;
 }
 
 /** Timing-safe comparison so a mismatching MAC can't be probed byte by byte. */
@@ -60,10 +63,27 @@ function macEquals(a: string, b: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
-  const origin = publicOrigin(req);
+  const origin = paymentPublicOrigin(req.url);
   const { searchParams } = new URL(req.url);
   const donationId = searchParams.get("donationId") || "";
-  const locale = (searchParams.get("locale") || "en").toLowerCase();
+  const requestedLocale = (searchParams.get("locale") || "en").toLowerCase();
+  const locale = isValidLocale(requestedLocale) ? requestedLocale : "en";
+
+  // A distinct, nonce-bound authentication-only flow for future subscription
+  // cards. It never falls through to the donation Sale/capture branch below.
+  if (searchParams.has("cardVerificationId")) {
+    const verificationId = searchParams.get("cardVerificationId") || "", token = searchParams.get("token") || "";
+    const target = new URL(`/${locale}/profile?tab=subscriptions&cardUpdate=failed`, origin);
+    if (!/^[a-f0-9]{24}$/i.test(verificationId) || !/^[A-Za-z0-9_-]{43}$/.test(token)) return NextResponse.redirect(target, 303);
+    try {
+      const form = await req.formData(), raw = Object.fromEntries([...form.entries()].filter(([, v]) => typeof v === "string").map(([k, v]) => [k, String(v)]));
+      const result = await completeSubscriptionCardVerification(prisma, verificationId, token, raw, albarakaConfig());
+      if (result.subscriptionId) target.searchParams.set("subscriptionId", result.subscriptionId);
+      target.searchParams.set("cardUpdate", result.ok ? "success" : "failed");
+      if (result.ok) target.searchParams.set("verificationId", verificationId);
+    } catch { /* No Sale call, and the old card remains the authority. */ }
+    return NextResponse.redirect(target, 303);
+  }
 
   const failUrl = donationId
     ? new URL(
@@ -74,14 +94,15 @@ export async function POST(req: NextRequest) {
   // The bank sends the donor here with a POST; a 303 makes the browser follow it as a GET.
   const redirect = (url: URL) => NextResponse.redirect(url, 303);
 
-  if (!donationId) return redirect(failUrl);
+  if (!/^[a-f0-9]{24}$/i.test(donationId)) return redirect(failUrl);
 
   const form = await req.formData();
   const raw: Record<string, string> = {};
   for (const [key, value] of form.entries()) raw[key] = String(value);
 
-  console.log("[Albaraka CALLBACK] Bank response:", JSON.stringify(raw, null, 2));
 
+  // Persist only verification outcomes, never arbitrary bank echo fields or authentication data.
+  const verificationAudit = Object.fromEntries(["OrderId", "Amount", "Currency", "MerchantId", "MdStatus", "MdErrorMessage"].filter(key => key in raw).map(key => [key, raw[key]]));
   const cfg = albarakaConfig();
   const mdStatus = String(raw.MdStatus ?? "");
   const orderId = String(raw.OrderId ?? "");
@@ -90,94 +111,72 @@ export async function POST(req: NextRequest) {
   const eci = String(raw.ECI ?? "");
   const md = String(raw.MD ?? "");
   const mdErrorMessage = String(raw.MdErrorMessage ?? "");
+  let captureAttempted = false;
+  let verified = false;
+  let originalMode: string | undefined;
+  let accessToken: string | null = null;
+  const successUrl = () => new URL(withDonationToken(`/${locale}/success/${donationId}`, accessToken), origin);
+  async function pending() {
+    // A lost capture response is NOT a decline. Hold the claim for reconciliation;
+    // never retry Sale or tell the donor to pay again for an uncertain outcome.
+    await prisma.donation.updateMany({
+      where: donationWhereAll({ id: donationId, providerOrderId: orderId, providerTxnResult: "Capturing3D" }, donationFieldEmpty("paidAt")),
+      data: { providerErrorMessage: "3D payment outcome requires confirmation; no automatic recapture will be attempted." },
+    }).catch(() => {});
+    // The bank has not confirmed a sale. Never redirect to a success page
+    // (which would imply a charge and may issue a certificate). The processing
+    // watcher will track the existing order while Cron verifies it; no recapture.
+    return redirect(new URL(withDonationToken(`/${locale}/payment-processing?donationId=${encodeURIComponent(donationId)}`, accessToken), origin));
+  }
 
   /** Marks the donation failed (unless already paid) and sends the donor to the failure page. */
-  async function fail(
-    reason: string,
-    extra: Record<string, unknown> = {},
-    procReturnCode: string | null = null
-  ) {
-    console.error("[Albaraka CALLBACK] failed:", reason, extra);
-    try {
-      const donation = await prisma.donation.findUnique({ where: { id: donationId } });
-      if (donation && donation.paidAt === null) {
-        await prisma.donation.update({
-          where: { id: donationId },
-          data: {
-            status: "FAILED",
-            provider: "ALBARAKA",
-            providerOrderId: donation.providerOrderId ?? orderId ?? null,
-            providerTxnResult: "Failed",
-            providerProcReturnCode: procReturnCode,
-            providerErrorMessage: reason,
-            providerRaw: asJson({
-              ...(typeof donation.providerRaw === "object" && donation.providerRaw
-                ? (donation.providerRaw as Record<string, unknown>)
-                : {}),
-              albarakaVerification: raw,
-              ...extra,
-            }),
-          },
-        });
-        void dispatchEvent("DONATION_FAILED", { donationId });
-        // Seed Meta with the failed attempt so lookalike audiences can include
-        // donors-who-tried; the browser pixel fires the matching DonateFailed hit
-        // with the same `${donationId}_failed` event id for dedup.
-        void sendDonationFailedConversions(donationId);
-      }
-    } catch (e) {
-      console.error("[Albaraka CALLBACK] failure bookkeeping error:", e);
+  async function fail(reason: string, extra: Record<string, unknown> = {}, code?: string) {
+    if (!verified) return redirect(failUrl);
+    if (!captureAttempted) {
+      const rejected = await prisma.donation.updateMany({
+        where: donationWhereAll({ id: donationId, provider: "ALBARAKA", providerOrderId: orderId, status: { not: "FAILED" } }, donationFieldEmpty("paidAt"),
+          originalMode === "3D" ? { providerTxnResult: "Processing" } : { OR: [{ providerTxnResult: "Processing" }, { providerTxnResult: null }, { providerTxnResult: { isSet: false } }] }),
+        data: { providerTxnResult: "Rejecting3D" },
+      });
+      if (rejected.count !== 1) return redirect(successUrl());
     }
+    await failAlbarakaDonation(donationId, reason, { albarakaVerification: verificationAudit, ...extra }, orderId, code);
     return redirect(failUrl);
   }
 
   try {
     if (!isAlbarakaConfigured(cfg)) {
-      return await fail("Albaraka is not configured on server");
+      return redirect(failUrl);
     }
 
     const donation = await prisma.donation.findUnique({ where: { id: donationId } });
     if (!donation) return redirect(failUrl);
 
-    // Idempotency: a duplicate callback for an already-captured donation is a no-op.
-    if (donation.paidAt !== null) {
-      return redirect(new URL(`/${locale}/success/${donationId}`, origin));
-    }
 
     // ── 1. MAC verification ──────────────────────────────────────────────────
-    // Signs the authentication result only (ECI/CAVV/MdStatus/MdErrorMessage/MD/
-    // SecureTransactionId) — amount and order are checked separately in step 2.
-    const expectedMac = albarakaResponseMac(
-      {
-        eci,
-        cavv,
-        mdStatus,
-        mdErrorMessage,
-        md,
-        secureTransactionId,
-      },
-      cfg.encKey
-    );
-    const receivedMac = String(raw.Mac ?? raw.MacNew ?? "");
+    const expectedMac = albarakaResponseMac(raw, cfg.encKey);
+    const receivedMac = String(raw.MacNew ?? "");
     if (!receivedMac || !macEquals(expectedMac, receivedMac)) {
-      return await fail("3D response MAC mismatch — response could not be verified");
+      return redirect(failUrl);
     }
 
     // ── 2. Order / amount linkage ────────────────────────────────────────────
     const snapshot = readRequestSnapshot(donation.providerRaw);
     const expectedOrderId = donation.providerOrderId ?? snapshot.orderId ?? "";
-    if (expectedOrderId && orderId && expectedOrderId !== orderId) {
-      return await fail(`OrderId mismatch (expected ${expectedOrderId}, got ${orderId})`);
-    }
+    if (albaraka3DLinkageError(raw, snapshot, expectedOrderId, cfg.merchantNo)) return redirect(failUrl);
+    verified = true;
+    originalMode = snapshot.mode;
+    accessToken = donation.accessToken;
+    if (accessToken) failUrl.searchParams.set("t", accessToken);
+    if (donation.paidAt) return redirect(successUrl());
+    if (donation.status === "FAILED") return redirect(failUrl);
     const returnedAmount = Number(raw.Amount);
     if (
       typeof snapshot.amount === "number" &&
       Number.isFinite(returnedAmount) &&
       snapshot.amount !== returnedAmount
     ) {
-      return await fail(
-        `Amount mismatch (expected ${snapshot.amount}, got ${returnedAmount})`
-      );
+      return redirect(failUrl);
     }
 
     // ── 3. 3D verdict ────────────────────────────────────────────────────────
@@ -190,6 +189,17 @@ export async function POST(req: NextRequest) {
     if (!secureTransactionId) {
       return await fail("Bank returned no SecureTransactionId for a verified 3D session");
     }
+
+    // Claim BEFORE Sale: two authentic callback deliveries must capture once.
+    const claim = await prisma.donation.updateMany({
+      where: donationWhereAll(
+        { id: donationId, provider: "ALBARAKA", providerOrderId: expectedOrderId, status: { not: "FAILED" } },
+        donationFieldEmpty("paidAt"),
+        snapshot.mode === "3D" ? { providerTxnResult: "Processing" } : { OR: [{ providerTxnResult: "Processing" }, { providerTxnResult: null }, { providerTxnResult: { isSet: false } }] },
+      ),
+      data: { providerTxnResult: "Capturing3D" },
+    });
+    if (claim.count !== 1) return redirect(successUrl());
 
     // ── 4. Capture ───────────────────────────────────────────────────────────
     const amount = typeof snapshot.amount === "number" ? snapshot.amount : returnedAmount;
@@ -207,6 +217,7 @@ export async function POST(req: NextRequest) {
       cfg.encKey
     );
 
+    captureAttempted = true;
     const sale: AlbarakaServiceResponse = await albarakaService(
       "Sale",
       {
@@ -233,77 +244,27 @@ export async function POST(req: NextRequest) {
         OrderId: orderId || expectedOrderId,
         InstallmentCount: 0,
       },
-      { correlationId: orderId || expectedOrderId || donationId }
+      { correlationId: orderId || expectedOrderId || donationId, config: cfg }
     );
 
-    console.log("[Albaraka CALLBACK] Sale response:", JSON.stringify(sale, null, 2));
+    if (isAlbarakaTransportFailure(sale)) return await pending();
 
     const responseCode = sale.ServiceResponseData?.ResponseCode ?? "";
     const responseDescription = sale.ServiceResponseData?.ResponseDescription ?? "";
 
     if (!isAlbarakaApproved(sale)) {
-      return await fail(
-        responseDescription || `Sale declined (${responseCode})`,
-        { albarakaSale: sale as unknown as Record<string, unknown> },
-        responseCode || null
-      );
+      return await fail(responseDescription || `Sale declined (${responseCode})`, {
+        albarakaSale: sale as unknown as Record<string, unknown>,
+      }, responseCode);
     }
 
     // ── 5. Settle ────────────────────────────────────────────────────────────
-    const settled = await prisma.$transaction(async (tx) => {
-      const fresh = await tx.donation.findUnique({
-        where: { id: donationId },
-        include: { items: true, categoryItems: true },
-      });
-      if (!fresh) return false;
-      // Re-check inside the transaction — two callbacks can race here.
-      if (fresh.paidAt !== null) return true;
-
-      await tx.donation.update({
-        where: { id: fresh.id },
-        data: {
-          status: "PAID",
-          paidAt: new Date(),
-          provider: "ALBARAKA",
-          providerProcReturnCode: responseCode || null,
-          providerTxnResult: "Success",
-          providerAuthCode: sale.AuthCode ? String(sale.AuthCode) : null,
-          // Albaraka's ReferenceCode is what İptal/İade are later keyed on, so it
-          // lands in the same column PayFor uses for its host reference.
-          providerHostRefNum: sale.ReferenceCode ? String(sale.ReferenceCode) : null,
-          providerErrorMessage: null,
-          providerRaw: asJson({
-            ...(typeof fresh.providerRaw === "object" && fresh.providerRaw
-              ? (fresh.providerRaw as Record<string, unknown>)
-              : {}),
-            albarakaVerification: raw,
-            albarakaSale: sale as unknown as Record<string, unknown>,
-          }),
-        },
-      });
-
-      // Apply increments only on confirmed payment.
-      for (const item of fresh.items) {
-        await tx.campaign.update({
-          where: { id: item.campaignId },
-          data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-        });
-      }
-      for (const item of fresh.categoryItems) {
-        await tx.category.update({
-          where: { id: item.categoryId },
-          data: { currentAmount: { increment: item.amountUSD ?? item.amount } },
-        });
-      }
-      return true;
-    });
-
-    if (!settled) return redirect(failUrl);
-
-    void dispatchDonationPaid(donationId);
-    return redirect(new URL(`/${locale}/success/${donationId}`, origin));
-  } catch (e) {
-    console.error("Albaraka callback error:", e);
-    return await fail(e instanceof Error ? e.message : "Albaraka callback error");
+    const settled = await settleAlbarakaDonation(donationId, sale, { albarakaVerification: verificationAudit });
+    if (!settled) return await pending();
+    return redirect(successUrl());
+  } catch {
+    console.error("Albaraka callback could not complete; private response details suppressed.");
+    if (verified && captureAttempted) return await pending();
+    return redirect(failUrl);
   }
 }

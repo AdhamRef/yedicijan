@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { publicOrigin } from "@/lib/public-origin";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
@@ -17,7 +16,7 @@ export async function GET(request: Request) {
   const denied = requireAdminOrDashboardPermission(session, "ads");
   if (denied) return denied;
 
-  const origin = publicOrigin(request);
+  const origin = new URL(request.url).origin;
   const res = await fetch(`${origin}/api/admin/marketing-intelligence/action-items`, {
     headers: { cookie: request.headers.get("cookie") || "" },
     cache: "no-store",

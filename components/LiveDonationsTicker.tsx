@@ -1,275 +1,178 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HandCoins } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useTranslations, useLocale } from "next-intl";
 import { AnimatePresence, motion } from "motion/react";
 import { useCurrency } from "@/context/CurrencyContext";
-import { formatNumber } from "@/hooks/formatNumber";
-import { getCurrency } from "@/hooks/useCampaignValue";
-
-interface AmountRange {
-  minAmount: number;
-  maxAmount: number;
-  probability: number;
-  label: string;
-}
+import { generateTickerDisplay, type TickerAmountRange, type PublicTickerEntry } from "@/lib/donations/public-ticker-display";
 
 interface TickerConfig {
+  enabled: boolean;
+  entries?: PublicTickerEntry[];
   donorNames: string[];
-  amountRanges: AmountRange[];
+  amountRanges: TickerAmountRange[];
   minIntervalSeconds: number;
   maxIntervalSeconds: number;
 }
 
 interface DonationDisplay {
   name: string;
-  amount: number;
+  amount: number | null;
+  currency?: string | null;
+  source?: string;
+  at?: string | null;
   categoryName: string | null;
   id: number;
 }
 
 const DISPLAY_MAX_MS = 5000;
-const EXIT_DURATION_MS = 280;
 
 export default function LiveDonationsGlass() {
   const t = useTranslations("LiveDonationsTicker");
-  const locale = useLocale() as "ar" | "en" | "fr";
-  const isRTL = locale === "ar";
-
+  const locale = useLocale();
+  const isRTL = locale === "ar" || locale === "ur";
   const { convertToCurrency } = useCurrency();
   const [config, setConfig] = useState<TickerConfig | null>(null);
-  const [categories, setCategories] = useState<{ name: string }[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [currentDonation, setCurrentDonation] = useState<DonationDisplay | null>(null);
-  const [exiting, setExiting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const nextId = useRef(0);
+  const seenDonations = useRef(new Set<string>());
+  const communityIndex = useRef(0);
+  const latestFeed = useRef({ config, categories });
+  useEffect(() => { latestFeed.current = { config, categories }; }, [config, categories]);
 
-  const hideAtTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearNullTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const nextTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const idRef = useRef(0);
-  const configRef = useRef(config);
-  const categoriesRef = useRef(categories);
-  configRef.current = config;
-  categoriesRef.current = categories;
-
-  const formatMoney = (n: number) => {
-    const r = convertToCurrency(n);
-    if (r?.convertedValue != null && r?.currency) {
-      const sym =
-        r.currency === "USD"
-          ? "$"
-          : r.currency === "EUR"
-            ? "€"
-            : r.currency === "GBP"
-              ? "£"
-              : r.currency === "TRY"
-                ? "₺"
-                : r.currency;
-      const val =
-        typeof r.convertedValue === "number"
-          ? r.convertedValue.toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            })
-          : "0";
-      return sym + " " + val;
-    }
-    return (
-      "$" +
-      (typeof n === "number"
-        ? n.toLocaleString(undefined, {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          })
-        : "0")
-    );
-  };
-
-  const clearAllTimeouts = useCallback(() => {
-    if (hideAtTimeoutRef.current) {
-      clearTimeout(hideAtTimeoutRef.current);
-      hideAtTimeoutRef.current = null;
-    }
-    if (clearNullTimeoutRef.current) {
-      clearTimeout(clearNullTimeoutRef.current);
-      clearNullTimeoutRef.current = null;
-    }
-    if (nextTimeoutRef.current) {
-      clearTimeout(nextTimeoutRef.current);
-      nextTimeoutRef.current = null;
-    }
-  }, []);
-
-  // Fetch ticker config and categories (locale-aware)
   useEffect(() => {
-    const fetchConfig = async () => {
+    let cancelled = false;
+    const load = async () => {
       try {
-        const [tickerRes, categoriesRes] = await Promise.all([
-          fetch("/api/live-donation-ticker"),
-          fetch(`/api/categories?locale=${locale}&limit=100`),
-        ]);
-        if (!tickerRes.ok) throw new Error("Failed to fetch ticker configuration");
-        const data = await tickerRes.json();
-        setConfig(data);
-
-        if (categoriesRes.ok) {
-          const catData = await categoriesRes.json();
-          const names = (catData.items || [])
-            .map((c: { name?: string }) => ({ name: c.name || "" }))
-            .filter((c: { name: string }) => c.name);
-          setCategories(names);
+        const tickerResponse = await fetch("/api/live-donation-ticker", { cache: "no-store" });
+        if (!tickerResponse.ok) throw new Error("Failed to load ticker configuration");
+        const ticker = await tickerResponse.json();
+        if (cancelled) return;
+        if (ticker.enabled === true && Array.isArray(ticker.donorNames) && Array.isArray(ticker.amountRanges)) {
+          setConfig({
+            enabled: true,
+            ...(Array.isArray(ticker.entries) ? { entries: ticker.entries } : {}),
+            donorNames: ticker.donorNames.filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0),
+            amountRanges: ticker.amountRanges,
+            minIntervalSeconds: Number.isInteger(ticker.minIntervalSeconds) ? ticker.minIntervalSeconds : 3,
+            maxIntervalSeconds: Number.isInteger(ticker.maxIntervalSeconds) ? ticker.maxIntervalSeconds : 8,
+          });
+        } else {
+          setConfig(null);
         }
-        setIsLoading(false);
-      } catch (err) {
-        console.error("Error fetching ticker config:", err);
-        setError("Failed to load donation ticker");
-        setIsLoading(false);
+      } catch (error) {
+        console.error("Error loading configured donation ticker:", error);
+        if (!cancelled) setConfig(null);
       }
     };
+    void load();
+    const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 10000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
 
-    fetchConfig();
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`/api/categories?locale=${encodeURIComponent(locale)}&limit=100`, { cache: "no-store" }).then(async response => {
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!cancelled) setCategories((data.items ?? []).map((item: { name?: string }) => item.name).filter((name: unknown): name is string => typeof name === "string" && Boolean(name.trim())));
+    }).catch(() => { /* Optional legacy labels never block confirmed donations. */ });
+    return () => { cancelled = true; };
   }, [locale]);
 
-  const generateRandomDonation = useCallback((): DonationDisplay => {
-    const cfg = configRef.current;
-    const cats = categoriesRef.current;
-    if (!cfg) {
-      return { name: "Anonymous", amount: 50, categoryName: null, id: ++idRef.current };
-    }
-
-    const name =
-      cfg.donorNames.length > 0
-        ? cfg.donorNames[Math.floor(Math.random() * cfg.donorNames.length)]
-        : "Anonymous";
-
-    let amount = 50;
-    if (cfg.amountRanges.length > 0) {
-      const totalWeight = cfg.amountRanges.reduce((sum, range) => sum + range.probability, 0);
-      let random = Math.random() * totalWeight;
-      let selectedRange = cfg.amountRanges[0];
-      for (const range of cfg.amountRanges) {
-        random -= range.probability;
-        if (random <= 0) {
-          selectedRange = range;
-          break;
-        }
-      }
-      amount = Math.floor(
-        Math.random() * (selectedRange.maxAmount - selectedRange.minAmount + 1) + selectedRange.minAmount
-      );
-    }
-
-    const categoryName =
-      cats.length > 0 ? cats[Math.floor(Math.random() * cats.length)].name : null;
-
-    return { name, amount, categoryName, id: ++idRef.current };
-  }, []);
-
-  // Single scheduler: show donation, hide at min(5s, interval), show next at interval (no clash)
+  const tickerEnabled = Boolean(config?.enabled && (config.entries || (config.donorNames.length && config.amountRanges.length)));
+  const minimumInterval = config?.minIntervalSeconds ?? 3;
+  const maximumInterval = config?.maxIntervalSeconds ?? 8;
   useEffect(() => {
-    if (!config) return;
+    if (!tickerEnabled) { setCurrentDonation(null); return; }
+    let stopped = false;
+    let showTimer: number | undefined;
+    let hideTimer: number | undefined;
 
     const showNext = () => {
-      const next = generateRandomDonation();
-      setCurrentDonation(next);
-      setExiting(false);
+      if (stopped) return;
+      if (document.hidden) { showTimer = window.setTimeout(showNext, 1500); return; }
+      const { config, categories } = latestFeed.current;
+      if (!config?.enabled) return;
+      const fresh = config.entries?.find(entry => entry.source === "DONATION" && !seenDonations.current.has(entry.key));
+      const community = config.entries?.filter(entry => entry.source === "COMMUNITY") || [];
+      const entry = fresh || (community.length ? community[communityIndex.current++ % community.length] : null);
+      const legacy = config.entries ? null : generateTickerDisplay(config, categories);
+      if (fresh) seenDonations.current.add(fresh.key);
+      const display = entry ? { ...entry, categoryName: null } : legacy ? { ...legacy, amount: null, source: "DISPLAY" } : null;
+      if (display) setCurrentDonation({ ...display, id: ++nextId.current }); else setCurrentDonation(null);
 
-      const minMs = config.minIntervalSeconds * 1000;
-      const maxMs = config.maxIntervalSeconds * 1000;
+      const minMs = Math.max(3000, minimumInterval * 1000);
+      const maxMs = Math.max(minMs, maximumInterval * 1000);
       const intervalMs = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
-      const hideAt = Math.min(DISPLAY_MAX_MS, intervalMs);
-
-      hideAtTimeoutRef.current = setTimeout(() => {
-        setExiting(true);
-        hideAtTimeoutRef.current = null;
-        clearNullTimeoutRef.current = setTimeout(() => {
-          setCurrentDonation(null);
-          setExiting(false);
-          clearNullTimeoutRef.current = null;
-        }, EXIT_DURATION_MS);
-      }, hideAt);
-
-      nextTimeoutRef.current = setTimeout(() => {
-        clearAllTimeouts();
-        nextTimeoutRef.current = null;
-        showNext();
-      }, intervalMs);
+      hideTimer = window.setTimeout(() => setCurrentDonation(null), Math.min(DISPLAY_MAX_MS, intervalMs));
+      showTimer = window.setTimeout(showNext, intervalMs);
     };
 
-    showNext();
-    return () => clearAllTimeouts();
-  }, [config, locale, generateRandomDonation, clearAllTimeouts]);
+    showTimer = window.setTimeout(showNext, 1200);
+    return () => {
+      stopped = true;
+      if (showTimer !== undefined) window.clearTimeout(showTimer);
+      if (hideTimer !== undefined) window.clearTimeout(hideTimer);
+    };
+  }, [tickerEnabled, minimumInterval, maximumInterval]);
 
-  if (isLoading || error) {
-    return null;
-  }
+  if (!config?.enabled) return null;
+
+  const formatMoney = (amount: number, currency = "USD") => {
+    if (currency !== "USD") return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 0 }).format(amount);
+    const converted = convertToCurrency(amount);
+    if (converted?.convertedValue != null && converted.currency) {
+      try {
+        return new Intl.NumberFormat(locale, { style: "currency", currency: converted.currency, maximumFractionDigits: 0 }).format(converted.convertedValue);
+      } catch {
+        return `${converted.convertedValue.toLocaleString(locale)} ${converted.currency}`;
+      }
+    }
+    return new Intl.NumberFormat(locale, { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amount);
+  };
 
   return (
     <div
       className={cn(
-        "fixed bottom-6 z-50 pointer-events-none",
-        "left-1/2 -translate-x-1/2",
-        isRTL
-          ? "md:left-6 md:right-auto md:translate-x-0"
-          : "md:right-6 md:left-auto md:translate-x-0",
-        "rounded-xl w-max"
+        "fixed bottom-6 z-50 pointer-events-none left-1/2 -translate-x-1/2",
+        isRTL ? "md:left-6 md:right-auto md:translate-x-0" : "md:right-6 md:left-auto md:translate-x-0",
+        "rounded-xl w-max",
       )}
       dir={isRTL ? "rtl" : "ltr"}
+      aria-live="polite"
+      aria-atomic="true"
     >
       <AnimatePresence mode="wait">
-        {currentDonation && !exiting && (
+        {currentDonation && (
           <motion.div
             key={currentDonation.id}
             initial={{ opacity: 0, y: 8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.97 }}
-            transition={{ duration: EXIT_DURATION_MS / 1000, ease: "easeOut" }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
             className="w-full"
           >
-            <Card
-              className={cn(
-                "w-[280px] sm:w-[300px] border border-white/30",
-                "bg-white/85 backdrop-blur-md dark:bg-gray-900/85 backdrop-blur-md",
-                "shadow-md shadow-black/10"
-              )}
-            >
+            <Card className="w-[280px] sm:w-[300px] border border-white/30 bg-white/90 shadow-md shadow-black/10 backdrop-blur-md dark:bg-gray-900/90">
               <div className="flex items-center gap-2.5 p-3">
-                <div className="relative shrink-0">
-                  <div className="relative bg-sky-500/90 text-white rounded-full p-1.5">
-                    <HandCoins className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-
-                <div className={cn("flex-1 min-w-0", isRTL ? "text-right" : "text-left")}>
-                  <p className="text-xs text-gray-700 dark:text-gray-200 leading-snug">
-                    <span className="font-semibold truncate block">{currentDonation.name}</span>
-                    <span className="text-gray-600 dark:text-gray-300">
-                      {t("donated")}{" "}
-                      <span className="font-semibold text-sky-600 dark:text-sky-400">
-                      {
-                        formatMoney(currentDonation.amount)
-                    }
-                    {" "}
-                      </span>
-                      {currentDonation.categoryName ? (
-                        <>
-                          {" "}
-                          {t("for")} {currentDonation.categoryName}
-                        </>
-                      ) : null}
-                    </span>
+                <span className="shrink-0 rounded-full bg-sky-500/90 p-1.5 text-white">
+                  <HandCoins className="h-3.5 w-3.5" />
+                </span>
+                <div className={cn("min-w-0 flex-1", isRTL ? "text-right" : "text-left")}>
+                  <p className="block truncate text-xs font-semibold leading-snug text-gray-800 dark:text-gray-100">
+                    {currentDonation.name}
+                  </p>
+                  <p className="text-xs leading-snug text-gray-600 dark:text-gray-300">
+                    {currentDonation.source === "DONATION" && currentDonation.amount !== null ? <>{t("donated")} <span className="font-semibold text-sky-700 dark:text-sky-300">{formatMoney(currentDonation.amount, currentDonation.currency || "USD")}</span></> : t("communitySupporter")}
+                    {currentDonation.categoryName ? <> {t("for")} {currentDonation.categoryName}</> : null}
                   </p>
                 </div>
-
-                <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap shrink-0">
-                  {t("now")}
-                </span>
+                <span className="shrink-0 whitespace-nowrap text-[10px] text-gray-500 dark:text-gray-400">{currentDonation.at ? new Intl.DateTimeFormat(locale, {hour:"2-digit",minute:"2-digit",timeZone:"Europe/Istanbul"}).format(new Date(currentDonation.at)) : ""}</span>
               </div>
-
               <div className="h-px w-full bg-gradient-to-r from-transparent via-sky-400/30 to-transparent" />
             </Card>
           </motion.div>

@@ -5,9 +5,9 @@
 // The output is always a code from `SUPPORTED_CURRENCY_OPTIONS`. Countries
 // whose national currency is not in our supported set fall back to USD.
 
-import { SUPPORTED_CURRENCY_CODES } from "@/lib/supported-currencies";
+import { SUPPORTED_CURRENCY_CODES } from "../supported-currencies";
 
-// Eurozone members — countries that officially use the Euro.
+// Eurozone members  countries that officially use the Euro.
 const EUROZONE = new Set<string>([
   "AT", "BE", "CY", "DE", "EE", "ES", "FI", "FR", "GR", "HR",
   "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PT", "SI", "SK",
@@ -20,7 +20,7 @@ const DIRECT_MAP: Record<string, string> = {
   IM: "GBP", JE: "GBP", GG: "GBP", // Crown dependencies
   CA: "CAD",
   AU: "AUD",
-  NZ: "AUD", // No NZD support — closest match
+  NZ: "AUD", // No NZD support  closest match
   TR: "TRY",
   SA: "SAR",
   AE: "AED",
@@ -29,9 +29,9 @@ const DIRECT_MAP: Record<string, string> = {
   BH: "BHD",
   OM: "OMR",
   JO: "JOD",
-  MA: "MAD",
-  // Egypt → USD by policy (EGP intentionally removed from supported set).
+  // Egypt and Morocco → USD by policy (EGP and MAD intentionally removed from supported set).
   EG: "USD",
+  MA: "USD",
   US: "USD",
 };
 

@@ -1,0 +1,310 @@
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import axios from 'axios';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { Plus, Pencil, Trash2, Loader2, GripVertical, Image as ImageIcon, CheckCircle2, Clock3, Languages } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { EmptyState } from '@/components/dashboard/EmptyState';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { errorMessage } from '@/lib/dashboard/client-error-message';
+import { PageHeader } from '@/components/dashboard/PageHeader';
+import { ContentMetricStrip } from '@/components/dashboard/content-editor/ContentMetricStrip';
+import { dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
+
+interface Story {
+  id: string;
+  slug: string;
+  title: string;
+  image: string;
+  slideCount: number;
+  order: number;
+  isActive: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  translationCount: number;
+  expired: boolean;
+  pending: boolean;
+}
+
+const STORY_ROW = 'STORY_ROW';
+
+function DraggableStoryRow({
+  story, index, moveRow, commitOrder, children,
+}: {
+  story: Story;
+  index: number;
+  moveRow: (from: number, to: number) => void;
+  commitOrder: () => void;
+  children: React.ReactNode;
+}) {
+  const [{ isDragging }, drag, preview] = useDrag({
+    type: STORY_ROW,
+    item: { index },
+    /* Persist once on drop. `hover` fires for every row the pointer crosses, so
+       saving there sends one transaction per tick and the responses can land
+       out of order. */
+    end: () => commitOrder(),
+    collect: (m) => ({ isDragging: m.isDragging() }),
+  });
+
+  const [, drop] = useDrop({
+    accept: STORY_ROW,
+    hover: (item: { index: number }) => {
+      if (item.index === index) return;
+      moveRow(item.index, index);
+      item.index = index;
+    },
+  });
+
+  /* react-dnd's connectors return the node they were given, while React 19's
+     `Ref` callback type must return void or a cleanup function. The existing
+     slides page assigns them directly and carries two type errors for it;
+     wrapping so the connector's return value is discarded says the same thing
+     to the DOM and type-checks. */
+  const rowRef = (node: HTMLTableRowElement | null) => {
+    preview(drop(node));
+  };
+  const handleRef = (node: HTMLTableCellElement | null) => {
+    drag(node);
+  };
+
+  return (
+    <TableRow
+      ref={rowRef}
+      className={`${isDragging ? 'opacity-50' : ''} ${!story.isActive ? 'bg-muted/30' : ''} hover:bg-muted/50 transition-colors`}
+    >
+      <TableCell className="w-12 p-2 cursor-grab active:cursor-grabbing" ref={handleRef}>
+        <GripVertical className="w-5 h-5 text-muted-foreground mx-auto" />
+      </TableCell>
+      {children}
+    </TableRow>
+  );
+}
+
+/** Why a story is or is not on the site right now. */
+function StatusBadge({ story }: { story: Story }) {
+  if (!story.isActive) return <Badge variant="secondary">{dt("معطّلة")}</Badge>;
+  if (story.expired) return <Badge variant="destructive">{dt("منتهية")}</Badge>;
+  if (story.pending) return <Badge variant="outline">{dt("مجدولة")}</Badge>;
+  return <Badge className="bg-emerald-600 hover:bg-emerald-600">{dt("ظاهرة")}</Badge>;
+}
+
+function formatWindow(story: Story): string {
+  if (!story.endsAt) return dt("غير محدودة");
+  return new Date(story.endsAt).toLocaleString(dashIntl("ar"), { dateStyle: 'short', timeStyle: 'short' });
+}
+
+export default function StoriesPage() {
+  const router = useRouter();
+  const [stories, setStories] = useState<Story[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<Story | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const fetchStories = useCallback(async () => {
+    try {
+      const res = await axios.get('/api/stories/admin');
+      const items = res.data?.items ?? [];
+      setStories(
+        Array.isArray(items)
+          ? [...items].sort((a: Story, b: Story) => (a.order ?? 0) - (b.order ?? 0))
+          : []
+      );
+    } catch (e) {
+      /* Surfaced rather than logged only: a failed load and "no stories yet"
+         otherwise render identically and nothing says which happened. */
+      console.error(e);
+      toast.error(errorMessage(e, dt("تعذّر تحميل القصص")));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchStories(); }, [fetchStories]);
+
+  const latest = useRef(stories);
+  latest.current = stories;
+  const orderDirty = useRef(false);
+
+  const moveRow = useCallback((from: number, to: number) => {
+    orderDirty.current = true;
+    setStories((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(from, 1);
+      next.splice(to, 0, removed);
+      return next;
+    });
+  }, []);
+
+  const commitOrder = useCallback(async () => {
+    if (!orderDirty.current) return;
+    orderDirty.current = false;
+    const payload = latest.current.map((s, i) => ({ id: s.id, order: i }));
+    try {
+      await axios.post('/api/stories/reorder', { stories: payload });
+    } catch (e) {
+      toast.error(errorMessage(e, dt("تعذّر حفظ الترتيب")));
+      fetchStories();
+    }
+  }, [fetchStories]);
+
+  const toggleActive = async (story: Story, next: boolean) => {
+    setTogglingId(story.id);
+    /* Only the flag is sent. Echoing the whole row back would let a stale field
+       the list is holding overwrite good data  and omitting `translations`
+       is what tells the API to leave the translation rows alone. */
+    try {
+      await axios.put(`/api/stories/${story.id}`, { isActive: next });
+      setStories((prev) => prev.map((s) => (s.id === story.id ? { ...s, isActive: next } : s)));
+    } catch (e) {
+      toast.error(errorMessage(e, dt("تعذّر تغيير الحالة")));
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`/api/stories/${deleteTarget.id}`);
+      setStories((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+      toast.success(dt("تم حذف القصة"));
+      setDeleteTarget(null);
+    } catch (e) {
+      toast.error(errorMessage(e, dt("تعذّر حذف القصة")));
+    } finally {
+      setDeleting(false);
+    }
+  };
+//asd
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <DndProvider backend={HTML5Backend}>
+      <div className="space-y-5">
+        <PageHeader
+          eyebrow={dt("المحتوى التحريري")}
+          title={dt("شريط القصص")}
+          description={dt("تظهر القصص أعلى الصفحة الرئيسية وتُفتح كتجربة متتابعة. راقب مواعيد العرض والترجمات قبل التفعيل.")}
+          icon={ImageIcon}
+          actions={<Button onClick={() => router.push('/dashboard/stories/new')}><Plus className="me-1 h-4 w-4" />{dt("قصة جديدة")}</Button>}
+        />
+        <ContentMetricStrip items={[
+          { label: dt("ظاهرة الآن"), value: stories.filter((story) => story.isActive && !story.expired && !story.pending).length, detail: dt("مفعّلة وضمن مدة العرض"), icon: CheckCircle2, tone: "green" },
+          { label: dt("مجدولة"), value: stories.filter((story) => story.pending).length, detail: dt("تبدأ لاحقًا"), icon: Clock3, tone: "brand" },
+          { label: dt("منتهية"), value: stories.filter((story) => story.expired).length, detail: dt("انتهت نافذة عرضها"), icon: ImageIcon, tone: "amber" },
+          { label: dt("تغطية الترجمات"), value: stories.reduce((sum, story) => sum + story.translationCount, 0), detail: dt("ترجمات محفوظة لكل القصص"), icon: Languages, tone: "slate" },
+        ]} />
+
+        {stories.length === 0 ? (
+          <EmptyState
+            icon={ImageIcon}
+            title={dt("لا توجد قصص")}
+            description={dt("أضف أول قصة لتظهر في أعلى الصفحة الرئيسية.")}
+          />
+        ) : (
+          <Card className="overflow-hidden border-slate-200 shadow-sm">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12" />
+                  <TableHead>{dt("الصورة")}</TableHead>
+                  <TableHead>{dt("العنوان")}</TableHead>
+                  <TableHead>{dt("الشرائح")}</TableHead>
+                  <TableHead>{dt("الحالة")}</TableHead>
+                  <TableHead>{dt("تنتهي")}</TableHead>
+                  <TableHead>{dt("الترجمات")}</TableHead>
+                  <TableHead>{dt("مفعّلة")}</TableHead>
+                  <TableHead className="w-24" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {stories.map((story, index) => (
+                  <DraggableStoryRow
+                    key={story.id}
+                    story={story}
+                    index={index}
+                    moveRow={moveRow}
+                    commitOrder={commitOrder}
+                  >
+                    <TableCell>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={story.image} alt="" className="w-12 h-12 rounded object-cover border" />
+                    </TableCell>
+                    <TableCell>
+                      <div className="font-semibold">{story.title}</div>
+                      <div className="text-xs text-slate-500" dir="ltr">{story.slug}</div>
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-600">{story.slideCount}</TableCell>
+                    <TableCell><StatusBadge story={story} /></TableCell>
+                    <TableCell className="text-xs text-slate-600">{formatWindow(story)}</TableCell>
+                    <TableCell className="text-xs text-slate-600">{story.translationCount}</TableCell>
+                    <TableCell>
+                      <Switch aria-label={dt("مفعّل") + ": " + story.title}
+                        checked={story.isActive}
+                        disabled={togglingId === story.id}
+                        onCheckedChange={(v) => toggleActive(story, v)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button
+                          aria-label={dt("تعديل") + ": " + story.title} title={dt("تعديل")}
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => router.push(`/dashboard/stories/edit/${story.id}`)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button aria-label={dt("حذف") + ": " + story.title} title={dt("حذف")} variant="ghost" size="icon" onClick={() => setDeleteTarget(story)}>
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </DraggableStoryRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )}
+
+        <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{dt("حذف القصة")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {dtx("سيتم حذف «{0}» بشرائحها وكل ترجماتها نهائيًا.", [deleteTarget?.title])}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>{dt("إلغاء")}</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete} disabled={deleting}>
+                {deleting && <Loader2 className="w-4 h-4 animate-spin me-2" />}
+                {dt("حذف")}</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </DndProvider>
+  );
+}

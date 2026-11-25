@@ -1,0 +1,45 @@
+import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+
+import { listProjects } from "@/lib/minbar/projects";
+import { recurringPageProjects } from "@/lib/minbar/recurring-page-settings";
+import { publicRecurringPageSettings } from "@/lib/minbar/recurring-page-settings-service";
+import { slugFor } from "@/lib/minbar/routes";
+import MinbarMessages from "@/components/minbar/MinbarMessages";
+import RecurringPage from "@/components/minbar/recurring/RecurringPage";
+import PageBanners from "@/components/minbar/banners/PageBanners";
+
+interface Props {
+  params: Promise<{ locale: string }>;
+}
+
+/** The page's own namespaces, on top of the shell bundle. */
+const NAMESPACES = ["recurring", "quran"] as const;
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { locale } = await params;
+  const t = await getTranslations({ locale, namespace: "recurring" });
+  return buildManagedPageMetadata("recurring", locale, {
+    title: `${t("title1")} ${t("title2")}`,
+    description: t("lead"),
+    path: `/${slugFor("recurring", locale)}`,
+  });
+}
+
+/**
+ * Recurring giving  ported from `Minbar/التبرع الدوري.dc.html`.
+ */
+export default async function Recurring({ params }: Props) {
+  const { locale } = await params;
+  const [published, settings] = await Promise.all([listProjects(locale), publicRecurringPageSettings()]);
+  const projects = recurringPageProjects(published, settings);
+
+  return (
+    <MinbarMessages locale={locale} namespaces={NAMESPACES}>
+        <PageBanners locale={locale} page="recurring" slot="top" />
+      <RecurringPage projects={projects} settings={settings} />
+      <PageBanners locale={locale} page="recurring" slot="bottom" />
+    </MinbarMessages>
+  );
+}

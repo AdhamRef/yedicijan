@@ -1,4 +1,7 @@
 "use client";
+import Link from "next/link";
+import dynamic from "next/dynamic";
+const ContentReadinessCenter = dynamic(() => import("@/components/dashboard/content-editor/ContentReadinessCenter").then(module => module.ContentReadinessCenter));
 
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
@@ -17,40 +20,44 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ContentLocalizationPreviewDialog } from "./ContentLocalizationPreviewDialog";
+import { dt, dtx } from "@/lib/dashboard/i18n";
 
 const LOCALE_LABELS: Record<string, string> = {
-  en: "الإنجليزية",
-  fr: "الفرنسية",
-  tr: "التركية",
-  id: "الإندونيسية",
-  pt: "البرتغالية",
-  es: "الإسبانية",
-  de: "الألمانية",
+  get en() { return dt("الإنجليزية"); },
+  get fr() { return dt("الفرنسية"); },
+  get tr() { return dt("التركية"); },
+  get id() { return dt("الإندونيسية"); },
+  get pt() { return dt("البرتغالية"); },
+  get es() { return dt("الإسبانية"); },
+  get de() { return dt("الألمانية"); },
+  get ur() { return dt("الأردية"); },
+  get sq() { return dt("الألبانية"); },
+  get it() { return dt("الإيطالية"); },
+  get nl() { return dt("الهولندية"); },
+  get sv() { return dt("السويدية"); },
+  get no() { return dt("النرويجية"); },
+  get da() { return dt("الدنماركية"); },
+  get ms() { return dt("الملايوية"); },
+  get ja() { return dt("اليابانية"); },
+  get zh() { return dt("الصينية"); },
+  get hi() { return dt("الهندية"); },
 };
 
-const LOCALE_SHORT: Record<string, string> = {
-  en: "EN",
-  fr: "FR",
-  tr: "TR",
-  id: "ID",
-  pt: "PT",
-  es: "ES",
-  de: "DE",
-};
+const LOCALE_SHORT: Record<string, string> = Object.fromEntries(Object.keys(LOCALE_LABELS).map((l) => [l, l.toUpperCase()]));
 
 const FIELD_LABELS: Record<string, string> = {
-  title: "العنوان",
-  name: "الاسم",
-  description: "الوصف",
-  content: "المحتوى",
-  buttonText: "نص الزر",
+  get title() { return dt("العنوان"); },
+  get name() { return dt("الاسم"); },
+  get description() { return dt("الوصف"); },
+  get content() { return dt("المحتوى"); },
+  get buttonText() { return dt("نص الزر"); },
 };
 
 const SECTION_LABELS = {
-  campaigns: "المشاريع",
-  categories: "الحملات",
-  blog: "المقالات",
-  slides: "الشرائح",
+  get campaigns() { return dt("المشاريع"); },
+  get categories() { return dt("التصنيفات"); },
+  get blog() { return dt("المقالات"); },
+  get slides() { return dt("الشرائح"); },
 } as const;
 
 type Section = keyof typeof SECTION_LABELS;
@@ -96,22 +103,22 @@ type AuditResponse = {
 };
 
 function fieldNames(fields: string[]): string {
-  return fields.map((field) => FIELD_LABELS[field] || field).join("، ");
+  return fields.map((field) => FIELD_LABELS[field] || field).join(dt("، "));
 }
 
 function issueText(locale: string, status: LocaleStatus): string {
   const reasons: string[] = [];
-  if (!status.exists) reasons.push("الترجمة غير موجودة");
+  if (!status.exists) reasons.push(dt("الترجمة غير موجودة"));
   if (status.emptyFields.length) {
-    reasons.push(`حقول فارغة: ${fieldNames(status.emptyFields)}`);
+    reasons.push(dt("حقول فارغة: {0}", [fieldNames(status.emptyFields)]));
   }
   if (status.missingFields.length) {
-    reasons.push(`حقول ناقصة: ${fieldNames(status.missingFields)}`);
+    reasons.push(dt("حقول ناقصة: {0}", [fieldNames(status.missingFields)]));
   }
   if (status.identicalToArabicFields.length) {
-    reasons.push(`مطابق للعربية: ${fieldNames(status.identicalToArabicFields)}`);
+    reasons.push(dt("مطابق للعربية: {0}", [fieldNames(status.identicalToArabicFields)]));
   }
-  return `${LOCALE_LABELS[locale] || locale}: ${reasons.join("، ")}`;
+  return `${LOCALE_LABELS[locale] || locale}: ${reasons.join(dt("، "))}`;
 }
 
 function completionPercent(total: number, incomplete: number): number {
@@ -119,10 +126,10 @@ function completionPercent(total: number, incomplete: number): number {
   return Math.max(0, Math.round(((total - incomplete) / total) * 100));
 }
 
-export function ContentLocalizationAuditCard({ section }: { section: Section }) {
+function LegacyLocalizationAuditCard({ section }: { section: Section }) {
   const [data, setData] = useState<AuditResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(section === "campaigns");
   const [itemsOpen, setItemsOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,16 +144,16 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
       );
       setData(response.data);
     } catch (requestError: any) {
-      setError(requestError?.response?.data?.error || "تعذر فحص الترجمات الآن");
+      setError(requestError?.response?.data?.error || dt("تعذر فحص الترجمات الآن"));
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void loadAudit();
+    if (detailsOpen) void loadAudit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section]);
+  }, [section, detailsOpen]);
 
   const totals = useMemo(() => {
     const localeSummaries = Object.values(data?.summary.byLocale || {});
@@ -185,10 +192,9 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
                 <Languages className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-base sm:text-lg">مراجعة النصوص والترجمات</CardTitle>
+                <CardTitle className="text-base sm:text-lg">{dt("تشخيص جودة النصوص")}</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  فحص قراءة فقط لقسم {SECTION_LABELS[section]} يكشف نقص الترجمات وملاحظات المحتوى.
-                </p>
+                  {dtx("فحص قراءة فقط لقسم {0} يكشف نقص الترجمات وملاحظات المحتوى.", [SECTION_LABELS[section]])}</p>
               </div>
             </div>
             <Button
@@ -199,7 +205,7 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
               className="gap-2"
             >
               {detailsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              {detailsOpen ? "إخفاء اللوحة" : "فتح اللوحة"}
+              {detailsOpen ? dt("إخفاء اللوحة") : dt("فتح اللوحة")}
             </Button>
           </div>
         </CardHeader>
@@ -215,21 +221,18 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
                 className="gap-2"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                تحديث الفحص
-              </Button>
+                {dt("تحديث الفحص")}</Button>
               <Button
                 size="sm"
                 onClick={() => setPreviewOpen(true)}
-                className="gap-2 bg-brand hover:bg-[#014f9c]"
+                className="gap-2 bg-brand hover:bg-[#19323f]"
               >
                 <Sparkles className="h-4 w-4" />
-                فتح المعاينة الآمنة
-              </Button>
+                {dt("فتح المعاينة الآمنة")}</Button>
             </div>
 
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-6 text-amber-900">
-              <strong>التعديل الجماعي المباشر متوقف مؤقتًا.</strong> المعاينة لا تحفظ أي نص، ولا يوجد Save أوApply حتى اكتمال مسار Preview → Review → Approve → Apply → Rollback.
-            </div>
+              {dt("التشخيص لا يغيّر المحتوى. افتح محرر العنصر لترجمة النصوص أو تدقيقها، ثم راجع المقترحات واعتمدها واحفظها معًا.")}</div>
 
             {error ? (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -239,8 +242,7 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
 
             {!data && loading ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" /> جاري الفحص…
-              </div>
+                <Loader2 className="h-4 w-4 animate-spin" /> {dt(" جاري الفحص…")}</div>
             ) : null}
 
             {data ? (
@@ -248,31 +250,31 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
                 <div className="grid gap-3 md:grid-cols-3">
                   <Metric
                     icon={<ShieldCheck className="h-4 w-4 text-emerald-600" />}
-                    label="إجمالي العناصر"
+                    label={dt("إجمالي العناصر")}
                     value={totals.total}
                   />
                   <Metric
                     icon={<AlertTriangle className="h-4 w-4 text-amber-600" />}
-                    label="حالات ترجمة تحتاج عملًا"
+                    label={dt("حالات ترجمة تحتاج عملًا")}
                     value={totals.incomplete}
                   />
                   <Metric
                     icon={<SearchCheck className="h-4 w-4 text-purple-600" />}
-                    label="ملاحظات جودة العربية"
+                    label={dt("ملاحظات جودة العربية")}
                     value={totals.arabicIssues}
                   />
                 </div>
 
                 <div className="grid gap-2 sm:grid-cols-3">
-                  <SmallMetric label="ترجمات غير موجودة" value={totals.missingRecords} />
-                  <SmallMetric label="حقول فارغة" value={totals.emptyFields} />
-                  <SmallMetric label="حقول مطابقة للعربية" value={totals.identicalFields} />
+                  <SmallMetric label={dt("ترجمات غير موجودة")} value={totals.missingRecords} />
+                  <SmallMetric label={dt("حقول فارغة")} value={totals.emptyFields} />
+                  <SmallMetric label={dt("حقول مطابقة للعربية")} value={totals.identicalFields} />
                 </div>
 
                 <div className={`rounded-xl border p-3 ${hasIssues ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
                   <div className="flex items-start gap-2 text-sm">
                     {hasIssues ? <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-700" /> : <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-700" />}
-                    <p>{hasIssues ? "يوجد محتوى يحتاج مراجعة أوترجمة." : "كل الترجمات مكتملة وفق الفحص الحالي."}</p>
+                    <p>{hasIssues ? dt("يوجد محتوى يحتاج مراجعة أوترجمة.") : dt("كل الترجمات مكتملة وفق الفحص الحالي.")}</p>
                   </div>
                 </div>
 
@@ -290,8 +292,7 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
                           <span>{percent}%</span>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {localeData?.incompleteItems || 0} عنصر يحتاج مراجعة
-                        </p>
+                          {dtx("{0} عنصر يحتاج مراجعة", [localeData?.incompleteItems || 0])}</p>
                       </div>
                     );
                   })}
@@ -301,16 +302,15 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
                   <button
                     type="button"
                     onClick={() => setItemsOpen((value) => !value)}
-                    className="flex w-full items-center justify-between text-right"
+                    className="flex w-full items-center justify-between text-start"
                   >
                     <span className="text-sm font-semibold">
-                      العناصر التي تحتاج عملًا ({visibleItems.length})
-                    </span>
+                      {dtx("العناصر التي تحتاج عملًا ({0})", [visibleItems.length])}</span>
                     {itemsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </button>
 
                   {itemsOpen ? (
-                    <div className="mt-3 max-h-96 space-y-2 overflow-y-auto pr-1">
+                    <div className="mt-3 max-h-96 space-y-2 overflow-y-auto ps-1">
                       {visibleItems.length ? visibleItems.map((item) => {
                         const incompleteLocales = Object.entries(item.localeStatus)
                           .filter(([, status]) => !status.complete);
@@ -320,6 +320,7 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
                               <div className="min-w-0">
                                 <p className="truncate font-medium">{item.label}</p>
                                 <p className="text-xs text-muted-foreground">{item.typeLabel}</p>
+                                <Link href={section === "slides" ? `/dashboard/slides/edit/${item.id}` : `/dashboard/content/${section}/${item.id}`} className="mt-2 inline-flex rounded-md border border-brand/20 bg-white px-3 py-1.5 text-xs font-semibold text-brand">{dt("فتح المحرر والمراجعة")}</Link>
                               </div>
                               <div className="flex flex-wrap gap-1 lg:justify-end">
                                 {incompleteLocales.map(([locale, status]) => (
@@ -328,7 +329,7 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
                                     className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700"
                                     title={issueText(locale, status)}
                                   >
-                                    {LOCALE_SHORT[locale] || locale}: {!status.exists ? "غير موجود" : "غير مكتمل"}
+                                    {LOCALE_SHORT[locale] || locale}: {!status.exists ? dt("غير موجود") : dt("غير مكتمل")}
                                   </span>
                                 ))}
                               </div>
@@ -344,14 +345,14 @@ export function ContentLocalizationAuditCard({ section }: { section: Section }) 
 
                             {item.arabicQualityIssues.length ? (
                               <div className="mt-2 rounded-md bg-purple-50 px-2 py-1 text-xs text-purple-700">
-                                <strong>ملاحظات جودة العربية:</strong>{" "}
-                                {item.arabicQualityIssues.map((issue) => issue.suggestion).join("، ")}
+                                <strong>{dt("ملاحظات جودة العربية:")}</strong>{" "}
+                                {item.arabicQualityIssues.map((issue) => issue.suggestion).join(dt("، "))}
                               </div>
                             ) : null}
                           </div>
                         );
                       }) : (
-                        <p className="text-sm text-muted-foreground">لا توجد عناصر تحتاج عملًا في الفحص الحالي.</p>
+                        <p className="text-sm text-muted-foreground">{dt("لا توجد عناصر تحتاج عملًا في الفحص الحالي.")}</p>
                       )}
                     </div>
                   ) : null}
@@ -397,4 +398,17 @@ function SmallMetric({ label, value }: { label: string; value: number }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+
+export function ContentLocalizationAuditCard({ section }: { section: Section }) {
+  const [open, setOpen] = useState(false);
+  if (section === "slides") return <LegacyLocalizationAuditCard section={section} />;
+  return <section className="overflow-hidden rounded-2xl border border-sky-200 bg-white shadow-sm">
+    <header className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-l from-sky-50 to-white p-5">
+      <div className="flex items-start gap-3"><span className="rounded-xl bg-brand/10 p-3 text-brand"><Languages size={22} /></span><div><h2 className="font-bold">{dt("مركز SEO والترجمات")}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">{dt("اكتشف المحتوى الناقص لكل لغة، راجع حقول البحث، وافتح المحرر مباشرة لاستكمالها.")}</p></div></div>
+      <div className="flex gap-2"><Button type="button" variant="outline" size="sm" aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? dt("إخفاء القائمة") : dt("عرض الجاهزية")}</Button><Link className="inline-flex items-center rounded-lg bg-brand px-4 py-2 text-sm text-white" href={`/dashboard/seo-pages?tab=translations&kind=${section}`}>{dt("فتح المركز")}</Link></div>
+    </header>
+    {open ? <div className="p-4 sm:p-5"><ContentReadinessCenter initialKind={section} allowedKinds={[section]} /></div> : null}
+  </section>;
 }

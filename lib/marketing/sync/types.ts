@@ -7,7 +7,7 @@
  * entry and a `PlatformSyncRun` row without crashing the dashboard.
  *
  * Snapshots are returned in a normalized shape and persisted by the
- * dispatcher — clients don't touch Prisma directly.
+ * dispatcher  clients don't touch Prisma directly.
  */
 import type { MarketingPlatformConnection } from "@prisma/client";
 
@@ -78,11 +78,8 @@ export interface SyncAdSnapshot {
 }
 
 export interface SyncMessagingSnapshot {
-  provider: "TWILIO" | "CUSTOM" | "EMAIL_PROVIDER" | "OTHER";
+  provider: "CUSTOM" | "EMAIL_PROVIDER" | "OTHER";
   channel:
-    | "TWILIO_EMAIL"
-    | "TWILIO_WHATSAPP"
-    | "TWILIO_SMS"
     | "EMAIL"
     | "WHATSAPP"
     | "SMS";

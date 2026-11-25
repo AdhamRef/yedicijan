@@ -1,7 +1,10 @@
 "use client";
+import { googleAdsTargets, type GoogleAdsTarget } from "@/lib/tracking/google-ads-targets";
 
 import React, { useEffect, useRef, createContext, useContext, useCallback, useState } from "react";
 import { track as vercelTrack } from "@vercel/analytics";
+import { initializeGoogleTracking, loadConfiguredGoogleTagManager } from "@/lib/tracking/google-script-policy";
+import { whenMarketingAllowed } from "@/lib/tracking/marketing-gate";
 import {
   generateEventId,
   metaDonationEventId,
@@ -17,7 +20,7 @@ import {
 // ─── Vercel Analytics: which canonical events to forward ──────────────────────
 // Skip page_view (Vercel's <Analytics/> handles it), scroll_depth, and
 // user_engagement (too noisy for the custom-events dashboard). donation_complete
-// is intentionally absent — that event is server-only (Meta CAPI from the
+// is intentionally absent  that event is server-only (Meta CAPI from the
 // payment webhook) so there's no browser path that emits it.
 const VERCEL_FORWARDED_EVENTS = new Set<CanonicalEventName>([
   "view_content",
@@ -46,6 +49,7 @@ function toVercelProps(event: CanonicalEvent): Record<string, string | number | 
   if (d?.cause_id)               props.cause_id       = truncate(d.cause_id);
   if (d?.cause_name)             props.cause_name     = truncate(d.cause_name);
   if (d?.donation_type)          props.donation_type  = d.donation_type;
+  if (d?.recurring != null)      props.recurring      = d.recurring;
   if (d?.status)                 props.status         = truncate(d.status);
 
   if (p?.gateway)                props.gateway        = p.gateway;
@@ -67,8 +71,11 @@ function toVercelProps(event: CanonicalEvent): Record<string, string | number | 
   return props;
 }
 
-// ─── Public config (pixel IDs only — no tokens) ───────────────────────────────
+// ─── Public config (pixel IDs only  no tokens) ───────────────────────────────
 export interface TrackingConfig {
+  googleTagManagerId?: string | null;
+  googleTagManagerEnabled?: boolean;
+  googleAdsTargets?: GoogleAdsTarget[];
   facebookPixelId: string | null;
   gaMeasurementId: string | null;
   tiktokPixelId: string | null;
@@ -100,7 +107,7 @@ interface TrackInitiateCheckoutOptions {
   numItems: number;
   contentIds?: string[];
   items?: TrackingItem[];
-  donationType?: "ONE_TIME";
+  donationType?: "ONE_TIME" | "MONTHLY";
 }
 
 interface TrackViewContentOptions {
@@ -112,7 +119,7 @@ interface TrackViewContentOptions {
 }
 
 interface TrackCustomizeProductOptions {
-  donationType?: "ONE_TIME";
+  donationType?: "ONE_TIME" | "MONTHLY";
   amount?: number;
   currency?: string;
   causeId?: string;
@@ -132,7 +139,7 @@ interface TrackDonateOptions {
   currency?: string;
   causeId?: string;
   causeName?: string;
-  donationType?: "ONE_TIME";
+  donationType?: "ONE_TIME" | "MONTHLY";
   gateway?: string;
   is3ds?: boolean;
 }
@@ -144,7 +151,7 @@ interface TrackPaymentFailedOptions {
   reason?: string;
   gateway?: string;
   /** Donation row id when known. Used by GA4 / Vercel as the order_id of the
-   *  failed attempt. Meta does NOT fire from the browser — the DonateFailed
+   *  failed attempt. Meta does NOT fire from the browser  the DonateFailed
    *  CAPI event is owned by `sendDonationFailedConversions` server-side, keyed
    *  by `donation.id`. See lib/tracking/donation-conversion-server.ts. */
   donationId?: string;
@@ -152,7 +159,7 @@ interface TrackPaymentFailedOptions {
 
 /** Single Meta-Pixel "Donate" fire from the /success page. The browser pixel
  *  is paired with a server CAPI fire from POST /api/donations/:id/track-conversion
- *  — Meta dedupes by the shared event_id. Don't call this from anywhere except
+ *   Meta dedupes by the shared event_id. Don't call this from anywhere except
  *  the /success page, and only after the donation is confirmed PAID in the DB
  *  AND the track-conversion endpoint returned `allowed: true`. */
 interface TrackDonateSuccessOptions {
@@ -168,9 +175,9 @@ interface TrackDonateSuccessOptions {
   contents?: Array<{ id: string; quantity?: number; item_price?: number }>;
   /** Human-readable cause for Events Manager. */
   contentName?: string;
-  /** "donation" | "qurbani" | … */
+  /** "donation" | "monthly" | "qurbani" | … */
   contentCategory?: string;
-  donationType?: "ONE_TIME";
+  donationType?: "ONE_TIME" | "MONTHLY";
   paymentMethod?: string;
 }
 
@@ -220,19 +227,6 @@ declare global {
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (typeof document === "undefined") return reject(new Error("no document"));
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`Failed to load ${src}`));
-    document.head.appendChild(s);
-  });
-}
-
 function getCookieValue(name: string): string | undefined {
   if (typeof document === "undefined") return undefined;
   return document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))?.[1];
@@ -246,11 +240,17 @@ function getUrlParam(key: string): string | undefined {
 /** Persist ttclid / gclid / fbclid in sessionStorage so they survive page navigations */
 function captureClickIds(): { ttclid?: string; gclid?: string; fbclid?: string } {
   if (typeof window === "undefined") return {};
-  const ttclid = getUrlParam("ttclid") || sessionStorage.getItem("_ttclid") || undefined;
-  const gclid  = getUrlParam("gclid")  || sessionStorage.getItem("_gclid")  || undefined;
+  let ttclid = getUrlParam("ttclid");
+  let gclid = getUrlParam("gclid");
   const fbclid = getUrlParam("fbclid") || undefined;
-  if (ttclid) sessionStorage.setItem("_ttclid", ttclid);
-  if (gclid)  sessionStorage.setItem("_gclid",  gclid);
+  try {
+    ttclid ||= sessionStorage.getItem("_ttclid") || undefined;
+    gclid ||= sessionStorage.getItem("_gclid") || undefined;
+  } catch { /* In-app/private browsers may deny storage. URL IDs still work. */ }
+  try {
+    if (ttclid) sessionStorage.setItem("_ttclid", ttclid);
+    if (gclid) sessionStorage.setItem("_gclid", gclid);
+  } catch { /* Cache failure must not abort a donation or its tracking event. */ }
   return { ttclid, gclid, fbclid };
 }
 
@@ -276,35 +276,36 @@ function buildGa4Items(
 export default function TrackingPixels({ children }: { children: React.ReactNode }) {
   const configRef = useRef<TrackingConfig | null>(null);
   const [config, setConfig] = useState<TrackingConfig | null>(null);
-  // Mutable user data — updated by DonationDialog when user fills in details
+  // Mutable user data  updated by DonationDialog when user fills in details
   const userDataRef = useRef<Partial<CanonicalUser>>({});
 
   // ── Load pixel config ───────────────────────────────────────────────────────
   // Defer the config fetch + script injection until either the user interacts with the
-  // page or 6 s have elapsed. Ad/marketing pixels (FB ~226KiB, TikTok, X) used to
+  // page or the shared marketing gate times out (lib/tracking/marketing-gate.ts).
+  // Ad/marketing pixels (FB ~226KiB, TikTok, X) used to
   // compete with the LCP image for bandwidth and ate ~700 ms of TBT during the first
   // second; the interaction-or-long-idle gate moves all of that off the critical path
-  // (Lighthouse never interacts so it never sees them) while still firing well before
-  // any real user can convert.
+  // while allowing real interactions and conversion pages to load them promptly.
   //
-  // EXCEPTION: /success/[id] is a conversion page — we need fbq ready immediately so
-  // `trackDonate` can fire the Meta "Donate" event without waiting for scroll or 6 s
-  // idle. Donors often arrive there post-redirect and may close the tab quickly.
+  // EXCEPTION: /success/[id] is a conversion page  we need fbq ready immediately so
+  // `trackDonate` can fire the Meta "Donate" event without waiting for the marketing
+  // gate. Donors often arrive there post-redirect and may close the tab quickly.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     let fired = false;
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const load = () => {
       if (fired) return;
       fired = true;
-      cleanup();
 
       fetch("/api/tracking/config")
         .then((r) => r.json())
         .then((data) => {
           const c: TrackingConfig = {
+            googleTagManagerId: data.googleTagManagerId || null,
+            googleTagManagerEnabled: data.googleTagManagerEnabled === true,
+            googleAdsTargets: googleAdsTargets(data),
             facebookPixelId: data.facebookPixelId || null,
             gaMeasurementId: data.gaMeasurementId || null,
             tiktokPixelId:   data.tiktokPixelId   || null,
@@ -316,29 +317,17 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         .catch(() => setConfig(null));
     };
 
-    const cleanup = () => {
-      if (timeoutId !== null) clearTimeout(timeoutId);
-      window.removeEventListener("scroll", load);
-      window.removeEventListener("pointerdown", load);
-      window.removeEventListener("keydown", load);
-      window.removeEventListener("touchstart", load);
-    };
-
-    // Fire-now path for conversion pages. The match is locale-agnostic — any
+    // Fire-now path for conversion pages. The match is locale-agnostic  any
     // pathname segment "/success/<id>" qualifies.
-    const isConversionPage = /\/success\/[^/]+/.test(window.location.pathname);
+    const isConversionPage = /\/(success|donation-failed)(\/|$)/.test(window.location.pathname);
     if (isConversionPage) {
       load();
-      return cleanup;
+      return;
     }
 
-    timeoutId = setTimeout(load, 6000);
-    window.addEventListener("scroll", load, { passive: true, once: true });
-    window.addEventListener("pointerdown", load, { once: true });
-    window.addEventListener("keydown", load, { once: true });
-    window.addEventListener("touchstart", load, { passive: true, once: true });
-
-    return cleanup;
+    // Everything else waits for the shared marketing gate: the first real
+    // interaction, or shortly after `load` (lib/tracking/marketing-gate.ts).
+    return whenMarketingAllowed(load);
   }, []);
 
   // ── Inject pixel scripts once config is ready ────────────────────────────────
@@ -359,7 +348,14 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
           version: string;
         }
         const n: FbqFn = function () {
-          n.callMethod ? n.callMethod(...arguments) : n.queue.push(arguments);
+          // Verbatim from Meta's pixel snippet: the loader forwards an unknown argument list through
+          // this same function object, and a rest parameter would not preserve the shape it expects.
+          // eslint-disable-next-line prefer-rest-params -- see the two lines above
+          if (n.callMethod) n.callMethod(...arguments);
+          else {
+            // eslint-disable-next-line prefer-rest-params -- Meta's loader queues the original Arguments object.
+            n.queue.push(arguments);
+          }
         } as FbqFn;
         b.fbq = n;
         if (!(b as Window & { _fbq?: FbqFn })._fbq) (b as Window & { _fbq?: FbqFn })._fbq = n;
@@ -377,18 +373,19 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       window.fbq?.("track", "PageView");
     }
 
-    // Google Analytics 4
-    if (config.gaMeasurementId) {
-      const id = config.gaMeasurementId;
-      window.dataLayer = window.dataLayer || [];
-      function gtag(..._args: unknown[]) {
-        // eslint-disable-next-line prefer-rest-params
-        window.dataLayer?.push(arguments);
-      }
-      (window as unknown as { gtag: (...a: unknown[]) => void }).gtag = gtag;
-      gtag("js", new Date());
-      gtag("config", id, { send_page_view: true });
-      loadScript(`https://www.googletagmanager.com/gtag/js?id=${id}`).catch(() => {});
+    // Mutually exclusive ownership. With GTM enabled the container loads once
+    // and owns Google tags; we do not install a parallel gtag.js/GA4/Ads config.
+    // The canonical payment-confirmed conversion source remains unchanged.
+    if (config.googleTagManagerEnabled && config.googleTagManagerId) {
+      loadConfiguredGoogleTagManager({
+        googleTagManagerId: config.googleTagManagerId,
+        googleTagManagerEnabled: true,
+      }, window, document);
+    } else {
+      initializeGoogleTracking({
+        gaMeasurementId: config.gaMeasurementId,
+        adsIds: googleAdsTargets(config).map(target => target.conversionId),
+      }, window, document);
     }
 
     // TikTok Pixel
@@ -488,7 +485,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
    * Conversion pages (/success, /donation-failed) are off-limits to every
    * event except `donation_complete` (which is owned by `trackDonate` and
    * does NOT route through here). Anything else firing on these paths is
-   * either a stray dialog mount or a misfired effect — both contaminate
+   * either a stray dialog mount or a misfired effect  both contaminate
    * Meta's funnel with phantom events on the conversion landing.
    */
   const sendCanonical = useCallback(
@@ -497,7 +494,6 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         const path = window.location.pathname;
         if (/\/(success|donation-failed)(\/|$)/.test(path)) {
           if (process.env.NODE_ENV !== "production") {
-            // eslint-disable-next-line no-console
             console.debug("[tracking] suppressed canonical event on conversion page", {
               event: partial.event,
               path,
@@ -599,7 +595,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
             quantity:      i.quantity ?? 1,
           }));
         }
-        // User / customer info — for GTM enhanced matching and Meta CAPI via GTM
+        // User / customer info  for GTM enhanced matching and Meta CAPI via GTM
         if (u.email)            ga4.email            = u.email;
         if (u.phone)            ga4.phone            = u.phone;
         if (u.first_name)       ga4.first_name       = u.first_name;
@@ -613,6 +609,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         if (u.external_id)      ga4.external_id      = u.external_id;
         if (u.fbp)              ga4.fbp              = u.fbp;
         if (u.fbc)              ga4.fbc              = u.fbc;
+        if (u.subscription_id)  ga4.subscription_id  = u.subscription_id;
         if (u.user_agent)       ga4.user_agent       = u.user_agent;
         if (event.custom) Object.assign(ga4, event.custom);
         window.gtag("event", ga4EventName, ga4);
@@ -633,7 +630,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       }
 
       // ── Server (CAPI + TikTok Events API) ────────────────────────────────
-      // Fire-and-forget — don't block UI
+      // Fire-and-forget  don't block UI
       fetch("/api/track", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
@@ -760,6 +757,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         cause_id:      options.causeId,
         cause_name:    options.causeName,
         donation_type: options.donationType,
+        recurring:     options.donationType === "MONTHLY",
       },
       payment: {
         gateway: options.gateway as CanonicalPayment["gateway"],
@@ -772,7 +770,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
   const trackPaymentFailed = useCallback((options: TrackPaymentFailedOptions) => {
     // Browser-side payment_failed fires GA4 "exception" and Vercel Analytics
     // for funnel/diagnostics only. The Meta DonateFailed CAPI event is owned
-    // by the SERVER (see donation-conversion-server.ts) — `payment_failed` is
+    // by the SERVER (see donation-conversion-server.ts)  `payment_failed` is
     // deliberately absent from META_EVENT_MAP and listed in
     // META_CAPI_OFF_CHANNEL, so fbq does not fire here and /api/track
     // refuses to forward it.
@@ -811,12 +809,12 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
   /**
    * Fire Meta Pixel "Donate" once for a confirmed-paid donation. Intentionally
    * does NOT route through `sendCanonical`:
-   *   • No /api/track mirror — CAPI Donate is owned by
+   *   • No /api/track mirror  CAPI Donate is owned by
    *     POST /api/donations/:id/track-conversion, which already fired by the
    *     time the success page calls this. /api/track would refuse the event
    *     anyway (donation_complete is in META_CAPI_OFF_CHANNEL), but skipping
    *     the round trip is cleaner.
-   *   • No TikTok / GA4 / X / Vercel fan-out — GA4 MP purchase is also fired
+   *   • No TikTok / GA4 / X / Vercel fan-out  GA4 MP purchase is also fired
    *     server-side from the same endpoint; the other platforms don't have a
    *     wired donation_complete leg yet (see project memory).
    *
@@ -858,13 +856,16 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       contents,
       num_items: contents.reduce((s, c) => s + (c.quantity ?? 1), 0),
       content_name: options.contentName,
-      content_category: options.contentCategory ?? "donation",
+      content_category:
+        options.contentCategory ??
+        (options.donationType === "MONTHLY" ? "monthly" : "donation"),
       order_id: options.donationId,
       transaction_id: options.donationId,
       status: "paid",
       success: true,
       payment_info_available: true,
-      donation_type: "one_time",
+      donation_type:
+        options.donationType === "MONTHLY" ? "monthly" : "one_time",
       payment_method: (options.paymentMethod ?? "card").toLowerCase(),
     };
 
@@ -884,13 +885,12 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
     if (tryFire()) return;
 
     let attempts = 0;
-    const MAX_ATTEMPTS = 40; // ~6s at 150ms intervals — well past pixel init
+    const MAX_ATTEMPTS = 40; // ~6s at 150ms intervals  well past pixel init
     const timer = setInterval(() => {
       attempts += 1;
       if (tryFire() || attempts >= MAX_ATTEMPTS) {
         clearInterval(timer);
         if (attempts >= MAX_ATTEMPTS && process.env.NODE_ENV !== "production") {
-          // eslint-disable-next-line no-console
           console.warn("[Donate] fbq never became ready; CAPI fire is the only signal", {
             eventId,
             hasFbq: !!window.fbq,
@@ -935,3 +935,4 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
     </TrackingContext.Provider>
   );
 }
+

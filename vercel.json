@@ -10,10 +10,14 @@
     },
     {
       "path": "/api/cron/communication-run-due",
-      "schedule": "*/10 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/communication-sync-email-events",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/communication-sync-whatsapp-templates",
       "schedule": "*/15 * * * *"
     },
     {
@@ -22,7 +26,37 @@
     },
     {
       "path": "/api/cron/reconcile-donations",
-      "schedule": "30 3 * * *"
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/recurring-charges",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/resume-dispatches",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/editorial-weekly",
+      "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/editorial-work",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/google-search-work",
+      "schedule": "*/5 * * * *"
     }
-  ]
+  ],
+  "installCommand": "npm ci --prefer-offline --no-audit --no-fund",
+  "buildCommand": "npm run build:vercel",
+  "github": {
+    "autoJobCancelation": true
+  },
+  "git": {
+    "deploymentEnabled": {
+      "fix/production-runtime-audit-oct7-safe": false
+    }
+  }
 }

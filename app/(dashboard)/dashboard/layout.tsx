@@ -1,16 +1,34 @@
+import "@/styles/dashboard-utilities.css";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import DashboardLayoutClient from "./DashboardLayoutClient";
-import ar from "../../../i18n/messages/ar.json";
+import { pickNamespaces, SHELL_NAMESPACES } from "@/i18n/locale-messages";
+import { DASH_LOCALE_COOKIE, dt, parseDashLocale, setDashRequestLocale } from "@/lib/dashboard/i18n";
 
-export const metadata: Metadata = {
-  title: "لوحة التحكم | يدي جيهان",
-  description: "إدارة المشاريع والتبرعات والمستخدمين",
-  icons: { icon: "/logometayedi.avif" },
-  robots: { index: false, follow: false },
-};
+/** The interface language picked in the top bar (Arabic until one is picked). */
+async function requestDashLocale() {
+  const locale = parseDashLocale((await cookies()).get(DASH_LOCALE_COOKIE)?.value);
+  setDashRequestLocale(locale);
+  return locale;
+}
+
+// The whole dashboard is behind `getServerSession` and can never be served statically.
+// Saying so explicitly makes `next build` skip the prerender attempt for every page
+// under it; on Vercel that attempt reached /dashboard/ads and died with a null React
+// dispatcher (`Cannot read properties of null (reading 'useContext')`).
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  await requestDashLocale();
+  return {
+    title: dt("لوحة التحكم"),
+    description: dt("إدارة المشاريع والتبرعات والمستخدمين"),
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function DashboardLayout({
   children,
@@ -19,9 +37,9 @@ export default async function DashboardLayout({
 }) {
   const session = await getServerSession(authOptions);
 
-  // Root gate for the whole dashboard tree. `middleware.ts` deliberately excludes /dashboard
-  // from its matcher, and only 2 of ~30 sections (archive, operations) had their own layout
-  // guard — so the other 28 rendered server-side for an unauthenticated visitor. The API
+  // Root gate for the whole dashboard tree. `proxy.ts` leaves /dashboard
+  // authorization to this layout, and only 2 of ~30 sections (archive, operations) had their own layout
+  // guard  so the other 28 rendered server-side for an unauthenticated visitor. The API
   // routes are guarded, so this was defence-in-depth rather than a data leak, but an
   // anonymous visitor could still render the dashboard shell.
   //
@@ -31,14 +49,15 @@ export default async function DashboardLayout({
     redirect("/ar/auth/signin");
   }
 
-  const locale = "ar";
-  const messages = (ar ?? {}) as unknown as Record<string, string | Record<string, string>>;
+  const locale = await requestDashLocale();
+  const messages = pickNamespaces(locale, [...SHELL_NAMESPACES, "certificates"]) as unknown as Record<string, string | Record<string, string>>;
 
   return (
     <DashboardLayoutClient
       session={session}
       messages={messages}
       locale={locale}
+      enableVercelAnalytics={Boolean(process.env.VERCEL)}
     >
       {children}
     </DashboardLayoutClient>

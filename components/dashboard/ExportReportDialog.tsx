@@ -8,12 +8,13 @@
  * filters the user already selected on the page so the export "just works"
  * from one click, but the user can still override any field before exporting.
  *
- * Designed for finance ops — they need the per-campaign breakdown to be
+ * Designed for finance ops  they need the per-campaign breakdown to be
  * sortable in Excel and they need to keep team support separated from cause
  * funds. Both of those concerns are handled by the API + lib/donation-export.ts;
  * this dialog just collects the inputs.
  */
 
+import { DONATION_PROVIDER_OPTIONS } from "@/lib/dashboard/donation-provider-filter";
 import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
@@ -33,8 +34,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { dashDir, dt, dtx } from "@/lib/dashboard/i18n";
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -52,7 +55,7 @@ export interface ExportReportDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Endpoint that takes filters via query string and returns the file. */
   endpoint: string;
-  /** Dialog header — usually the page name (e.g. "تصدير تبرعات الإحالة"). */
+  /** Dialog header  usually the page name (e.g. "تصدير تبرعات الإحالة"). */
   title: string;
   /** Optional explanatory text. */
   description?: string;
@@ -72,8 +75,12 @@ export interface ExportReportDialogProps {
     category?: boolean;
     campaign?: boolean;
     status?: boolean;
+    type?: boolean;          // ONE_TIME / MONTHLY / all
+    subStatus?: boolean;     // ACTIVE / PAUSED / CANCELLED / PAYMENT_FAILED (recurring page)
+    frequency?: boolean;     // DAILY / FRIDAY / MONTHLY (recurring page)
     locale?: boolean;
     country?: boolean;
+    subscriptionOnly?: boolean;
     sort?: boolean;
     limit?: boolean;
   };
@@ -81,14 +88,21 @@ export interface ExportReportDialogProps {
 
 export interface ExportFormState {
   format: ExportFormat;
+  reportLanguage?: "ar" | "en";
   period: "day" | "week" | "month" | "all" | "custom";
   start: string;             // YYYY-MM-DD
   end: string;
   categoryId: string;
   campaignId: string;
-  status: "all" | "PAID" | "FAILED";
+  status: "all" | "RESOLVED" | "PAID" | "PENDING" | "FAILED";
+  type: "all" | "ONE_TIME" | "MONTHLY";
+  subStatus: "all" | "ACTIVE" | "PAUSED" | "CANCELLED" | "PAYMENT_FAILED";
+  /** Recurring plan cadence. */
+  frequency: "all" | "DAILY" | "FRIDAY" | "MONTHLY";
   locale: string;
   country: string;
+  provider?: string;
+  subscriptionOnly: boolean;
   sortBy: "date" | "amount";
   sortOrder: "asc" | "desc";
   limit: number;
@@ -96,14 +110,19 @@ export interface ExportFormState {
 
 export const EXPORT_DEFAULTS: ExportFormState = {
   format: "xlsx",
+  reportLanguage: "ar",
   period: "all",
   start: "",
   end: "",
   categoryId: "all",
   campaignId: "all",
   status: "all",
+  type: "all",
+  subStatus: "all",
+  frequency: "all",
   locale: "all",
   country: "all",
+  subscriptionOnly: false,
   sortBy: "date",
   sortOrder: "desc",
   limit: 20000,
@@ -127,6 +146,7 @@ function resolveDateRange(state: ExportFormState): { start: string; end: string 
 function buildQuery(endpoint: string, state: ExportFormState, fields: ExportReportDialogProps["enabledFields"]): string {
   const params = new URLSearchParams();
   params.set("format", state.format);
+  params.set("reportLanguage", state.reportLanguage ?? "ar");
 
   if (fields.period || fields.dateRange) {
     const { start, end } = resolveDateRange(state);
@@ -136,8 +156,15 @@ function buildQuery(endpoint: string, state: ExportFormState, fields: ExportRepo
   if (fields.category && state.categoryId !== "all") params.set("categoryId", state.categoryId);
   if (fields.campaign && state.campaignId !== "all") params.set("campaignId", state.campaignId);
   if (fields.status && state.status !== "all") params.set("status", state.status);
+  if (fields.type && state.type !== "all") {
+    params.set("donationType", state.type);
+  }
+  if (fields.subStatus && state.subStatus !== "all") params.set("subStatus", state.subStatus);
+  if (fields.frequency && state.frequency !== "all") params.set("frequency", state.frequency);
   if (fields.locale && state.locale !== "all") params.set("locale", state.locale);
   if (fields.country && state.country !== "all") params.set("country", state.country);
+  if (state.provider && state.provider !== "all") params.set("provider", state.provider);
+  if (fields.subscriptionOnly && state.subscriptionOnly) params.set("subscriptionOnly", "true");
   if (fields.sort) {
     params.set("sortBy", state.sortBy);
     params.set("sortOrder", state.sortOrder);
@@ -150,7 +177,7 @@ function buildQuery(endpoint: string, state: ExportFormState, fields: ExportRepo
 async function triggerDownload(url: string): Promise<void> {
   const res = await fetch(url, { credentials: "include" });
   if (!res.ok) {
-    let msg = "تعذّر تصدير التقرير";
+    let msg = dt("تعذّر تصدير التقرير");
     try {
       const json = await res.json();
       if (json?.error) msg = json.error;
@@ -194,10 +221,10 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
     setDownloading(true);
     try {
       await triggerDownload(previewQs);
-      toast.success("تم التصدير بنجاح");
+      toast.success(dt("تم التصدير بنجاح"));
       onOpenChange(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "تعذّر تصدير التقرير");
+      toast.error(e instanceof Error ? e.message : dt("تعذّر تصدير التقرير"));
     } finally {
       setDownloading(false);
     }
@@ -208,19 +235,27 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        <DialogHeader className="text-right">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir={dashDir()}>
+        <DialogHeader className="text-start">
           <DialogTitle className="text-lg font-bold flex items-center gap-2 justify-end">
             <Download className="w-5 h-5 text-blue-600" />
             {title}
           </DialogTitle>
           {description && (
-            <DialogDescription className="text-right text-slate-600">
+            <DialogDescription className="text-start text-slate-600">
               {description}
             </DialogDescription>
           )}
         </DialogHeader>
 
+        <label className="grid gap-2 text-sm font-medium">
+          {dt("لغة التقرير")}
+          <select className="h-10 rounded-md border bg-background px-3" value={state.reportLanguage ?? "ar"}
+            onChange={(event) => setField("reportLanguage", event.target.value as "ar" | "en")}>
+            <option value="ar">العربية</option>
+            <option value="en">English</option>
+          </select>
+        </label>
         {/* Format toggle */}
         <div className="grid grid-cols-2 gap-3 my-2">
           <button
@@ -236,8 +271,7 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
             <FileSpreadsheet className={"w-7 h-7 " + (state.format === "xlsx" ? "text-emerald-600" : "text-slate-400")} />
             <div className="text-sm font-semibold">Excel (XLSX)</div>
             <div className="text-xs text-slate-500 text-center leading-tight">
-              منسّق، ملخص + تفاصيل
-            </div>
+              {dt("منسّق، ملخص + تفاصيل")}</div>
           </button>
           <button
             type="button"
@@ -252,8 +286,7 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
             <FileText className={"w-7 h-7 " + (state.format === "csv" ? "text-blue-600" : "text-slate-400")} />
             <div className="text-sm font-semibold">CSV</div>
             <div className="text-xs text-slate-500 text-center leading-tight">
-              نصي، لأنظمة المحاسبة
-            </div>
+              {dt("نصي، لأنظمة المحاسبة")}</div>
           </button>
         </div>
 
@@ -261,18 +294,18 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
           {/* Period */}
           {enabledFields.period && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">الفترة</Label>
+              <Label className="text-xs font-medium text-slate-600">{dt("الفترة")}</Label>
               <Select
                 value={state.period}
                 onValueChange={(v) => setField("period", v as ExportFormState["period"])}
               >
-                <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">كل الوقت</SelectItem>
-                  <SelectItem value="day">آخر يوم</SelectItem>
-                  <SelectItem value="week">آخر أسبوع</SelectItem>
-                  <SelectItem value="month">آخر شهر</SelectItem>
-                  <SelectItem value="custom">مخصص</SelectItem>
+                  <SelectItem value="all">{dt("كل الوقت")}</SelectItem>
+                  <SelectItem value="day">{dt("آخر يوم")}</SelectItem>
+                  <SelectItem value="week">{dt("آخر أسبوع")}</SelectItem>
+                  <SelectItem value="month">{dt("آخر شهر")}</SelectItem>
+                  <SelectItem value="custom">{dt("مخصص")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -282,21 +315,21 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
           {enabledFields.dateRange && state.period === "custom" && (
             <>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">من تاريخ</Label>
+                <Label className="text-xs font-medium text-slate-600">{dt("من تاريخ")}</Label>
                 <Input
                   type="date"
                   value={state.start}
                   onChange={(e) => setField("start", e.target.value)}
-                  className="text-right"
+                  className="text-start"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">إلى تاريخ</Label>
+                <Label className="text-xs font-medium text-slate-600">{dt("إلى تاريخ")}</Label>
                 <Input
                   type="date"
                   value={state.end}
                   onChange={(e) => setField("end", e.target.value)}
-                  className="text-right"
+                  className="text-start"
                 />
               </div>
             </>
@@ -305,14 +338,14 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
           {/* Category */}
           {enabledFields.category && options.categories && options.categories.length > 0 && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">القسم</Label>
+              <Label className="text-xs font-medium text-slate-600">{dt("القسم")}</Label>
               <Select
                 value={state.categoryId}
                 onValueChange={(v) => setField("categoryId", v)}
               >
-                <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
+                  <SelectItem value="all">{dt("الكل")}</SelectItem>
                   {options.categories.map((c) => (
                     <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                   ))}
@@ -324,14 +357,14 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
           {/* Campaign */}
           {enabledFields.campaign && options.campaigns && options.campaigns.length > 0 && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">الحملة</Label>
+              <Label className="text-xs font-medium text-slate-600">{dt("الحملة")}</Label>
               <Select
                 value={state.campaignId}
                 onValueChange={(v) => setField("campaignId", v)}
               >
-                <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
+                  <SelectItem value="all">{dt("الكل")}</SelectItem>
                   {options.campaigns.map((c) => (
                     <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                   ))}
@@ -343,16 +376,75 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
           {/* Donation status */}
           {enabledFields.status && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">حالة التبرع</Label>
+              <Label className="text-xs font-medium text-slate-600">{dt("حالة التبرع")}</Label>
               <Select
                 value={state.status}
                 onValueChange={(v) => setField("status", v as ExportFormState["status"])}
               >
-                <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="PAID">ناجح</SelectItem>
-                  <SelectItem value="FAILED">فاشل</SelectItem>
+                  <SelectItem value="RESOLVED">{dt("ناجح وفاشل فقط")}</SelectItem>
+                  <SelectItem value="PAID">{dt("ناجح")}</SelectItem>
+                  <SelectItem value="FAILED">{dt("فاشل")}</SelectItem>
+                  <SelectItem value="PENDING">{dt("محاولات بحاجة لتحقق")}</SelectItem>
+                  <SelectItem value="all">{dt("كل الحالات (مع غير المحسومة)")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Donation type */}
+          {enabledFields.type && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">{dt("نوع التبرع")}</Label>
+              <Select
+                value={state.type}
+                onValueChange={(v) => setField("type", v as ExportFormState["type"])}
+              >
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{dt("الكل")}</SelectItem>
+                  <SelectItem value="ONE_TIME">{dt("لمرة واحدة")}</SelectItem>
+                  <SelectItem value="MONTHLY">{dt("متكرر")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Subscription status */}
+          {enabledFields.subStatus && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">{dt("حالة الاشتراك")}</Label>
+              <Select
+                value={state.subStatus}
+                onValueChange={(v) => setField("subStatus", v as ExportFormState["subStatus"])}
+              >
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{dt("الكل")}</SelectItem>
+                  <SelectItem value="ACTIVE">{dt("نشط")}</SelectItem>
+                  <SelectItem value="PAUSED">{dt("متوقف")}</SelectItem>
+                  <SelectItem value="CANCELLED">{dt("ملغي")}</SelectItem>
+                  <SelectItem value="PAYMENT_FAILED">{dt("تعذّر الخصم")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Recurring cadence */}
+          {enabledFields.frequency && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-slate-600">{dt("الدورية")}</Label>
+              <Select
+                value={state.frequency}
+                onValueChange={(v) => setField("frequency", v as ExportFormState["frequency"])}
+              >
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{dt("كل الدوريات")}</SelectItem>
+                  <SelectItem value="DAILY">{dt("يومي")}</SelectItem>
+                  <SelectItem value="FRIDAY">{dt("تبرع كل جمعة")}</SelectItem>
+                  <SelectItem value="MONTHLY">{dt("شهري")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -361,15 +453,15 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
           {/* Locale */}
           {enabledFields.locale && options.locales && options.locales.length > 0 && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">اللغة</Label>
+              <Label className="text-xs font-medium text-slate-600">{dt("اللغة")}</Label>
               <Select
                 value={state.locale}
                 onValueChange={(v) => setField("locale", v)}
               >
-                <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="__unset">غير محدد</SelectItem>
+                  <SelectItem value="all">{dt("الكل")}</SelectItem>
+                  <SelectItem value="__unset">{dt("غير محدد")}</SelectItem>
                   {options.locales.map((l) => (
                     <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
                   ))}
@@ -381,15 +473,15 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
           {/* Country */}
           {enabledFields.country && options.countries && options.countries.length > 0 && (
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-slate-600">الدولة</Label>
+              <Label className="text-xs font-medium text-slate-600">{dt("الدولة")}</Label>
               <Select
                 value={state.country}
                 onValueChange={(v) => setField("country", v)}
               >
-                <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">الكل</SelectItem>
-                  <SelectItem value="__unset">غير محدد</SelectItem>
+                  <SelectItem value="all">{dt("الكل")}</SelectItem>
+                  <SelectItem value="__unset">{dt("غير محدد")}</SelectItem>
                   {options.countries.map((c) => (
                     <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
                   ))}
@@ -398,32 +490,40 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
             </div>
           )}
 
+          {state.provider !== undefined ? <div className="space-y-1.5">
+            <Label htmlFor="export-provider" className="text-xs font-medium text-slate-600">{dt("بوابة الدفع")}</Label>
+            <Select value={state.provider} onValueChange={value => setField("provider", value)}>
+              <SelectTrigger id="export-provider" className="text-start"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">{dt("كل البوابات")}</SelectItem>{DONATION_PROVIDER_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.value === "BANK_TRANSFER" ? dt("تحويل بنكي") : option.label}</SelectItem>)}<SelectItem value="__unset">{dt("غير محدد")}</SelectItem></SelectContent>
+            </Select>
+          </div> : null}
+
           {/* Sort */}
           {enabledFields.sort && (
             <>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">الترتيب حسب</Label>
+                <Label className="text-xs font-medium text-slate-600">{dt("الترتيب حسب")}</Label>
                 <Select
                   value={state.sortBy}
                   onValueChange={(v) => setField("sortBy", v as ExportFormState["sortBy"])}
                 >
-                  <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="date">التاريخ</SelectItem>
-                    <SelectItem value="amount">القيمة</SelectItem>
+                    <SelectItem value="date">{dt("التاريخ")}</SelectItem>
+                    <SelectItem value="amount">{dt("القيمة")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-slate-600">الاتجاه</Label>
+                <Label className="text-xs font-medium text-slate-600">{dt("الاتجاه")}</Label>
                 <Select
                   value={state.sortOrder}
                   onValueChange={(v) => setField("sortOrder", v as ExportFormState["sortOrder"])}
                 >
-                  <SelectTrigger className="text-right"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="text-start"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="desc">تنازلي</SelectItem>
-                    <SelectItem value="asc">تصاعدي</SelectItem>
+                    <SelectItem value="desc">{dt("تنازلي")}</SelectItem>
+                    <SelectItem value="asc">{dt("تصاعدي")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -434,46 +534,57 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
           {enabledFields.limit && (
             <div className="space-y-1.5 sm:col-span-2">
               <Label className="text-xs font-medium text-slate-600">
-                الحد الأقصى لعدد العمليات (1 - 50000)
-              </Label>
+                {dt("الحد الأقصى لعدد العمليات (1 - 50000)")}</Label>
               <Input
                 type="number"
                 min={1}
                 max={50000}
                 value={state.limit}
                 onChange={(e) => setField("limit", Math.max(1, Math.min(50000, parseInt(e.target.value, 10) || 20000)))}
-                className="text-right"
+                className="text-start"
               />
             </div>
           )}
         </div>
 
+        {/* subscriptionOnly switch */}
+        {enabledFields.subscriptionOnly && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 mt-2">
+            <div className="text-start">
+              <div className="text-sm font-medium text-slate-700">{dt("الاشتراكات المتكررة فقط")}</div>
+              <div className="text-xs text-slate-500">{dt("عرض التبرعات المرتبطة باشتراك دوري")}</div>
+            </div>
+            <Switch
+              checked={state.subscriptionOnly}
+              onCheckedChange={(v) => setField("subscriptionOnly", !!v)}
+            />
+          </div>
+        )}
+
         {/* Summary banner */}
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 leading-relaxed mt-2">
-          <div className="font-semibold mb-1">يحتوي التقرير على:</div>
+          <div className="font-semibold mb-1">{dt("يحتوي التقرير على:")}</div>
           <ul className="space-y-0.5 list-disc list-inside marker:text-emerald-600">
-            <li>قائمة كاملة بكل عمليات التبرع المطابقة</li>
-            <li>فصل واضح بين <strong>مبلغ التبرع</strong> و<strong>دعم الفريق</strong> و<strong>رسوم المعالجة</strong></li>
-            <li>إجماليات لكل عملة بالقيمة المحلية + بالدولار</li>
-            <li>تفصيل حسب الحملة (من الأعلى إلى الأدنى) ، القسم، الدولة، الإحالة، اللغة</li>
-            <li>KPI شاملة: عدد العمليات، الناجحة، الفاشلة، متبرعون فريدون</li>
+            <li>{dt("قائمة كاملة بكل عمليات التبرع المطابقة")}</li>
+            <li>{dt("فصل واضح بين ")}<strong>{dt("مبلغ التبرع")}</strong> {dt(" و")}<strong>{dt("دعم الفريق")}</strong> {dt(" و")}<strong>{dt("رسوم المعالجة")}</strong></li>
+            <li>{dt("إجماليات لكل عملة بالقيمة المحلية + بالدولار")}</li>
+            <li>{dt("تفصيل حسب الحملة (من الأعلى إلى الأدنى) ، القسم، الدولة، الإحالة، اللغة")}</li>
+            <li>{dt("KPI شاملة: عدد العمليات، الناجحة، الفاشلة، متبرعون فريدون")}</li>
           </ul>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={downloading}>
-            إلغاء
-          </Button>
+            {dt("إلغاء")}</Button>
           <Button onClick={handleExport} disabled={downloading} className="bg-blue-600 hover:bg-blue-700">
             {downloading ? (
               <>
                 <Loader2 className="w-4 h-4 ms-2 animate-spin" />
-                جاري التصدير...
-              </>
+                {dt("جاري التصدير...")}</>
             ) : (
               <>
                 <Download className="w-4 h-4 ms-2" />
-                تصدير {state.format === "xlsx" ? "Excel" : "CSV"}
+                {dtx("تصدير {0}", [state.format === "xlsx" ? "Excel" : "CSV"])}
               </>
             )}
           </Button>
@@ -482,3 +593,5 @@ export function ExportReportDialog(props: ExportReportDialogProps) {
     </Dialog>
   );
 }
+
+

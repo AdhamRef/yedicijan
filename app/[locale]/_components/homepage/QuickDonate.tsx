@@ -13,8 +13,8 @@ import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-lin
 import type { SuggestedDonationsConfig } from "@/lib/campaign/suggested-donations";
 import type { ShareLabelsConfig } from "@/lib/campaign/share-labels";
 
-// DonationDialog is a large client chunk; loading it lazily keeps it out of the
-// homepage critical path entirely.
+// DonationDialog pulls in @stripe/stripe-js (~230KiB) plus the Stripe utility script.
+// Loading it lazily keeps Stripe out of the homepage critical path entirely.
 const DonationDialog = dynamic(() => import("@/components/DonationDialog"), { ssr: false });
 
 interface CategoryOption {
@@ -46,7 +46,7 @@ interface CampaignOption {
 }
 
 interface QuickDonateProps {
-  /** Server-fetched categories — when provided we skip the client fetch + loading state,
+  /** Server-fetched categories  when provided we skip the client fetch + loading state,
    *  which means the SSR HTML already contains the final dropdown content (no CLS). */
   initialCategories?: CategoryOption[];
 }
@@ -55,6 +55,7 @@ const QUICK_DONATE_RESUME_KEY = "quickDonateResume";
 
 const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => {
   const t = useTranslations("QuickDonate");
+  const tDonation = useTranslations("DonationDialog");
   const locale = useLocale() as "ar" | "en" | "fr";
   const pathname = usePathname();
   const router = useRouter();
@@ -66,7 +67,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
     initialCategories[0]?.id ?? ""
   );
   const [donationDialogOpen, setDonationDialogOpen] = useState(false);
-  // Gate the actual mount so the dialog chunk doesn't load on page paint.
+  // Gate the actual mount so the Stripe / dialog chunk doesn't load on page paint.
   const [donationDialogMounted, setDonationDialogMounted] = useState(false);
   const [categoriesLoading, setCategoriesLoading] = useState(initialCategories.length === 0);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
@@ -80,16 +81,28 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
    *  springs open on a deliberate change and never on first paint. */
   const autoOpenCampaignsRef = useRef(false);
   const [currencyLabel, setCurrencyLabel] = useState<string>("USD");
+  const [stripeMinAmount, setStripeMinAmount] = useState(1);
   /** Campaign the visitor had picked before being sent to sign-in. */
   const pendingResumeCampaignRef = useRef<string>("");
   const [resumeRequested, setResumeRequested] = useState(false);
 
   useEffect(() => {
-    setCurrencyLabel(getCurrency());
+    const cur = getCurrency();
+    setCurrencyLabel(cur);
+    if (cur !== "USD") {
+      try {
+        const cached = localStorage.getItem("cachedExchangeRates");
+        if (cached) {
+          const { rates } = JSON.parse(cached) as { rates: Record<string, number> };
+          const rate = rates?.[cur];
+          if (rate) setStripeMinAmount(Math.ceil(rate));
+        }
+      } catch { /* use default 1 */ }
+    }
   }, []);
 
   // After sign-in redirect: restore the selection and re-open the dialog. The
-  // dialog can't open here any more — it now needs a campaign, and campaigns are
+  // dialog can't open here any more  it now needs a campaign, and campaigns are
   // fetched per category, so opening waits until that selection is back in place.
   useEffect(() => {
     if (searchParams.get("openDonation") !== "1") return;
@@ -126,7 +139,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Categories arrive as a prop from the server — only re-fetch on the client if the
+  // Categories arrive as a prop from the server  only re-fetch on the client if the
   // server failed to populate them (e.g. /api/categories was 5xx during SSR).
   useEffect(() => {
     if (initialCategories.length > 0) return;
@@ -184,7 +197,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         pendingResumeCampaignRef.current = "";
         const restored = wanted ? items.find((c) => c.id === wanted) : undefined;
         setSelectedCampaignId(restored?.id ?? items[0]?.id ?? "");
-        // The saved project is gone (unpublished, or the area changed) — don't
+        // The saved project is gone (unpublished, or the area changed)  don't
         // silently reopen checkout on a different one, let them pick again.
         if (wanted && !restored) setResumeRequested(false);
 
@@ -205,8 +218,9 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const selectedCampaign = campaigns.find((c) => c.id === selectedCampaignId);
   const displayAmount = selectedAmount ?? (customAmount ? parseFloat(customAmount) || 0 : 0);
+  const belowMin = stripeMinAmount > 1 && displayAmount > 0 && displayAmount < stripeMinAmount;
   const canDonate =
-    Boolean(selectedCampaignId) && displayAmount > 0 && !campaignsLoading;
+    Boolean(selectedCampaignId) && displayAmount > 0 && !belowMin && !campaignsLoading;
 
   // Reopen checkout once the restored project is actually in hand.
   useEffect(() => {
@@ -232,7 +246,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
   const handleCategorySelect = (categoryId: string) => {
     setCategoryDropdownOpen(false);
     if (categoryId === selectedCategoryId) return;
-    // Deliberate change — reveal the projects inside it rather than making the
+    // Deliberate change  reveal the projects inside it rather than making the
     // visitor guess that a second choice is waiting.
     autoOpenCampaignsRef.current = true;
     setSelectedCategoryId(categoryId);
@@ -360,7 +374,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
             )}
           </div>
 
-          {/* Project inside the chosen area — the donation is credited here, not
+          {/* Project inside the chosen area  the donation is credited here, not
               to the area, so it has to be an explicit choice. */}
           <div ref={campaignDropdownRef} className="relative mb-4">
             <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-gray-400">{t("selectProject")}</label>
@@ -446,8 +460,12 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
             </div>
           </div>
 
-          {/* Encouragement */}
-          {displayAmount > 0 ? (
+          {/* Encouragement / Stripe minimum hint */}
+          {belowMin ? (
+            <p className="mt-3 animate-fade-in text-center text-xs font-medium text-amber-600">
+              {tDonation("stripeMinDonation", { amount: stripeMinAmount, currency: currencyLabel })}
+            </p>
+          ) : displayAmount > 0 ? (
             <p className="mt-3 flex items-center gap-2 rounded-xl bg-burgundy/[0.06] px-3.5 py-2.5 text-xs font-medium leading-relaxed text-burgundy animate-fade-in">
               <Heart className="h-3.5 w-3.5 shrink-0" fill="currentColor" />
               {t("encourage", { amount: `${displayAmount} ${currencyLabel}` })}
@@ -493,6 +511,9 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         <DonationDialog
           isOpen={donationDialogOpen}
           onClose={() => setDonationDialogOpen(false)}
+          // No monthlyOnly: the dialog opens on its own first step so the visitor
+          // chooses one-time or monthly instead of being committed to a
+          // subscription they never asked for.
           campaignId={selectedCampaign?.id ?? ""}
           campaignTitle={selectedCampaign?.title ?? ""}
           campaignImage={selectedCampaign?.images?.[0] || undefined}

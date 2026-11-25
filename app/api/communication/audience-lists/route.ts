@@ -11,6 +11,8 @@ import {
   AUDIENCE_LIST_PREFIX,
 } from "@/lib/communication/audience-list-service";
 import { COMMUNICATION_CHANNELS } from "@/lib/communication/communication-runtime-types";
+import { AUDIENCE_SELECTION_MAX } from "@/lib/communication/audience-limits";
+import { normalizeSmartAudienceDefinition, smartAudienceMetadata, countSmartAudience } from "@/lib/communication/smart-audience";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +21,10 @@ const createSchema = z.object({
   name: z.string().min(1).max(160),
   description: z.string().max(500).nullable().optional(),
   channel: z.enum(COMMUNICATION_CHANNELS),
-  userIds: z.array(z.string().min(1)).min(1).max(1000),
+  userIds: z.array(z.string().min(1)).min(1).max(AUDIENCE_SELECTION_MAX).optional(),
+  smartDefinition: z.unknown().optional(),
+}).refine((value) => Boolean(value.smartDefinition) !== Boolean(value.userIds?.length), {
+  message: "Provide either smartDefinition or userIds",
 });
 
 export async function GET() {
@@ -38,8 +43,10 @@ export async function GET() {
  * re-checks consent at send time. Storing ids on the campaign would have meant a second recipient
  * path to keep in step with the first.
  *
- * Members are capped at 1000 by the service — the same ceiling `addDonorMembers` enforces — so a
- * runaway "select all" cannot silently create an audience the executor would then truncate.
+ * Members are capped at `AUDIENCE_SELECTION_MAX`  the same ceiling the donor picker offers and
+ * `addDonorMembers` enforces. It is one constant on purpose: the two used to disagree (5,000 in the
+ * picker, 1,000 here), so a "select all" the UI accepted was rejected here after the user had
+ * already chosen the audience, the template and the name.
  */
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -58,6 +65,31 @@ export async function POST(request: NextRequest) {
   }
 
   const actor = auditActorFromDashboardSession(session!);
+
+  if (parsed.data.smartDefinition) {
+    const definition = normalizeSmartAudienceDefinition(parsed.data.smartDefinition, parsed.data.channel);
+    const matched = await countSmartAudience(definition);
+    const created = await createAudienceList(
+      {
+        name: parsed.data.name,
+        description: parsed.data.description ?? null,
+        type: "SMART",
+        channels: [parsed.data.channel],
+        metadata: smartAudienceMetadata(definition, { lastMatchedCount: matched }),
+      },
+      actor,
+    );
+    if (!created.ok) return NextResponse.json({ ok: false, error: created.error }, { status: created.status });
+    return NextResponse.json({
+      ok: true,
+      listId: created.data.id,
+      added: 0,
+      matched,
+      audienceType: "SMART",
+      audienceSegmentKey: `${AUDIENCE_LIST_PREFIX}${created.data.id}`,
+    });
+  }
+
   const created = await createAudienceList(
     {
       name: parsed.data.name,
@@ -69,13 +101,14 @@ export async function POST(request: NextRequest) {
   );
   if (!created.ok) return NextResponse.json({ ok: false, error: created.error }, { status: created.status });
 
-  const added = await addDonorMembers(created.data.id, parsed.data.userIds, actor);
+  const added = await addDonorMembers(created.data.id, parsed.data.userIds ?? [], actor);
   if (!added.ok) return NextResponse.json({ ok: false, error: added.error }, { status: added.status });
 
   return NextResponse.json({
     ok: true,
     listId: created.data.id,
     added: added.data.added,
+    audienceType: "CUSTOM",
     audienceSegmentKey: `${AUDIENCE_LIST_PREFIX}${created.data.id}`,
   });
 }

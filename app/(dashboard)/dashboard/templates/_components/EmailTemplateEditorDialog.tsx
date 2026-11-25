@@ -10,6 +10,7 @@ import type { EmailDocument } from "@/components/email-builder";
 import { defaultDocument } from "@/components/email-builder";
 import { SUPPORTED_LOCALES, LOCALE_LABELS, DEFAULT_LOCALE, type SupportedLocale } from "@/lib/locales";
 import { TemplateDialogShell, LocaleStrip, FieldLabel } from "./TemplateDialogShell";
+import { dt } from "@/lib/dashboard/i18n";
 
 const EmailEditor = dynamic(
   () => import("@/components/email-builder").then((m) => m.EmailEditor),
@@ -17,8 +18,7 @@ const EmailEditor = dynamic(
     ssr: false,
     loading: () => (
       <div className="h-[60vh] flex items-center justify-center text-sm text-muted-foreground">
-        جاري تحميل المحرر…
-      </div>
+        {dt("جاري تحميل المحرر…")}</div>
     ),
   }
 );
@@ -38,10 +38,13 @@ interface ApiTemplate {
   subject: string;
   document: EmailDocument;
   translations?: Partial<Record<string, { subject?: string; document?: EmailDocument }>> | null;
+  kind?: "SYSTEM" | "CAMPAIGN" | null;
+  purpose?: "MARKETING" | "UTILITY" | "TRANSACTIONAL" | "AUTHENTICATION" | null;
 }
 
 export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
   const [name, setName] = React.useState("");
+  const [kind, setKind] = React.useState<"SYSTEM" | "CAMPAIGN">("CAMPAIGN");
   const [variants, setVariants] = React.useState<VariantsState>({});
   const [activeLocale, setActiveLocale] = React.useState<SupportedLocale>(DEFAULT_LOCALE);
   const [loading, setLoading] = React.useState(false);
@@ -51,6 +54,7 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
     if (!open) return;
     if (!id) {
       setName("");
+      setKind("CAMPAIGN");
       setVariants({ [DEFAULT_LOCALE]: { subject: "", document: defaultDocument() } });
       setActiveLocale(DEFAULT_LOCALE);
       return;
@@ -61,6 +65,7 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
       .then((res) => {
         const t = res.data?.template as ApiTemplate;
         setName(t?.name ?? "");
+        setKind(t?.kind === "SYSTEM" || (t?.purpose && t.purpose !== "MARKETING") ? "SYSTEM" : "CAMPAIGN");
         const next: VariantsState = {
           [DEFAULT_LOCALE]: {
             subject: t?.subject ?? "",
@@ -82,7 +87,7 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
         setVariants(next);
         setActiveLocale(DEFAULT_LOCALE);
       })
-      .catch(() => toast.error("فشل تحميل القالب"))
+      .catch(() => toast.error(dt("فشل تحميل القالب")))
       .finally(() => setLoading(false));
   }, [id, open]);
 
@@ -116,12 +121,12 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
 
   const save = async () => {
     if (!name.trim()) {
-      toast.error("اسم القالب مطلوب");
+      toast.error(dt("اسم القالب مطلوب"));
       return;
     }
     const arVariant = variants[DEFAULT_LOCALE];
     if (!arVariant?.subject?.trim()) {
-      toast.error("الموضوع بالعربية مطلوب");
+      toast.error(dt("الموضوع بالعربية مطلوب"));
       return;
     }
     setSaving(true);
@@ -138,16 +143,22 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
         subject: arVariant.subject,
         document: arVariant.document,
         translations: Object.keys(translations).length > 0 ? translations : null,
+        kind,
+        purpose: kind === "CAMPAIGN" ? "MARKETING" : "TRANSACTIONAL",
+        status: "READY",
       };
       if (id) {
         await axios.patch(`/api/templates/email/${id}`, payload);
       } else {
         await axios.post("/api/templates/email", payload);
       }
-      toast.success("تم الحفظ");
+      toast.success(dt("تم الحفظ"));
       onOpenChange(false);
-    } catch {
-      toast.error("فشل الحفظ");
+    } catch (err) {
+      /* Say what the server refused rather than a bare "failed". */
+      const e = err as { response?: { data?: { error?: string; issues?: { fieldErrors?: Record<string, string[]> } } } };
+      const fields = Object.keys(e.response?.data?.issues?.fieldErrors ?? {});
+      toast.error(fields.length ? dt("فشل الحفظ: تحقّق من {0}", [fields.join(dt("، "))]) : e.response?.data?.error ? dt("فشل الحفظ: {0}", [e.response.data.error]) : dt("فشل الحفظ"));
     } finally {
       setSaving(false);
     }
@@ -157,7 +168,7 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
     <TemplateDialogShell
       open={open}
       onOpenChange={onOpenChange}
-      title={id ? "تعديل قالب البريد" : "قالب بريد جديد"}
+      title={id ? dt("تعديل قالب البريد") : dt("قالب بريد جديد")}
       icon={<Mail className="h-4 w-4" />}
       size="full"
       onCancel={() => onOpenChange(false)}
@@ -165,28 +176,39 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
       saving={saving}
       /* The builder manages its own scrolling and wants every pixel of height, so the body
          drops the shell padding and its scroll container. */
-      bodyClassName="overflow-hidden p-3"
+      bodyClassName="overflow-hidden p-2.5"
       toolbar={
         <>
           {/* Name and subject sit above the canvas rather than inside the header: at full-screen
               width the header row was a third input-wide and the ✕ crowded it. */}
-          <div className="grid shrink-0 grid-cols-1 gap-3 border-b border-border px-5 py-3 sm:grid-cols-2">
+          <div className="grid shrink-0 grid-cols-1 gap-2 border-b border-border px-4 py-2 sm:grid-cols-3">
             <div className="min-w-0 space-y-1">
-              <FieldLabel hint="لا يُرسل">اسم القالب</FieldLabel>
+              <FieldLabel hint={dt("لا يُرسل")}>{dt("اسم القالب")}</FieldLabel>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="مثال: شكر التبرع"
-                className="h-9"
+                placeholder={dt("مثال: شكر التبرع الشهري")}
+                className="h-8"
               />
             </div>
             <div className="min-w-0 space-y-1">
-              <FieldLabel hint={LOCALE_LABELS[activeLocale]}>موضوع البريد</FieldLabel>
+              <FieldLabel>{dt("نوع الاستخدام")}</FieldLabel>
+              <select
+                value={kind}
+                onChange={(e) => setKind(e.target.value as "SYSTEM" | "CAMPAIGN")}
+                className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+              >
+                <option value="SYSTEM">{dt("تلقائي / خدمي / توثيق")}</option>
+                <option value="CAMPAIGN">{dt("حملة تسويقية")}</option>
+              </select>
+            </div>
+            <div className="min-w-0 space-y-1">
+              <FieldLabel hint={LOCALE_LABELS[activeLocale]}>{dt("موضوع البريد")}</FieldLabel>
               <Input
                 value={current?.subject ?? ""}
                 onChange={(e) => updateCurrent({ subject: e.target.value })}
-                placeholder="مرحباً {{user.name}}"
-                className="h-9 font-mono text-xs"
+                placeholder={dt("مرحباً {{user.name}}")}
+                className="h-8 font-mono text-xs"
                 dir={activeLocale === "ar" ? "rtl" : "ltr"}
               />
             </div>
@@ -197,14 +219,14 @@ export function EmailTemplateEditorDialog({ id, open, onOpenChange }: Props) {
             onSelect={setActiveLocale}
             onEnable={enableLocale}
             onRemove={removeLocale}
+            compact
           />
         </>
       }
     >
       {loading || !current ? (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          <Loader2 className="me-2 h-6 w-6 animate-spin" /> جاري التحميل…
-        </div>
+          <Loader2 className="me-2 h-6 w-6 animate-spin" /> {dt(" جاري التحميل…")}</div>
       ) : (
         <EmailEditor
           key={activeLocale}

@@ -46,18 +46,22 @@ function createAppSecretProof(accessToken: string, appSecret: string): string {
   return createHmac("sha256", appSecret).update(accessToken).digest("hex");
 }
 
+/** A token must outlive this window to be activated; anything shorter is a temporary token. */
+const TOKEN_MIN_REMAINING_MS = 72 * 60 * 60 * 1000;
+const REQUIRED_WHATSAPP_SCOPES = ["whatsapp_business_management", "whatsapp_business_messaging"];
+
 export class MetaWhatsAppConnectionTester implements IntegrationProviderTester {
   constructor(private readonly fetchImpl: ProviderFetch = fetch) {}
 
   async test(input: ProviderConnectionTestInput): Promise<ProviderConnectionTestResult> {
     const token = input.values.ACCESS_TOKEN;
     const appSecret = input.values.APP_SECRET;
+    const appId = input.values.APP_ID;
+    const businessPortfolioId = input.values.BUSINESS_PORTFOLIO_ID;
     const verifyToken = input.values.WEBHOOK_VERIFY_TOKEN;
     const version = input.values.GRAPH_API_VERSION;
-    const businessId = input.values.BUSINESS_ACCOUNT_ID;
-    const phoneId = input.values.DEFAULT_PHONE_NUMBER_ID;
-    if (!token || !appSecret || !verifyToken || !version || !businessId || !phoneId) {
-      return failed("بيانات Meta المطلوبة غير مكتملة.", "META_CONFIGURATION_INCOMPLETE");
+    if (!token || !appId || !appSecret || !businessPortfolioId || !verifyToken || !version) {
+      return failed("بيانات Meta المركزية المطلوبة غير مكتملة.", "META_CONFIGURATION_INCOMPLETE");
     }
 
     try {
@@ -68,47 +72,104 @@ export class MetaWhatsAppConnectionTester implements IntegrationProviderTester {
 
     const base = `https://graph.facebook.com/${version}`;
     try {
-      const accountWithoutProof = await providerFetch(this.fetchImpl, `${base}/${businessId}?fields=id,name`, {
+      // Validate the access token first without appsecret_proof so authentication failures are
+      // distinguishable from an App Secret mismatch. WABA/phone validation is intentionally not
+      // performed here: those identifiers belong to individual CommunicationSender rows.
+      const identity = await providerFetch(this.fetchImpl, `${base}/me?fields=id,name`, {
         method: "GET",
         headers: bearer(token),
       });
-      if (!accountWithoutProof.ok) {
+      if (!identity.ok) {
         return failed(
-          "تعذر الوصول إلى حساب أعمال Meta.",
-          accountWithoutProof.status === 401 ? "META_UNAUTHORIZED" : "META_BUSINESS_ACCOUNT_UNAVAILABLE"
+          "تعذر التحقق من رمز الوصول إلى Meta.",
+          identity.status === 401 ? "META_UNAUTHORIZED" : "META_ACCOUNT_UNAVAILABLE"
         );
       }
 
-      const appSecretProof = createAppSecretProof(token, appSecret);
-      const accountWithProof = await providerFetch(
+      /* What the token is, asked of Meta with the app's own credentials. A personal user token
+         that expires within days would pass every check below and then stop all WhatsApp
+         traffic when it lapses, so that is refused here; so is a token without the WhatsApp
+         permissions. If Meta will not answer this call, the checks below still decide. */
+      const tokenInfo = await providerFetch(
         this.fetchImpl,
-        `${base}/${metaPath(`${businessId}?fields=id,name`, appSecretProof)}`,
+        `${base}/debug_token?input_token=${encodeURIComponent(token)}`,
+        { method: "GET", headers: bearer(`${appId}|${appSecret}`) },
+      );
+      const tokenData = tokenInfo.ok && tokenInfo.body && typeof tokenInfo.body === "object"
+        ? ((tokenInfo.body as { data?: Record<string, unknown> }).data ?? null)
+        : null;
+      const scopes = Array.isArray(tokenData?.scopes) ? (tokenData!.scopes as unknown[]).map(String) : null;
+      if (tokenData) {
+        if (tokenData.is_valid === false) {
+          return failed("رمز الوصول إلى Meta غير صالح.", "META_UNAUTHORIZED");
+        }
+        const expiresAt = Number(tokenData.expires_at ?? 0);
+        if (expiresAt > 0 && expiresAt * 1000 < Date.now() + TOKEN_MIN_REMAINING_MS) {
+          return failed(
+            `رمز الوصول مؤقت وينتهي في ${new Date(expiresAt * 1000).toISOString().slice(0, 16).replace("T", " ")} UTC. استخدم رمز System User دائمًا.`,
+            "META_TOKEN_EXPIRING",
+          );
+        }
+        if (scopes && !REQUIRED_WHATSAPP_SCOPES.every((scope) => scopes.includes(scope))) {
+          return failed(
+            "رمز الوصول لا يملك صلاحيات whatsapp_business_management وwhatsapp_business_messaging.",
+            "META_TOKEN_MISSING_WHATSAPP_SCOPES",
+          );
+        }
+      }
+
+      const appSecretProof = createAppSecretProof(token, appSecret);
+      const identityWithProof = await providerFetch(
+        this.fetchImpl,
+        `${base}/${metaPath("me?fields=id,name", appSecretProof)}`,
         { method: "GET", headers: bearer(token) }
       );
-      if (!accountWithProof.ok) {
+      if (!identityWithProof.ok) {
         return failed("تعذر التحقق من توافق App Secret مع Access Token.", "META_APP_SECRET_MISMATCH");
       }
 
-      const phones = await providerFetch(
+      const app = await providerFetch(
         this.fetchImpl,
-        `${base}/${metaPath(`${businessId}/phone_numbers?fields=id,verified_name,display_phone_number`, appSecretProof)}`,
-        { method: "GET", headers: bearer(token) }
+        `${base}/${metaPath(`${appId}?fields=id,name`, appSecretProof)}`,
+        { method: "GET", headers: bearer(token) },
       );
-      if (!phones.ok) return failed("تعذر قراءة أرقام واتساب المرتبطة بحساب الأعمال.", "META_PHONE_NUMBERS_UNAVAILABLE");
-      const linked = arrayFrom(phones.body, "data").some(
-        (item) => !!item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === phoneId
-      );
-      if (!linked) return failed("رقم واتساب المحدد غير مرتبط بحساب الأعمال.", "META_PHONE_NUMBER_MISMATCH");
+      if (!app.ok) {
+        return failed("تعذر الوصول إلى تطبيق Meta المحدد أو لا يتوافق مع بيانات الاعتماد.", "META_APP_ID_UNAVAILABLE");
+      }
 
-      const phone = await providerFetch(
+      const business = await providerFetch(
         this.fetchImpl,
-        `${base}/${metaPath(`${phoneId}?fields=id,verified_name,display_phone_number,quality_rating`, appSecretProof)}`,
-        { method: "GET", headers: bearer(token) }
+        `${base}/${metaPath(`${businessPortfolioId}?fields=id,name`, appSecretProof)}`,
+        { method: "GET", headers: bearer(token) },
       );
-      if (!phone.ok) return failed("تعذر الوصول إلى رقم واتساب المحدد.", "META_PHONE_NUMBER_UNAVAILABLE");
+      if (!business.ok) {
+        return failed("تعذر الوصول إلى حساب الأعمال الرئيسي في Meta.", "META_BUSINESS_PORTFOLIO_UNAVAILABLE");
+      }
+
+      const wabas = await providerFetch(
+        this.fetchImpl,
+        `${base}/${metaPath(`${businessPortfolioId}/owned_whatsapp_business_accounts?fields=id,name&limit=200`, appSecretProof)}`,
+        { method: "GET", headers: bearer(token) },
+      );
+      if (!wabas.ok) {
+        /* Listing a portfolio's WABAs needs business_management. It is only discovery: each
+           sender's WABA is checked against this portfolio through the WABA's own
+           owner_business_info, which whatsapp_business_management can read. So a missing
+           business_management is a note, not a failure. */
+        if (wabas.status === 403 || wabas.status === 400) {
+          return connected(
+            "تم التحقق من Access Token وApp ID وApp Secret والوصول إلى Business Portfolio الرئيسي. الرمز لا يملك صلاحية business_management، لذا لن تظهر قائمة حسابات WABA تلقائيًا عند إضافة مُرسِل؛ ملكية WABA لكل مُرسِل تُتحقق عند التحقق منه.",
+          );
+        }
+        return failed(
+          "تم الوصول إلى Business Portfolio لكن تعذر قراءة حسابات WhatsApp Business التابعة له.",
+          "META_BUSINESS_WABAS_UNAVAILABLE",
+        );
+      }
+      const wabaCount = arrayFrom(wabas.body, "data").length;
 
       return connected(
-        "تم التحقق من بيانات الوصول إلى Meta وتوافق App Secret وحساب واتساب ورقم الهاتف. رمز Webhook Verify Token موجود وصالح محليًا وجاهز لعملية التحقق من Webhook."
+        `تم التحقق من Access Token وApp ID وApp Secret وربط Business Portfolio الرئيسي بنجاح. تم اكتشاف ${wabaCount} حساب WABA مملوك مباشرة. أرقام الهاتف واشتراك Webhook تُفحص لكل مُرسِل قبل تفعيله.`
       );
     } catch {
       return failed("تعذر الاتصال بخدمة Meta حاليًا.", "META_REQUEST_FAILED");
@@ -135,16 +196,16 @@ function elasticEmailErrorText(res: { body: unknown; text?: string }): string {
  * `GET /v4/domains` does not always answer with a bare hostname. When a domain is verified for one
  * specific sender rather than wholesale, Elastic Email returns the sender scope inline:
  *
- *     "Domain": "yedicihan.org (info@yedicihan.org)"
+ *     "Domain": "minberiaksa.org (info@minberiaksa.org)"
  *
- * Comparing that string to "yedicihan.org" never matched, so a correctly verified sender was
+ * Comparing that string to "minberiaksa.org" never matched, so a correctly verified sender was
  * reported as ELASTIC_EMAIL_SENDER_DOMAIN_NOT_VERIFIED on the فحص الاتصال page.
  */
 export function elasticEmailDomainName(raw: string): string {
   return raw.split("(")[0].trim().toLowerCase();
 }
 
-/** Elastic Email (REST API v4) — the only email provider. Verifies the key without sending mail. */
+/** Elastic Email (REST API v4)  the only email provider. Verifies the key without sending mail. */
 export class ElasticEmailConnectionTester implements IntegrationProviderTester {
   constructor(private readonly fetchImpl: ProviderFetch = fetch) {}
 
@@ -167,7 +228,7 @@ export class ElasticEmailConnectionTester implements IntegrationProviderTester {
       });
 
       // Elastic Email v4 answers BOTH "this key is invalid" and "this key may not use
-      // this endpoint" with HTTP 400 — it never returns 401 — so the status code alone
+      // this endpoint" with HTTP 400  it never returns 401  so the status code alone
       // cannot tell them apart. Only the body can:
       //     {"Error":"APIKey Expired"}   -> key is invalid, missing, or revoked
       //     {"Error":"Access Denied."}   -> key is valid but not scoped for this endpoint
@@ -212,7 +273,7 @@ export class ElasticEmailConnectionTester implements IntegrationProviderTester {
   }
 }
 
-/** Brevo — international (non-Turkish) SMS only. Email moved to Elastic Email. */
+/** Brevo  international (non-Turkish) SMS only. Email moved to Elastic Email. */
 export class BrevoConnectionTester implements IntegrationProviderTester {
   constructor(private readonly fetchImpl: ProviderFetch = fetch) {}
 

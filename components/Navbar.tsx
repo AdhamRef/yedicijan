@@ -4,7 +4,6 @@ import {
   Menu,
   X,
   ShoppingCart,
-  Search,
   LogOut,
   LayoutDashboard,
   ChevronDown,
@@ -17,6 +16,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import Image from "next/image";
+import NextLink from "next/link";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useTranslations, useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
@@ -31,7 +31,7 @@ import SignInDialog from "@/components/SignInDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import dynamic from "next/dynamic";
 const CartPaymentDialog = dynamic(() => import("./CartPaymentDialog"), { ssr: false });
-// framer-motion removed — replaced with CSS-only fade animations to keep ~70 KiB
+// framer-motion removed  replaced with CSS-only fade animations to keep ~70 KiB
 // of motion JS off the homepage critical path.
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
 import { CURRENCY_COOKIE_UPDATED_EVENT } from "@/components/CurrencyFromUrlSync";
@@ -52,8 +52,8 @@ interface CartItem {
   };
 }
 
-const LOGO_URL = "/yedicijan_logo.png";
-const LOGO_MOBILE_URL = "/yedicijan_logo.png";
+const LOGO_URL = "/logometaminber.avif";
+const LOGO_MOBILE_URL = "/logometaminber.avif";
 
 const Navbar = () => {
   const t = useTranslations("Navbar");
@@ -68,7 +68,6 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -145,20 +144,6 @@ const Navbar = () => {
     setIsCartPaymentDialogOpen(true);
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(
-        appendCurrencyQuery(
-          `/campaigns?search=${encodeURIComponent(searchQuery.trim())}`,
-          getCurrencyCodeForLinks()
-        )
-      );
-      setSearchQuery("");
-      setIsMobileMenuOpen(false);
-    }
-  };
-
   const openCart = () => {
     if (session?.user) {
       setCartGuestMode(false);
@@ -207,7 +192,7 @@ const Navbar = () => {
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50">
-        {/* ── Top Utility Bar (desktop only) — slim ── */}
+        {/* ── Top Utility Bar (desktop only)  slim ── */}
         <div className="bg-deep text-offwhite text-xs hidden lg:block border-b border-gray-100">
           <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-8">
             {/* Left: social icons + phone */}
@@ -246,7 +231,7 @@ const Navbar = () => {
           </div>
         </div>
 
-        {/* ── Main Navbar — compact light ── */}
+        {/* ── Main Navbar  compact light ── */}
         <nav
           className={`bg-white/90 backdrop-blur-md border-b transition-shadow duration-300 ${
             isScrolled ? "border-gray-200 shadow-sm" : "border-gray-200"
@@ -254,11 +239,11 @@ const Navbar = () => {
         >
           <div className="max-w-7xl mx-auto px-4 flex items-center h-12 lg:h-14 gap-2">
 
-            {/* Logo — always visible */}
+            {/* Logo  always visible */}
             <Link href="/" className="flex-shrink-0 flex items-center gap-2">
               {/* Mobile: narrow square logo */}
               <Image src={LOGO_MOBILE_URL} alt="Logo" width={48} height={48} className="lg:hidden h-7 w-auto object-contain" />
-              {/* Desktop: wide logo — width must match aspect ratio to prevent blur */}
+              {/* Desktop: wide logo  width must match aspect ratio to prevent blur */}
               <Image src={LOGO_URL} alt="Logo" width={240} height={48} className="hidden lg:block h-8 w-auto object-contain" />
             </Link>
 
@@ -297,7 +282,7 @@ const Navbar = () => {
               {t("donate") || "BAĞIŞ YAP"}
             </Link>
 
-            {/* Spacer — pushes right-side items to the edge on mobile */}
+            {/* Spacer  pushes right-side items to the edge on mobile */}
             <div className="flex-1 lg:hidden" />
 
             {/* Mobile: Language + Currency */}
@@ -306,7 +291,7 @@ const Navbar = () => {
               <CurrencySelector onDark={false} />
             </div>
 
-            {/* Cart button — always visible */}
+            {/* Cart button  always visible */}
             <button
               type="button"
               onClick={openCart}
@@ -346,17 +331,17 @@ const Navbar = () => {
                         <p className="text-xs text-gray-500 truncate">{session.user.email}</p>
                       </div>
                            {(session.user.role === "ADMIN" || session.user.role === "STAFF") && (
-                        <a
+                        <NextLink
                           href="/dashboard"
                           onClick={() => setIsUserMenuOpen(false)}
                           className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           <LayoutDashboard className="w-4 h-4 text-burgundy" />
                           {isRTL ? "لوحة التحكم" : "Dashboard"}
-                        </a>
+                        </NextLink>
                       )}
                       <Link
-                        href="/profile"
+                        href="/profile?tab=donations"
                         onClick={() => setIsUserMenuOpen(false)}
                         className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
@@ -440,7 +425,7 @@ const Navbar = () => {
                     </div>
                     <div className="flex gap-2">
                       <Link
-                        href="/profile"
+                        href="/profile?tab=donations"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className="p-2 shape-chip bg-offwhite text-burgundy hover:bg-gold/20 transition-colors"
                       >

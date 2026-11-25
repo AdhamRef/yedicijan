@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "@/i18n/routing";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,6 +43,7 @@ import {
 import WysiwygEditor from "./wysiwyg/wysiwyg-editor";
 import { defaultEditorContent } from "./wysiwyg/default-content";
 import { useCreateTranslations } from "@/app/(dashboard)/dashboard/blog/create/_components/CreateTranslationsContext";
+import { AutoTranslateButton } from "@/app/(dashboard)/dashboard/_components/AutoTranslateButton";
 import { SmartSeoAuditCard } from "@/app/(dashboard)/dashboard/_components/SmartSeoAuditCard";
 import {
   Select,
@@ -65,11 +66,16 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
+import { contentToTiptapDocument } from "@/lib/blog/rich-text";
 
 const postEditFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   image: z.string().optional(),
+  metaTitle: z.string().optional(),
+  metaDescription: z.string().optional(),
+  seoKeywords: z.string().optional(),
+  imageAlt: z.string().optional(),
   categoryId: z.string().optional(),
   campaignIds: z.tuple([z.string().optional(), z.string().optional(), z.string().optional()]),
 });
@@ -103,6 +109,20 @@ const protectedPostConfig = {
   pleaseWait: "برجاء الانتظار ...",
 };
 
+/**
+ * This file is JavaScript, so TypeScript infers its prop types from the defaults  and `= []`
+ * infers as `never[]`, which made every caller passing a real list a type error at the boundary.
+ * The JSDoc below is the boundary's declared contract; it costs nothing at runtime.
+ *
+ * @param {{
+ *   post?: any,
+ *   categories?: any[],
+ *   campaignOptions?: { label: string, value: string }[],
+ *   redirectAfterCreate?: string,
+ *   isCreate?: boolean,
+ *   userId?: string,
+ * }} props
+ */
 const BlogEditor = ({ post, categories, campaignOptions = [], redirectAfterCreate, isCreate: isCreateProp }) => {
   const router = useRouter();
   const isCreate = isCreateProp || !post?.id || post.id === "new";
@@ -129,6 +149,10 @@ const BlogEditor = ({ post, categories, campaignOptions = [], redirectAfterCreat
     title: post?.titleAR || post?.title || "",
     description: post?.descriptionAR || post?.description || "",
     image: post?.imageAR || post?.image || "",
+    metaTitle: post?.metaTitle || post?.titleAR || post?.title || "",
+    metaDescription: post?.metaDescription || post?.descriptionAR || post?.description || "",
+    seoKeywords: Array.isArray(post?.seoKeywords) ? post.seoKeywords.join(", ") : "",
+    imageAlt: post?.imageAlt || post?.titleAR || post?.title || "",
     categoryId: post?.category_id || post?.categoryId || "",
     campaignIds: padCampaignIds(),
   };
@@ -142,6 +166,13 @@ const BlogEditor = ({ post, categories, campaignOptions = [], redirectAfterCreat
   const watchedTitle = form.watch("title");
   const watchedDescription = form.watch("description");
   const watchedImage = form.watch("image");
+
+  /* In create mode the language tabs translate from this draft before anything
+     exists on the server, so it is published to the shared buffer as typed. */
+  useEffect(() => {
+    if (!isCreate || !createTranslationsCtx) return;
+    createTranslationsCtx.setArabic({ title: watchedTitle || "", description: watchedDescription || "", content: contentAR });
+  }, [isCreate, createTranslationsCtx, watchedTitle, watchedDescription, contentAR]);
 
   const onSubmit = async (data) => {
     setShowLoadingAlert(true);
@@ -177,6 +208,10 @@ const BlogEditor = ({ post, categories, campaignOptions = [], redirectAfterCreat
         description: data.description || "",
         content: contentAR || "",
         image: data.image || "",
+        metaTitle: data.metaTitle || data.title,
+        metaDescription: data.metaDescription || data.description || "",
+        seoKeywords: (data.seoKeywords || "").split(",").map((v) => v.trim()).filter(Boolean),
+        imageAlt: data.imageAlt || data.title,
         categoryId: data.categoryId || null,
         campaignIds,
       };
@@ -190,7 +225,7 @@ const BlogEditor = ({ post, categories, campaignOptions = [], redirectAfterCreat
         router.push(redirectAfterCreate ? `${redirectAfterCreate}/${key}` : `/blog/${key}`);
       } else {
         response = await axios.patch(`/api/posts/${post.id}`, payload);
-        toast.success("تم تحديث المقال بنجاح — أنت ما زلت داخل صفحة التعديل", { id: toastId, duration: 9000 });
+        toast.success("تم تحديث المقال بنجاح  أنت ما زلت داخل صفحة التعديل", { id: toastId, duration: 9000 });
         router.refresh();
       }
     } catch (error) {
@@ -331,6 +366,42 @@ const BlogEditor = ({ post, categories, campaignOptions = [], redirectAfterCreat
             </CardContent>
           </Card>
 
+
+          <Card>
+            <CardHeader dir="rtl">
+              <CardTitle>SEO المقال</CardTitle>
+              <CardDescription>بيانات البحث الخاصة بهذه اللغة. اجعلها طبيعية، محددة، ومتطابقة مع نية المقال.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField control={form.control} name="metaTitle" render={({ field }) => (
+                <FormItem dir="rtl">
+                  <FormLabel>عنوان محركات البحث</FormLabel>
+                  <FormControl><Input {...field} placeholder="عنوان بحث واضح ومحدد" /></FormControl>
+                  <FormDescription>يفضل أن يكون بين 45 و65 حرفًا دون حشو الكلمات المفتاحية.</FormDescription>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="metaDescription" render={({ field }) => (
+                <FormItem dir="rtl">
+                  <FormLabel>وصف محركات البحث</FormLabel>
+                  <FormControl><Textarea {...field} rows={3} placeholder="ملخص دقيق ومقنع للمقال" /></FormControl>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="seoKeywords" render={({ field }) => (
+                <FormItem dir="rtl">
+                  <FormLabel>عبارات البحث</FormLabel>
+                  <FormControl><Input {...field} placeholder="مثال: زكاة المال، حساب الزكاة، مصارف الزكاة" /></FormControl>
+                  <FormDescription>عبارات داخلية للمراجعة والتخطيط وليست meta keywords تقليدية.</FormDescription>
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="imageAlt" render={({ field }) => (
+                <FormItem dir="rtl">
+                  <FormLabel>النص البديل للغلاف</FormLabel>
+                  <FormControl><Input {...field} placeholder="وصف مختصر ودقيق للصورة" /></FormControl>
+                </FormItem>
+              )} />
+            </CardContent>
+          </Card>
+
           <SmartSeoAuditCard
             key="blog-seo-ar"
             type="blog"
@@ -346,12 +417,26 @@ const BlogEditor = ({ post, categories, campaignOptions = [], redirectAfterCreat
               <WysiwygEditor
                 defaultValue={(() => {
                   if (!contentAR) return defaultEditorContent;
-                  try { return typeof contentAR === "string" ? JSON.parse(contentAR) : contentAR; } catch { return defaultEditorContent; }
+                  return contentToTiptapDocument(
+                    typeof contentAR === "string" ? contentAR : JSON.stringify(contentAR)
+                  );
                 })()}
                 onDebouncedUpdate={(editor) => setContentAR(JSON.stringify(editor?.getJSON()))}
               />
             </CardContent>
           </Card>
+
+          {isCreate && createTranslationsCtx ? (
+            <div className="w-full rounded-lg border border-purple-200 bg-purple-50/50 p-3" dir="rtl">
+              <AutoTranslateButton
+                source={{ title: watchedTitle || "", description: watchedDescription || "" }}
+                richSource={{ content: contentAR || "" }}
+                itemLabel="blog article"
+                onResult={(translations, overwrite) => createTranslationsCtx.fillLocales(translations, overwrite)}
+              />
+              <p className="mt-2 text-[11px] text-slate-600">تملأ كل تبويبات اللغات من هذه المسودة؛ تُحفظ معًا عند الضغط على «إنشاء».</p>
+            </div>
+          ) : null}
 
           <div className="inline-flex items-center justify-start gap-x-3">
             <Button type="submit" className="flex !bg-gray-900 px-10 !text-white hover:!bg-gray-800" disabled={isSaving}>{isCreate ? "إنشاء" : protectedEditorConfig.submit}</Button>

@@ -5,7 +5,7 @@ import { requireArchiveApiAccess, requireArchiveUploadedFileListAccess } from ".
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Params = { params: Promise<{ id: string }> | { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: Params) {
   const { denied } = await requireArchiveApiAccess();
@@ -35,7 +35,9 @@ export async function GET(_request: Request, context: Params) {
   return fileResponse(Buffer.from(base64, "base64"), fileName, mimeType);
 }
 
-function isArchiveUploadedFile(row: { action: string; entityType: string } | null): row is { id: string; metadata: unknown; action: string; entityType: string } {
+/* `entityType` is nullable in the schema, so the parameter has to admit null for the call above to
+   typecheck; the predicate still narrows it to a string. */
+function isArchiveUploadedFile(row: { action: string; entityType: string | null } | null): row is { id: string; metadata: unknown; action: string; entityType: string } {
   return Boolean(row && row.action === "archive.uploadedFile.create" && row.entityType === "ArchiveUploadedFile");
 }
 

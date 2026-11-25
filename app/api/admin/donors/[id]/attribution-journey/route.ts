@@ -16,7 +16,7 @@ import {
  * detection, plus a "first-touch" summary derived from the earliest donation
  * whose attribution identifies a paid platform.
  *
- * Pure read — runs the same `detectDonationSource` the dashboard uses for the
+ * Pure read  runs the same `detectDonationSource` the dashboard uses for the
  * row badge, so the journey view stays consistent with the table.
  */
 export async function GET(
@@ -50,6 +50,7 @@ export async function GET(
         attribution: true,
         conversionEventsSentAt: true,
         conversionFailedEventsSentAt: true,
+        subscriptionId: true,
         items: { select: { campaign: { select: { id: true, title: true } } } },
       },
     });
@@ -68,6 +69,7 @@ export async function GET(
         status: d.status,
         amountUSD: d.amountUSD ?? d.totalAmount ?? d.amount ?? 0,
         currency: d.currency,
+        type: d.subscriptionId ? ("MONTHLY" as const) : ("ONE_TIME" as const),
         campaign: d.items[0]?.campaign?.title ?? null,
         platform: source.platform,
         platformLabel: PLATFORM_LABEL_AR[source.platform],

@@ -1,39 +1,66 @@
+import { notFound } from "next/navigation";
+import { preload } from "react-dom";
 import type { Metadata } from "next";
-import { LOCALE_SEO, OG_LOCALE_MAP, OG_IMAGE, SITE_URL, buildHreflang } from "@/lib/seo";
+import { LOCALES, LOCALE_SEO, OG_LOCALE_MAP, OG_IMAGE, SITE_URL, buildHreflang, isVercelDeployment } from "@/lib/seo";
 import type { Locale } from "@/lib/seo";
 import { Suspense } from "react";
-import Navbar from "@/components/Navbar";
+import { getPublicServerSession } from "@/lib/auth/public-session";
+import Header from "@/components/minbar/shell/Header";
+import MobileBottomNav from "@/components/minbar/shell/MobileBottomNav";
+import MinbarFooter from "@/components/minbar/shell/Footer";
+import ConciergeLauncher from "@/components/minbar/concierge/ConciergeLauncher";
 import CartReminder from "@/components/CartReminder";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
 import IntlProviderClient from "./IntlProviderClient";
-import ar from "../../i18n/messages/ar.json";
-import en from "../../i18n/messages/en.json";
-import fr from "../../i18n/messages/fr.json";
-import tr from "../../i18n/messages/tr.json";
-import id from "../../i18n/messages/id.json";
-import pt from "../../i18n/messages/pt.json";
-import es from "../../i18n/messages/es.json";
-import de from "../../i18n/messages/de.json";
-import { SUPPORTED_LOCALES } from "@/lib/locales";
-import { buildNormalizedMessages } from "../../i18n/message-quality";
+import { SUPPORTED_LOCALES, localeDirection } from "@/lib/locales";
+import { SHELL_NAMESPACES, pickNamespaces } from "@/i18n/locale-messages";
 import { Toaster } from "react-hot-toast";
 import SessionProvider from "@/components/providers/SessionProvider";
 import { ConfettiProvider } from "../../components/providers/confetti-provider";
-import Footer from "@/components/Footer";
 import PreferredLangSync from "@/components/PreferredLangSync";
 import SyncHtmlDir from "@/components/SyncHtmlDir";
+import ScrollToTop from "@/components/minbar/ScrollToTop";
 import { MarketingRuntime } from "@/components/MarketingRuntime";
 import { CurrencyProvider } from "@/context/CurrencyContext";
-import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { listCategories, type NavCategory } from "@/lib/minbar/categories";
+import { listNavSuperCategories } from "@/lib/minbar/super-category";
+import "@/styles/minbar/minbar.css";
+import "@/styles/minbar/locale-fonts.css";
+import { LOCALE_FONT_STYLESHEETS } from "@/lib/locale-fonts";
 
-// NOTE: this map must stay static (bundled JSON imports). When promoting a future
-// locale from `lib/locales.ts` to public, add its `import` above + an entry here.
-const rawLocaleMessages: Record<string, Record<string, unknown>> = { ar, en, fr, tr, id, pt, es, de };
-const localeMessages = buildNormalizedMessages(rawLocaleMessages, "en") as Record<string, Record<string, unknown>>;
 // Valid public locales derive from the single source of truth (enabled set).
 const VALID_LOCALES = SUPPORTED_LOCALES;
-const DEFAULT_LOCALE = "ar";
+
+/* Fetched from the first bytes of the document rather than once the CSS has
+   been parsed. The pattern tile is the hero's (and the header's) background,
+   which PageSpeed picks as the Largest Contentful Paint element; the text face
+   arriving late re-flowed the hero (CLS "web font loaded"). Font file names are
+   from `styles/self-hosted-fonts.css`, written by scripts/vendor-google-fonts.mjs
+   update them together. */
+const PATTERN_TILE = "/minbar/assets/patterns/aqsa-white-pattern.webp";
+const RTL_TEXT_FONTS = ["/fonts/cairo/cairo-200-1000-arabic-714d40cf.woff2", "/fonts/cairo/cairo-200-1000-latin-caa2f572.woff2"];
+const LTR_TEXT_FONTS = ["/fonts/poppins/poppins-400-latin-ac6d71b4.woff2"];
+
+/** The non-Latin faces `styles/minbar/locale-fonts.css` names, one per locale that needs one. */
+
+/**
+ * A first path segment that is not a locale is NOT a page in Arabic.
+ *
+ * This segment used to fall back to `ar` silently, so every stray root request 
+ * `/favicon.ico`, `/apple-touch-icon.png`, a mistyped path, a crawler probing
+ * `/wp-admin`  rendered the Arabic homepage with `locale = "favicon.ico"`
+ * threaded through it. Anything that then handed that string to `Intl` threw
+ * `RangeError: Incorrect locale information provided`, which is how a missing
+ * favicon became a 500 in production rather than a 404.
+ *
+ * A real `app/favicon.ico` now answers that particular request, but the rule is
+ * the fix: an unknown locale is a 404, and `notFound()` says so.
+ */
+function assertLocale(rawLocale: string): Locale {
+  if (!VALID_LOCALES.includes(rawLocale as (typeof VALID_LOCALES)[number])) notFound();
+  return rawLocale as Locale;
+}
 
 export async function generateMetadata({
   params,
@@ -41,7 +68,7 @@ export async function generateMetadata({
   params: Promise<{ locale: string }>;
 }): Promise<Metadata> {
   const { locale: rawLocale } = await params;
-  const locale = (VALID_LOCALES.includes(rawLocale as (typeof VALID_LOCALES)[number]) ? rawLocale : DEFAULT_LOCALE) as Locale;
+  const locale = assertLocale(rawLocale);
   const seo = LOCALE_SEO[locale];
   const alternates = buildHreflang("/", locale);
 
@@ -49,7 +76,6 @@ export async function generateMetadata({
     title: { default: seo.title, template: seo.titleTemplate },
     description: seo.description,
     keywords: seo.keywords,
-    icons: { icon: "/yedicijan_logo.png" },
     alternates,
     openGraph: {
       title: seo.title,
@@ -58,6 +84,7 @@ export async function generateMetadata({
       siteName: seo.siteName,
       images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: seo.siteName }],
       locale: OG_LOCALE_MAP[locale],
+      alternateLocale: LOCALES.filter((candidate) => candidate !== locale).map((candidate) => OG_LOCALE_MAP[candidate]),
       type: "website",
     },
     twitter: {
@@ -77,35 +104,74 @@ export default async function Rootlayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale: rawLocale } = await params;
-  const locale = VALID_LOCALES.includes(rawLocale as (typeof VALID_LOCALES)[number])
-    ? rawLocale
-    : DEFAULT_LOCALE;
-  const messages = localeMessages[locale] ?? localeMessages[DEFAULT_LOCALE];
-  const dir = locale === "ar" ? "rtl" : "ltr";
+  const locale = assertLocale(rawLocale);
+  // Only the shell needs messages at this level: the header, footer and
+  // quick-donation widget. Pages add their own namespaces through
+  // MinbarMessages or LegacyMessages, per PERFORMANCE_BUDGET.md.
+  const messages = pickNamespaces(locale, SHELL_NAMESPACES);
+  const tagline = String(
+    (pickNamespaces(locale, ["homepage"]).homepage as Record<string, string> | undefined)
+      ?.orgDescription ?? ""
+  );
+  // Direction comes from the locale catalog, not a hand-written check  Urdu is
+  // RTL too, and the previous `locale === "ar"` test silently rendered it LTR.
+  const dir = localeDirection(locale);
+  // Drives where the header's account icon points (`[AUTH-INTEGRATION]`).
+  // Categories feed the header's projects dropdown and the footer's band; super
+  // categories join them in the dropdown only.
+  const [session, categories, superCategories] = await Promise.all([
+    getPublicServerSession(),
+    listCategories(locale),
+    listNavSuperCategories(locale),
+  ]);
+  const navCategories: NavCategory[] = categories.filter(c=>c.navigationVisible!==false).map(({ id, href, name, image, projectCount }) => ({ id, href, name, image, projectCount }));
+  const localeFont = LOCALE_FONT_STYLESHEETS[locale];
+
+  // Phones hide the hero pattern (styles/minbar/minbar.css), so only wider screens need it early.
+  preload(PATTERN_TILE, { as: "image", fetchPriority: "high", media: "(min-width: 761px)" });
+  for (const font of localeFont ? [] : dir === "rtl" ? RTL_TEXT_FONTS : LTR_TEXT_FONTS) {
+    preload(font, { as: "font", type: "font/woff2", crossOrigin: "anonymous" });
+  }
 
   return (
-    <IntlProviderClient locale={locale || "ar"} messages={messages}>
+    <IntlProviderClient locale={locale} messages={messages}>
+      {/* React hoists a stylesheet link with `precedence` into <head>. */}
+      {localeFont ? <><link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" /><link rel="stylesheet" href={localeFont} precedence="default" /></> : null}
       <SyncHtmlDir locale={locale} />
       <MarketingRuntime>
-        <div dir={dir} lang={locale === "ar" ? "ar" : locale === "fr" ? "fr" : locale === "tr" ? "tr" : locale === "id" ? "id" : locale === "pt" ? "pt" : locale === "es" ? "es" : locale === "de" ? "de" : "en"}>
+        {/* `mia-scope` is what confines the Minbar design tokens to the public
+            site; the dashboard shares this app's root layout and must not
+            inherit them. See styles/minbar/minbar.css. */}
+        <div className="mia-scope" dir={dir} lang={locale}>
           <CurrencyProvider>
             <Suspense fallback={null}>
               <CurrencyFromUrlSync />
             </Suspense>
             <SessionProvider>
               <PreferredLangSync />
-              <Navbar />
-              <main className="pt-12 lg:pt-[88px]">
-                {children}
-              </main>
-              <Footer />
+              <ScrollToTop />
+              <Header signedIn={!!session?.user} isAdmin={session?.user?.role === "ADMIN"} categories={navCategories} superCategories={superCategories} />
+              <MobileBottomNav signedIn={!!session?.user} />
+              {/* No top padding here: the header renders its own spacer, sized
+                  from its measured height, because that height changes with the
+                  language, the back button and the viewport. */}
+              <main>{children}</main>
+              {/* The tagline is the footer's one string from the `homepage`
+                  namespace. Passing it in keeps a 10KB bundle out of the shell
+                  for the sake of a single sentence. */}
+              {/* Hydrated in its own task, after the page above it. */}
+              <Suspense fallback={null}>
+                <MinbarFooter tagline={tagline} categories={navCategories} />
+              </Suspense>
+              <ConciergeLauncher />
               <CartReminder />
               <ConfettiProvider />
               <Toaster position="top-center" />
             </SessionProvider>
           </CurrencyProvider>
-          <Analytics />
-          <SpeedInsights />
+          {/* Analytics is mounted once, in the root layout. Both are Vercel-only:
+              on the VPS their scripts 404 and log console errors. */}
+          {isVercelDeployment() ? <SpeedInsights /> : null}
         </div>
       </MarketingRuntime>
     </IntlProviderClient>

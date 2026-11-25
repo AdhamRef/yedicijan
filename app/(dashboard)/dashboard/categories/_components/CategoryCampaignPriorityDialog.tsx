@@ -26,6 +26,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import axios from 'axios';
+import { dashDir, dt, dtx } from "@/lib/dashboard/i18n";
 
 interface Campaign {
   id: string;
@@ -56,7 +57,7 @@ const DraggableCampaign = ({ campaign, index, moveCampaign }: DraggableCampaignP
 
   return (
     <div
-      ref={(node) => drag(drop(node))}
+      ref={(node) => { drag(drop(node)); }}
       className={`flex items-center gap-3 p-3 bg-white border rounded-lg mb-2 ${
         isDragging ? 'opacity-50' : ''
       }`}
@@ -88,23 +89,22 @@ export const CategoryCampaignPriorityDialog = ({
   const [selectedCampaigns, setSelectedCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   // Load campaigns for this category + current priority list
   useEffect(() => {
     if (!open || !categoryId) return;
     let cancelled = false;
     (async () => {
-      setIsLoading(true);
+      setIsLoading(true); setLoadFailed(false); setCampaigns([]); setSelectedCampaigns([]);
       try {
         const [allRes, priRes] = await Promise.all([
-          axios.get(`/api/categories/${categoryId}/campaigns`, {
-            params: { limit: 100, isActive: true },
-          }),
+          axios.get('/api/campaigns/all', { params: { includeInactive: true } }),
           axios.get(`/api/categories/${categoryId}/prioritized-campaigns`),
         ]);
         if (cancelled) return;
 
-        const items = (allRes.data?.items || []) as Campaign[];
+        const items = (allRes.data || []).filter((row: { categoryIds?: string[] }) => row.categoryIds?.includes(categoryId)) as Campaign[];
         const prioritized = (priRes.data || []) as Campaign[];
 
         setCampaigns(items);
@@ -115,8 +115,10 @@ export const CategoryCampaignPriorityDialog = ({
             .filter(Boolean) as Campaign[]
         );
       } catch (err) {
+        if (cancelled) return;
+        setLoadFailed(true);
         console.error(err);
-        toast.error('فشل في تحميل المشاريع');
+        toast.error(dt("فشل في تحميل المشاريع"));
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -128,12 +130,12 @@ export const CategoryCampaignPriorityDialog = ({
     const campaign = campaigns.find((c) => c.id === campaignId);
     if (!campaign) return;
 
-    if (selectedCampaigns.length >= 12) {
-      toast.error('يمكنك اختيار 12 مشروع كحد أقصى');
+    if (selectedCampaigns.length >= 500) {
+      toast.error(dt("يمكنك اختيار 500 مشروع كحد أقصى"));
       return;
     }
     if (selectedCampaigns.some((c) => c.id === campaignId)) {
-      toast.error('هذا المشروع مضاف بالفعل');
+      toast.error(dt("هذا المشروع مضاف بالفعل"));
       return;
     }
     setSelectedCampaigns((prev) => [...prev, campaign]);
@@ -152,18 +154,19 @@ export const CategoryCampaignPriorityDialog = ({
   };
 
   const handleSave = async () => {
+    if (isSubmitting || isLoading || loadFailed) return;
     setIsSubmitting(true);
     try {
       const payload = selectedCampaigns.map((c, index) => ({ id: c.id, order: index }));
       await axios.post(`/api/categories/${categoryId}/prioritized-campaigns`, {
         campaigns: payload,
       });
-      toast.success('تم إعادة ترتيب المشاريع بنجاح');
+      toast.success(dt("تم إعادة ترتيب المشاريع بنجاح"));
       onSaved?.();
       onOpenChange(false);
     } catch (error) {
       console.error(error);
-      toast.error('فشل في إعادة ترتيب المشاريع');
+      toast.error(dt("فشل في إعادة ترتيب المشاريع"));
     } finally {
       setIsSubmitting(false);
     }
@@ -171,21 +174,19 @@ export const CategoryCampaignPriorityDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" dir="rtl">
+      <DialogContent className="max-w-md" dir={dashDir()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Crown className="w-5 h-5 text-brand" />
-            أولويات المشاريع — {categoryName}
+            {dtx("أولويات المشاريع  {0}", [categoryName])}
           </DialogTitle>
         </DialogHeader>
 
         <div className="py-4">
           <p className="text-sm text-gray-500 mb-4">
-            اختر المشاريع التي تريد عرضها بالترتيب داخل هذه الحملة. الحد الأقصى 12 مشروعًا.
-            <br />
+            {dt("اختر المشاريع التي تريد عرضها بالترتيب داخل هذه الحملة. الحد الأقصى 500 مشروعًا.")}<br />
             <span className="text-xs mt-1 block">
-              ({selectedCampaigns.length}/12 مشاريع مختارة)
-            </span>
+              {dtx("({0}/500 مشاريع مختارة)", [selectedCampaigns.length])}</span>
           </p>
 
           <Popover open={comboOpen} onOpenChange={setComboOpen}>
@@ -197,8 +198,8 @@ export const CategoryCampaignPriorityDialog = ({
                 className="w-full justify-between font-normal text-muted-foreground"
                 disabled={isLoading}
               >
-                {isLoading ? 'جارٍ التحميل…' : 'اختر مشروع لإضافتها'}
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                {isLoading ? dt("جارٍ التحميل…") : dt("اختر مشروع لإضافتها")}
+                <ChevronsUpDown className="me-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -207,9 +208,9 @@ export const CategoryCampaignPriorityDialog = ({
               style={{ width: 'var(--radix-popover-trigger-width)' }}
             >
               <Command>
-                <CommandInput placeholder="ابحث عن مشروع..." />
+                <CommandInput placeholder={dt("ابحث عن مشروع...")} />
                 <CommandList>
-                  <CommandEmpty>لا توجد نتائج</CommandEmpty>
+                  <CommandEmpty>{dt("لا توجد نتائج")}</CommandEmpty>
                   <CommandGroup>
                     {campaigns
                       .filter((c) => !selectedCampaigns.some((sc) => sc.id === c.id))
@@ -222,7 +223,7 @@ export const CategoryCampaignPriorityDialog = ({
                             setComboOpen(false);
                           }}
                         >
-                          <Check className="mr-2 h-4 w-4 opacity-0" />
+                          <Check className="ms-2 h-4 w-4 opacity-0" />
                           {campaign.title}
                         </CommandItem>
                       ))}
@@ -236,8 +237,7 @@ export const CategoryCampaignPriorityDialog = ({
             <div className="mt-4 space-y-2">
               {selectedCampaigns.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-4">
-                  لم يتم اختيار أي مشاريع بعد
-                </p>
+                  {dt("لم يتم اختيار أي مشاريع بعد")}</p>
               ) : (
                 <div className="max-h-[400px] overflow-y-auto">
                   {selectedCampaigns.map((campaign, index) => (
@@ -247,10 +247,14 @@ export const CategoryCampaignPriorityDialog = ({
                         index={index}
                         moveCampaign={moveCampaign}
                       />
+                      <div className="flex gap-2 mb-2">
+                        <Button type="button" variant="outline" size="sm" disabled={index === 0 || isSubmitting} onClick={() => moveCampaign(index, index - 1)} aria-label={dt("تقديم {0}", [campaign.title])}>↑</Button>
+                        <Button type="button" variant="outline" size="sm" disabled={index === selectedCampaigns.length - 1 || isSubmitting} onClick={() => moveCampaign(index, index + 1)} aria-label={dt("تأخير {0}", [campaign.title])}>↓</Button>
+                      </div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="absolute top-2 left-2 h-6 w-6 p-0"
+                        className="absolute top-2 end-2 h-6 w-6 p-0"
                         onClick={() => removeCampaign(campaign.id)}
                       >
                         ×
@@ -265,16 +269,14 @@ export const CategoryCampaignPriorityDialog = ({
 
         <div className="flex justify-end gap-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            إلغاء
-          </Button>
+            {dt("إلغاء")}</Button>
           <Button
             onClick={handleSave}
-            disabled={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading || loadFailed}
             className="gap-2"
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            حفظ الترتيب
-          </Button>
+            {dt("حفظ الترتيب")}</Button>
         </div>
       </DialogContent>
     </Dialog>

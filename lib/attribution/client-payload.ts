@@ -1,7 +1,7 @@
 "use client";
 
-import { DONATION_ATTRIBUTION_KEYS, type DonationAttributionKey } from "./sanitize";
-import { captureStoredClickIds } from "@/lib/tracking/click-id-storage";
+import { DONATION_ATTRIBUTION_KEYS, safeAttributionUrl, isPaymentReturnPage, type DonationAttributionKey } from "./sanitize";
+import { captureStoredClickIds, clearStoredClickIds } from "@/lib/tracking/click-id-storage";
 
 const PREFIX = "ala_attr_";
 const MAX_AGE_DAYS = 30;
@@ -86,10 +86,11 @@ function persistMetaClickIds(params: URLSearchParams) {
 
   if (fbclid && !hasMacro(fbclid)) {
     sessionSet(FBCLID_SESSION_KEY, fbclid);
-    setIfClean("fbclid", fbclid, false);
-    const fbc = getRawCookie("_fbc") || getCookie(PREFIX + "fbc") || buildFbc(fbclid);
-    setRawCookie("_fbc", fbc, false);
-    setIfClean("fbc", fbc, false);
+    setIfClean("fbclid", fbclid, Boolean(fromUrl));
+    const existingFbc = getRawCookie("_fbc") || getCookie(PREFIX + "fbc");
+    const fbc = fromUrl && !existingFbc?.endsWith(`.${fbclid}`) ? buildFbc(fbclid) : existingFbc || buildFbc(fbclid);
+    setRawCookie("_fbc", fbc, Boolean(fromUrl));
+    setIfClean("fbc", fbc, Boolean(fromUrl));
   }
 
   const fbp = getOrCreateFbp();
@@ -99,20 +100,45 @@ function persistMetaClickIds(params: URLSearchParams) {
 /** Capture URL params + click IDs into cookies (call once on app load / route change). */
 export function captureAttributionFromUrl(): void {
   if (typeof window === "undefined") return;
-  const storedClickIds = captureStoredClickIds();
   const params = new URLSearchParams(window.location.search);
+  for (const [key,value] of Array.from(params)) {
+    const lower=key.toLowerCase(), canonical=["sccid","sc_click_id"].includes(lower)?"scclid":lower;
+    if (!params.has(canonical)) params.set(canonical,value);
+  }
+  const identityKeys = ["utm_source", "utm_medium", "utm_campaign", "utm_id", "campaign_id", "fbclid", "gclid", "gbraid", "wbraid", "dclid", "ttclid", "twclid", "scclid", "li_fat_id", "rdt_cid"] as const;
+  const newTouch = identityKeys.some(key => { const value = params.get(key)?.trim(); return value && !hasMacro(value) && value !== getCookie(PREFIX + key); });
+  if (newTouch) {
+    const persistent=new Set(["first_landing_page","first_referrer","session_id","fbp","_ga","ga_client_id","ga_session_id"]);
+    for (const key of [...DONATION_ATTRIBUTION_KEYS,"twilioCampaignId","twilioTemplateId"].filter(key=>!persistent.has(key))) {
+      for (const suffix of ["", "_unresolved"]) document.cookie = `${encodeURIComponent(PREFIX + key + suffix)}=; Max-Age=0; path=/; SameSite=Lax; Secure`;
+    }
+    clearStoredClickIds();
+    try { sessionStorage.removeItem(FBCLID_SESSION_KEY); } catch {}
+  }
+  const storedClickIds = captureStoredClickIds();
+  if (newTouch || !getCookie(PREFIX + "source_captured_at")) {
+    setIfClean("source_captured_at", new Date().toISOString(), true);
+    setIfClean("source_capture", newTouch ? "campaign" : document.referrer ? "referrer" : "direct", true);
+  }
+
   const keys: DonationAttributionKey[] = [...DONATION_ATTRIBUTION_KEYS];
   for (const key of keys) {
     const fromUrl = params.get(key) || storedClickIds[key as keyof typeof storedClickIds];
     if (fromUrl) setIfClean(key, fromUrl, true);
   }
 
-  const currentUrl = window.location.href.split("#")[0].slice(0, 2048);
-  setIfClean("first_landing_page", currentUrl, false);
-  setIfClean("landing_page", currentUrl, true);
-  if (document.referrer) {
-    setIfClean("first_referrer", document.referrer.slice(0, 2048), false);
-    setIfClean("referrer", document.referrer.slice(0, 2048), true);
+  const currentUrl = safeAttributionUrl(window.location.href);
+  const isReturn = isPaymentReturnPage(currentUrl);
+  // Gateway success/failure screens are conversion destinations, not original
+  // acquisition landings. Never write the guest receipt token to cookies.
+  if (currentUrl && !isReturn) {
+    setIfClean("first_landing_page", currentUrl, false);
+    setIfClean("landing_page", currentUrl, newTouch);
+  }
+  const safeReferrer = safeAttributionUrl(document.referrer);
+  if (safeReferrer && !isPaymentReturnPage(safeReferrer)) {
+    setIfClean("first_referrer", safeReferrer, false);
+    setIfClean("referrer", safeReferrer, newTouch);
   }
 
   const sessionId = getOrCreateSessionId();
@@ -143,11 +169,14 @@ export function getDonationAttributionPayload(): Record<string, string> {
     if (v) out[key] = v;
   }
 
-  const currentUrl = window.location.href.split("#")[0].slice(0, 2048);
-  out.conversion_page = currentUrl;
-  out.landing_page = out.landing_page || currentUrl;
+  const currentUrl = safeAttributionUrl(window.location.href);
+  if (currentUrl) out.conversion_page = currentUrl;
+  // If attribution was first captured on a bank return, do not fabricate a
+  // landing_page from /success, or store its private query token.
+  if (!out.landing_page && currentUrl && !isPaymentReturnPage(currentUrl)) out.landing_page = currentUrl;
   out.first_landing_page = out.first_landing_page || out.landing_page;
-  if (document.referrer) out.referrer = out.referrer || document.referrer.slice(0, 2048);
+  const safeReferrer = safeAttributionUrl(document.referrer);
+  if (!out.referrer && safeReferrer && !isPaymentReturnPage(safeReferrer)) out.referrer = safeReferrer;
 
   const sessionId = getOrCreateSessionId();
   if (sessionId) out.session_id = out.session_id || sessionId;
