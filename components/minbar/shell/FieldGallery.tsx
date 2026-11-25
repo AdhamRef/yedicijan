@@ -10,7 +10,9 @@ export default function FieldGallery({ locale }: { locale: string }) {
   const pathname = usePathname() ?? "";
   const rtl = locale.startsWith("ar");
   const route = routeForPathname(pathname);
-  const hidden = galleryHiddenOn(pathname) || (route !== "home" && route !== "projectDetail");
+  // Yedicihan project pages live at /<locale>/campaign/<id>; Minber route map only knows its own project URLs.
+  const yedicihanProject = /^\/[a-z]{2}\/campaign\/[^/]+\/?$/.test(pathname);
+  const hidden = galleryHiddenOn(pathname) || (route !== "home" && route !== "projectDetail" && !yedicihanProject);
   const row = useRef<HTMLDivElement>(null);
   const slide = (dir: 1 | -1) => { const el = row.current; if (el) el.scrollBy({ left: dir * (rtl ? -1 : 1) * el.clientWidth * 0.85, behavior: "smooth" }); };
   const [images, setImages] = useState<PublicGalleryImage[]>([]);
