@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
-
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { fetchAdsDonations } from "@/lib/admin/ads-fetch";
 import { resolveAttribution } from "@/lib/tracking/attribution-resolver";
@@ -14,12 +13,10 @@ import {
   type AdPlatform,
 } from "@/lib/attribution/detect-source";
 
-export const dynamic = "force-dynamic";
-
 /**
  * Per-donation feed for the "مجموعات إعلانية" tab. Returns the raw donation
- * rows in the selected period with their full attribution snapshot  utm_term
- * (search keyword), utm_campaign, country and amount  already paired with the
+ * rows in the selected period with their full attribution snapshot — utm_term
+ * (search keyword), utm_campaign, country and amount — already paired with the
  * source-detection result so the UI can render the badge inline.
  *
  * Capped at 2000 rows; tighter date filters needed beyond that.

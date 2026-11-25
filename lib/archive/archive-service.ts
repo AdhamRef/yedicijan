@@ -106,7 +106,7 @@ let driveLinks: ArchiveDriveLink[] = [
   },
 ];
 
-const assets: ArchiveAsset[] = [
+let assets: ArchiveAsset[] = [
   {
     id: "archive_asset_gaza_photo_foundation",
     projectId: "archive_project_gaza_2025_water",
@@ -183,7 +183,7 @@ const assets: ArchiveAsset[] = [
   },
 ];
 
-const videoFrames: ArchiveVideoFrame[] = [
+let videoFrames: ArchiveVideoFrame[] = [
   {
     id: "archive_frame_foundation_10s",
     assetId: "archive_asset_gaza_video_foundation",

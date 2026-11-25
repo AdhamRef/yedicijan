@@ -248,7 +248,7 @@ export const dashboardDbContracts: DashboardDbContract[] = [
     name: "BrandProfile",
     context: "brand",
     status: "PRISMA_READY",
-    purpose: "Stores the official Minber-i Aksa brand identity.",
+    purpose: "Stores the official Yedicihan brand identity.",
     currentPersistence: "foundation repository",
     nextModel: "BrandProfile",
     readyForPrisma: true,

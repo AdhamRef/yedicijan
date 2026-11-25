@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { clientKey, hit } from "@/lib/ai/concierge/rate-limit";
+import { clientKey, hit } from "@/lib/security/rate-limit";
 
 /**
  * Card-testing brakes for the charges that send a typed card straight to a bank

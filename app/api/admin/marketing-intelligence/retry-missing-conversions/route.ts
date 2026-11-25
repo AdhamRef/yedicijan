@@ -78,14 +78,14 @@ async function metaServerLedgerState(donationId: string): Promise<LedgerState> {
       filter: {
         platform: "META",
         channel: "server",
-        eventName: { $in: ["Donate", "Purchase"] },
+        eventName: "Donate",
         $or: [
           { donationId },
           { donationId: legacyOid(donationId) },
           { eventId: `donate_${donationId}` },
         ],
       },
-      projection: { status: 1, eventName: 1 },
+      projection: { status: 1 },
       limit: 20,
     });
     const batch = isRecord(result) && isRecord(result.cursor) && Array.isArray(result.cursor.firstBatch)
@@ -94,7 +94,7 @@ async function metaServerLedgerState(donationId: string): Promise<LedgerState> {
     const statuses = batch
       .map((item) => (isRecord(item) && typeof item.status === "string" ? item.status : "UNKNOWN"))
       .filter(Boolean);
-    return { hasLedger: statuses.length > 0, hasSent: ["Donate", "Purchase"].every(name => batch.some(item => isRecord(item) && item.eventName === name && item.status === "SENT")), statuses };
+    return { hasLedger: statuses.length > 0, hasSent: statuses.includes("SENT"), statuses };
   } catch {
     return { hasLedger: false, hasSent: false, statuses: [] };
   }
@@ -126,7 +126,10 @@ export async function POST(request: NextRequest) {
 
   const results = [];
   for (const row of rows) {
-    const result = await syncDonationConversion(row.id, { force: true });
+    if (row.conversionEventsSentAt != null) {
+      await prisma.donation.update({ where: { id: row.id }, data: { conversionEventsSentAt: null } });
+    }
+    const result = await syncDonationConversion(row.id);
     results.push({
       donationId: row.id,
       paidAt: row.paidAt?.toISOString() ?? null,

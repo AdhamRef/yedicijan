@@ -1,7 +1,5 @@
-import LegacyMessages from "@/components/minbar/LegacyMessages";
-import { buildManagedPageMetadata } from "@/lib/content-editor/page-seo";
 import type { Metadata } from "next";
-import { LOCALE_SEO, type Locale } from "@/lib/seo";
+import { buildPageMetadata, LOCALE_SEO, type Locale } from "@/lib/seo";
 
 const BANK_TRANSFER_SEO: Record<Locale, { title: string; description: string }> = {
   ar: {
@@ -48,7 +46,7 @@ export async function generateMetadata({ params }: Pick<Props, "params">): Promi
   const locale = (rawLocale in LOCALE_SEO ? rawLocale : "en") as Locale;
   const seo = BANK_TRANSFER_SEO[locale] ?? BANK_TRANSFER_SEO.en;
 
-  return buildManagedPageMetadata("legacyBankTransfer", locale, {
+  return buildPageMetadata(locale, {
     title: seo.title,
     description: seo.description,
     path: "/bank-transfer",
@@ -56,7 +54,6 @@ export async function generateMetadata({ params }: Pick<Props, "params">): Promi
   });
 }
 
-export default async function BankTransferLayout({ children, params }: Props) {
-  const { locale } = await params;
-  return <LegacyMessages locale={locale}>{children}</LegacyMessages>;
+export default function BankTransferLayout({ children }: Props) {
+  return children;
 }

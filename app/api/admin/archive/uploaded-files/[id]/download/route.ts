@@ -5,7 +5,7 @@ import { requireArchiveApiAccess, requireArchiveUploadedFileListAccess } from ".
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Params = { params: Promise<{ id: string }> };
+type Params = { params: Promise<{ id: string }> | { id: string } };
 
 export async function GET(_request: Request, context: Params) {
   const { denied } = await requireArchiveApiAccess();
@@ -13,7 +13,7 @@ export async function GET(_request: Request, context: Params) {
 
   const { id } = await Promise.resolve(context.params);
   const row = await prisma.auditLog.findUnique({ where: { id }, select: { id: true, metadata: true, action: true, entityType: true } });
-  if (!isArchiveUploadedFile(row)) return new Response("Not found", { status: 404 });
+  if (!row || !isArchiveUploadedFile(row as never)) return new Response("Not found", { status: 404 });
 
   const metadata = metadataObject(row.metadata);
   if (stringField(metadata.category) === "DOCUMENTS") {
@@ -35,9 +35,7 @@ export async function GET(_request: Request, context: Params) {
   return fileResponse(Buffer.from(base64, "base64"), fileName, mimeType);
 }
 
-/* `entityType` is nullable in the schema, so the parameter has to admit null for the call above to
-   typecheck; the predicate still narrows it to a string. */
-function isArchiveUploadedFile(row: { action: string; entityType: string | null } | null): row is { id: string; metadata: unknown; action: string; entityType: string } {
+function isArchiveUploadedFile(row: { action: string; entityType: string } | null): row is { id: string; metadata: unknown; action: string; entityType: string } {
   return Boolean(row && row.action === "archive.uploadedFile.create" && row.entityType === "ArchiveUploadedFile");
 }
 

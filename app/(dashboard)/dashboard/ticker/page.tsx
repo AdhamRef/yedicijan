@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,21 +13,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Info, Loader2, Plus, RefreshCw, Save, Ticket, Trash2 } from "lucide-react";
+import { Trash2, Plus, Save, Loader2, RefreshCw, Ticket } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/PageHeader";
 import { useToast } from "@/hooks/use-toast";
-import { dt } from "@/lib/dashboard/i18n";
-
-interface TickerConfig {
-  id?: string;
-  isActive: boolean;
-  showRecentDonations: boolean;
-  showRegisteredNames: boolean;
-  donorNames: string[];
-  amountRanges: AmountRange[];
-  minIntervalSeconds: number;
-  maxIntervalSeconds: number;
-}
 
 interface AmountRange {
   minAmount: number;
@@ -36,144 +24,144 @@ interface AmountRange {
   label: string;
 }
 
-const DEFAULT_CONFIG: TickerConfig = {
-  isActive: true,
-  showRecentDonations: true,
-  showRegisteredNames: false,
-  donorNames: [],
-  amountRanges: [{ minAmount: 5, maxAmount: 50, probability: 100, label: "small" }],
-  minIntervalSeconds: 3,
-  maxIntervalSeconds: 8,
-};
-
-function invalidateRequest(request: { current: number }) { request.current++; }
+interface TickerConfig {
+  id?: string;
+  isActive: boolean;
+  donorNames: string[];
+  amountRanges: AmountRange[];
+  minIntervalSeconds: number;
+  maxIntervalSeconds: number;
+}
 
 export default function TickerAdminPanel() {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loadError, setLoadError] = useState(false);
-  const configRequest = useRef(0);
-  const [config, setConfig] = useState<TickerConfig>(DEFAULT_CONFIG);
+
+  const [config, setConfig] = useState<TickerConfig>({
+    isActive: true,
+    donorNames: [],
+    amountRanges: [],
+    minIntervalSeconds: 3,
+    maxIntervalSeconds: 8,
+  });
+
+  // حالة مؤقتة لإدخال أسماء المتبرعين (مفصولة بفواصل)
   const [donorNamesInput, setDonorNamesInput] = useState("");
 
-  const fetchConfig = useCallback(async () => {
-    const request = ++configRequest.current;
-    setLoading(true);
-    setLoadError(false);
-    try {
-      const response = await fetch("/api/live-donation-ticker?view=admin", { cache: "no-store", signal: AbortSignal.timeout(15000) });
-      const data = await response.json().catch(() => null);
-      if (request !== configRequest.current) return;
-      if (response.status === 404 && data?.error === "No ticker configuration found") {
-        setConfig(DEFAULT_CONFIG);
-        setDonorNamesInput("");
-        return;
-      }
-      if (!response.ok) throw new Error(dt("فشل في تحميل إعدادات شريط التبرعات"));
+  // جلب الإعدادات الحالية عند تحميل الصفحة
+  useEffect(() => {
+    fetchConfig();
+  }, []);
 
-      if (!data || typeof data.id !== "string" || typeof data.isActive !== "boolean" || !Array.isArray(data.donorNames) || !Array.isArray(data.amountRanges)
-        || !Number.isInteger(data.minIntervalSeconds) || !Number.isInteger(data.maxIntervalSeconds)) throw new Error(dt("تعذر تحميل الإعدادات"));
-      setConfig({
-        id: data.id,
-        isActive: data.isActive === true,
-        showRecentDonations: data.showRecentDonations !== false,
-        showRegisteredNames: data.showRegisteredNames === true,
-        donorNames: Array.isArray(data.donorNames) ? data.donorNames : [],
-        amountRanges: Array.isArray(data.amountRanges) ? data.amountRanges : [],
-        minIntervalSeconds: Number.isInteger(data.minIntervalSeconds) ? data.minIntervalSeconds : DEFAULT_CONFIG.minIntervalSeconds,
-        maxIntervalSeconds: Number.isInteger(data.maxIntervalSeconds) ? data.maxIntervalSeconds : DEFAULT_CONFIG.maxIntervalSeconds,
-      });
-      setDonorNamesInput((Array.isArray(data.donorNames) ? data.donorNames : []).join("\n"));
-    } catch {
-      if (request !== configRequest.current) return;
-      setLoadError(true);
+  const fetchConfig = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/live-donation-ticker");
+      if (response.ok) {
+        const data = await response.json();
+        setConfig({
+          id: data.id,
+          isActive: true,
+          donorNames: data.donorNames,
+          amountRanges: data.amountRanges,
+          minIntervalSeconds: data.minIntervalSeconds,
+          maxIntervalSeconds: data.maxIntervalSeconds,
+        });
+
+        // تعبئة حقل الإدخال بالقيم المفصولة بفواصل
+        setDonorNamesInput(data.donorNames.join(", "));
+      }
+    } catch (error) {
+      console.error("خطأ أثناء جلب الإعدادات:", error);
       toast({
-        title: dt("تعذر تحميل الإعدادات"),
-        description: dt("حاول تحديث الصفحة"),
+        title: "خطأ",
+        description: "فشل في تحميل إعدادات شريط التبرعات",
         variant: "destructive",
       });
     } finally {
-      if (request === configRequest.current) setLoading(false);
+      setLoading(false);
     }
-  }, [toast]);
-
-  useEffect(() => {
-    void fetchConfig();
-    return () => invalidateRequest(configRequest);
-  }, [fetchConfig]);
+  };
 
   const handleSave = async () => {
-    if (loading || saving || loadError) return;
-    const donorNames = donorNamesInput.split(/\r?\n/u).map((name) => name.trim()).filter(Boolean);
-    const probabilityTotal = config.amountRanges.reduce((sum, range) => sum + range.probability, 0);
-    const rangesAreValid = config.amountRanges.length > 0 && config.amountRanges.every((range) =>
-      Number.isFinite(range.minAmount) && range.minAmount >= 0 &&
-      Number.isFinite(range.maxAmount) && range.maxAmount >= range.minAmount &&
-      Number.isFinite(range.probability) && range.probability >= 0 && range.probability <= 100,
-    );
-    const live = config.showRecentDonations || config.showRegisteredNames;
-    if (!live && !donorNames.length) {
-      toast({ title: dt("أدخل أسماء العرض"), description: dt("أضف اسمًا واحدًا على الأقل لاستخدامه في الشريط"), variant: "destructive" });
-      return;
-    }
-    if (donorNames.length > 100 || donorNames.some((name) => name.length > 80)) {
-      toast({ title: dt("راجع قائمة أسماء العرض"), description: dt("استخدم حتى 100 اسم، بحد أقصى 80 حرفًا للاسم الواحد"), variant: "destructive" });
-      return;
-    }
-    if (!live && (!rangesAreValid || Math.abs(probabilityTotal - 100) > 0.01)) {
-      toast({ title: dt("راجع اقتراحات المبالغ"), description: dt("تأكد من صحة النطاقات وأن مجموع احتمالاتها يساوي 100٪"), variant: "destructive" });
-      return;
-    }
-    if (
-      !Number.isInteger(config.minIntervalSeconds) ||
-      !Number.isInteger(config.maxIntervalSeconds) ||
-      config.minIntervalSeconds < 3 ||
-      config.maxIntervalSeconds < config.minIntervalSeconds ||
-      config.maxIntervalSeconds > 3600
-    ) {
-      toast({
-        title: dt("راجع توقيت العرض"),
-        description: dt("أدخل أعدادًا صحيحة بين 3 و3600 ثانية، واجعل الحد الأدنى أقل من الحد الأقصى"),
-        variant: "destructive",
-      });
-      return;
-    }
-
     setSaving(true);
     try {
-      const response = await fetch("/api/live-donation-ticker", {
-        method: config.id ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(config.id ? { id: config.id } : {}),
-          isActive: config.isActive,
-          showRecentDonations: config.showRecentDonations,
-          showRegisteredNames: config.showRegisteredNames,
-          donorNames,
-          amountRanges: config.amountRanges,
-          minIntervalSeconds: config.minIntervalSeconds,
-          maxIntervalSeconds: config.maxIntervalSeconds,
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || dt("فشل في حفظ الإعدادات"));
+      // تحويل القيم المفصولة بفواصل إلى مصفوفة
+      const donorNames = donorNamesInput
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
 
-      setConfig({
-        id: result.id ?? config.id,
-        isActive: result.isActive === true,
-        showRecentDonations: result.showRecentDonations === true,
-        showRegisteredNames: result.showRegisteredNames === true,
-        donorNames: result.donorNames ?? donorNames,
-        amountRanges: result.amountRanges ?? config.amountRanges,
-        minIntervalSeconds: result.minIntervalSeconds,
-        maxIntervalSeconds: result.maxIntervalSeconds,
+      // التحقق من صحة البيانات
+      if (donorNames.length === 0) {
+        toast({
+          title: "خطأ في التحقق",
+          description: "يرجى إضافة اسم متبرع واحد على الأقل",
+          variant: "destructive",
+        });
+        setSaving(false);
+        return;
+      }
+
+      if (config.amountRanges.length === 0) {
+        toast({
+          title: "خطأ في التحقق",
+          description: "يرجى إضافة نطاق تبرع واحد على الأقل",
+          variant: "destructive",
+        });
+        setSaving(false);
+        return;
+      }
+
+      if (config.minIntervalSeconds <= 0 || config.maxIntervalSeconds <= 0) {
+        toast({
+          title: "خطأ في التحقق",
+          description: "عدد الثواني يجب أن يكون أكبر من صفر",
+          variant: "destructive",
+        });
+        setSaving(false);
+        return;
+      }
+
+      if (config.minIntervalSeconds >= config.maxIntervalSeconds) {
+        toast({
+          title: "خطأ في التحقق",
+          description: "الحد الأدنى يجب أن يكون أقل من الحد الأقصى",
+          variant: "destructive",
+        });
+        setSaving(false);
+        return;
+      }
+
+      const payload = {
+        ...config,
+        donorNames,
+      };
+
+      const response = await fetch("/api/live-donation-ticker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      toast({ title: dt("تم الحفظ"), description: dt("تم تحديث إعدادات شريط التبرعات") });
-    } catch (error) {
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "فشل في حفظ الإعدادات");
+      }
+
+      const saved = await response.json();
+      setConfig({ ...config, id: saved.id });
+
       toast({
-        title: dt("تعذر حفظ الإعدادات"),
-        description: error instanceof Error ? error.message : dt("حاول مرة أخرى"),
+        title: "تم بنجاح",
+        description: "تم حفظ إعدادات شريط التبرعات بنجاح",
+      });
+    } catch (error: any) {
+      console.error("خطأ أثناء الحفظ:", error);
+      toast({
+        title: "خطأ",
+        description: error.message || "فشل في حفظ الإعدادات",
         variant: "destructive",
       });
     } finally {
@@ -181,185 +169,247 @@ export default function TickerAdminPanel() {
     }
   };
 
-  const addAmountRange = () => setConfig((current) => ({
-    ...current,
-    amountRanges: [...current.amountRanges, { minAmount: 10, maxAmount: 50, probability: 0, label: "" }],
-  }));
-
-  const updateAmountRange = (index: number, field: keyof AmountRange, value: number | string) => {
-    setConfig((current) => ({
-      ...current,
-      amountRanges: current.amountRanges.map((range, i) => i === index ? { ...range, [field]: value } : range),
-    }));
+  const addAmountRange = () => {
+    setConfig({
+      ...config,
+      amountRanges: [
+        ...config.amountRanges,
+        { minAmount: 10, maxAmount: 50, probability: 50, label: "نطاق_جديد" },
+      ],
+    });
   };
 
-  const removeAmountRange = (index: number) => setConfig((current) => ({
-    ...current,
-    amountRanges: current.amountRanges.filter((_, i) => i !== index),
-  }));
+  const removeAmountRange = (index: number) => {
+    setConfig({
+      ...config,
+      amountRanges: config.amountRanges.filter((_, i) => i !== index),
+    });
+  };
+
+  const updateAmountRange = (
+    index: number,
+    field: keyof AmountRange,
+    value: number | string,
+  ) => {
+    const updated = [...config.amountRanges];
+    updated[index] = { ...updated[index], [field]: value };
+    setConfig({ ...config, amountRanges: updated });
+  };
+
+  const calculateTotalProbability = () => {
+    return config.amountRanges.reduce(
+      (sum, range) => sum + range.probability,
+      0,
+    );
+  };
 
   if (loading) {
-    return <div className="flex min-h-48 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" aria-label={dt("جارٍ التحميل")} /></div>;
+    return (
+      <div className="flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
-  if (loadError) return <div className="mx-auto max-w-5xl space-y-6">
-    <PageHeader title={dt("شريط التبرعات")} icon={Ticket} />
-    <div role="alert" className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-5 text-red-800">
-      <p>{dt("تعذر تحميل الإعدادات")}</p>
-      <Button variant="outline" onClick={() => void fetchConfig()}>{dt("إعادة المحاولة")}</Button>
-    </div>
-    <Button disabled><Save className="ms-2 h-4 w-4" />{dt("حفظ الإعدادات")}</Button>
-  </div>;
-
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       <PageHeader
-        title={dt("شريط التبرعات")}
-        description={dt("اعرض التبرعات الفعلية وأسماء مجتمع الداعمين مع إخفاء الأسماء وتحديد توقيت الإشعارات")}
+        title="إعدادات شريط التبرعات المباشر"
+        description="إدارة إعدادات عرض التبرعات المباشرة"
         icon={Ticket}
-        actions={(
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => void fetchConfig()} disabled={loading || saving}>
-              <RefreshCw className="ms-2 h-4 w-4" />{dt("تحديث")}
-            </Button>
-            <Button onClick={() => void handleSave()} disabled={saving}>
-              {saving ? <Loader2 className="ms-2 h-4 w-4 animate-spin" /> : <Save className="ms-2 h-4 w-4" />}
-              {dt("حفظ الإعدادات")}
-            </Button>
-          </div>
-        )}
+        actions={<>
+          <Button variant="outline" onClick={fetchConfig} disabled={loading}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            تحديث
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-2" />
+            )}
+            حفظ الإعدادات
+          </Button>
+        </>}
       />
 
-      {config.isActive && !config.showRecentDonations && !config.showRegisteredNames && !donorNamesInput.split("\n").some((name) => name.trim()) ? (
-        <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          {dt("الشريط مفعل لكن قائمة أسماء العرض فارغة. أضف أسماء العرض واحفظها ليظهر الشريط.")}
-        </p>
-      ) : null}
-      <Card><CardHeader><CardTitle>{dt("مصدر أسماء التيكر")}</CardTitle><CardDescription>{dt("يُخفى الاسم على الخادم ليظهر أول وآخر حرف من الاسم الأول والأخير فقط. لا تُعرض بيانات الاتصال.")}</CardDescription></CardHeader><CardContent className="space-y-4"><label className="flex items-center justify-between gap-3"><span>{dt("عرض التبرعات المدفوعة خلال آخر 24 ساعة")}</span><Switch checked={config.showRecentDonations} onCheckedChange={value => setConfig(current => ({...current, showRecentDonations:value}))} /></label><label className="flex items-center justify-between gap-3"><span>{dt("عرض أسماء الحسابات المسجلة أيضًا")}</span><Switch checked={config.showRegisteredNames} onCheckedChange={value => setConfig(current => ({...current, showRegisteredNames:value}))} /></label><p className="text-xs leading-6 text-slate-500">{dt("أسماء الحسابات تظهر كأعضاء في مجتمع الداعمين، دون نسبة تبرع أو مبلغ غير حقيقي لهم.")}</p></CardContent></Card>
+      {/* حالة الشريط */}
       <Card>
         <CardHeader>
-          <CardTitle>{dt("حالة الشريط")}</CardTitle>
-          <CardDescription>{dt("عند التفعيل، يعرض الموقع الإشعارات من المصادر المحددة أعلاه")}</CardDescription>
+          <CardTitle>حالة الشريط</CardTitle>
+          <CardDescription>تفعيل أو إيقاف شريط التبرعات</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-center justify-between gap-6">
-          <div>
-            <Label htmlFor="ticker-active" className="text-base">{config.isActive ? dt("الشريط مفعل") : dt("الشريط متوقف")}</Label>
-            <p className="mt-1 text-sm text-muted-foreground">{dt("تظهر الأسماء مخفية، والتبرعات المعتمدة فقط تحمل مبلغًا وتوقيتًا فعليين.")}</p>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <Label className="text-base">
+              {config.isActive ? "الشريط مفعل" : "الشريط متوقف"}
+            </Label>
+            <Switch
+              checked={config.isActive}
+              onCheckedChange={(checked) =>
+                setConfig({ ...config, isActive: checked })
+              }
+            />
           </div>
-          <Switch
-            id="ticker-active"
-            checked={config.isActive}
-            onCheckedChange={(isActive) => setConfig((current) => ({ ...current, isActive }))}
-          />
         </CardContent>
       </Card>
 
-      {!config.showRecentDonations && !config.showRegisteredNames ? <>
+      {/* أسماء المتبرعين */}
       <Card>
         <CardHeader>
-          <CardTitle>{dt("أسماء العرض الافتراضية")}</CardTitle>
-          <CardDescription>{dt("اكتب اسمًا في كل سطر. هذه القائمة التي تختارها أنت، ولا ترتبط بسجلات المتبرعين أو حساباتهم")}</CardDescription>
+          <CardTitle>أسماء المتبرعين</CardTitle>
+          <CardDescription>
+            أدخل الأسماء مفصولة بفواصل، وسيتم اختيارها عشوائيًا للعرض
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent>
           <Textarea
-            aria-label={dt("أسماء العرض الافتراضية")}
-            placeholder={dt("اسم العرض الأول\nاسم العرض الثاني\nاسم العرض الثالث")}
+            placeholder="أحمد، محمد، فاطمة، سارة، عبد الله..."
             value={donorNamesInput}
-            onChange={(event) => setDonorNamesInput(event.target.value)}
-            rows={5}
-            maxLength={8000}
+            onChange={(e) => setDonorNamesInput(e.target.value)}
+            rows={4}
+            className="font-mono text-sm"
           />
-          <p className="text-sm text-muted-foreground">
-            {dt("عدد الأسماء")}: {donorNamesInput.split(/\r?\n/u).map((name) => name.trim()).filter(Boolean).length} / 100
+          <p className="text-sm text-muted-foreground mt-2">
+            العدد الحالي: {donorNamesInput.split(",").filter(Boolean).length}{" "}
+            اسم
           </p>
         </CardContent>
       </Card>
 
+      {/* نطاقات التبرعات */}
       <Card>
         <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center justify-between">
             <div>
-              <CardTitle>{dt("اقتراحات المبالغ")}</CardTitle>
-              <CardDescription>{dt("إعدادات توافق قديمة؛ لا تُعرض هذه الأرقام كتبرعات فعلية. استخدم مصدر التبرعات المدفوعة لعرض مبالغ حقيقية.")}</CardDescription>
+              <CardTitle>نطاقات المبالغ</CardTitle>
+              <CardDescription>
+                تحديد نطاقات التبرع مع نسب احتمالية
+              </CardDescription>
             </div>
-            <Button type="button" variant="outline" onClick={addAmountRange}>
-              <Plus className="ms-2 h-4 w-4" />{dt("إضافة نطاق")}
+            <Button onClick={addAmountRange} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              إضافة نطاق
             </Button>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {config.amountRanges.map((range, index) => (
-            <div key={index} className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_1.5fr_auto]">
-              <div className="space-y-2">
-                <Label htmlFor={`ticker-range-min-${index}`}>{dt("من (USD)")}</Label>
-                <Input id={`ticker-range-min-${index}`} type="number" min={0} step="any" value={range.minAmount}
-                  onChange={(event) => updateAmountRange(index, "minAmount", Number(event.target.value))} />
+            <div
+              key={index}
+              className="grid grid-cols-1 gap-4 p-4 border rounded-lg bg-muted/50 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
+            >
+              <div>
+                <Label>الحد الأدنى ($)</Label>
+                <Input
+                  type="number"
+                  value={range.minAmount}
+                  onChange={(e) =>
+                    updateAmountRange(
+                      index,
+                      "minAmount",
+                      parseFloat(e.target.value) || 0,
+                    )
+                  }
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor={`ticker-range-max-${index}`}>{dt("إلى (USD)")}</Label>
-                <Input id={`ticker-range-max-${index}`} type="number" min={0} step="any" value={range.maxAmount}
-                  onChange={(event) => updateAmountRange(index, "maxAmount", Number(event.target.value))} />
+              <div>
+                <Label>الحد الأقصى ($)</Label>
+                <Input
+                  type="number"
+                  value={range.maxAmount}
+                  onChange={(e) =>
+                    updateAmountRange(
+                      index,
+                      "maxAmount",
+                      parseFloat(e.target.value) || 0,
+                    )
+                  }
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor={`ticker-range-weight-${index}`}>{dt("النسبة المئوية")}</Label>
-                <Input id={`ticker-range-weight-${index}`} type="number" min={0} max={100} step="any" value={range.probability}
-                  onChange={(event) => updateAmountRange(index, "probability", Number(event.target.value))} />
+              <div>
+                <Label>الاحتمالية</Label>
+                <Input
+                  type="number"
+                  value={range.probability}
+                  onChange={(e) =>
+                    updateAmountRange(
+                      index,
+                      "probability",
+                      parseFloat(e.target.value) || 0,
+                    )
+                  }
+                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor={`ticker-range-label-${index}`}>{dt("وصف اختياري")}</Label>
-                <Input id={`ticker-range-label-${index}`} maxLength={60} value={range.label}
-                  onChange={(event) => updateAmountRange(index, "label", event.target.value)} />
+              <div className="col-span-2">
+                <Label>التسمية</Label>
+                <Input
+                  value={range.label}
+                  onChange={(e) =>
+                    updateAmountRange(index, "label", e.target.value)
+                  }
+                  placeholder="صغير، متوسط، كبير"
+                />
               </div>
-              <Button type="button" variant="outline" size="icon" className="self-end text-destructive" aria-label={dt("حذف النطاق")}
-                onClick={() => removeAmountRange(index)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex items-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => removeAmountRange(index)}
+                  className="w-full"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           ))}
-          <p className={`text-sm ${Math.abs(config.amountRanges.reduce((sum, range) => sum + range.probability, 0) - 100) > 0.01 ? "text-destructive" : "text-muted-foreground"}`}>
-            {dt("مجموع النسب")}: {config.amountRanges.reduce((sum, range) => sum + range.probability, 0)}%
-          </p>
+
+          {config.amountRanges.length > 0 && (
+            <div className="flex items-center justify-between p-4 bg-brand/8 rounded-lg">
+              <span className="font-medium">إجمالي الاحتمالات:</span>
+              <span className="text-lg font-bold">
+                {calculateTotalProbability()}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      </> : null}
+      {/* توقيت العرض */}
       <Card>
         <CardHeader>
-          <CardTitle>{dt("توقيت الإشعارات")}</CardTitle>
-          <CardDescription>{dt("الفاصل الزمني بين إشعار وآخر. لا يغيّر هذا قيمة التبرع أو وقت اعتماده")}</CardDescription>
+          <CardTitle>توقيت العرض</CardTitle>
+          <CardDescription>التحكم في عدد الثواني بين كل تبرع</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="ticker-min-interval">{dt("الحد الأدنى للفاصل (ثوانٍ)")}</Label>
+        <CardContent className="grid grid-cols-2 gap-6">
+          <div>
+            <Label>أقل مدة (ثواني)</Label>
             <Input
-              id="ticker-min-interval"
               type="number"
-              min={3}
-              max={3600}
-              step={1}
               value={config.minIntervalSeconds}
-              onChange={(event) => setConfig((current) => ({ ...current, minIntervalSeconds: Number(event.target.value) }))}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  minIntervalSeconds: parseInt(e.target.value) || 1,
+                })
+              }
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="ticker-max-interval">{dt("الحد الأقصى للفاصل (ثوانٍ)")}</Label>
+          <div>
+            <Label>أقصى مدة (ثواني)</Label>
             <Input
-              id="ticker-max-interval"
               type="number"
-              min={3}
-              max={3600}
-              step={1}
               value={config.maxIntervalSeconds}
-              onChange={(event) => setConfig((current) => ({ ...current, maxIntervalSeconds: Number(event.target.value) }))}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  maxIntervalSeconds: parseInt(e.target.value) || 1,
+                })
+              }
             />
           </div>
         </CardContent>
       </Card>
-
-      <div className="flex gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-        <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
-        <p className="leading-6">{dt("التبرعات الفعلية مأخوذة من المدفوعات المعتمدة فقط. أسماء الحسابات المسجلة تظهر كدعم مجتمعي دون مبلغ. إعدادات العرض اليدوية لا تنشئ تبرعات.")}</p>
-      </div>
     </div>
   );
 }

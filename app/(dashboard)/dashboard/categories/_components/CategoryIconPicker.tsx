@@ -14,12 +14,11 @@ import {
   type IconCatalogEntry,
   type IconSector,
 } from "./category-icon-catalog";
-import { dashIntl, dt } from "@/lib/dashboard/i18n";
 
 /**
  * ISO 3166-1 alpha-2 codes, so every country the flag CDN publishes can be
  * picked. Names are resolved with Intl.DisplayNames instead of being listed
- * here  the browser already ships the Arabic country names.
+ * here — the browser already ships the Arabic country names.
  */
 const COUNTRY_CODES = [
   "AD", "AE", "AF", "AG", "AL", "AM", "AO", "AR", "AT", "AU", "AW", "AZ",
@@ -43,7 +42,7 @@ const COUNTRY_CODES = [
   "ZM", "ZW",
 ];
 
-/** Shown first, before the full list  where the association works most. */
+/** Shown first, before the full list — where the association works most. */
 const PINNED_CODES = ["PS", "SY", "TR", "SD", "YE", "SO", "LB", "AF", "SA", "EG"];
 
 function countryNames(locale: string): Record<string, string> {
@@ -60,8 +59,8 @@ function countryNames(locale: string): Record<string, string> {
 }
 
 /**
- * Picks what goes into `category.icon`: one of the built-in icons  Lucide's or
- * one of the glyphs drawn for this organisation's own project types  or any
+ * Picks what goes into `category.icon`: one of the built-in icons — Lucide's or
+ * one of the glyphs drawn for this organisation's own project types — or any
  * country flag. Flags are stored as `flag:XX` and custom glyphs as
  * `custom:Name`; CategoryIcon also reads looser forms, so a value typed by hand
  * elsewhere still renders.
@@ -103,7 +102,7 @@ export function CategoryIconPicker({
 
   const iconResultCount = iconGroups.reduce((sum, group) => sum + group.entries.length, 0);
 
-  const names = useMemo(() => countryNames(dashIntl("ar")), []);
+  const names = useMemo(() => countryNames("ar"), []);
   const englishNames = useMemo(() => countryNames("en"), []);
 
   const visibleCodes = useMemo(() => {
@@ -139,7 +138,7 @@ export function CategoryIconPicker({
             type="button"
             onClick={() => onChange("")}
             className="text-gray-400 hover:text-red-600 transition-colors"
-            title={dt("إزالة الأيقونة")}
+            title="إزالة الأيقونة"
           >
             <X className="w-4 h-4" />
           </button>
@@ -148,8 +147,8 @@ export function CategoryIconPicker({
 
       <div className="inline-flex rounded-lg border border-gray-200 p-1">
         {([
-          { key: "icon", label: dt("أيقونة") },
-          { key: "flag", label: dt("علم دولة") },
+          { key: "icon", label: "أيقونة" },
+          { key: "flag", label: "علم دولة" },
         ] as const).map((tab) => (
           <button
             key={tab.key}
@@ -172,7 +171,7 @@ export function CategoryIconPicker({
               type="text"
               value={iconQuery}
               onChange={(event) => setIconQuery(event.target.value)}
-              placeholder={dt("ابحث عن أيقونة (مسجد، بئر، أضحية، خيمة، يتيم...)")}
+              placeholder="ابحث عن أيقونة (مسجد، بئر، أضحية، خيمة، يتيم...)"
               className="w-full rounded-lg border border-gray-200 py-2 ps-9 pe-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
             />
           </div>
@@ -214,7 +213,8 @@ export function CategoryIconPicker({
 
             {iconResultCount === 0 && (
               <p className="py-4 text-center text-xs text-gray-400">
-                {dt("لا توجد أيقونة مطابقة.")}</p>
+                لا توجد أيقونة مطابقة.
+              </p>
             )}
           </div>
         </div>
@@ -226,7 +226,7 @@ export function CategoryIconPicker({
               type="text"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={dt("ابحث باسم الدولة أو رمزها (TR، فلسطين، Turkey)")}
+              placeholder="ابحث باسم الدولة أو رمزها (TR، فلسطين، Turkey)"
               className="w-full rounded-lg border border-gray-200 py-2 ps-9 pe-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
             />
           </div>
@@ -252,7 +252,8 @@ export function CategoryIconPicker({
             ))}
             {visibleCodes.length === 0 && (
               <p className="col-span-full py-4 text-center text-xs text-gray-400">
-                {dt("لا توجد دولة مطابقة.")}</p>
+                لا توجد دولة مطابقة.
+              </p>
             )}
           </div>
         </div>

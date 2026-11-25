@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-const PLATFORMS = ["META", "GOOGLE_ADS", "GA4", "TIKTOK", "X"];
+const PLATFORMS = ["META", "GOOGLE_ADS", "GA4", "TIKTOK", "X", "TWILIO"];
 
 function iso(value: Date | null | undefined) {
   return value ? value.toISOString() : null;

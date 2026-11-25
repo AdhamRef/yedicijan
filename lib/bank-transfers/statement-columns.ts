@@ -8,11 +8,11 @@
  *  1. It returns the first header matching ANY keyword, not the best match. A
  *     sheet whose columns are «… | Bakiye Tutarı | Tutar |» resolved to the
  *     running-balance column, because "Bakiye Tutarı" contains "tutar" and
- *     comes first  so every row imported the account balance as the donation.
+ *     comes first — so every row imported the account balance as the donation.
  *  2. When no header matched, the fallback took the first number anywhere in
  *     the row, which is routinely a reference or account number.
  *
- * So: an explicit priority order with an exclusion list (the user's rule 
+ * So: an explicit priority order with an exclusion list (the user's rule —
  * prefer the «Tutar» column when the sheet has one), and when there is no
  * usable header, column profiling over the actual data instead of a per-row
  * guess.
@@ -27,9 +27,6 @@ import {
 
 export type ResolvedColumns = {
   date: number;
-  balance: number;
-  currency: number;
-  channel: number;
   description: number;
   donor: number;
   reference: number;
@@ -39,14 +36,14 @@ export type ResolvedColumns = {
   credit: number;
   /** Outgoing-only column (a «Borç»-style pair). */
   debit: number;
-  /** How `amount` was found  surfaced to the dashboard so the admin can see it. */
+  /** How `amount` was found — surfaced to the dashboard so the admin can see it. */
   amountSource: "header:tutar" | "header:credit" | "header:amount" | "detected" | "none";
   /** The header text the amount was taken from, when there was one. */
   amountHeader: string | null;
 };
 
 export const NO_COLUMNS: ResolvedColumns = {
-  date: -1, balance: -1, currency: -1, channel: -1, description: -1, donor: -1, reference: -1,
+  date: -1, description: -1, donor: -1, reference: -1,
   amount: -1, credit: -1, debit: -1,
   amountSource: "none", amountHeader: null,
 };
@@ -204,7 +201,7 @@ export function detectAmountColumn(
 
 /**
  * Resolve every column for a sheet. `headers` may be undefined when no header
- * row was found  detection then runs purely on the data.
+ * row was found — detection then runs purely on the data.
  */
 export function resolveStatementColumns(
   headers: string[] | undefined,
@@ -215,12 +212,6 @@ export function resolveStatementColumns(
 
   const date = matchHeader(folded, DATE_TOKENS, claimed);
   if (date >= 0) claimed.add(date);
-  const balance = matchHeader(folded, ["bakiye", "balance", "الرصيد", "رصيد"], claimed);
-  if (balance >= 0) claimed.add(balance);
-  const currency = matchHeader(folded, ["para birimi", "currency", "doviz cinsi", "العملة"], claimed);
-  if (currency >= 0) claimed.add(currency);
-  const channel = matchHeader(folded, ["kanal", "channel", "قناة"], claimed);
-  if (channel >= 0) claimed.add(channel);
   const description = matchHeader(folded, DESC_TOKENS, claimed);
   if (description >= 0) claimed.add(description);
   const donor = matchHeader(folded, DONOR_TOKENS, claimed);
@@ -248,7 +239,7 @@ export function resolveStatementColumns(
 
   // Nothing usable in the header: profile the data.
   if (amount < 0) {
-    const skip = new Set<number>([date, description, donor, reference, debit, balance, currency, channel].filter((i) => i >= 0));
+    const skip = new Set<number>([date, description, donor, reference, debit].filter((i) => i >= 0));
     const detected = detectAmountColumn(dataRows, skip);
     if (detected >= 0) {
       amount = detected;
@@ -263,9 +254,6 @@ export function resolveStatementColumns(
 
   return {
     date,
-    balance,
-    currency,
-    channel,
     description,
     donor,
     reference,
@@ -282,7 +270,7 @@ export function resolveStatementColumns(
  *
  * The old check accepted the first row matching /date|tarih|.../ anywhere in its
  * text, so a preamble line like "Rapor Tarihi: 01.01.2026" was taken as the
- * header  after which no column resolved and every amount fell through to the
+ * header — after which no column resolved and every amount fell through to the
  * first-number-in-the-row guess. Requiring two distinct label hits across
  * separate cells, and scoring candidates instead of taking the first, keeps the
  * preamble out.
@@ -306,7 +294,7 @@ export function findHeaderRow(rows: unknown[][], searchLimit = 30): number {
     for (const group of LABEL_GROUPS) {
       if (filled.some((cell) => group.some((token) => cell.includes(token)))) score += 1;
     }
-    // Two distinct label families is the bar  "Tarih" alone is a preamble.
+    // Two distinct label families is the bar — "Tarih" alone is a preamble.
     if (score >= 2 && score > bestScore) {
       bestScore = score;
       bestIndex = i;

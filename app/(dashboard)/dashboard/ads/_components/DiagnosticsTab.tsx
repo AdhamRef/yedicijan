@@ -28,7 +28,6 @@ import {
   type ReasonEntry,
 } from "@/lib/tracking/tracking-event-contract";
 import { DiagnosticsDrawer } from "./DiagnosticsDrawer";
-import { dashDir, dashIntl, dt } from "@/lib/dashboard/i18n";
 
 interface DiagnosticRow {
   id: string;
@@ -96,9 +95,9 @@ const STATUS_PILL: Record<AttributionStatus, string> = {
   ga4_inferred: "bg-sky-50 text-sky-700 border-sky-200",
   utm_only: "bg-amber-50 text-amber-700 border-amber-200",
   organic: "bg-slate-50 text-slate-600 border-slate-200",
-  unknown: "bg-slate-50 text-slate-600 border-slate-200",
   direct: "bg-slate-50 text-slate-600 border-slate-200",
   tracking_issue: "bg-rose-50 text-rose-700 border-rose-200",
+  unknown: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
 const ALL_STATUSES: AttributionStatus[] = [
@@ -110,7 +109,6 @@ const ALL_STATUSES: AttributionStatus[] = [
   "organic",
   "direct",
   "tracking_issue",
-  "unknown",
 ];
 
 const ISSUE_CARDS: {
@@ -122,56 +120,56 @@ const ISSUE_CARDS: {
 }[] = [
   {
     key: "total",
-    get title() { return dt("إجمالي أخطاء التتبع"); },
+    title: "إجمالي أخطاء التتبع",
     icon: AlertTriangle,
     color: "text-rose-700 bg-rose-50 border-rose-200",
     ringColor: "ring-rose-500",
   },
   {
     key: "capi_missing",
-    get title() { return dt("CAPI ناقص"); },
+    title: "CAPI ناقص",
     icon: Activity,
     color: "text-rose-700 bg-white border-slate-200",
     ringColor: "ring-rose-500",
   },
   {
     key: "browser_missing",
-    get title() { return dt("Browser Donate ناقص"); },
+    title: "Browser Donate ناقص",
     icon: EyeOff,
     color: "text-amber-700 bg-white border-slate-200",
     ringColor: "ring-amber-500",
   },
   {
     key: "click_id_missing",
-    get title() { return dt("Click ID ناقص"); },
+    title: "Click ID ناقص",
     icon: Link2Off,
     color: "text-amber-700 bg-white border-slate-200",
     ringColor: "ring-amber-500",
   },
   {
     key: "unresolved_macros",
-    get title() { return dt("Macros غير مستبدلة"); },
+    title: "Macros غير مستبدلة",
     icon: Wand2,
     color: "text-rose-700 bg-white border-slate-200",
     ringColor: "ring-rose-500",
   },
   {
     key: "ga4_missing",
-    get title() { return dt("GA4 ناقص"); },
+    title: "GA4 ناقص",
     icon: Hash,
     color: "text-sky-700 bg-white border-slate-200",
     ringColor: "ring-sky-500",
   },
   {
     key: "utm_only",
-    get title() { return dt("UTM فقط"); },
+    title: "UTM فقط",
     icon: ShieldQuestion,
     color: "text-amber-700 bg-white border-slate-200",
     ringColor: "ring-amber-500",
   },
   {
     key: "organic_or_direct",
-    get title() { return dt("غير إعلاني/مباشر"); },
+    title: "غير إعلاني/مباشر",
     icon: Globe2,
     color: "text-slate-700 bg-white border-slate-200",
     ringColor: "ring-slate-500",
@@ -184,7 +182,7 @@ function fmtMoney(n: number) {
 
 function fmtIstanbul(iso: string | null) {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat(dashIntl("ar-EG"), {
+  return new Intl.DateTimeFormat("ar-EG", {
     timeZone: "Europe/Istanbul",
     year: "numeric",
     month: "short",
@@ -280,7 +278,7 @@ export function DiagnosticsTab({ filterQs }: Props) {
       .catch((e) => {
         if (cancelled) return;
         setError(
-          (e?.response?.data?.error as string | undefined) ?? dt("تعذر تحميل تشخيص التتبع")
+          (e?.response?.data?.error as string | undefined) ?? "تعذر تحميل تشخيص التتبع"
         );
       })
       .finally(() => {
@@ -297,13 +295,13 @@ export function DiagnosticsTab({ filterQs }: Props) {
   };
 
   const platformOptions: { v: AdPlatform | "all"; label: string }[] = [
-    { v: "all", label: dt("كل المنصات") },
+    { v: "all", label: "كل المنصات" },
     { v: "meta", label: "Meta" },
     { v: "google", label: "Google" },
     { v: "tiktok", label: "TikTok" },
     { v: "x", label: "X" },
-    { v: "other-paid", label: dt("إعلان آخر") },
-    { v: "organic", label: dt("غير إعلاني") },
+    { v: "other-paid", label: "إعلان آخر" },
+    { v: "organic", label: "غير إعلاني" },
   ];
 
   return (
@@ -329,7 +327,7 @@ export function DiagnosticsTab({ filterQs }: Props) {
                 }
               }}
               className={cn(
-                "rounded-xl border p-2.5 text-start hover:shadow-sm transition-shadow",
+                "rounded-xl border p-2.5 text-right hover:shadow-sm transition-shadow",
                 c.color,
                 active && "ring-2",
                 active && c.ringColor
@@ -355,7 +353,7 @@ export function DiagnosticsTab({ filterQs }: Props) {
               setStatusFilter((prev) => (prev === k ? "all" : k))
             }
             className={cn(
-              "rounded-xl border bg-white p-2.5 text-start hover:shadow-sm transition-shadow",
+              "rounded-xl border bg-white p-2.5 text-right hover:shadow-sm transition-shadow",
               statusFilter === k && "ring-2 ring-brand",
               STATUS_PILL[k]
             )}
@@ -377,20 +375,20 @@ export function DiagnosticsTab({ filterQs }: Props) {
 
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative w-full sm:max-w-sm">
-          <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder={dt("ابحث في الحملة, المتبرع, الموضع, معرف التبرع...")}
-            className="w-full h-9 ps-8 pe-8 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-800 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+            placeholder="ابحث في الحملة, المتبرع, الموضع, معرف التبرع..."
+            className="w-full h-9 pr-8 pl-8 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-800 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
           />
           {searchInput && (
             <button
               type="button"
               onClick={() => setSearchInput("")}
-              className="absolute end-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-              aria-label={dt("مسح البحث")}
+              className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+              aria-label="مسح البحث"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -403,7 +401,8 @@ export function DiagnosticsTab({ filterQs }: Props) {
             onChange={(e) => setOnlyIssues(e.target.checked)}
             className="accent-brand"
           />
-          {dt("إظهار التبرعات التي بها مشكلة فقط")}</label>
+          إظهار التبرعات التي بها مشكلة فقط
+        </label>
 
         <select
           value={platformFilter}
@@ -418,7 +417,7 @@ export function DiagnosticsTab({ filterQs }: Props) {
         </select>
 
         <div className="flex items-center gap-2 text-xs text-slate-700">
-          <span className="text-slate-500">{dt("الثقة:")}</span>
+          <span className="text-slate-500">الثقة:</span>
           <input
             type="number"
             min={0}
@@ -450,17 +449,20 @@ export function DiagnosticsTab({ filterQs }: Props) {
             }}
             className="text-xs text-brand hover:underline"
           >
-            {dt("مسح كل الفلاتر")}</button>
+            مسح كل الفلاتر
+          </button>
         )}
         {data?.truncated && (
           <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5">
-            {dt("عرض أحدث 500 صف  ضع فلتر فترة أضيق للحصول على القائمة كاملة")}</span>
+            عرض أحدث 500 صف — ضع فلتر فترة أضيق للحصول على القائمة كاملة
+          </span>
         )}
       </div>
 
       {loading ? (
         <div className="rounded-xl border border-border bg-white p-6 flex items-center justify-center gap-2 text-sm text-slate-500">
-          <Loader2 className="w-4 h-4 animate-spin" /> {dt(" جاري التحميل…")}</div>
+          <Loader2 className="w-4 h-4 animate-spin" /> جاري التحميل…
+        </div>
       ) : error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           {error}
@@ -468,26 +470,26 @@ export function DiagnosticsTab({ filterQs }: Props) {
       ) : !data || visibleRows.length === 0 ? (
         <div className="rounded-xl border border-border bg-white p-8 text-center text-sm text-slate-500">
           {search
-            ? dt("لا توجد نتائج تطابق \"{0}\"", [search])
+            ? `لا توجد نتائج تطابق "${search}"`
             : onlyIssues
-            ? dt("لا توجد تبرعات بها مشاكل تتبع في الفترة المختارة")
-            : dt("لا توجد تبرعات في الفترة المختارة")}
+            ? "لا توجد تبرعات بها مشاكل تتبع في الفترة المختارة"
+            : "لا توجد تبرعات في الفترة المختارة"}
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
-          <div className="overflow-x-auto" dir={dashDir()}>
-            <table className="w-full text-xs text-start">
+          <div className="overflow-x-auto" dir="rtl">
+            <table className="w-full text-xs text-right">
               <thead className="bg-slate-50/80 border-b border-slate-200">
                 <tr>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("التاريخ")}</th>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("الحالة")}</th>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("المنصة")}</th>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("الحملة")}</th>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("المبلغ")}</th>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("الثقة")}</th>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("السبب الرئيسي")}</th>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("تحذيرات")}</th>
-                  <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("تفاصيل")}</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">التاريخ</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">الحالة</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">المنصة</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">الحملة</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">المبلغ</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">الثقة</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">السبب الرئيسي</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">تحذيرات</th>
+                  <th className="text-right py-2 px-3 font-semibold text-slate-700">تفاصيل</th>
                 </tr>
               </thead>
               <tbody>
@@ -534,7 +536,7 @@ export function DiagnosticsTab({ filterQs }: Props) {
                         {r.status === "PAID" ? (
                           fmtMoney(r.amountUSD)
                         ) : (
-                          <span className="text-rose-600">{dt("فشل")}</span>
+                          <span className="text-rose-600">فشل</span>
                         )}
                       </td>
                       <td className="py-2 px-3 text-slate-700">
@@ -571,7 +573,8 @@ export function DiagnosticsTab({ filterQs }: Props) {
                           onClick={() => openDrawer(r.id)}
                           className="inline-flex items-center gap-1 text-brand hover:underline text-[11px]"
                         >
-                          {dt("إظهار")}</button>
+                          إظهار
+                        </button>
                       </td>
                     </tr>
                   );

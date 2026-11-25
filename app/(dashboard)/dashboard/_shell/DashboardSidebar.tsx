@@ -106,9 +106,9 @@ export function DashboardSidebar({
       )}
     >
       {/* Brand bar */}
-      <div className="h-16 flex items-center justify-between gap-2 px-4 border-b bg-burgundy shrink-0">
+      <div className="h-16 flex items-center justify-between gap-2 px-4 border-b bg-brand shrink-0">
         <Link href="/dashboard" className="flex items-center gap-2 min-w-0">
-            <img src="/logo.webp" alt="" className="h-12 w-auto object-contain brightness-0 invert" />
+            <img src="/yedicijan_logo.png" alt="" className="h-12 w-auto object-contain brightness-0 invert" />
           </Link>
         <button
           type="button"

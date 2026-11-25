@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
-
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { fetchAdsDonations } from "@/lib/admin/ads-fetch";
 import {
@@ -9,8 +8,6 @@ import {
   computeOverview,
 } from "@/lib/attribution/aggregate";
 import { computeRecommendations } from "@/lib/ads/recommendations";
-
-export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {

@@ -44,106 +44,57 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
   {
     get group() { return dt("الرئيسية"); },
     items: [
-      { key: "revenue", get title() { return dt("اللوحة الرئيسية"); }, href: "/dashboard", icon: "layoutDashboard", keywords: ["home", "overview", "الرئيسية"] },
-      { key: "bankTransfers", get title() { return dt("التحويلات البنكية"); }, href: "/dashboard/bank-transfers", icon: "landmark", keywords: ["bank", "transfers", "حوالات", "statement", "كشف"] },
-      // Receipts donors upload after choosing bank transfer at checkout, waiting on a finance
-      // decision. A different queue from the statement importer above: that one starts from the
-      // bank's file, this one from the donor's photo. Same permission  both are the finance desk.
-      { key: "bankTransfers", get title() { return dt("إيصالات التحويل"); }, href: "/dashboard/transfer-receipts", icon: "receipt", keywords: ["receipts", "transfer", "إيصال", "إيصالات", "تحويل", "مراجعة", "review", "pending"], badge: "transferReceiptsPending" },
-      { key: "donors", get title() { return dt("المتبرعون"); }, href: "/dashboard/users/donors", icon: "users", keywords: ["donors", "users", "متبرعين"] },
+      { key: "revenue", get title() { return dt("اللوحة الرئيسية"); }, href: "/dashboard", icon: "layoutDashboard", keywords: ["home","overview","الرئيسية"] },
+      { key: "bankTransfers", get title() { return dt("التحويلات البنكية"); }, href: "/dashboard/bank-transfers", icon: "landmark", keywords: ["bank","transfers","حوالات"] },
+      { key: "donors", get title() { return dt("المتبرعون"); }, href: "/dashboard/users/donors", icon: "users", keywords: ["donors","users","متبرعين"] },
     ],
   },
   {
-    get group() { return dt("المشاريع والتصنيفات"); },
+    get group() { return dt("الحملات والمحتوى"); },
     items: [
-      { key: "campaigns", get title() { return dt("المشاريع"); }, href: "/dashboard/campaigns", icon: "heart", keywords: ["projects", "campaigns", "مشاريع"] },
-      { key: "categories", get title() { return dt("التصنيفات"); }, href: "/dashboard/categories", icon: "globe", keywords: ["categories", "countries", "تصنيفات"] },
-      { key: "siteContent", get title() { return dt("المشاريع الكبرى"); }, href: "/dashboard/super-categories", icon: "layers", keywords: ["super", "category", "programme", "landing", "أقسام", "برنامج", "عبادا لنا"] },
-    ],
-  },
-  {
-    get group() { return dt("المحتوى التحريري"); },
-    items: [
-      { key: "blog", get title() { return dt("المدونة"); }, href: "/dashboard/blog", icon: "penLine", keywords: ["blog", "posts", "مقالات"] },
-      { key: "siteContent", get title() { return dt("شريط القصص"); }, href: "/dashboard/stories", icon: "images", keywords: ["stories", "قصص", "rail", "highlights"] },
-      { key: "siteContent", get title() { return dt("الفيديوهات"); }, href: "/dashboard/videos", icon: "video", keywords: ["videos", "فيديو", "achievements", "endorsements", "إنجازات", "تزكيات"] },
-      { key: "siteContent", get title() { return dt("برامجنا المصورة"); }, href: "/dashboard/playlists", icon: "listVideo", keywords: ["playlists", "programs", "series", "برامج", "سلاسل", "youtube"] },
-      { key: "siteContent", get title() { return dt("دوراتنا"); }, href: "/dashboard/courses", icon: "graduationCap", keywords: ["courses", "دورات", "training"] },
-      { key: "siteContent", get title() { return dt("التقارير"); }, href: "/dashboard/reports", icon: "fileText", keywords: ["reports", "تقارير", "pdf", "annual"] },
-      { key: "siteContent", get title() { return dt("الكتيبات"); }, href: "/dashboard/booklets", icon: "bookOpen", keywords: ["booklets", "كتيبات", "pdf", "library"] },
-      { key: "siteContent", get title() { return dt("الأسئلة الشائعة"); }, href: "/dashboard/faqs", icon: "helpCircle", keywords: ["faq", "أسئلة", "questions", "help"] },
-    ],
-  },
-  {
-    get group() { return dt("الصفحة الرئيسية"); },
-    items: [
-      { key: "siteContent", get title() { return dt("ترتيب الصفحة الرئيسية"); }, href: "/dashboard/homepage-layout", icon: "layoutTemplate", keywords: ["homepage", "home", "layout", "order", "sections", "arrange", "الرئيسية", "ترتيب", "أقسام", "فعاليات", "تزكيات", "أولوية", "priority"] },
-      { key: "slides", get title() { return dt("الشرائح"); }, href: "/dashboard/slides", icon: "images", keywords: ["slides", "slider", "hero"] },
-      { key: "siteContent", get title() { return dt("البانرات"); }, href: "/dashboard/urgent-banners", icon: "alertTriangle", keywords: ["urgent", "banner", "banners", "emergency", "طوارئ", "بانر", "بانرات", "عاجل", "شد الرحال", "placement"] },
-      { key: "ticker", get title() { return dt("شريط التبرعات"); }, href: "/dashboard/ticker", icon: "ticket", keywords: ["ticker", "marquee"] },
-    ],
-  },
-  {
-    get group() { return dt("إعدادات المحتوى والتبرعات"); },
-    items: [
-      { key: "siteContent", anyPermissions: ["siteContent", "blog", "campaigns", "categories"], get title() { return dt("مركز SEO والترجمات"); }, href: "/dashboard/seo-pages", icon: "globe", keywords: ["seo", "editorial", "weekly", "translation", "metadata", "pages", "مقال", "ترجمة", "فهرسة", "بحث"] },
-      { key: "campaigns", get title() { return dt("إعدادات السلة"); }, href: "/dashboard/cart-settings", icon: "shoppingCart", keywords: ["cart", "basket", "السلة", "team", "support", "دعم", "الفريق", "upsell", "suggestions", "مقترحات", "amounts", "مبالغ"] },
-      { key: "bankAccounts", get title() { return dt("الحسابات البنكية"); }, href: "/dashboard/bank-accounts", icon: "landmark", keywords: ["bank", "accounts", "iban", "swift", "حسابات", "بنك"] },
+      { key: "campaigns", get title() { return dt("المشاريع"); }, href: "/dashboard/campaigns", icon: "heart", keywords: ["projects","campaigns","مشاريع"] },
+      { key: "categories", get title() { return dt("الحملات والدول"); }, href: "/dashboard/categories", icon: "globe", keywords: ["categories","countries","تصنيفات"] },
+      { key: "blog", get title() { return dt("المدونة"); }, href: "/dashboard/blog", icon: "penLine", keywords: ["blog","posts","مقالات"] },
+      { key: "slides", get title() { return dt("الشرائح"); }, href: "/dashboard/slides", icon: "images", keywords: ["slides","slider","hero"] },
+      { key: "ticker", get title() { return dt("شريط التبرعات"); }, href: "/dashboard/ticker", icon: "ticket", keywords: ["ticker","marquee"] },
     ],
   },
   {
     get group() { return dt("التواصل"); },
     items: [
-      // The six "مركز التواصل" entries that lived here pointed into /dashboard/operations, which
-      // has been removed along with the whole التشغيل section. What remains below is the part of
-      // التواصل that is not operations: the template/trigger editor and the send log.
-      // Previously unreachable (no nav entry, no inbound link) despite being fully built with
-      // working APIs. Titled "القوالب والمحفّزات" rather than "القوالب" to distinguish it
-      // from the communication-campaign templates directly above  it is a different page that
-      // owns the email/WhatsApp templates AND the message triggers, including the
-      // DONATION_LAPSED reminder.
-      // Per-channel pages: each answers "what did we send on this channel, and what happened to
-      // it afterwards"  the delivery/open/click detail the flat send log cannot show.
-      { key: "messages", get title() { return dt("الحملات التسويقية"); }, href: "/dashboard/communication/campaigns", icon: "megaphone", keywords: ["campaigns", "marketing", "حملات", "تسويق", "broadcast", "bulk"] },
-      { key: "messages", get title() { return dt("البريد الإلكتروني"); }, href: "/dashboard/communication/email", icon: "mail", keywords: ["email", "بريد", "elastic"] },
-      { key: "messages", get title() { return dt("واتساب"); }, href: "/dashboard/communication/whatsapp", icon: "messageCircle", keywords: ["whatsapp", "واتساب", "meta"] },
-      // Replies were counted by the sidebar badge long before there was a screen to open.
-      { key: "messages", get title() { return dt("الرسائل النصية"); }, href: "/dashboard/communication/sms", icon: "messageSquare", keywords: ["sms", "نصية", "netgsm", "brevo"] },
-      { key: "templates", get title() { return dt("القوالب والمحفّزات"); }, href: "/dashboard/templates", icon: "mail", keywords: ["email", "whatsapp", "sms", "templates", "triggers", "قوالب", "محفزات"] },
-      // Was the second tab of /dashboard/messages, behind a page that defaults to the outbound
-      // log  so visitor mail had no sidebar entry and no command-palette hit. It is inbound
-      // human correspondence, not send telemetry, and belongs beside the channels, not inside them.
-      { key: "badges", get title() { return dt("تصنيفات المتبرعين"); }, href: "/dashboard/badges", icon: "award", keywords: ["donor categories", "donor lists", "badges", "قوائم المتبرعين"] },
-      // The flat outbound send log (/dashboard/messages) is gone. Per-channel delivery detail lives
-      // in البريد الإلكتروني / واتساب / الرسائل النصية above.
+      { key: "messages", get title() { return dt("الحملات التسويقية"); }, href: "/dashboard/communication/campaigns", icon: "megaphone", keywords: ["campaigns","marketing","حملات","تسويق","broadcast","bulk"] },
+      { key: "messages", get title() { return dt("البريد الإلكتروني"); }, href: "/dashboard/communication/email", icon: "mail", keywords: ["email","بريد","elastic"] },
+      { key: "messages", get title() { return dt("واتساب"); }, href: "/dashboard/communication/whatsapp", icon: "messageCircle", keywords: ["whatsapp","واتساب","meta"] },
+      { key: "messages", get title() { return dt("الرسائل النصية"); }, href: "/dashboard/communication/sms", icon: "messageSquare", keywords: ["sms","نصية","netgsm","brevo"] },
+      { key: "templates", get title() { return dt("القوالب والمحفّزات"); }, href: "/dashboard/templates", icon: "mail", keywords: ["email","whatsapp","templates","triggers","قوالب","محفزات"] },
+      { key: "badges", get title() { return dt("الشارات"); }, href: "/dashboard/badges", icon: "award", keywords: ["badges","donor lists"] },
+      { key: "messages", get title() { return dt("الرسائل الواردة"); }, href: "/dashboard/inbox", icon: "inbox", keywords: ["inbox","inbound","contact","واردة","زوار","تواصل"] },
     ],
   },
   {
     get group() { return dt("التسويق"); },
     items: [
-      { key: "platformConnections", get title() { return dt("تحليلات Google Analytics"); }, href: "/dashboard/google-analytics", icon: "barChart", keywords: ["google analytics", "analytics", "ga4", "visitors", "pages", "traffic", "تحليلات", "زوار", "إحصاءات"] },
-      { key: "platformConnections", get title() { return dt("إدارة Google Search"); }, href: "/dashboard/marketing/google-search", icon: "target", keywords: ["google ads", "search", "keywords", "جوجل", "كلمات", "حملات البحث"] },
-      // The overview, أداء الحملات and التوصيات pages were removed; what is left is the part of
-      // التسويق that owns real, first-party data: our own links and our own tracking.
-      { key: "referrals", get title() { return dt("الروابط والإسناد"); }, href: "/dashboard/marketing/attribution", icon: "link", keywords: ["attribution", "referrals", "links", "utm"] },
-      { key: "referrals", get title() { return dt("صفحات جمع التبرعات والإحالات"); }, href: "/dashboard/referrals", icon: "heartHandshake", keywords: ["fundraisers", "referral pages", "إحالات", "جمع التبرعات"] },
+      { key: "referrals", get title() { return dt("الروابط والإسناد"); }, href: "/dashboard/marketing/attribution", icon: "link", keywords: ["attribution","referrals","links","utm"] },
+      { key: "pixels", get title() { return dt("التتبع والتحويلات"); }, href: "/dashboard/marketing/tracking", icon: "target", keywords: ["tracking","pixels","conversions","capi"] },
+    ],
+  },
+  {
+    get group() { return dt("ربط المنصات والإرسال"); },
+    items: [
+      { key: "platformConnections", get title() { return dt("بكسلات التتبع"); }, href: "/dashboard/platform-connections/tracking", icon: "radar", keywords: ["pixels","meta","tiktok","snap"] },
+      { key: "platformConnections", get title() { return dt("مزودو التواصل والإرسال"); }, href: "/dashboard/platform-connections/communication", icon: "server", keywords: ["providers","whatsapp","email"] },
+      { key: "platformConnections", get title() { return dt("فحص الاتصال"); }, href: "/dashboard/platform-connections/health", icon: "heartPulse", keywords: ["health","status","diagnostics"] },
+      { key: "platformConnections", get title() { return dt("تيليجرام"); }, href: "/dashboard/telegram", icon: "send", keywords: ["telegram","bot","notifications"] },
     ],
   },
   {
     get group() { return dt("الإدارة"); },
     items: [
-      { key: "aiConcierge", get title() { return dt("مساعد العطاء الذكي"); }, href: "/dashboard/ai-concierge", icon: "sparkles", keywords: ["ai", "concierge", "assistant", "chat", "مساعد", "العطاء", "ذكاء", "analytics", "conversations", "insights", "settings"] },
-      { key: "platformConnections", get title() { return dt("بكسلات التتبع"); }, href: "/dashboard/platform-connections/tracking", icon: "radar", keywords: ["pixels", "meta", "tiktok", "snap"] },
-      { key: "platformConnections", get title() { return dt("مزودو التواصل والإرسال"); }, href: "/dashboard/platform-connections/communication", icon: "server", keywords: ["providers", "meta", "elastic email", "brevo", "netgsm", "whatsapp", "sms", "email"] },
-      { key: "platformConnectionsAdmin", get title() { return dt("تيليجرام"); }, href: "/dashboard/telegram", icon: "send", keywords: ["telegram", "bot", "notifications"], adminOnly: true },
-      { key: "siteContent", get title() { return dt("التبرع السريع"); }, href: "/dashboard/quick-donation", icon: "heartHandshake", keywords: ["quick", "donation", "donate", "amounts", "presets", "سريع", "مبالغ", "مقترحة", "dock"] },
-      { key: "siteContent", get title() { return dt("الشهادات"); }, href: "/dashboard/certificates", icon: "award", keywords: ["certificate", "certificates", "receipt", "waqf", "thanks", "شهادة", "شهادات", "إهداء", "إيصال", "وقف", "شكر"] },
-      { key: "siteContent", get title() { return dt("معرض لقطات من الميدان"); }, href: "/dashboard/gallery", icon: "images", adminOnly: true, keywords: ["gallery", "photos", "images", "field", "email", "معرض", "صور", "لقطات"] },
-      { key: "team", get title() { return dt("الفريق"); }, href: "/dashboard/users/team", icon: "userCog", keywords: ["team", "staff", "permissions", "صلاحيات"] },
-      { key: "generalSettings", get title() { return dt("الإعدادات"); }, href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways"] },
-      { key: "generalSettings", get title() { return dt("تجديدات الخدمات"); }, href: "/dashboard/renewals", icon: "repeat", adminOnly: true, keywords: ["renewal", "subscription", "billing", "expiry", "تجديد", "اشتراك", "دفع"] },
-      { key: "logs", get title() { return dt("الأمان وسجل الوصول"); }, href: "/dashboard/security", icon: "shield", adminOnly: true, keywords: ["security", "ip", "country", "block", "حظر", "أمان"] },
-      { key: "logs", get title() { return dt("سجلات النظام"); }, href: "/dashboard/logs", icon: "scrollText", keywords: ["logs", "audit", "system"] },
+      { key: "siteContent", get title() { return dt("معرض لقطات من الميدان"); }, href: "/dashboard/gallery", icon: "images", adminOnly: true, keywords: ["gallery","photos","images","field","معرض","صور","لقطات"] },
+      { key: "team", get title() { return dt("الفريق"); }, href: "/dashboard/users/team", icon: "userCog", keywords: ["team","staff","permissions","صلاحيات"] },
+      { key: "generalSettings", get title() { return dt("الإعدادات"); }, href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings","payment","gateways"] },
+      { key: "generalSettings", get title() { return dt("تجديدات الخدمات"); }, href: "/dashboard/renewals", icon: "repeat", adminOnly: true, keywords: ["renewal","subscription","billing","expiry","تجديد","اشتراك"] },
+      { key: "logs", get title() { return dt("سجلات النظام"); }, href: "/dashboard/logs", icon: "scrollText", keywords: ["logs","audit","system"] },
     ],
   },
 ];

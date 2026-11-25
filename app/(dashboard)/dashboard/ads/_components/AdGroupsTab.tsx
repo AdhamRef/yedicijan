@@ -12,7 +12,6 @@ import {
 import type { AttributionStatus } from "@/lib/tracking/tracking-event-contract";
 import { getCountryDisplayNameFromCode } from "@/lib/dashboard/country-display-name";
 import { DASHBOARD_DISPLAY_SYMBOLS } from "@/lib/dashboard/format-dashboard-money";
-import { dashDir, dashIntl, dt, dtx } from "@/lib/dashboard/i18n";
 
 interface DonationListRow {
   id: string;
@@ -61,9 +60,9 @@ const STATUS_PILL: Record<AttributionStatus, string> = {
   ga4_inferred: "bg-sky-50 text-sky-700 border-sky-200",
   utm_only: "bg-amber-50 text-amber-700 border-amber-200",
   organic: "bg-slate-50 text-slate-600 border-slate-200",
-  unknown: "bg-slate-50 text-slate-600 border-slate-200",
   direct: "bg-slate-50 text-slate-600 border-slate-200",
   tracking_issue: "bg-rose-50 text-rose-700 border-rose-200",
+  unknown: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
 const STATUS_DOT: Record<AttributionStatus, string> = {
@@ -73,14 +72,14 @@ const STATUS_DOT: Record<AttributionStatus, string> = {
   ga4_inferred: "bg-sky-500",
   utm_only: "bg-amber-400",
   organic: "bg-slate-300",
-  unknown: "bg-slate-300",
   direct: "bg-slate-400",
   tracking_issue: "bg-rose-500",
+  unknown: "bg-rose-500",
 };
 
 function fmtIstanbul(iso: string | null) {
   if (!iso) return "—";
-  return new Intl.DateTimeFormat(dashIntl("ar-EG"), {
+  return new Intl.DateTimeFormat("ar-EG", {
     timeZone: "Europe/Istanbul",
     year: "numeric",
     month: "short",
@@ -128,7 +127,7 @@ export function AdGroupsTab({ filterQs }: Props) {
       .catch((e) => {
         if (cancelled) return;
         setError(
-          (e?.response?.data?.error as string | undefined) ?? dt("تعذر تحميل قائمة التبرعات")
+          (e?.response?.data?.error as string | undefined) ?? "تعذر تحميل قائمة التبرعات"
         );
       })
       .finally(() => {
@@ -227,7 +226,8 @@ export function AdGroupsTab({ filterQs }: Props) {
   if (loading) {
     return (
       <div className="rounded-xl border border-border bg-white p-6 flex items-center justify-center gap-2 text-sm text-slate-500">
-        <Loader2 className="w-4 h-4 animate-spin" /> {dt(" جاري تحميل قائمة التبرعات…")}</div>
+        <Loader2 className="w-4 h-4 animate-spin" /> جاري تحميل قائمة التبرعات…
+      </div>
     );
   }
   if (error) {
@@ -243,20 +243,20 @@ export function AdGroupsTab({ filterQs }: Props) {
       <div className="rounded-xl border border-border bg-white p-3 shadow-sm space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder={dt("ابحث في utm_term, utm_campaign, الإعلان, الدولة...")}
-              className="w-full h-9 ps-8 pe-8 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-800 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+              placeholder="ابحث في utm_term, utm_campaign, الإعلان, الدولة..."
+              className="w-full h-9 pr-8 pl-8 text-xs rounded-lg border border-slate-200 bg-slate-50 text-slate-800 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
             />
             {searchInput && (
               <button
                 type="button"
                 onClick={() => setSearchInput("")}
-                className="absolute end-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                aria-label={dt("مسح البحث")}
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                aria-label="مسح البحث"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -275,15 +275,15 @@ export function AdGroupsTab({ filterQs }: Props) {
                     : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                 )}
               >
-                {k === "all" ? dt("الكل") : k === "PAID" ? dt("مدفوع") : dt("فاشل")}
+                {k === "all" ? "الكل" : k === "PAID" ? "مدفوع" : "فاشل"}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-1.5">
             {([
-              { k: "all", label: dt("إعلاني + عضوي") },
-              { k: "ads", label: dt("إعلاني فقط") },
-              { k: "organic", label: dt("عضوي فقط") },
+              { k: "all", label: "إعلاني + عضوي" },
+              { k: "ads", label: "إعلاني فقط" },
+              { k: "organic", label: "عضوي فقط" },
             ] as const).map(({ k, label }) => (
               <button
                 key={k}
@@ -304,69 +304,74 @@ export function AdGroupsTab({ filterQs }: Props) {
 
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
           <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
-            <p className="text-emerald-700 text-[11px]">{dt("إيرادات (USD)")}</p>
+            <p className="text-emerald-700 text-[11px]">إيرادات (USD)</p>
             <p className="text-emerald-900 font-bold mt-0.5">{fmtUsd(totals.revenueUSD)}</p>
           </div>
           <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2">
-            <p className="text-blue-700 text-[11px]">{dt("تبرعات مدفوعة")}</p>
+            <p className="text-blue-700 text-[11px]">تبرعات مدفوعة</p>
             <p className="text-blue-900 font-bold mt-0.5">{totals.paidCount}</p>
           </div>
           <div className="rounded-lg bg-rose-50 border border-rose-200 px-3 py-2">
-            <p className="text-rose-700 text-[11px]">{dt("محاولات فاشلة")}</p>
+            <p className="text-rose-700 text-[11px]">محاولات فاشلة</p>
             <p className="text-rose-900 font-bold mt-0.5">{totals.failedCount}</p>
           </div>
           <div className="rounded-lg bg-violet-50 border border-violet-200 px-3 py-2">
-            <p className="text-violet-700 text-[11px]">{dt("منصات")}</p>
+            <p className="text-violet-700 text-[11px]">منصات</p>
             <p className="text-violet-900 font-bold mt-0.5">{totals.platformsCount}</p>
           </div>
           <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
-            <p className="text-amber-700 text-[11px]">{dt("قيم utm_term")}</p>
+            <p className="text-amber-700 text-[11px]">قيم utm_term</p>
             <p className="text-amber-900 font-bold mt-0.5">{totals.distinctTerms}</p>
           </div>
         </div>
 
         {data?.truncated && (
           <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1 inline-block">
-            {dt("عرض أحدث 2000 تبرع  ضع فلتر فترة أضيق للحصول على القائمة كاملة")}</div>
+            عرض أحدث 2000 تبرع — ضع فلتر فترة أضيق للحصول على القائمة كاملة
+          </div>
         )}
       </div>
 
       <div className="rounded-xl border border-border bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto" dir={dashDir()}>
-          <table className="w-full text-xs text-start">
+        <div className="overflow-x-auto" dir="rtl">
+          <table className="w-full text-xs text-right">
             <thead className="bg-slate-50/80 border-b border-slate-200">
               <tr>
-                <th className="text-start py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
+                <th className="text-right py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => toggleSort("date")}
                     className="inline-flex items-center gap-1 hover:text-brand"
                   >
-                    {dt("التاريخ")}<ArrowUpDown className={cn("w-3 h-3", sortKey === "date" ? "text-brand" : "text-slate-400")} />
+                    التاريخ
+                    <ArrowUpDown className={cn("w-3 h-3", sortKey === "date" ? "text-brand" : "text-slate-400")} />
                   </button>
                 </th>
-                <th className="text-start py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
+                <th className="text-right py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => toggleSort("amountUSD")}
                     className="inline-flex items-center gap-1 hover:text-brand"
                   >
-                    {dt("المبلغ")}<ArrowUpDown className={cn("w-3 h-3", sortKey === "amountUSD" ? "text-brand" : "text-slate-400")} />
+                    المبلغ
+                    <ArrowUpDown className={cn("w-3 h-3", sortKey === "amountUSD" ? "text-brand" : "text-slate-400")} />
                   </button>
                 </th>
-                <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("الدولة")}</th>
-                <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("المنصة / الحالة")}</th>
-                <th className="text-start py-2 px-3 font-semibold text-slate-700">utm_campaign</th>
-                <th className="text-start py-2 px-3 font-semibold text-slate-700">
-                  {dt("utm_term (الكلمة المفتاحية)")}</th>
-                <th className="text-start py-2 px-3 font-semibold text-slate-700">{dt("الإعلان / الموضع")}</th>
-                <th className="text-start py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
+                <th className="text-right py-2 px-3 font-semibold text-slate-700">الدولة</th>
+                <th className="text-right py-2 px-3 font-semibold text-slate-700">المنصة / الحالة</th>
+                <th className="text-right py-2 px-3 font-semibold text-slate-700">utm_campaign</th>
+                <th className="text-right py-2 px-3 font-semibold text-slate-700">
+                  utm_term (الكلمة المفتاحية)
+                </th>
+                <th className="text-right py-2 px-3 font-semibold text-slate-700">الإعلان / الموضع</th>
+                <th className="text-right py-2 px-3 font-semibold text-slate-700 whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => toggleSort("confidence")}
                     className="inline-flex items-center gap-1 hover:text-brand"
                   >
-                    {dt("الثقة")}<ArrowUpDown className={cn("w-3 h-3", sortKey === "confidence" ? "text-brand" : "text-slate-400")} />
+                    الثقة
+                    <ArrowUpDown className={cn("w-3 h-3", sortKey === "confidence" ? "text-brand" : "text-slate-400")} />
                   </button>
                 </th>
               </tr>
@@ -376,14 +381,14 @@ export function AdGroupsTab({ filterQs }: Props) {
                 <tr>
                   <td colSpan={8} className="py-10 text-center text-sm text-slate-500">
                     {search
-                      ? dt("لا توجد نتائج تطابق \"{0}\"", [search])
-                      : dt("لا توجد تبرعات في الفترة المختارة")}
+                      ? `لا توجد نتائج تطابق "${search}"`
+                      : "لا توجد تبرعات في الفترة المختارة"}
                   </td>
                 </tr>
               ) : (
                 filtered.map((r) => {
                   const countryName = r.donorCountryCode
-                    ? getCountryDisplayNameFromCode(r.donorCountryCode, dashIntl("ar")) ?? r.donorCountryCode
+                    ? getCountryDisplayNameFromCode(r.donorCountryCode, "ar") ?? r.donorCountryCode
                     : null;
                   return (
                     <tr
@@ -406,7 +411,7 @@ export function AdGroupsTab({ filterQs }: Props) {
                             )}
                           </div>
                         ) : (
-                          <span className="text-rose-600">{dt("فشل")}</span>
+                          <span className="text-rose-600">فشل</span>
                         )}
                       </td>
                       <td className="py-2 px-3 whitespace-nowrap">
@@ -449,8 +454,8 @@ export function AdGroupsTab({ filterQs }: Props) {
                           <button
                             type="button"
                             onClick={() => copyToClipboard(r.utmCampaign!)}
-                            title={dt("{0}  اضغط للنسخ", [r.utmCampaign])}
-                            className="text-start truncate block text-slate-700 hover:text-brand hover:underline"
+                            title={`${r.utmCampaign} — اضغط للنسخ`}
+                            className="text-right truncate block text-slate-700 hover:text-brand hover:underline"
                           >
                             {r.utmCampaign}
                           </button>
@@ -463,8 +468,8 @@ export function AdGroupsTab({ filterQs }: Props) {
                           <button
                             type="button"
                             onClick={() => copyToClipboard(r.utmTerm!)}
-                            title={dt("{0}  اضغط للنسخ", [r.utmTerm])}
-                            className="text-start truncate block font-medium text-slate-800 hover:text-brand hover:underline"
+                            title={`${r.utmTerm} — اضغط للنسخ`}
+                            className="text-right truncate block font-medium text-slate-800 hover:text-brand hover:underline"
                           >
                             {r.utmTerm}
                           </button>
@@ -518,7 +523,8 @@ export function AdGroupsTab({ filterQs }: Props) {
       </div>
 
       <p className="text-[11px] text-slate-500 text-center">
-        {dtx("المعروض {0} من {1} تبرع في الفترة", [filtered.length, data?.totalRows ?? 0])}</p>
+        المعروض {filtered.length} من {data?.totalRows ?? 0} تبرع في الفترة
+      </p>
     </div>
   );
 }

@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
 import axios from 'axios';
-import { dt } from "@/lib/dashboard/i18n";
 
 interface Category {
   id: string;
@@ -95,12 +94,12 @@ export const ReorderDialog = ({ categories, onReorder }: {
         categories: updatedCategories,
       });
 
-      toast.success(dt("تم إعادة ترتيب الحملات بنجاح"));
+      toast.success('تم إعادة ترتيب الحملات بنجاح');
       onReorder();
       setIsOpen(false);
     } catch (error) {
       console.error('Error reordering categories:', error);
-      toast.error(dt("فشل في إعادة ترتيب الحملات"));
+      toast.error('فشل في إعادة ترتيب الحملات');
     } finally {
       setIsSubmitting(false);
     }
@@ -111,15 +110,17 @@ export const ReorderDialog = ({ categories, onReorder }: {
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2">
           <ArrowUpDown className="w-4 h-4" />
-          {dt("رتب التصنيفات")}</Button>
+          رتب التصنيفات
+        </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{dt("إعادة ترتيب الحملات")}</DialogTitle>
+          <DialogTitle>إعادة ترتيب الحملات</DialogTitle>
         </DialogHeader>
         <div className="py-4">
           <p className="text-sm text-gray-500 mb-4">
-            {dt("اسحب وأفلت الحملات لإعادة ترتيبها")}</p>
+            اسحب وأفلت الحملات لإعادة ترتيبها
+          </p>
           <DndProvider backend={HTML5Backend}>
             <div className="max-h-[400px] overflow-y-auto">
               {orderedCategories.map((category, index) => (
@@ -138,14 +139,16 @@ export const ReorderDialog = ({ categories, onReorder }: {
             variant="outline"
             onClick={() => setIsOpen(false)}
           >
-            {dt("إلغاء")}</Button>
+            إلغاء
+          </Button>
           <Button
             onClick={handleSave}
             disabled={isSubmitting}
             className="gap-2"
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
-            {dt("حفظ الترتيب")}</Button>
+            حفظ الترتيب
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

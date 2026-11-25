@@ -32,7 +32,7 @@ async function conversionValues(donationId: string) {
   const result = await prisma.$runCommandRaw({
     find: "ConversionEvent",
     filter: {
-      eventName: { $in: ["Donate", "Purchase", "purchase"] },
+      eventName: { $in: ["Donate", "purchase"] },
       $or: [
         { donationId },
         { donationId: legacyOid(donationId) },

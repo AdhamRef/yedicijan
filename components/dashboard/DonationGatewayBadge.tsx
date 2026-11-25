@@ -9,8 +9,6 @@ import { dt } from "@/lib/dashboard/i18n";
 export const GATEWAY_LOGOS: Record<string, { src: string; alt: string }> = {
   ALBARAKA: { src: "/banks/albaraka.png", alt: "Albaraka Türk" },
   PAYFOR: { src: "/banks/ziraat-katilim.png", alt: "Ziraat Katılım" },
-  PAYPAL: { src: "/paypal.webp", alt: "PayPal" },
-  CHARITY_GIVING: { src: "/charity-giving.png", alt: "Charity Giving" },
 };
 
 export const GATEWAY_NAMES: Record<string, string> = {
@@ -64,7 +62,7 @@ export function DonationGatewayBadge({ donation, onOpen }: Props) {
        or a receipt a donor uploaded at checkout. Only the latter has a review to open. */
     return donation.paymentMethod === "BANK_TRANSFER" ? (
       <Link
-        href={`/dashboard/transfer-receipts?claim=${donation.id}`}
+        href={`/dashboard/bank-transfers`}
         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-brand/10 text-brand hover:bg-brand/20 transition-colors"
         title={donation.paidAt ? dt("تحويل بنكي مؤكد  فتح الإيصال") : dt("تحويل بنكي بانتظار مطابقة الإيصال  فتح المراجعة")}
       >

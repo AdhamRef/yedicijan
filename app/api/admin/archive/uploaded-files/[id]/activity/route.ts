@@ -4,7 +4,7 @@ import { jsonNoStore, requireArchiveApiAccess, requireArchiveUploadedFileListAcc
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Params = { params: Promise<{ id: string }> };
+type Params = { params: Promise<{ id: string }> | { id: string } };
 
 export async function GET(_request: Request, context: Params) {
   const { denied } = await requireArchiveApiAccess();
@@ -31,8 +31,6 @@ export async function GET(_request: Request, context: Params) {
     },
     orderBy: { createdAt: "desc" },
     take: 30,
-    /* AuditLog has no `actorEmail` column  only `actorId` and `actorName`. Selecting it was a type
-       error and reading it below always produced undefined, so the actor fallback never ran. */
     select: { id: true, action: true, messageAr: true, messageEn: true, actorName: true, createdAt: true },
   });
 

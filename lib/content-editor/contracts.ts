@@ -12,6 +12,8 @@ export const CONTENT_KINDS = [
   "videos", "playlists", "courses", "reports", "booklets", "faqs",
 ] as const;
 export type ContentKind = (typeof CONTENT_KINDS)[number];
+/** Yedicihan edits only its existing sections here (projects, categories, blog). */
+export const ENABLED_CONTENT_KINDS: readonly ContentKind[] = ["campaigns", "categories", "blog"];
 export type TextValues = Record<string, string>;
 export type ContentField = {
   key: string;
@@ -172,7 +174,7 @@ export const CONFIG: Record<
 };
 export function parseKind(value: unknown): ContentKind | null {
   return typeof value === "string" &&
-    (CONTENT_KINDS as readonly string[]).includes(value)
+    (ENABLED_CONTENT_KINDS as readonly string[]).includes(value)
     ? (value as ContentKind)
     : null;
 }

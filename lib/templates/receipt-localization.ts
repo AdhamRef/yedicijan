@@ -2,11 +2,8 @@ import type { SupportedLocale } from "../locales";
 
 export const RECEIPT_BRANDS: Record<string, string> = {
   ar: "جمعية يدي جيهان", tr: "Yedicihan Derneği", en: "Yedicihan Relief & Solidarity Association",
-  fr: "Association internationale Minberi Aksa", de: "Internationaler Verein Minberi Aksa", es: "Asociación Internacional Minberi Aksa",
-  id: "Asosiasi Internasional Minberi Aksa", pt: "Associação Internacional Minberi Aksa", ur: "بین الاقوامی منبر اقصیٰ تنظیم",
-  sq: "Shoqata Ndërkombëtare Minberi Aksa", it: "Associazione Internazionale Minberi Aksa", nl: "Internationale Vereniging Minberi Aksa",
-  sv: "Internationella föreningen Minberi Aksa", no: "Den internasjonale foreningen Minberi Aksa", da: "Den internationale forening Minberi Aksa",
-  ms: "Persatuan Antarabangsa Minberi Aksa", ja: "ミンベリ・アクサ国際協会", zh: "敏贝里阿克萨国际协会", hi: "मिनबेरी अक्सा अंतरराष्ट्रीय संस्था",
+  fr: "Association Yedicihan", de: "Verein Yedicihan", es: "Asociación Yedicihan",
+  id: "Asosiasi Yedicihan", pt: "Associação Yedicihan",
 };
 
 export const RECEIPT_BANK_COPY: Record<string, readonly [string, string]> = {

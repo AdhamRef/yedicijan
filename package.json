@@ -30,15 +30,11 @@
     "content:audit": "node scripts/audit-content-localization.mjs",
     "content:audit:strict": "node scripts/audit-content-localization.mjs --strict",
     "backfill:slugs": "tsx prisma/backfill-slugs.ts",
-    "seed:banners": "tsx prisma/seed/seed-banners.ts",
     "backfill:donation-countries": "tsx scripts/backfill-donation-donor-country.ts",
     "backfill:user-verified": "tsx scripts/backfill-user-verified-at.ts",
     "exchange-rates:refresh": "tsx scripts/refresh-exchange-rates.ts",
     "cleanup:orphan-donation-items": "tsx scripts/cleanup-orphan-donation-items.ts",
     "migrate:integration-settings": "prisma generate --schema prisma/integration-settings.schema.prisma && tsx prisma/mongodb-migrations/20260714-integration-settings.ts",
-    "blog:seed:dry": "tsx prisma/seed/seed-posts.ts --dry",
-    "blog:seed": "tsx prisma/seed/seed-posts.ts",
-    "blog:seed:replace": "tsx prisma/seed/seed-posts.ts --replace",
     "build:vercel": "node scripts/reject-staging-production-build.mjs && npm run preflight:release-metadata && npm run test:content-editors && npm run typecheck:content-editor-service && npm run typecheck:communication-runtime && npm run typecheck:integration-release && next build && node --import tsx scripts/ensure-content-editor-indexes.ts --production",
     "quality:ci": "npm run test:integration-settings && npm run typecheck:baseline && npm run lint:ci",
     "test:content-editors": "node --import tsx --test tests/content-editor/*.test.ts",
@@ -47,7 +43,7 @@
     "preflight:release-metadata": "node scripts/finalize-reviewed-dashboard.mjs --check-runtime"
   },
   "prisma": {
-    "seed": "tsx prisma/seed/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
@@ -120,6 +116,7 @@
     "google-auth-library": "^10.6.2",
     "i18n": "^0.15.1",
     "install": "^0.13.0",
+    "jspdf": "^2.5.2",
     "libphonenumber-js": "^1.12.38",
     "lucide-react": "^0.474.0",
     "mongodb": "^7.7.0",

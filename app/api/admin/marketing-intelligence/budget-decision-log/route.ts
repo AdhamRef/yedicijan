@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { prisma } from "@/lib/prisma";
-import { rawCommand } from "@/lib/prisma-raw-command";
 
 export const dynamic = "force-dynamic";
 
@@ -14,14 +13,14 @@ function num(value: unknown) { if (typeof value === "number" && Number.isFinite(
 function isMap(value: unknown): value is JsonMap { return typeof value === "object" && value !== null && !Array.isArray(value); }
 
 async function ensureIndexes() {
-  await prisma.$runCommandRaw(rawCommand({
+  await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
     createIndexes: "MarketingBudgetDecisionLog",
     indexes: [
       { key: { createdAt: -1 }, name: "createdAt_desc" },
       { key: { decision: 1, createdAt: -1 }, name: "decision_createdAt" },
       { key: { sourceRecommendationId: 1 }, name: "sourceRecommendationId" },
     ],
-  })).catch(() => null);
+  }).catch(() => null);
 }
 
 export async function GET(request: NextRequest) {
@@ -31,7 +30,7 @@ export async function GET(request: NextRequest) {
   await ensureIndexes();
 
   const limit = Math.max(1, Math.min(200, Math.floor(num(request.nextUrl.searchParams.get("limit")) || 50)));
-  const result = await prisma.$runCommandRaw(rawCommand({ find: "MarketingBudgetDecisionLog", filter: {}, sort: { createdAt: -1 }, limit })) as JsonMap;
+  const result = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({ find: "MarketingBudgetDecisionLog", filter: {}, sort: { createdAt: -1 }, limit }) as JsonMap;
   const rows = isMap(result.cursor) && Array.isArray(result.cursor.firstBatch) ? result.cursor.firstBatch : [];
   return NextResponse.json({ ok: true, rows }, { headers: { "Cache-Control": "no-store" } });
 }
@@ -59,6 +58,6 @@ export async function POST(request: NextRequest) {
     createdBy: session?.user?.email || session?.user?.name || null,
   };
 
-  const result = await prisma.$runCommandRaw(rawCommand({ insert: "MarketingBudgetDecisionLog", documents: [document] })) as JsonMap;
+  const result = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({ insert: "MarketingBudgetDecisionLog", documents: [document] }) as JsonMap;
   return NextResponse.json({ ok: true, result });
 }

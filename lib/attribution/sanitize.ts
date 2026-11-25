@@ -153,7 +153,7 @@ export function safeAcquisitionLandingPage(attribution: Record<string, unknown> 
     const safe = safeAttributionUrl(candidate);
     if (!safe || isPaymentReturnPage(safe)) continue;
     const host = new URL(safe).hostname.toLowerCase();
-    if (host === "yedicihan.org" || host.endsWith(".yedicihan.org") || host === "minberiaksa.vercel.app") {
+    if (host === "yedicihan.org" || host.endsWith(".yedicihan.org")) {
       return safe;
     }
   }

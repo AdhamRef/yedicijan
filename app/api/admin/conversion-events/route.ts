@@ -4,7 +4,6 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { prisma } from "@/lib/prisma";
 import { ensureConversionEventIndexes } from "@/lib/tracking/conversion-event-indexes";
-import { rawCommand } from "@/lib/prisma-raw-command";
 
 export const dynamic = "force-dynamic";
 
@@ -143,7 +142,7 @@ function auditToEvent(row: AuditFallbackRow): ConversionEventLike {
   return {
     _id: row.id,
     eventId,
-    eventName: metaString(metadata, "event_name") ?? (stage.includes("ga4") ? "purchase" : "Donate"),
+    eventName: stage.includes("ga4") ? "purchase" : "Donate",
     platform: stage.includes("ga4") ? "GA4" : "META",
     channel: "server",
     status,
@@ -160,7 +159,7 @@ function auditToEvent(row: AuditFallbackRow): ConversionEventLike {
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
-  const denied = requireAdminOrDashboardPermission(session, "pixels");
+  const denied = requireAdminOrDashboardPermission(session, "ads");
   if (denied) return denied;
 
   await ensureConversionEventIndexes();
@@ -202,7 +201,7 @@ export async function GET(request: NextRequest) {
   }
   const filter: Query = clauses.length === 1 ? clauses[0] : { $and: clauses };
 
-  const result = await prisma.$runCommandRaw(rawCommand({
+  const result = await (prisma.$runCommandRaw as (command: object) => Promise<any>)({
     find: "ConversionEvent",
     filter,
     sort: { updatedAt: -1, createdAt: -1 },
@@ -224,7 +223,7 @@ export async function GET(request: NextRequest) {
       updatedAt: 1,
       response: 1,
     },
-  }));
+  });
 
   let batch: ConversionEventLike[] = isRecord(result) && isRecord(result.cursor) && Array.isArray(result.cursor.firstBatch)
     ? result.cursor.firstBatch as ConversionEventLike[]
@@ -257,18 +256,17 @@ export async function GET(request: NextRequest) {
 
   let collapsed = collapseEvents(batch);
   if (status && status !== "all") collapsed = collapsed.filter((event) => event.status === status);
-  const total = collapsed.length;
-  const events = collapsed.slice(0, limit);
+  collapsed = collapsed.slice(0, limit);
 
   return NextResponse.json({
     ok: true,
     source,
-    total,
+    total: collapsed.length,
     rawTotal: batch.length,
     limit,
     from: from.toISOString(),
     to: to.toISOString(),
     filters: { platform, channel, status, eventName, donationId, search },
-    events,
+    events: collapsed,
   });
 }

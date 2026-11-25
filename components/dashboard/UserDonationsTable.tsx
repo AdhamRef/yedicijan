@@ -115,21 +115,6 @@ export function UserDonationsTable({
 
   return (
     <div className="space-y-3">
-      <section className="rounded-md border border-border bg-muted/30 p-3" aria-label={dt("الاشتراكات الدورية")}>
-        <h3 className="text-xs font-semibold mb-2">{dt("الاشتراكات الدورية")}</h3>
-        {loading ? <p className="text-xs text-muted-foreground">{dt("جاري التحميل…")}</p> : error ? <p role="alert" className="text-xs text-red-700">{error}</p> : !subscriptions.length ? <p className="text-xs text-muted-foreground">{dt("لا توجد اشتراكات دورية")}</p> : <div className="grid gap-2">
-          {subscriptions.map(plan => <div key={plan.id} className="rounded border bg-background p-3 text-xs space-y-1.5">
-            <div className="flex flex-wrap justify-between gap-2"><strong>{FREQUENCY_LABEL[plan.frequency]} · <span dir="ltr">{plan.amount} {plan.currency}</span></strong><span className={plan.lifecycle === "ACTIVE" ? "text-emerald-700" : plan.lifecycle === "PAYMENT_FAILED" ? "text-red-700" : "text-amber-800"}>{dt(SUBSCRIPTION_LIFECYCLE_LABELS[plan.lifecycle])}</span></div>
-            <p className="text-muted-foreground">{plan.projects.join(" · ")} · {plan.provider}</p>
-            {!plan.activated && <p>{dt("لم تنجح أول دفعة؛ هذه محاولة اشتراك وليست اشتراكًا نشطًا.")}</p>}
-            {plan.lastBillingDate && <p>{dt("آخر دفعة مؤكدة")}: {formatDateTime(plan.lastBillingDate)?.date}</p>}
-            {plan.lifecycle === "ACTIVE" && plan.nextBillingDate && <p>{dt("التجديد القادم")}: {formatDateTime(plan.nextBillingDate)?.date}</p>}
-            {plan.lifecycle === "PAYMENT_FAILED" && <p>{plan.status === "ACTIVE" ? dt("إعادة المحاولة مجدولة؛ يحتاج متابعة الفريق.") : dt("توقفت المحاولات؛ يحتاج متابعة الفريق.")}</p>}
-            {plan.lastChargeError && <p dir="auto" className="break-words rounded bg-red-50 p-2 text-red-700">{dt("سبب التعثر")}: {plan.lastChargeError}</p>}
-            {!plan.lastChargeError && plan.lifecycle === "PAYMENT_FAILED" && <p>{dt("سبب التعثر غير مسجل؛ راجع تفاصيل بوابة الدفع.")}</p>}
-          </div>)}
-        </div>}
-      </section>
       <div className="rounded-md border border-border bg-muted/30">
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -158,9 +143,6 @@ export function UserDonationsTable({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 p-2" aria-label={dt("نوع التبرع")}>
-        {([ ["all", "كل التبرعات"], ["once", "مرة واحدة"], ["recurring", "دوري"] ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={kind === value} onClick={() => setKind(value)} className={`rounded border px-3 py-1 text-xs ${kind === value ? "bg-brand text-white" : "bg-background"}`}>{dt(label)}</button>)}
-      </div>
       <div className="max-h-[320px] overflow-auto">
         {loading ? (
           <div className="py-10 text-center">

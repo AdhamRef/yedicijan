@@ -24,7 +24,6 @@ import dynamic from "next/dynamic";
 import { EditorModal } from "./EditorModal";
 import { DocumentUploadField } from "./DocumentUploadField";
 import { ImageUploadField } from "@/app/(dashboard)/dashboard/_components/ImageUploadField";
-import { ProjectVideoLibrary } from "./ProjectVideoLibrary";
 import { CampaignUpdatesEditor } from "./CampaignUpdatesEditor";
 import { CategoryStructureEditor } from "./CategoryStructureEditor";
 import { MediaCollectionEditor } from "./MediaCollectionEditor";
@@ -1013,10 +1012,8 @@ export function ContentEditor({ kind, id, initialSection = "content", initialLoc
             </section>
           ) : null}
           {kind === "campaigns" && section === "history" ? (<>
-            <ProjectVideoLibrary campaignId={id} refreshKey={JSON.stringify([document.revision, document.settings.updates])} disabled={dirty || Boolean(busy) || id === "new"} />
             <CampaignUpdatesEditor campaignId={id} updates={document.settings.updates} disabled={dirty || Boolean(busy)} onSaved={initialLoad} onUploadingChange={onUploadingChange} />
           </>) : null}
-          {kind === "blog" && section === "review" && id !== "new" ? <Link href={`/dashboard/editorial-planner?improve=${id}`} className={button}>{dt("تجهيز تحسين المقال والبحث عن مصادره")}</Link> : null}
           {section === "review" ? (
             <section className="space-y-4 rounded-xl border bg-white p-5">
               <h3 className="font-bold">{dt("المراجعة قبل النشر")}</h3>

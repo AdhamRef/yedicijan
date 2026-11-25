@@ -1,4 +1,3 @@
-import { safeAuthCallback } from "@/lib/auth-safe-callback";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { routing } from "@/i18n/routing";
@@ -29,12 +28,8 @@ export default async function AuthErrorBridge({
 }) {
   const sp = await searchParams;
   const cookieStore = await cookies();
-  let locale = resolveLocale(
+  const locale = resolveLocale(
     cookieStore.get("NEXT_LOCALE")?.value ?? cookieStore.get("NEXT_INTL_LOCALE")?.value
   );
-  const candidate = typeof sp.callbackUrl === "string" ? sp.callbackUrl : cookieStore.get("__Secure-next-auth.callback-url")?.value ?? cookieStore.get("next-auth.callback-url")?.value;
-  const callback = safeAuthCallback(candidate, locale);
-  const callbackLocale = callback.split("/")[1];
-  if ((routing.locales as readonly string[]).includes(callbackLocale)) locale = callbackLocale;
-  redirect(`/${locale}/auth/error${toQueryString({ ...sp, callbackUrl: callback })}`);
+  redirect(`/${locale}/auth/error${toQueryString(sp)}`);
 }
