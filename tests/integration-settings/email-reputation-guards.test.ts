@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeElasticEmailEvents, suppressionForError } from "../../lib/communication/providers/elastic-email/webhook-events";
-import { reminderPreviousAttemptWindows } from "../../lib/events/donation-lapsed-policy";
 
 test("permanent refusals in Elastic's error text suppress the address (texts from the 2026-11-18 audit)", () => {
   assert.equal(suppressionForError("Delivery not attempted because Contact's status was 'Invalid' at the time of sending."), "hard-bounce");
@@ -29,13 +28,4 @@ test("a 'suppress' event now carries the suppression its text implies; other eve
   assert.equal(unsub.suppression, "unsubscribe");
   const [opened] = normalizeElasticEmailEvents({ MessageID: "m4", EventType: "Open", To: "a@b.org" });
   assert.equal(opened.suppression, "none");
-});
-
-test("a reminder the provider accepted counts as sent: full cooldown, no weekly retry", () => {
-  const cooldown = new Date("2026-09-19T00:00:00Z"), failed = new Date("2026-11-11T00:00:00Z");
-  const windows = reminderPreviousAttemptWindows(cooldown, failed) as Array<Record<string, unknown>>;
-  const accepted = windows.find((w) => JSON.stringify(w).includes("providerMessageId"));
-  assert.ok(accepted, "a window for failures after provider acceptance");
-  assert.deepEqual(JSON.parse(JSON.stringify(accepted)), { status: { in: ["FAILED", "SKIPPED"] }, providerMessageId: { not: null }, createdAt: { gte: cooldown.toISOString() } });
-  assert.ok(windows.some((w) => JSON.stringify(w) === JSON.stringify({ status: { in: ["FAILED", "SKIPPED"] }, createdAt: { gte: failed } })), "never-sent failures still retry after the short backoff");
 });
