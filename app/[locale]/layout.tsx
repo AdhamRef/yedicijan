@@ -5,6 +5,7 @@ import type { Locale } from "@/lib/seo";
 import { Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import CartReminder from "@/components/CartReminder";
+import FieldGallery from "@/components/minbar/shell/FieldGallery";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
 import IntlProviderClient from "./IntlProviderClient";
 import { SUPPORTED_LOCALES, localeDirection } from "@/lib/locales";
@@ -105,6 +106,7 @@ export default async function Rootlayout({
               <main className="pt-12 lg:pt-[88px]">
                 {children}
               </main>
+              <FieldGallery locale={locale} />
               <Footer />
               <CartReminder />
               <ConfettiProvider />
