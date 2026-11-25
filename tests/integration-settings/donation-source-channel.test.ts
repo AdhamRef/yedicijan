@@ -17,14 +17,14 @@ test("tagged sources seen in production map to their channel", () => {
 });
 
 test("untagged visits fall back to click ids, then the referrer", () => {
-  assert.equal(c({ first_landing_page: "https://minberiaksa.org/ar?gclid=abc", session_id: "s" }), "google_ads");
-  assert.equal(c({ first_referrer: "https://l.instagram.com/", landing_page: "https://minberiaksa.org/ar" }), "instagram");
-  assert.equal(c({ first_referrer: "https://lm.facebook.com/", landing_page: "https://minberiaksa.org/ar" }), "facebook");
-  assert.equal(c({ first_referrer: "android-app://com.google.android.gm/", landing_page: "https://minberiaksa.org/ar" }), "email");
-  assert.equal(c({ first_referrer: "https://www.google.com/", landing_page: "https://minberiaksa.org/ar" }), "google_search");
-  assert.equal(c({ first_referrer: "https://www.paypal.com/", landing_page: "https://minberiaksa.org/ar" }), "direct", "a payment return is not a source");
-  assert.equal(c({ first_referrer: "https://minberiaksa.org/ar/bagislar", landing_page: "https://minberiaksa.org/ar" }), "direct", "own site");
-  assert.equal(c({ landing_page: "https://minberiaksa.org/ar", session_id: "s" }), "direct");
+  assert.equal(c({ first_landing_page: "https://yedicihan.org/ar?gclid=abc", session_id: "s" }), "google_ads");
+  assert.equal(c({ first_referrer: "https://l.instagram.com/", landing_page: "https://yedicihan.org/ar" }), "instagram");
+  assert.equal(c({ first_referrer: "https://lm.facebook.com/", landing_page: "https://yedicihan.org/ar" }), "facebook");
+  assert.equal(c({ first_referrer: "android-app://com.google.android.gm/", landing_page: "https://yedicihan.org/ar" }), "email");
+  assert.equal(c({ first_referrer: "https://www.google.com/", landing_page: "https://yedicihan.org/ar" }), "google_search");
+  assert.equal(c({ first_referrer: "https://www.paypal.com/", landing_page: "https://yedicihan.org/ar" }), "direct", "a payment return is not a source");
+  assert.equal(c({ first_referrer: "https://yedicihan.org/ar/bagislar", landing_page: "https://yedicihan.org/ar" }), "direct", "own site");
+  assert.equal(c({ landing_page: "https://yedicihan.org/ar", session_id: "s" }), "direct");
 });
 
 test("no attribution is unknown, never guessed", () => {
