@@ -1,3 +1,4 @@
+import RenewalAlerts from "@/components/dashboard/RenewalAlerts";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
@@ -40,7 +41,7 @@ export default async function DashboardLayout({
       messages={messages}
       locale={locale}
     >
-      {children}
+      <RenewalAlerts />{children}
     </DashboardLayoutClient>
   );
 }

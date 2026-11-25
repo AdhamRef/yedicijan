@@ -113,6 +113,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
     items: [
       { key: "team", title: "الفريق", href: "/dashboard/users/team", icon: "userCog", keywords: ["team", "staff", "permissions", "صلاحيات"] },
       { key: "generalSettings", title: "الإعدادات", href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways"] },
+      { key: "generalSettings", title: "تجديدات الخدمات", href: "/dashboard/renewals", icon: "repeat", keywords: ["renewal", "subscription", "billing", "expiry", "تجديد", "اشتراك"] },
       { key: "logs", title: "سجلات النظام", href: "/dashboard/logs", icon: "scrollText", keywords: ["logs", "audit", "system"] },
     ],
   },
