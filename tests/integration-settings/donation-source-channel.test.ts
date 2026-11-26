@@ -44,7 +44,7 @@ test("chart, list and export apply the source filter; the page offers it and kee
   assert.match(fs.readFileSync("app/api/donations/route.ts", "utf8"), /countryWhere, sourceWhere\]/);
   assert.match(fs.readFileSync("app/api/admin/donations/export/route.ts", "utf8"), /donationSourceWhere\(sp\.get\("source"\)\)/);
   const page = fs.readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
-  assert.equal((page.match(/params\.set\("source", donationSourceFilter\)/g) ?? []).length, 2, "chart and list requests");
+  assert.equal((page.match(/params\.set\("source", donationSourceFilter\)/g) ?? []).length, 3, "chart, KPI stats and list requests");
   assert.match(page, /\{dt\("مصدر التبرع"\)\}/);
   assert.match(page, /<\/TabsList>\s*<Select value=\{chartView\}/, "chart type sits with the chart controls");
   assert.doesNotMatch(page, /\{\/\* Chart Type \*\/\}/, "and no longer in the filters grid");
