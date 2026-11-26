@@ -11,3 +11,10 @@
   .dash-content * { min-width: 0; }
   .dash-content table { min-width: max-content; }
 }
+
+/* Inputs at 16 px on phones (ported from Minber al-Aqsa #294): iPhone zooms the page into any field under
+   16 px when it is tapped. Phones only; computers keep the compact size. */
+@media (max-width: 767px) {
+  .dash-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  .dash-shell select, .dash-shell textarea { font-size: 16px; }
+}
