@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
-
+//look
 // Every destination here must be a page that still exists. The marketing overview, أداء الحملات
 // and التوصيات pages, and the platform-connections overview, الحسابات الإعلانية, Webhooks and
 // سجلات المنصات pages, were deleted — so the routes that used to land on them now land on the
