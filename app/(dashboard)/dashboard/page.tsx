@@ -13,6 +13,7 @@ import {
   FolderTree,
   Wallet,
   Calendar,
+  CalendarDays,
   Receipt,
   Target,
   Layers,
@@ -256,6 +257,11 @@ export default function DashboardPage() {
   );
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  // "Today" card: same filters as the indicators, but the period is always the
+  // current Istanbul day and only settled (PAID) donations count as revenue.
+  const [todayStats, setTodayStats] = useState<{ amount: number; count: number } | null>(null);
+  const [todayError, setTodayError] = useState(false);
+  const todayRequestId = useRef(0);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
@@ -518,6 +524,33 @@ export default function DashboardPage() {
     fetchStats();
   }, [fetchStats]);
 
+  const fetchTodayStats = useCallback(async () => {
+    const requestId = ++todayRequestId.current;
+    setTodayError(false);
+    setTodayStats(null);
+    try {
+      const today = istanbulTodayKey();
+      const params = new URLSearchParams({ period: "day", start: today, end: today });
+      if (selectedCategory !== "all") params.set("categoryId", selectedCategory);
+      if (selectedCampaign !== "all") params.set("campaignId", selectedCampaign);
+      if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
+      if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
+      const response = await fetch(`/api/admin/stats?${params}`);
+      const data = await response.json();
+      if (requestId !== todayRequestId.current) return;
+      if (!response.ok) throw new Error(data?.error || "stats failed");
+      setTodayStats({ amount: Number(data?.totalAmount ?? 0), count: Number(data?.paidCount ?? 0) });
+    } catch (error) {
+      if (requestId !== todayRequestId.current) return;
+      console.error("Error fetching today's stats:", error);
+      setTodayError(true);
+    }
+  }, [selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter]);
+
+  useEffect(() => {
+    fetchTodayStats();
+  }, [fetchTodayStats]);
+
   // Donations list — uses تصفية النتائج + chart time span (period + from/to) + sort
   const fetchDonations = useCallback(
     async (page: number, append: boolean) => {
@@ -608,10 +641,11 @@ export default function DashboardPage() {
     void Promise.all([
       fetchDonations(1, false),
       fetchStats(),
+      fetchTodayStats(),
       fetchChartData(),
       fetchCountries(),
     ]);
-  }, [fetchDonations, fetchStats, fetchChartData, fetchCountries]);
+  }, [fetchDonations, fetchStats, fetchTodayStats, fetchChartData, fetchCountries]);
   const donationActions = useDonationActions({
     enabled: canEditDonations,
     onChange: refreshAfterDonationMutation,
@@ -812,6 +846,15 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 sm:gap-4">
             {statCardSet === "revenue" && (
               <>
+                <StatsMetricCard
+                  compact
+                  title="إيرادات ناجحة (اليوم)"
+                  value={todayStats?.amount ?? 0}
+                  icon={CalendarDays}
+                  accent="teal"
+                  format="money"
+                  subtitle={todayError ? "تعذر تحميل أرقام اليوم" : todayStats ? `عدد: ${todayStats.count.toLocaleString("en-US")} · اليوم فقط (بتوقيت إسطنبول)، بنفس التصفية` : "…"}
+                />
                 <StatsMetricCard
                   compact
                   title={thisMonthRevenueTitle}
