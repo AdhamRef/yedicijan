@@ -30,3 +30,16 @@ export function securityClientIp(headers: Pick<Headers, "get">): string | null {
   }
   return null;
 }
+
+/**
+ * Paths an emergency closure must never block: the dashboard and sign-in, admin,
+ * cron and webhook APIs, and the bank callbacks that finish a payment already
+ * started (Yedicihan's gateways: Albaraka and PayFor).
+ */
+export function isSecurityExemptPath(path: string) {
+  return (
+    /^\/(?:[a-z]{2}\/)?(?:dashboard|auth)(?:\/|$)/.test(path) ||
+    /^\/api\/(?:admin|auth|webhooks|cron)(?:\/|$)/.test(path) ||
+    /^\/api\/(?:albaraka\/3d\/callback|payfor\/3dpay\/(?:ok|fail)|telegram\/webhook)(?:\/|$)/.test(path)
+  );
+}

@@ -99,7 +99,7 @@ function DashboardContent({
     return DASHBOARD_NAV_GROUPS
       .map((section) => ({
         group: section.group,
-        items: section.items.filter((item) => userHasDashboardPermission(u, item.key)),
+        items: section.items.filter((item) => (!item.adminOnly || u.role === "ADMIN") && userHasDashboardPermission(u, item.key)),
       }))
       .filter((s) => s.items.length > 0);
   }, [session?.user]);

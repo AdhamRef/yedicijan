@@ -95,6 +95,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Emergency switch (/dashboard/security): while donations are paused, no new payment starts.
+  // Lazy and fail-open: a problem reading the switch never stops a donation.
+  const paused = await import("@/lib/site-security/emergency").then((m) => m.emergencyResponse(request)).catch(() => null);
+  if (paused) return paused;
   try {
     const session = await getServerSession(authOptions);
 
