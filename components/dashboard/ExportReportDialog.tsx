@@ -89,6 +89,8 @@ export interface ExportFormState {
   status: "all" | "PAID" | "FAILED";
   locale: string;
   country: string;
+  /** Classified donation source (Donation.sourceChannel); "all" or unset = no filter. */
+  source?: string;
   sortBy: "date" | "amount";
   sortOrder: "asc" | "desc";
   limit: number;
@@ -138,6 +140,7 @@ function buildQuery(endpoint: string, state: ExportFormState, fields: ExportRepo
   if (fields.status && state.status !== "all") params.set("status", state.status);
   if (fields.locale && state.locale !== "all") params.set("locale", state.locale);
   if (fields.country && state.country !== "all") params.set("country", state.country);
+  if (state.source && state.source !== "all") params.set("source", state.source);
   if (fields.sort) {
     params.set("sortBy", state.sortBy);
     params.set("sortOrder", state.sortOrder);

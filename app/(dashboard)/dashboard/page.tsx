@@ -13,6 +13,7 @@ import {
   FolderTree,
   Wallet,
   Calendar,
+  CalendarDays,
   Receipt,
   Target,
   Layers,
@@ -69,6 +70,7 @@ import {
 } from "@/lib/dashboard/format-dashboard-money";
 import { formatIstanbulCalendarMonthLong } from "@/lib/admin/current-calendar-month-utc";
 import { StatsMetricCard } from "@/components/dashboard/StatsMetricCard";
+import MultiPick from "@/components/dashboard/MultiPick";
 import { getDashboardChartPeriodLabelAr } from "@/lib/dashboard/chart-period-label-ar";
 import { getPeriodDateKeys } from "@/lib/dashboard/period-date-range";
 import {
@@ -220,6 +222,10 @@ function getDonationsDateRange(
   return getPeriodDateKeys(period, dateFrom, dateTo);
 }
 
+/** Filters hold "all" or a comma-joined list ("a,b" = any of them; #282). */
+const pickList = (v: string) => (v && v !== "all" ? v.split(",").filter(Boolean) : []);
+const pickValue = (xs: string[]) => (xs.length ? xs.join(",") : "all");
+
 export default function DashboardPage() {
   const locale = useLocale() as string;
   const thisMonthRevenueTitle = `إيرادات شهر ${formatIstanbulCalendarMonthLong(new Date(), locale || "ar")}`;
@@ -256,6 +262,11 @@ export default function DashboardPage() {
   );
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  // "Today" card: same filters as the indicators, but the period is always the
+  // current Istanbul day and only settled (PAID) donations count as revenue.
+  const [todayStats, setTodayStats] = useState<{ amount: number; count: number } | null>(null);
+  const [todayError, setTodayError] = useState(false);
+  const todayRequestId = useRef(0);
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
@@ -314,10 +325,43 @@ export default function DashboardPage() {
   const [donationsStatusFilter, setDonationsStatusFilter] = useState<"all" | "PAID" | "FAILED">("all");
   /** Applied donor search (name or email) for the أحدث التبرعات table — server-side, not a page filter. */
   const [donationsSearch, setDonationsSearch] = useState("");
-  const [donationLocaleFilter, setDonationLocaleFilter] = useState<
-    "all" | "ar" | "en" | "fr" | "tr" | "id" | "pt" | "es" | "de" | "__unset"
-  >("all");
+  // "all", one locale, or several joined by commas (#282).
+  const [donationLocaleFilter, setDonationLocaleFilter] = useState<string>("all");
   const [donationCountryFilter, setDonationCountryFilter] = useState<string>("all");
+  const [donationSourceFilter, setDonationSourceFilter] = useState("all");
+
+  // Saved filter sets: the author's own, plus those shared with the team (#283).
+  type SavedView = { id: string; name: string; filters: Record<string, string>; shared: boolean; mine: boolean; ownerName: string | null };
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]), [activeViewId, setActiveViewId] = useState("");
+  const loadViews = useCallback(() => {
+    fetch("/api/admin/dashboard-views", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.views) setSavedViews(d.views as SavedView[]); }).catch(() => {});
+  }, []);
+  useEffect(() => { loadViews(); }, [loadViews]);
+  const currentFilters = (): Record<string, string> => ({ selectedCategory, selectedCampaign, donationSourceFilter, donationLocaleFilter, donationCountryFilter, donationsStatusFilter, chartPeriod, dateFrom, dateTo });
+  const applyView = (v: SavedView) => {
+    const vf = v.filters;
+    if (vf.selectedCategory) setSelectedCategory(vf.selectedCategory);
+    if (vf.selectedCampaign) setSelectedCampaign(vf.selectedCampaign);
+    if (vf.donationSourceFilter) setDonationSourceFilter(vf.donationSourceFilter);
+    if (vf.donationLocaleFilter) setDonationLocaleFilter(vf.donationLocaleFilter);
+    if (vf.donationCountryFilter) setDonationCountryFilter(vf.donationCountryFilter);
+    if (vf.donationsStatusFilter === "all" || vf.donationsStatusFilter === "PAID" || vf.donationsStatusFilter === "FAILED") setDonationsStatusFilter(vf.donationsStatusFilter);
+    if (vf.chartPeriod && vf.chartPeriod in PERIOD_LABELS) setChartPeriod(vf.chartPeriod as ChartPeriod);
+    setDateFrom(vf.dateFrom ?? ""); setDateTo(vf.dateTo ?? "");
+  };
+  const saveView = async () => {
+    const name = window.prompt("اسم العرض (مثلاً: متبرعو تركيا عبر فيسبوك)");
+    if (!name?.trim()) return;
+    const shared = window.confirm("مشاركة هذا العرض مع الفريق؟ (موافق = مشترك، إلغاء = لي فقط)");
+    await fetch("/api/admin/dashboard-views", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), filters: currentFilters(), shared }) }).catch(() => undefined);
+    loadViews();
+  };
+  const deleteView = async () => {
+    const v = savedViews.find((x) => x.id === activeViewId);
+    if (!v || !v.mine || !window.confirm(`حذف العرض «${v.name}»؟`)) return;
+    await fetch(`/api/admin/dashboard-views?id=${v.id}`, { method: "DELETE" }).catch(() => undefined);
+    setActiveViewId(""); loadViews();
+  };
   const [countryOptions, setCountryOptions] = useState<{ code: string; count: number }[]>([]);
   const [countryUnsetCount, setCountryUnsetCount] = useState(0);
 
@@ -326,7 +370,6 @@ export default function DashboardPage() {
   const [donationsTotal, setDonationsTotal] = useState(0);
   const [donationsLoading, setDonationsLoading] = useState(false);
   const [donationsFetchedOnce, setDonationsFetchedOnce] = useState(false);
-  const [searchCampaign, setSearchCampaign] = useState("");
   const [donationDetails, setDonationDetails] = useState<{
     open: boolean;
     mode: "attribution" | "payment" | "error";
@@ -469,6 +512,7 @@ export default function DashboardPage() {
       if (showFailed) params.set("showFailed", "true");
       if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
       if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
+      if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
       const response = await axios.get(`/api/admin/donations/chart?${params}`);
       setChartData(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
@@ -478,7 +522,7 @@ export default function DashboardPage() {
     } finally {
       setChartLoading(false);
     }
-  }, [selectedCategory, selectedCampaign, selectedUserId, searchParams, chartPeriod, dateFrom, dateTo, showFailed, donationLocaleFilter, donationCountryFilter]);
+  }, [selectedCategory, selectedCampaign, selectedUserId, searchParams, chartPeriod, dateFrom, dateTo, showFailed, donationLocaleFilter, donationCountryFilter, donationSourceFilter]);
 
   useEffect(() => {
     fetchChartData();
@@ -498,6 +542,7 @@ export default function DashboardPage() {
       if (selectedCampaign !== "all") params.set("campaignId", selectedCampaign);
       if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
       if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
+      if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
       const response = await fetch(`/api/admin/stats?${params}`);
       const data = await response.json();
       if (!response.ok) {
@@ -512,11 +557,39 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter]);
+  }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter, donationSourceFilter]);
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
+
+  const fetchTodayStats = useCallback(async () => {
+    const requestId = ++todayRequestId.current;
+    setTodayError(false);
+    setTodayStats(null);
+    try {
+      const today = istanbulTodayKey();
+      const params = new URLSearchParams({ period: "day", start: today, end: today });
+      if (selectedCategory !== "all") params.set("categoryId", selectedCategory);
+      if (selectedCampaign !== "all") params.set("campaignId", selectedCampaign);
+      if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
+      if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
+      if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
+      const response = await fetch(`/api/admin/stats?${params}`);
+      const data = await response.json();
+      if (requestId !== todayRequestId.current) return;
+      if (!response.ok) throw new Error(data?.error || "stats failed");
+      setTodayStats({ amount: Number(data?.totalAmount ?? 0), count: Number(data?.paidCount ?? 0) });
+    } catch (error) {
+      if (requestId !== todayRequestId.current) return;
+      console.error("Error fetching today's stats:", error);
+      setTodayError(true);
+    }
+  }, [selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter, donationSourceFilter]);
+
+  useEffect(() => {
+    fetchTodayStats();
+  }, [fetchTodayStats]);
 
   // Donations list — uses تصفية النتائج + chart time span (period + from/to) + sort
   const fetchDonations = useCallback(
@@ -537,6 +610,7 @@ export default function DashboardPage() {
         if (donationsStatusFilter !== "all") params.set("status", donationsStatusFilter);
         if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
         if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
+        if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
         if (donationsSearch) params.set("search", donationsSearch);
         const res = await fetch(`/api/donations?${params}`);
         const data = await res.json();
@@ -567,6 +641,7 @@ export default function DashboardPage() {
       donationsStatusFilter,
       donationLocaleFilter,
       donationCountryFilter,
+      donationSourceFilter,
       donationsSearch,
     ]
   );
@@ -608,10 +683,11 @@ export default function DashboardPage() {
     void Promise.all([
       fetchDonations(1, false),
       fetchStats(),
+      fetchTodayStats(),
       fetchChartData(),
       fetchCountries(),
     ]);
-  }, [fetchDonations, fetchStats, fetchChartData, fetchCountries]);
+  }, [fetchDonations, fetchStats, fetchTodayStats, fetchChartData, fetchCountries]);
   const donationActions = useDonationActions({
     enabled: canEditDonations,
     onChange: refreshAfterDonationMutation,
@@ -636,6 +712,7 @@ export default function DashboardPage() {
       status: donationsStatusFilter,
       locale: donationLocaleFilter === "all" ? "all" : String(donationLocaleFilter),
       country: donationCountryFilter,
+      source: donationSourceFilter,
       sortBy: donationsSortBy,
       sortOrder: donationsSortOrder,
     };
@@ -648,6 +725,7 @@ export default function DashboardPage() {
     donationsStatusFilter,
     donationLocaleFilter,
     donationCountryFilter,
+    donationSourceFilter,
     donationsSortBy,
     donationsSortOrder,
   ]);
@@ -812,6 +890,15 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 sm:gap-4">
             {statCardSet === "revenue" && (
               <>
+                <StatsMetricCard
+                  compact
+                  title="إيرادات ناجحة (اليوم)"
+                  value={todayStats?.amount ?? 0}
+                  icon={CalendarDays}
+                  accent="teal"
+                  format="money"
+                  subtitle={todayError ? "تعذر تحميل أرقام اليوم" : todayStats ? `عدد: ${todayStats.count.toLocaleString("en-US")} · اليوم فقط (بتوقيت إسطنبول)، بنفس التصفية` : "…"}
+                />
                 <StatsMetricCard
                   compact
                   title={thisMonthRevenueTitle}
@@ -1392,6 +1479,16 @@ export default function DashboardPage() {
                       التبرعات عبر الزمن
                     </TabsTrigger>
                   </TabsList>
+                  <Select value={chartView} onValueChange={(v) => setChartView(v as ChartViewType)}>
+                    <SelectTrigger className="h-8 w-[120px] px-2 text-xs rounded-lg border-slate-200 bg-white" aria-label="نوع الرسم">
+                      <SelectValue placeholder="نوع الرسم" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bar" className="text-xs">أعمدة</SelectItem>
+                      <SelectItem value="line" className="text-xs">خط</SelectItem>
+                      <SelectItem value="area" className="text-xs">منطقة</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {chartView === "bar" && chartMetric === "amount" && (
                     <button
                       type="button"
@@ -1461,13 +1558,13 @@ export default function DashboardPage() {
                 selectedCategory !== "all" && {
                   id: "category",
                   label: "الحملة",
-                  value: categories.find((c) => c.id === selectedCategory)?.name ?? selectedCategory,
+                  value: pickList(selectedCategory).map((id) => categories.find((c) => c.id === id)?.name ?? id).join("، "),
                   onClear: () => setSelectedCategory("all"),
                 },
                 selectedCampaign !== "all" && {
                   id: "campaign",
                   label: "المشروع",
-                  value: campaigns.find((c) => c.id === selectedCampaign)?.title ?? selectedCampaign,
+                  value: pickList(selectedCampaign).map((id) => campaigns.find((c) => c.id === id)?.title ?? id).join("، "),
                   onClear: () => setSelectedCampaign("all"),
                 },
                 selectedUserId !== "all" && {
@@ -1494,61 +1591,29 @@ export default function DashboardPage() {
 
 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
 
-
-  {/* Category */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      الفئة
-    </label>
-    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر الفئة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">جميع الفئات</SelectItem>
-        {categories.map((c) => (
-          <SelectItem key={c.id} value={c.id} className="text-xs">
-            {c.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+  {/* Saved views */}
+  <div className="col-span-full flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-2 text-xs">
+    <select value={activeViewId} onChange={(e) => { setActiveViewId(e.target.value); const v = savedViews.find((x) => x.id === e.target.value); if (v) applyView(v); }} className="h-8 rounded border border-slate-200 bg-white px-2" aria-label="العروض المحفوظة">
+      <option value="">العروض المحفوظة…</option>
+      {savedViews.map((v) => <option key={v.id} value={v.id}>{v.name}{v.shared ? " · مشترك" : ""}{!v.mine && v.ownerName ? ` (${v.ownerName})` : ""}</option>)}
+    </select>
+    <button type="button" onClick={() => void saveView()} className="h-8 rounded border border-slate-300 bg-white px-3 hover:bg-slate-100">💾 حفظ الفلاتر</button>
+    {savedViews.find((x) => x.id === activeViewId)?.mine ? <button type="button" onClick={() => void deleteView()} className="h-8 rounded px-2 text-slate-500 hover:text-red-600">حذف العرض</button> : null}
   </div>
 
-  {/* Campaign */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      المشروع
-    </label>
-    <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر المشروع" />
-      </SelectTrigger>
-      <SelectContent>
-        <div className="p-2 border-b border-slate-100">
-          <Input
-            placeholder="بحث..."
-            value={searchCampaign}
-            onChange={(e) => setSearchCampaign(e.target.value)}
-            className="w-full h-8 text-xs"
-          />
-        </div>
-        <SelectItem value="all" className="text-xs">جميع المشاريع</SelectItem>
-        {campaigns
-          .filter((c) => {
-            const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : []);
-            const inCategory = selectedCategory === "all" || ids.includes(selectedCategory);
-            return inCategory && (!searchCampaign ||
-              c.title.toLowerCase().includes(searchCampaign.toLowerCase()));
-          })
-          .map((c) => (
-            <SelectItem key={c.id} value={c.id} className="text-xs">
-              {c.title}
-            </SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
-  </div>
+
+  {/* Category — several at once */}
+  <MultiPick label="الفئة" allLabel="جميع الفئات" selected={pickList(selectedCategory)}
+    options={categories.map((c) => ({ value: c.id, label: c.name }))}
+    onChange={(next) => {
+      setSelectedCategory(pickValue(next));
+      // Drop chosen projects that are outside every chosen category.
+      if (next.length) setSelectedCampaign((cur) => pickValue(pickList(cur).filter((id) => { const c = campaigns.find((item) => item.id === id); if (!c) return true; const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : []); return next.some((cid) => ids.includes(cid)); })));
+    }} />
+
+  {/* Campaign — several at once; limited to the chosen categories */}
+  <MultiPick label="المشروع" allLabel="جميع المشاريع" selected={pickList(selectedCampaign)} onChange={(next) => setSelectedCampaign(pickValue(next))}
+    options={campaigns.filter((c) => { const cats = pickList(selectedCategory); const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : []); return cats.length === 0 || cats.some((cid) => ids.includes(cid)); }).map((c) => ({ value: c.id, label: c.title }))} />
 
   {/* User — hidden when viewing a specific user via link (?userId=...) */}
   {!searchParams.get("userId") && (
@@ -1630,77 +1695,20 @@ export default function DashboardPage() {
     </Select>
   </div>
 
-  {/* Chart Type */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      نوع الرسم
-    </label>
-    <Select value={chartView} onValueChange={(v) => setChartView(v as ChartViewType)}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر النوع" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="bar" className="text-xs">أعمدة</SelectItem>
-        <SelectItem value="line" className="text-xs">خط</SelectItem>
-        <SelectItem value="area" className="text-xs">منطقة</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Donation source (classified attribution) — several at once */}
+  <MultiPick label="مصدر التبرع" allLabel="كل المصادر" selected={pickList(donationSourceFilter)} onChange={(next) => setDonationSourceFilter(pickValue(next))}
+    options={[["facebook", "فيسبوك"], ["instagram", "إنستغرام"], ["whatsapp", "واتساب"], ["email", "البريد الإلكتروني"], ["google_ads", "إعلانات Google"], ["google_search", "بحث Google"], ["tiktok", "تيك توك"], ["direct", "مباشر"], ["other", "أخرى"], ["unknown", "غير معروف"]].map(([value, label]) => ({ value, label }))} />
 
-  {/* Site language (donation row locale) */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      لغة الموقع (التبرع)
-    </label>
-    <Select
-      value={donationLocaleFilter}
-      onValueChange={(v) => setDonationLocaleFilter(v as typeof donationLocaleFilter)}
-    >
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اللغة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">كل اللغات</SelectItem>
-        <SelectItem value="ar" className="text-xs">العربية</SelectItem>
-        <SelectItem value="en" className="text-xs">English</SelectItem>
-        <SelectItem value="fr" className="text-xs">Français</SelectItem>
-        <SelectItem value="tr" className="text-xs">Türkçe</SelectItem>
-        <SelectItem value="id" className="text-xs">Indonesia</SelectItem>
-        <SelectItem value="pt" className="text-xs">Português</SelectItem>
-        <SelectItem value="es" className="text-xs">Español</SelectItem>
-        <SelectItem value="de" className="text-xs">Deutsch</SelectItem>
-        <SelectItem value="__unset" className="text-xs">غير محدد</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Site language (donation row locale) — several at once */}
+  <MultiPick label="لغة الموقع (التبرع)" allLabel="كل اللغات" selected={pickList(donationLocaleFilter)} onChange={(next) => setDonationLocaleFilter(pickValue(next))}
+    options={[["ar", "العربية"], ["en", "English"], ["fr", "Français"], ["tr", "Türkçe"], ["id", "Indonesia"], ["pt", "Português"], ["es", "Español"], ["de", "Deutsch"], ["__unset", "غير محدد"]].map(([value, label]) => ({ value, label }))} />
 
-  {/* Donor country */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      الدولة
-    </label>
-    <Select
-      value={donationCountryFilter}
-      onValueChange={(v) => setDonationCountryFilter(v)}
-    >
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="الدولة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">كل الدول</SelectItem>
-        {countryOptions.map((c) => (
-          <SelectItem key={c.code} value={c.code} className="text-xs">
-            {getCountryDisplayNameFromCode(c.code, locale || "ar")} ({c.count})
-          </SelectItem>
-        ))}
-        {countryUnsetCount > 0 && (
-          <SelectItem value="__unset" className="text-xs">
-            غير محدد ({countryUnsetCount})
-          </SelectItem>
-        )}
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Donor country — several at once */}
+  <MultiPick label="الدولة" allLabel="كل الدول" selected={pickList(donationCountryFilter)} onChange={(next) => setDonationCountryFilter(pickValue(next))}
+    options={[
+      ...countryOptions.map((c) => ({ value: c.code, label: getCountryDisplayNameFromCode(c.code, locale || "ar"), count: c.count })),
+      ...(countryUnsetCount > 0 ? [{ value: "__unset", label: "غير محدد", count: countryUnsetCount }] : []),
+    ]} />
 
   {/* Donation Status Filter */}
   <div className="space-y-1 text-right">

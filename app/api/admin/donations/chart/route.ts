@@ -1,3 +1,5 @@
+import { mergeDonationSourceFilter } from '@/lib/dashboard/donation-source-filter';
+import { donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere } from '@/lib/dashboard/donation-multi-filter';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -10,22 +12,15 @@ import {
   getIstanbulDateRange,
 } from '@/lib/admin/istanbul-calendar';
 
+// One value gives the same condition as before; "a,b" means any of them (#282).
 function mergeLocaleFilter(where: Record<string, unknown>, locale: string | null): Record<string, unknown> {
-  if (!locale || locale === 'all') return where;
-  const lw =
-    locale === '__unset'
-      ? { OR: [{ locale: null }, { locale: '' }] }
-      : { locale };
-  return { AND: [where, lw] };
+  const lw = donationLocaleWhere(locale);
+  return lw ? { AND: [where, lw] } : where;
 }
 
 function mergeCountryFilter(where: Record<string, unknown>, country: string | null): Record<string, unknown> {
-  if (!country || country === 'all') return where;
-  const cw =
-    country === '__unset'
-      ? { OR: [{ donorCountryCode: null }, { donorCountryCode: '' }] }
-      : { donorCountryCode: country.toUpperCase() };
-  return { AND: [where, cw] };
+  const cw = donationCountryWhere(country);
+  return cw ? { AND: [where, cw] } : where;
 }
 
 export async function GET(request: NextRequest) {
@@ -67,20 +62,15 @@ export async function GET(request: NextRequest) {
       innerWhere.donorId = userId;
     }
 
-    if (campaignId && campaignId !== 'all') {
-      innerWhere.AND = [{ items: { some: { campaignId } } }];
-    } else if (categoryId && categoryId !== 'all') {
-      innerWhere.AND = [
-        {
-          OR: [
-            { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-            { categoryItems: { some: { categoryId } } },
-          ],
-        },
-      ];
+    const campaignScope = donationCampaignWhere(campaignId);
+    const categoryScope = donationCategoryWhere(categoryId);
+    if (campaignScope) {
+      innerWhere.AND = [campaignScope];
+    } else if (categoryScope) {
+      innerWhere.AND = [categoryScope];
     }
 
-    const baseWhere = mergeCountryFilter(mergeLocaleFilter(innerWhere, locale), country);
+    const baseWhere = mergeDonationSourceFilter(mergeCountryFilter(mergeLocaleFilter(innerWhere, locale), country), searchParams.get('source'));
 
     // Always fetch both paid and failed donations
     const donations = await prisma.donation.findMany({
@@ -97,8 +87,8 @@ export async function GET(request: NextRequest) {
         currency: true,
         status: true,
         paidAt: true,
-        items: { select: { amount: true, amountUSD: true } },
-        categoryItems: { select: { amount: true, amountUSD: true } },
+        // items / categoryItems are not read below (donationRowUsdApprox uses amountUSD, amount, currency): loading them
+        // for every donation in the range cost two large relation queries (2026-11-20).
       },
     });
 
