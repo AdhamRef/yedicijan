@@ -182,6 +182,19 @@ export async function GET(request: NextRequest) {
     );
     const thisMonthPaidWhere = donationWhereAll(thisMonthDonationWhere, PAID_DONATION_FILTER);
 
+    // Independent reads start now and run alongside the block below (same queries, same results; only overlapped).
+    const supportFeesP = prisma.donation.findMany({
+      where: paidWhere,
+      select: { amountUSD: true, amount: true, currency: true, totalAmount: true, teamSupport: true, fees: true },
+      take: 100000,
+    });
+    /** All successful charges ever — ignores period / category / campaign query filters */
+    const globalPaidWhere = { ...PAID_DONATION_FILTER };
+    const globalPaidAggP = prisma.donation.aggregate({ _sum: { amountUSD: true }, where: globalPaidWhere });
+    const globalCountsP = prisma.donation.count({ where: globalPaidWhere });
+    // A rejected early read is awaited below; until then it must not surface as an unhandled rejection.
+    for (const p of [supportFeesP, globalPaidAggP, globalCountsP]) p.catch(() => undefined);
+
     const [
       totalCampaigns,
       totalCategories,
@@ -289,11 +302,7 @@ export async function GET(request: NextRequest) {
     const campaignDonationsCount = campaignDonationsSum._count?.id ?? 0;
     const categoryDonationsCount = categoryDonationsSum._count?.id ?? 0;
 
-    const donationsForSupportFees = await prisma.donation.findMany({
-      where: paidWhere,
-      select: { amountUSD: true, amount: true, currency: true, totalAmount: true, teamSupport: true, fees: true },
-      take: 100000,
-    });
+    const donationsForSupportFees = await supportFeesP;
     const toUSD = (
       rows: {
         amountUSD: number | null;
@@ -345,12 +354,9 @@ export async function GET(request: NextRequest) {
 
     const failedTotalAmount = failedTotalResult._sum?.amountUSD ?? 0;
 
-    /** All successful charges ever — ignores period / category / campaign query filters */
-    const globalPaidWhere = { ...PAID_DONATION_FILTER };
-    let paidRevenueAllTimeUnfiltered =
-      (await prisma.donation.aggregate({ _sum: { amountUSD: true }, where: globalPaidWhere }))._sum?.amountUSD ?? 0;
+    let paidRevenueAllTimeUnfiltered = (await globalPaidAggP)._sum?.amountUSD ?? 0;
     if (paidRevenueAllTimeUnfiltered === 0) {
-      const globalPaidCount = await prisma.donation.count({ where: globalPaidWhere });
+      const globalPaidCount = await globalCountsP;
       if (globalPaidCount > 0) {
         paidRevenueAllTimeUnfiltered = await donationUsdSumFallback(globalPaidWhere);
       }
@@ -360,7 +366,7 @@ export async function GET(request: NextRequest) {
     // NOT affected by the period/category/campaign filters. The filtered `paidCount` above
     // cannot be shown next to that claim — on a filtered view it would quietly contradict
     // the figure it sits beside.
-    const paidCountAllTimeUnfiltered = await prisma.donation.count({ where: globalPaidWhere });
+    const paidCountAllTimeUnfiltered = await globalCountsP;
 
     return NextResponse.json({
       totalCampaigns,
