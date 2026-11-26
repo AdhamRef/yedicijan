@@ -122,6 +122,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Only one-time donations are supported." }, { status: 400 });
     }
 
+    // Donation guard (observe-only in this release). Loaded lazily and fail-open, so a guard
+    // problem can never stop a donation or affect payment processing.
+    const donationGuard = await import("@/lib/site-security/donation-guard")
+      .then((m) => m.checkDonationGuard(request, { paymentMethod: String(paymentMethod), userId: session?.user?.id ?? null, email: session?.user?.email ?? guest?.email, phone: guest?.phone, deviceId: (body.attribution as Record<string, unknown> | undefined)?.session_id }))
+      .catch(() => ({ response: null, keys: null }));
+    if (donationGuard.response) return donationGuard.response;
+
     // Resolve donor
     let donorId: string;
     let donorName: string | null = null;
@@ -304,6 +311,7 @@ export async function POST(request: NextRequest) {
       stream: auditStreamForRole(actorRole),
     });
 
+    void import("@/lib/site-security/donation-guard").then((m) => m.recordDonationGuardAttempt(donationGuard, [donation.id])).catch(() => undefined);
     return NextResponse.json({
       success: true,
       donation,

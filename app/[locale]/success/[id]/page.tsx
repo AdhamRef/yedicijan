@@ -18,6 +18,7 @@ import { ar, enUS, fr, tr, id, pt, es } from 'date-fns/locale';
 import Image from 'next/image';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from 'next-auth/react';
+import DonationTrustMark from '@/components/success/DonationTrustMark';
 import SignInDialog from '@/components/SignInDialog';
 import { useTracking } from '@/components/TrackingPixels';
 
@@ -326,6 +327,7 @@ const DonationSuccessPage = () => {
       className="min-h-screen bg-gray-50"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      {id && <DonationTrustMark donationId={id} token={null} />}
       <div className="max-w-3xl mx-auto px-4 py-12 sm:py-16">
         {/* Hero block */}
         <motion.section
