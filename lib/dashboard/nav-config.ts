@@ -17,6 +17,8 @@ export type DashboardNavItem = {
    * slug to a poller and hands the resolved numbers back down.
    */
   badge?: DashboardNavBadgeKey;
+  /** Shown to admins only, whatever permissions a staff member holds. */
+  adminOnly?: boolean;
 };
 
 /** Counters the sidebar knows how to fetch. */
@@ -112,6 +114,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
     items: [
       { key: "team", title: "الفريق", href: "/dashboard/users/team", icon: "userCog", keywords: ["team", "staff", "permissions", "صلاحيات"] },
       { key: "generalSettings", title: "الإعدادات", href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways"] },
+      { key: "logs", title: "الأمان وحالة الموقع", href: "/dashboard/security", icon: "shield", adminOnly: true, keywords: ["security", "emergency", "maintenance", "pause", "أمان", "طوارئ", "إيقاف"] },
       { key: "logs", title: "سجلات النظام", href: "/dashboard/logs", icon: "scrollText", keywords: ["logs", "audit", "system"] },
     ],
   },

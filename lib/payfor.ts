@@ -52,3 +52,62 @@ export function payForHash(params: {
   return crypto.createHash("sha1").update(raw, "utf8").digest("base64");
 }
 
+/**
+ * The bank's signature on a 3DPay callback.
+ * Formula: base64(SHA1(MerchantID + MerchantPass + OrderId + AuthCode + ProcReturnCode + ResponseRnd))
+ *
+ * Derived from production callbacks rather than a document: it reproduces the
+ * `ResponseHash` of every authorised response we hold, approved and declined.
+ * The one exception is an MPI-stage failure (V034, the card never reached
+ * authorisation), which is signed differently  and which is never a payment.
+ *
+ * Without this check the OK callback trusted whatever was POSTed to it: the
+ * order id is in the callback URL and the amount is the donor's own, so a
+ * forged "ProcReturnCode=00" could mark an unpaid donation paid.
+ */
+export function payForResponseHash(response: Record<string, unknown>, merchantPass: string): string {
+  const field = (key: string) => String(response[key] ?? "");
+  const raw =
+    field("MerchantID") +
+    merchantPass +
+    field("OrderId") +
+    field("AuthCode") +
+    field("ProcReturnCode") +
+    field("ResponseRnd");
+  return crypto.createHash("sha1").update(raw, "utf8").digest("base64");
+}
+
+/** True only when the callback carries a `ResponseHash` that matches our own computation. */
+export function verifyPayForResponseHash(
+  response: Record<string, unknown>,
+  merchantPass: string | undefined
+): boolean {
+  const provided = String(response.ResponseHash ?? "");
+  if (!provided || !merchantPass) return false;
+  const expected = payForResponseHash(response, merchantPass);
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Our own 3DPay request signature as the bank echoes it back (MbrId … Rnd, with `Hash`). Every callback
+ * carries it, including 3D-stage failures (V034, MR…) whose ResponseHash is signed differently, and it
+ * cannot be produced without the merchant password. Verified on all 236 production callbacks of the
+ * previous 60 days (2026-11-18). Proof the callback is about an order we started; NOT proof of payment —
+ * approvals still require verifyPayForResponseHash.
+ */
+export function verifyPayForRequestEcho(response: Record<string, unknown>, merchantPass: string | undefined): boolean {
+  const provided = String(response.Hash ?? "");
+  if (!provided || !merchantPass) return false;
+  const field = (key: string) => String(response[key] ?? "");
+  const expected = payForHash({
+    mbrId: field("MbrId"), orderId: field("OrderId"), purchAmount: field("PurchAmount"), okUrl: field("OkUrl"),
+    failUrl: field("FailUrl"), txnType: field("TxnType"), installmentCount: field("InstallmentCount"), rnd: field("Rnd"), merchantPass,
+  });
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+
