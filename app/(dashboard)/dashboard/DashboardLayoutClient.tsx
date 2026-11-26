@@ -8,7 +8,6 @@ import { localeDirection } from "@/lib/locales";
 import SessionProvider from '@/components/providers/SessionProvider';
 import { NextIntlClientProvider } from "next-intl";
 import { Toaster, ToastBar, toast as hotToast } from "react-hot-toast";
-import { dt } from "@/lib/dashboard/i18n";
 import { ConfettiProvider } from "@/components/providers/confetti-provider";
 import { CurrencyProvider } from "@/context/CurrencyContext";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
@@ -30,6 +29,7 @@ import {
 } from "@/lib/dashboard/nav-config";
 import { buildBreadcrumbs } from "@/lib/dashboard/breadcrumbs";
 import { INBOX_UNREAD_EVENT } from "@/lib/messages/inbox-status";
+import { alertOnNewInboxMessages, inboxAlertsEnabled, setInboxTitleCount } from "@/lib/communication/inbox-alerts";
 import { DashboardSidebar } from "./_shell/DashboardSidebar";
 import { DashboardTopbar } from "./_shell/DashboardTopbar";
 import { CommandPalette } from "./_shell/CommandPalette";
@@ -100,7 +100,7 @@ function DashboardContent({
     return DASHBOARD_NAV_GROUPS
       .map((section) => ({
         group: section.group,
-        items: section.items.filter((item) => userHasDashboardPermission(u, item.key)),
+        items: section.items.filter((item) => (!item.adminOnly || u.role === "ADMIN") && userHasDashboardPermission(u, item.key)),
       }))
       .filter((s) => s.items.length > 0);
   }, [session?.user]);
@@ -173,6 +173,48 @@ function DashboardContent({
     };
   }, [wantsInboxBadge]);
 
+  /**
+   * WhatsApp conversations (Minber al-Aqsa #261/#265): the unread total for the sidebar badge, a sound and a
+   * browser notification when it grows, and the count in the tab title. With alerts on, it keeps checking
+   * from a background tab, which is when an alert matters most. Only for people who can open the page.
+   */
+  const wantsWhatsappBadge = badgeKeys.includes('whatsappUnread');
+  useEffect(() => {
+    if (!wantsWhatsappBadge) return;
+    let cancelled = false;
+    let running = false;
+    let last: number | null = null;
+    const run = async () => {
+      if (running || (document.hidden && !inboxAlertsEnabled())) return;
+      running = true;
+      try {
+        const res = await fetch('/api/dashboard/communication/inbox/conversations?countsOnly=1', { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+        if (!res.ok) return;
+        const data = await res.json();
+        const count = Number(data?.counts?.all);
+        if (!cancelled && Number.isFinite(count)) {
+          const next = Math.max(0, count);
+          alertOnNewInboxMessages(last, next, { title: "رسالة واتساب جديدة", body: `لديك ${next} محادثة غير مقروءة`, href: '/dashboard/communication/conversations' });
+          last = next;
+          setNavCounts((prev) => (prev.whatsappUnread === next ? prev : { ...prev, whatsappUnread: next }));
+        }
+      } catch { /* Retain the last confirmed count during transient failures. */ }
+      finally { running = false; }
+    };
+    run();
+    const timer = setInterval(run, 30000);
+    window.addEventListener('whatsapp-inbox-updated', run);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('whatsapp-inbox-updated', run);
+    };
+  }, [wantsWhatsappBadge]);
+
+  // The unread total also shows in the tab title, so it is visible with the dashboard in the background.
+  const whatsappUnread = navCounts.whatsappUnread ?? 0;
+  useEffect(() => { setInboxTitleCount(whatsappUnread); }, [whatsappUnread]);
+
   const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
   const openSearch = useCallback(() => { setIsSidebarOpen(false); setIsSearchOpen(true); }, []);
 
@@ -213,7 +255,7 @@ function DashboardContent({
       />
 
       <main
-        className={`flex-1 min-w-0 ${dir === 'rtl' ? 'lg:mr-[268px]' : 'lg:ml-[268px]'}`}
+        className={`dash-shell flex-1 min-w-0 ${dir === 'rtl' ? 'lg:mr-[268px]' : 'lg:ml-[268px]'}`}
       >
         <DashboardTopbar
           crumbs={crumbs}
@@ -225,7 +267,7 @@ function DashboardContent({
         {/* Content well. Pages own their own surfaces (Card, PageHeader, …) — the shell no
             longer wraps every route in a white rounded card, which produced a box-inside-a-box
             with doubled padding on every one of the 151 routes. */}
-        <div className="p-3 sm:p-4 lg:p-6 min-h-[calc(100vh-4rem)]">{children}</div>
+        <div className="dash-content p-3 sm:p-4 lg:p-6 min-h-[calc(100vh-4rem)]">{children}</div>
       </main>
     </div>
   );
@@ -262,7 +304,7 @@ export default function DashboardLayoutClient({
           <Toaster position="top-center" toastOptions={{
             style: { fontFamily: 'inherit', fontSize: '14px', whiteSpace: 'pre-line', maxWidth: 560 },
             success: { iconTheme: { primary: '#025EB8', secondary: '#fff' } },
-            // Problems stay until closed (owner, 2026-11-20): they used to vanish before they could be read.
+            // Problems stay until closed (#267): they used to vanish before they could be read.
             error: { duration: Infinity },
           }}>
             {(t) => (
@@ -272,7 +314,7 @@ export default function DashboardLayoutClient({
                     {icon}
                     {message}
                     {t.type !== 'loading' ? (
-                      <button type="button" onClick={() => hotToast.dismiss(t.id)} aria-label={dt("إغلاق")} className="ms-2 shrink-0 self-start rounded px-1.5 text-slate-500 hover:bg-slate-100">✕</button>
+                      <button type="button" onClick={() => hotToast.dismiss(t.id)} aria-label="إغلاق" className="ms-2 shrink-0 self-start rounded px-1.5 text-slate-500 hover:bg-slate-100">✕</button>
                     ) : null}
                   </>
                 )}

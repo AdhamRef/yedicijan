@@ -4,16 +4,22 @@ import { prisma } from "../prisma";
 import { classifyInboxLanguage, isInboxLanguage, type InboxLanguage, type LanguageSource } from "./inbox-language";
 
 /**
- * The inbox's conversation layer (owner, 2026-11-18). One row per conversation on the site's single
- * WhatsApp number, kept current as messages arrive and replies leave, so the list, the language tabs,
+ * The WhatsApp conversations layer (ported from Minber al-Aqsa #249/#270). One row per conversation on the
+ * site's WhatsApp number, kept current as messages arrive and replies leave, so the list, the language tabs,
  * assignment and unread counts never have to be rebuilt from the whole message archive.
  * Message bodies stay where they are (provider events and deliveries); this holds only the summary.
+ *
+ * Yedicihan: this is a NEW section beside the contact-form inbox (/dashboard/inbox), which is untouched.
+ * Yedicihan's number may have no CommunicationSender row (the Meta runtime's default phone number is used),
+ * so a message with no sender id belongs to the site's number too, filed under the id "default".
  */
 const COLLECTION = "InboxConversation";
 const DAY = 86_400_000;
+/** The conversation key used when the site's number has no sender row. */
+export const DEFAULT_SENDER_KEY = "default";
 /**
  * Raw commands take MongoDB extended JSON: a JavaScript Date must travel as { $date }, or it is stored as text
- * and sorts below every real date (the conversation list showed no new message for two days, 2026-11-20).
+ * and sorts below every real date (Minber #270: the list showed no new message for two days).
  */
 export const toExtendedJson = (value: unknown): unknown =>
   value instanceof Date ? { $date: value.toISOString() }
@@ -45,14 +51,16 @@ const toConversation = (d: Record<string, unknown>): InboxConversation => {
   };
 };
 
-/** The site's one WhatsApp number (the default sender). Cached for a minute. */
-let defaultSender: { until: number; id: string | null } | null = null;
-export async function inboxSenderId(): Promise<string | null> {
+/** The site's WhatsApp number: the default enabled sender row, or "default" when there is none. Cached for a minute. */
+let defaultSender: { until: number; id: string } | null = null;
+export async function inboxSenderId(): Promise<string> {
   if (defaultSender && defaultSender.until > Date.now()) return defaultSender.id;
-  const s = await prisma.communicationSender.findFirst({ where: { channel: "WHATSAPP", isDefault: true, enabled: true }, select: { id: true } });
-  defaultSender = { until: Date.now() + 60_000, id: s?.id ?? null };
+  const s = await prisma.communicationSender.findFirst({ where: { channel: "WHATSAPP", isDefault: true, enabled: true }, select: { id: true } }).catch(() => null);
+  defaultSender = { until: Date.now() + 60_000, id: s?.id ?? DEFAULT_SENDER_KEY };
   return defaultSender.id;
 }
+/** A message on the site's number: its own sender row, or no sender row at all (the runtime's default number). */
+const isSiteNumber = (sid: string, senderId: string | null | undefined) => !senderId || senderId === sid;
 
 /** The donor behind a phone number: their site language, name and account (best effort). */
 async function donorForPhone(phone: string): Promise<{ locale: string | null; name: string | null; userId: string | null }> {
@@ -67,7 +75,7 @@ async function donorForPhone(phone: string): Promise<{ locale: string | null; na
 /** A message arrived. Creates the conversation (with its language) or moves it to the top as unread. */
 export async function touchInbound(input: { senderId: string | null; phone: string; text: string | null; profileName?: string | null; at: Date }): Promise<void> {
   const sid = await inboxSenderId();
-  if (!sid || input.senderId !== sid || !input.phone) return; // only the site's own number
+  if (!isSiteNumber(sid, input.senderId) || !input.phone) return; // only the site's own number
   const id = `${sid}:${input.phone}`;
   const existing = rows(await raw({ find: COLLECTION, filter: { _id: id }, limit: 1 }))[0];
   const donor = existing ? null : await donorForPhone(input.phone);
@@ -84,14 +92,13 @@ export async function touchInbound(input: { senderId: string | null; phone: stri
 /** A reply left from the dashboard: the conversation is answered (read) and shows the reply. */
 export async function touchOutbound(input: { senderId: string | null; phone: string; text: string | null; at: Date }): Promise<void> {
   const sid = await inboxSenderId();
-  if (!sid || input.senderId !== sid) return;
+  if (!isSiteNumber(sid, input.senderId)) return;
   await raw({ update: COLLECTION, updates: [{ q: { _id: `${sid}:${input.phone}` }, u: { $set: { lastMessageAt: input.at, lastOutboundAt: input.at, lastPreview: preview(input.text), lastDirection: "out", unreadCount: 0, updatedAt: new Date() } } }] });
 }
 
 export type InboxFilter = { language?: InboxLanguage | "all"; view?: "all" | "mine" | "unread" | "done"; userId?: string | null; q?: string; limit?: number; before?: string | null };
 export async function listInboxConversations(f: InboxFilter): Promise<InboxConversation[]> {
   const sid = await inboxSenderId();
-  if (!sid) return [];
   const filter: Record<string, unknown> = { senderId: sid, status: f.view === "done" ? "DONE" : "OPEN" };
   if (f.language && f.language !== "all") filter.language = f.language;
   if (f.view === "mine") filter.assigneeId = f.userId ?? "__none__";
@@ -106,13 +113,19 @@ export async function listInboxConversations(f: InboxFilter): Promise<InboxConve
 export async function inboxCounts(userId: string | null): Promise<Record<InboxLanguage | "all" | "mine", number>> {
   const sid = await inboxSenderId();
   const out = { ar: 0, tr: 0, fr: 0, en: 0, all: 0, mine: 0 };
-  if (!sid) return out;
   const res = await raw({ aggregate: COLLECTION, pipeline: [{ $match: { senderId: sid, status: "OPEN", unreadCount: { $gt: 0 } } }, { $group: { _id: "$language", n: { $sum: 1 }, mine: { $sum: { $cond: [{ $eq: ["$assigneeId", userId] }, 1, 0] } } } }], cursor: {} });
   for (const r of rows(res)) { const l = String(r._id); if (isInboxLanguage(l)) out[l] = Number(r.n); out.all += Number(r.n); out.mine += Number(r.mine); }
   return out;
 }
 
-const ID = /^[a-f\d]{24}:\+?\d{6,16}$/;
+const ID = /^(?:[a-f\d]{24}|default):\+?\d{6,16}$/;
+/** "<sender>:<phone>" → its parts; null when it is not a conversation id. */
+export function parseInboxConversationId(id: string): { senderId: string | null; phone: string } | null {
+  if (!ID.test(id)) return null;
+  const at = id.indexOf(":"), sender = id.slice(0, at);
+  return { senderId: sender === DEFAULT_SENDER_KEY ? null : sender, phone: id.slice(at + 1) };
+}
+
 export async function updateInboxConversation(id: string, patch: { assigneeId?: string | null; assigneeName?: string | null; language?: unknown; read?: boolean; status?: unknown }): Promise<void> {
   if (!ID.test(id)) throw new Error("INVALID_ID");
   const $set: Record<string, unknown> = { updatedAt: new Date() };

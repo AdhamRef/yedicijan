@@ -131,11 +131,11 @@ export async function getBadgeIdsByUser(
   const result = new Map<string, string[]>();
   for (const id of userIds) result.set(id, []);
 
-  // Each badge is independent: evaluate them together, then attach in the badges' own order (Minber #266).
+  // Each badge is independent: evaluate them together, then attach in the badges' own order (2026-11-20).
   const matches = await Promise.all(badges.map((badge) => getUserIdsMatchingBadge(badge.criteria)));
   badges.forEach((badge, index) => {
-    for (const uid of matches[index]) {
-      if (result.has(uid)) result.get(uid)!.push(badge.id);
+    for (const userId of matches[index]) {
+      result.get(userId)?.push(badge.id);
     }
   });
   return result;

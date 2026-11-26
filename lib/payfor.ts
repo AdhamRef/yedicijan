@@ -77,9 +77,6 @@ export function payForResponseHash(response: Record<string, unknown>, merchantPa
   return crypto.createHash("sha1").update(raw, "utf8").digest("base64");
 }
 
-/** Written to providerErrorMessage when an approval callback's ResponseHash does not verify. */
-export const PAYFOR_UNVERIFIED_APPROVAL = "ResponseHash mismatch on approval callback";
-
 /** True only when the callback carries a `ResponseHash` that matches our own computation. */
 export function verifyPayForResponseHash(
   response: Record<string, unknown>,
@@ -113,12 +110,4 @@ export function verifyPayForRequestEcho(response: Record<string, unknown>, merch
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-/** The bank's own reason for a decline. PayFor sends it as `ErrMsg`, not `ErrorMessage`. */
-export function payForErrorMessage(response: Record<string, unknown>): string {
-  for (const key of ["ErrMsg", "ErrorMessage", "errorMessage", "ErrorData"]) {
-    const value = String(response[key] ?? "").trim();
-    if (value) return value.slice(0, 300);
-  }
-  return "";
-}
 

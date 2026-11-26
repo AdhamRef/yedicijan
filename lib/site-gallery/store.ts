@@ -2,12 +2,12 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma";
-import { GALLERY_PUBLIC_LIMIT, isGalleryImageUrl, type GalleryCaptions, type GalleryImage, type PublicGalleryImage } from "./shared";
+import { GALLERY_LOCALES, GALLERY_PUBLIC_LIMIT, isGalleryImageUrl, type GalleryCaptions, type GalleryImage, type PublicGalleryImage } from "./shared";
 
 const COLLECTION = "SiteGalleryImage";
 const raw = (cmd: Record<string, unknown>) => prisma.$runCommandRaw(cmd as Prisma.InputJsonObject);
 const rows = (r: unknown) => ((r as { cursor?: { firstBatch?: Record<string, unknown>[] } })?.cursor?.firstBatch ?? []);
-const LOCALES = ["ar", "tr", "en", "fr"] as const;
+const LOCALES = GALLERY_LOCALES;
 
 export function cleanCaptions(input: unknown): GalleryCaptions {
   const out: GalleryCaptions = {};

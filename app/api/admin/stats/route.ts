@@ -1,5 +1,6 @@
-import { mergeDonationSourceFilter } from "@/lib/dashboard/donation-source-filter";
 import { NextRequest, NextResponse } from 'next/server';
+import { mergeDonationSourceFilter } from '@/lib/dashboard/donation-source-filter';
+import { campaignCategoryWhere, donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere, idOrIn } from '@/lib/dashboard/donation-multi-filter';
 import { prisma } from '@/lib/prisma';
 import { getCurrentCalendarMonthIstanbulRange } from '@/lib/admin/current-calendar-month-utc';
 import { getServerSession } from 'next-auth';
@@ -45,13 +46,12 @@ function buildDonationWhere(
 ) {
   const dateFilter = { createdAt: { gte: startDate, lte: endDate } };
   const base: Record<string, unknown> = { ...dateFilter };
-  if (campaignId && campaignId !== 'all') {
-    base.items = { some: { campaignId } };
-  } else if (categoryId && categoryId !== 'all') {
-    base.OR = [
-      { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-      { categoryItems: { some: { categoryId } } },
-    ];
+  const campaignScope = donationCampaignWhere(campaignId);
+  const categoryScope = donationCategoryWhere(categoryId);
+  if (campaignScope) {
+    base.items = campaignScope.items;
+  } else if (categoryScope) {
+    base.OR = categoryScope.OR;
   }
   return base;
 }
@@ -59,33 +59,25 @@ function buildDonationWhere(
 /** Same filters as buildDonationWhere but no date — all-time إيرادات (donation amountUSD sum) */
 function buildDonationWhereAllTime(categoryId: string | null, campaignId: string | null) {
   const base: Record<string, unknown> = {};
-  if (campaignId && campaignId !== 'all') {
-    base.items = { some: { campaignId } };
-  } else if (categoryId && categoryId !== 'all') {
-    base.OR = [
-      { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-      { categoryItems: { some: { categoryId } } },
-    ];
+  const campaignScope = donationCampaignWhere(campaignId);
+  const categoryScope = donationCategoryWhere(categoryId);
+  if (campaignScope) {
+    base.items = campaignScope.items;
+  } else if (categoryScope) {
+    base.OR = categoryScope.OR;
   }
   return base;
 }
 
+// One value gives the same condition as before; "a,b" means any of them (#282).
 function mergeLocaleFilter(where: Record<string, unknown>, locale: string | null): Record<string, unknown> {
-  if (!locale || locale === 'all') return where;
-  const lw =
-    locale === '__unset'
-      ? { OR: [{ locale: null }, { locale: '' }] }
-      : { locale };
-  return { AND: [where, lw] };
+  const lw = donationLocaleWhere(locale);
+  return lw ? { AND: [where, lw] } : where;
 }
 
 function mergeCountryFilter(where: Record<string, unknown>, country: string | null): Record<string, unknown> {
-  if (!country || country === 'all') return where;
-  const cw =
-    country === '__unset'
-      ? { OR: [{ donorCountryCode: null }, { donorCountryCode: '' }] }
-      : { donorCountryCode: country.toUpperCase() };
-  return { AND: [where, cw] };
+  const cw = donationCountryWhere(country);
+  return cw ? { AND: [where, cw] } : where;
 }
 
 function mergeFilters(
@@ -94,7 +86,7 @@ function mergeFilters(
   country: string | null,
   source: string | null = null
 ) {
-  // source: the donation-source filter (Minber #287) — the chart, list and export applied it; the KPIs did not.
+  // source: the donation-source filter — the chart, list and export applied it; the KPIs did not (#287).
   return mergeDonationSourceFilter(mergeCountryFilter(mergeLocaleFilter(where, locale), country), source);
 }
 
@@ -115,10 +107,12 @@ function buildDonationItemWhere(
       source
     ),
   };
-  if (campaignId && campaignId !== 'all') {
-    base.campaignId = campaignId;
-  } else if (categoryId && categoryId !== 'all') {
-    base.campaign = { categoryIds: { has: categoryId } };
+  const campaignIds = idOrIn(campaignId);
+  const inCategory = campaignCategoryWhere(categoryId);
+  if (campaignIds) {
+    base.campaignId = campaignIds;
+  } else if (inCategory) {
+    base.campaign = inCategory;
   }
   return base;
 }
@@ -139,8 +133,9 @@ function buildDonationCategoryItemWhere(
       source
     ),
   };
-  if (categoryId && categoryId !== 'all') {
-    base.categoryId = categoryId;
+  const categoryIds = idOrIn(categoryId);
+  if (categoryIds) {
+    base.categoryId = categoryIds;
   }
   return base;
 }
@@ -192,6 +187,19 @@ export async function GET(request: NextRequest) {
       source
     );
     const thisMonthPaidWhere = donationWhereAll(thisMonthDonationWhere, PAID_DONATION_FILTER);
+
+    // Independent reads start now and run alongside the block below (same queries, same results; only overlapped).
+    const supportFeesP = prisma.donation.findMany({
+      where: paidWhere,
+      select: { amountUSD: true, amount: true, currency: true, totalAmount: true, teamSupport: true, fees: true },
+      take: 100000,
+    });
+    /** All successful charges ever — ignores period / category / campaign query filters */
+    const globalPaidWhere = { ...PAID_DONATION_FILTER };
+    const globalPaidAggP = prisma.donation.aggregate({ _sum: { amountUSD: true }, where: globalPaidWhere });
+    const globalCountsP = prisma.donation.count({ where: globalPaidWhere });
+    // A rejected early read is awaited below; until then it must not surface as an unhandled rejection.
+    for (const p of [supportFeesP, globalPaidAggP, globalCountsP]) p.catch(() => undefined);
 
     const [
       totalCampaigns,
@@ -300,11 +308,7 @@ export async function GET(request: NextRequest) {
     const campaignDonationsCount = campaignDonationsSum._count?.id ?? 0;
     const categoryDonationsCount = categoryDonationsSum._count?.id ?? 0;
 
-    const donationsForSupportFees = await prisma.donation.findMany({
-      where: paidWhere,
-      select: { amountUSD: true, amount: true, currency: true, totalAmount: true, teamSupport: true, fees: true },
-      take: 100000,
-    });
+    const donationsForSupportFees = await supportFeesP;
     const toUSD = (
       rows: {
         amountUSD: number | null;
@@ -356,12 +360,9 @@ export async function GET(request: NextRequest) {
 
     const failedTotalAmount = failedTotalResult._sum?.amountUSD ?? 0;
 
-    /** All successful charges ever — ignores period / category / campaign query filters */
-    const globalPaidWhere = { ...PAID_DONATION_FILTER };
-    let paidRevenueAllTimeUnfiltered =
-      (await prisma.donation.aggregate({ _sum: { amountUSD: true }, where: globalPaidWhere }))._sum?.amountUSD ?? 0;
+    let paidRevenueAllTimeUnfiltered = (await globalPaidAggP)._sum?.amountUSD ?? 0;
     if (paidRevenueAllTimeUnfiltered === 0) {
-      const globalPaidCount = await prisma.donation.count({ where: globalPaidWhere });
+      const globalPaidCount = await globalCountsP;
       if (globalPaidCount > 0) {
         paidRevenueAllTimeUnfiltered = await donationUsdSumFallback(globalPaidWhere);
       }
@@ -371,7 +372,7 @@ export async function GET(request: NextRequest) {
     // NOT affected by the period/category/campaign filters. The filtered `paidCount` above
     // cannot be shown next to that claim — on a filtered view it would quietly contradict
     // the figure it sits beside.
-    const paidCountAllTimeUnfiltered = await prisma.donation.count({ where: globalPaidWhere });
+    const paidCountAllTimeUnfiltered = await globalCountsP;
 
     return NextResponse.json({
       totalCampaigns,

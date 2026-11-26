@@ -68,7 +68,7 @@ export function dueRenewals(items: ServiceRenewal[], now = new Date()): Array<Se
 /** The services the site was found to depend on (dates and amounts are entered by the team). */
 export const DEFAULT_SERVICES: Array<Pick<ServiceRenewal, "name" | "provider" | "cycle" | "billingUrl" | "notes"> & { auto?: "SSL" }> = [
   { name: "الخادم (VPS)", provider: "Radore", cycle: "MONTHLY", billingUrl: "https://www.radore.com", notes: "يتوقف الموقع كاملاً إن انتهى." },
-  { name: "النطاق minberiaksa.org", provider: "مسجّل النطاق", cycle: "YEARLY", billingUrl: null, notes: "يتوقف الموقع والبريد إن انتهى." },
+  { name: "النطاق yedicihan.org", provider: "مسجّل النطاق", cycle: "YEARLY", billingUrl: null, notes: "يتوقف الموقع والبريد إن انتهى." },
   { name: "قاعدة البيانات", provider: "MongoDB Atlas", cycle: "MONTHLY", billingUrl: "https://cloud.mongodb.com", notes: "كل بيانات التبرعات والمتبرعين." },
   { name: "الصور والملفات", provider: "Cloudinary", cycle: "MONTHLY", billingUrl: "https://console.cloudinary.com", notes: "تختفي صور الموقع إن توقف." },
   { name: "البريد الإلكتروني", provider: "Elastic Email", cycle: "MONTHLY", billingUrl: "https://app.elasticemail.com", notes: "الإيصالات والشهادات وحملات البريد." },

@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 const COLLECTION = "DashboardSavedView";
 type Raw = { _id: { $oid: string } | string; name: string; filters: Record<string, string>; shared?: boolean; ownerId?: string; ownerName?: string | null };
 const rid = (v: Raw["_id"]) => (typeof v === "string" ? v : v.$oid);
-const KEYS = ["selectedCategory", "selectedCampaign", "donationSourceFilter", "donationLocaleFilter", "donationCountryFilter", "donationProviderFilter", "donationsStatusFilter", "donationsTypeFilter", "chartPeriod", "dateFrom", "dateTo"];
+// Yedicihan's home filters (no payment-gateway or donation-type filter here).
+const KEYS = ["selectedCategory", "selectedCampaign", "donationSourceFilter", "donationLocaleFilter", "donationCountryFilter", "donationsStatusFilter", "chartPeriod", "dateFrom", "dateTo"];
 
 async function gate() {
   const session = await getServerSession(authOptions);

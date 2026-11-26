@@ -199,6 +199,8 @@ export async function listConversations(opts: { senderId?: string | null } = {})
 }
 
 export type TimelineItem = {
+  /** Stable key for the UI (the event or delivery id). */
+  id: string;
   kind: "inbound" | "outbound" | "status";
   at: string | null;
   text: string | null;
@@ -219,25 +221,27 @@ export async function getConversation(phone: string): Promise<ConversationDetail
   const variants = [target, `+${target}`];
 
   const [events, deliveries, donorMap, senders] = await Promise.all([
-    prisma.communicationProviderEvent.findMany({ where: { channel: "WHATSAPP", recipient: { in: variants } }, orderBy: { receivedAt: "asc" }, take: 500, select: { eventType: true, receivedAt: true, status: true, payloadSanitized: true, senderId: true } }).catch(() => []),
-    prisma.communicationDelivery.findMany({ where: { channel: "WHATSAPP", recipientPhone: { in: variants } }, orderBy: { createdAt: "asc" }, take: 500, select: { createdAt: true, renderedBody: true, status: true, senderId: true } }).catch(() => []),
+    prisma.communicationProviderEvent.findMany({ where: { channel: "WHATSAPP", recipient: { in: variants } }, orderBy: { receivedAt: "desc" }, take: 300, select: { id: true, eventType: true, receivedAt: true, status: true, errorMessage: true, payloadSanitized: true, senderId: true } }).catch(() => []),
+    prisma.communicationDelivery.findMany({ where: { channel: "WHATSAPP", recipientPhone: { in: variants } }, orderBy: { createdAt: "desc" }, take: 300, select: { id: true, createdAt: true, renderedBody: true, status: true, senderId: true } }).catch(() => []),
     matchDonors([target]),
     senderMap(),
   ]);
 
   const timeline: TimelineItem[] = [];
   for (const d of deliveries) {
-    timeline.push({ kind: "outbound", at: d.createdAt?.toISOString() ?? null, text: d.renderedBody ?? null, status: d.status });
+    timeline.push({ id: `delivery:${d.id}`, kind: "outbound", at: d.createdAt?.toISOString() ?? null, text: d.renderedBody ?? null, status: d.status });
   }
   // Resolve the number this conversation arrived on: most recent inbound event with a senderId, else outbound.
   let senderId: string | null = null;
   let senderAt = 0;
   for (const ev of events) {
     if (ev.eventType === "inbound_message") {
-      const p = ev.payloadSanitized as { text?: unknown } | null;
-      timeline.push({ kind: "inbound", at: ev.receivedAt?.toISOString() ?? null, text: p && typeof p.text === "string" ? p.text : null, status: null });
+      const p = ev.payloadSanitized as { text?: unknown; messageType?: unknown } | null;
+      // A photo, voice note or file shows as its type: the message itself stays on the donor's phone.
+      const text = p && typeof p.text === "string" ? p.text : p && typeof p.messageType === "string" && p.messageType ? `[${p.messageType}]` : null;
+      timeline.push({ id: `event:${ev.id}`, kind: "inbound", at: ev.receivedAt?.toISOString() ?? null, text, status: null });
     } else {
-      timeline.push({ kind: "status", at: ev.receivedAt?.toISOString() ?? null, text: null, status: ev.status ?? ev.eventType });
+      timeline.push({ id: `event:${ev.id}`, kind: "status", at: ev.receivedAt?.toISOString() ?? null, text: ev.errorMessage ?? null, status: ev.status ?? ev.eventType });
     }
     const at = ev.receivedAt?.getTime() ?? 0;
     if (ev.senderId && at >= senderAt) { senderId = ev.senderId; senderAt = at; }

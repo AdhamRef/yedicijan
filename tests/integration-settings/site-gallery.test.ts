@@ -22,10 +22,12 @@ test("sized variants: site thumbnail, full view, and a plain 600 px JPEG for e-m
   assert.match(html, /^<img src="https:\/\/res\.cloudinary\.com\/.*f_jpg.*" width="600" alt="a quoted bcaption\/b" style="/);
 });
 
-test("titles in four languages, English for the rest; captions fall back sensibly", () => {
+// Yedicihan: titles and captions in its eight enabled site languages (Minber: four).
+test("titles in every enabled language, English for the rest; captions fall back sensibly", () => {
   assert.equal(galleryTexts("ar").title, "لقطات من الميدان");
   assert.equal(galleryTexts("tr").title, "Sahadan Kareler");
-  assert.equal(galleryTexts("de").title, galleryTexts("en").title);
+  for (const l of ["fr", "id", "pt", "es", "de"]) assert.notEqual(galleryTexts(l).title, galleryTexts("en").title, l);
+  assert.equal(galleryTexts("ru").title, galleryTexts("en").title);
   assert.equal(galleryCaption({ ar: "غزة", en: "Gaza" }, "fr"), "Gaza");
   assert.equal(galleryCaption({ ar: "غزة" }, "tr"), "غزة");
 });
@@ -98,12 +100,15 @@ test("the site shows at most 12 images", async () => {
   assert.equal((await s.publicGallery()).length, 12);
 });
 
-test("wiring: admin-only management, public read-only list, gallery above the footer", () => {
+test("wiring: admin-only management, public read-only list, gallery above the footer, translated manager", () => {
   const admin = fs.readFileSync("app/api/admin/site-gallery/route.ts", "utf8");
   assert.equal((admin.match(/const \{[^}]*denied[^}]*\} = await admin\(\);\s*\n\s*if \(denied\) return denied;/g) ?? []).length, 4, "GET, POST, PATCH, DELETE are admin-only");
   assert.doesNotMatch(fs.readFileSync("app/api/site-gallery/route.ts", "utf8"), /export async function (POST|PATCH|DELETE)/);
   const layout = fs.readFileSync("app/[locale]/layout.tsx", "utf8");
-  assert.match(layout, /\{children\}\s*<\/main>\r?\n\s*<FieldGallery locale=\{locale\} \/>/);
+  assert.match(layout, /<\/main>\r?\n\s*<FieldGallery locale=\{locale\} \/>\r?\n\s*<Footer \/>/);
   assert.match(fs.readFileSync("app/(dashboard)/dashboard/gallery/page.tsx", "utf8"), /role !== "ADMIN"\) redirect/);
-  // No dashboard translation catalog in this repo (Arabic-only dashboard): the catalog check is removed.
+  // Yedicihan's dashboard is Arabic only: the manager edits a caption per enabled site language instead.
+  const ui = fs.readFileSync("app/(dashboard)/dashboard/gallery/GalleryManager.tsx", "utf8");
+  assert.match(ui, /const LOCALES = GALLERY_LOCALES;/);
+  assert.match(fs.readFileSync("lib/dashboard/nav-config.ts", "utf8"), /href: "\/dashboard\/gallery", icon: "images", adminOnly: true/);
 });

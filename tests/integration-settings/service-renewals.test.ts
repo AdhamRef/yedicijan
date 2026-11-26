@@ -84,11 +84,16 @@ test("bad input is refused, and only the last four card digits are ever accepted
   assert.equal(s.cleanRenewal({ name: "A", cycle: "YEARLY", currency: "try" }, false).currency, "TRY");
 });
 
-test("wiring: admin-only API and page, banner in the dashboard layout", () => {
+test("wiring: admin-only API and page, banner in the dashboard layout, translated", () => {
   const api = fs.readFileSync("app/api/admin/service-renewals/route.ts", "utf8");
   assert.equal((api.match(/const \{[^}]*denied[^}]*\} = await admin\(\);\s*\n\s*if \(denied\) return denied;/g) ?? []).length, 4);
   assert.match(fs.readFileSync("app/(dashboard)/dashboard/renewals/page.tsx", "utf8"), /role !== "ADMIN"\) redirect/);
   const layout = fs.readFileSync("app/(dashboard)/dashboard/layout.tsx", "utf8");
   assert.match(layout, /<RenewalAlerts \/>\{children\}/);
-  // No dashboard translation catalog in this repo (Arabic-only dashboard): the catalog check is removed.
+  // Yedicihan: Arabic-only dashboard (no en/tr catalogs); its own domain, not Minber's.
+  assert.match(fs.readFileSync("lib/dashboard/nav-config.ts", "utf8"), /href: "\/dashboard\/renewals", icon: "repeat", adminOnly: true/);
+  for (const f of ["lib/service-renewals/shared.ts", "lib/service-renewals/store.ts"]) {
+    assert.doesNotMatch(fs.readFileSync(f, "utf8"), /minberiaksa/i, f);
+  }
+  assert.match(fs.readFileSync("lib/service-renewals/shared.ts", "utf8"), /النطاق yedicihan\.org/);
 });

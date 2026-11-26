@@ -1,9 +1,10 @@
-import RenewalAlerts from "@/components/dashboard/RenewalAlerts";
+import "@/styles/dashboard-utilities.css";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import DashboardLayoutClient from "./DashboardLayoutClient";
+import RenewalAlerts from "@/components/dashboard/RenewalAlerts";
 import ar from "../../../i18n/messages/ar.json";
 
 export const metadata: Metadata = {

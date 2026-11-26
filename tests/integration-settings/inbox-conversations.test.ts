@@ -35,6 +35,7 @@ test("order: the site profile, then the text, then the phone, then English", () 
 
 type Doc = Record<string, unknown>;
 type Store = {
+  parseInboxConversationId: (id: string) => { senderId: string | null; phone: string } | null;
   touchInbound: (i: { senderId: string | null; phone: string; text: string | null; profileName?: string | null; at: Date }) => Promise<void>;
   touchOutbound: (i: { senderId: string | null; phone: string; text: string | null; at: Date }) => Promise<void>;
   listInboxConversations: (f: Record<string, unknown>) => Promise<Array<{ id: string; language: string; unreadCount: number; lastPreview: string; lastDirection: string; assigneeId: string | null }>>;
@@ -42,7 +43,7 @@ type Store = {
   updateInboxConversation: (id: string, p: Record<string, unknown>) => Promise<void>;
 };
 const SID = "aaaaaaaaaaaaaaaaaaaaaaaa", OTHER = "bbbbbbbbbbbbbbbbbbbbbbbb";
-function loadStore(db: Record<string, Doc[]>): Store {
+function loadStore(db: Record<string, Doc[]>, senderRow: { id: string } | null = { id: SID }): Store {
   const js = (f: string) => ts.transpileModule(fs.readFileSync(f, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const lang: { exports: Record<string, unknown> } = { exports: {} };
   vm.runInNewContext(js("lib/communication/inbox-language.ts"), { module: lang, exports: lang.exports, String });
@@ -68,7 +69,7 @@ function loadStore(db: Record<string, Doc[]>): Store {
         return { cursor: { firstBatch: [...g].map(([k, v]) => ({ _id: k, ...v })) } }; }
       throw new Error("unsupported");
     },
-    communicationSender: { findFirst: async () => ({ id: SID }) },
+    communicationSender: { findFirst: async () => senderRow },
     donorCommunicationProfile: { findFirst: async (a: { where: { phone: { in: string[] } } }) => (a.where.phone.in.includes("+33612345678") ? { preferredLocale: "fr", userId: "u1" } : null) },
     user: { findUnique: async () => ({ name: "Amina" }) },
   };
@@ -113,7 +114,32 @@ test("assign, move between tabs, mark read and done; bad input is refused", asyn
 test("wiring: fail-safe hooks on receive and reply; the API uses the inbox permission", () => {
   const w = fs.readFileSync("lib/communication/webhook-service.ts", "utf8");
   assert.match(w, /void import\("\.\/inbox-conversations"\)\s*\n\s*\.then\(\(m\) => m\.touchInbound\([\s\S]*?\.catch\(\(\) => undefined\);/);
-  // No conversation-reply-service in this repo yet (no inbox replies), so the outbound hook check is left out.
+  assert.match(fs.readFileSync("lib/communication/conversation-reply-service.ts", "utf8"), /m\.touchOutbound\([\s\S]*?\.catch\(\(\) => undefined\);\s*\n\s*return \{ ok: true, deliveryId/);
   const api = fs.readFileSync("app/api/dashboard/communication/inbox/conversations/route.ts", "utf8");
   assert.equal((api.match(/requireAdminOrDashboardPermission\(session, "messages"\)/g) ?? []).length, 2);
+});
+
+// Yedicihan: the site's number may have no sender row (the Meta runtime's default number), so a message with
+// no sender id belongs to the site too; with no default sender row at all, conversations are filed under "default".
+test("Yedicihan: messages without a sender row reach the site's conversations", async () => {
+  const db: Record<string, Doc[]> = {}, s = loadStore(db);
+  await s.touchInbound({ senderId: null, phone: "+905551234567", text: "Merhaba", at: new Date() });
+  assert.equal((await s.listInboxConversations({})).length, 1);
+  assert.equal(db.InboxConversation[0]._id, `${SID}:+905551234567`);
+
+  const db2: Record<string, Doc[]> = {}, s2 = loadStore(db2, null);
+  await s2.touchInbound({ senderId: null, phone: "+966501234567", text: "السلام عليكم", at: new Date() });
+  await s2.touchInbound({ senderId: OTHER, phone: "+966501234568", text: "x", at: new Date() });
+  const list = await s2.listInboxConversations({});
+  assert.deepEqual(list.map((c) => c.id), ["default:+966501234567"], "another number's sender row is still not ours");
+  assert.equal(list[0].language, "ar");
+  await s2.updateInboxConversation("default:+966501234567", { read: true });
+  assert.equal((await s2.listInboxConversations({ view: "unread" })).length, 0);
+});
+
+test("Yedicihan: conversation ids parse to the sender and the phone", () => {
+  const s = loadStore({});
+  assert.deepEqual(JSON.parse(JSON.stringify(s.parseInboxConversationId(`${SID}:+905551234567`))), { senderId: SID, phone: "+905551234567" });
+  assert.deepEqual(JSON.parse(JSON.stringify(s.parseInboxConversationId("default:+905551234567"))), { senderId: null, phone: "+905551234567" });
+  for (const bad of ["", "default", "x:+90555", "default:+90abc", `${SID}:+1`]) assert.equal(s.parseInboxConversationId(bad), null, bad);
 });

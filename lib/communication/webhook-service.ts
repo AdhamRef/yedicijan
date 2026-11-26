@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { markDeliveryStatus } from "./delivery-log-service";
-import { normalizePhoneE164 } from "./phone";
 import type { NormalizedWebhookEvent } from "./providers/meta-whatsapp/types";
 
 /**
@@ -61,12 +60,6 @@ async function recordEvent(data: {
   }
 }
 
-function messageEventTime(timestamp: number | null): Date {
-  const now = Date.now();
-  const milliseconds = timestamp === null ? NaN : timestamp * 1000;
-  return new Date(Number.isFinite(milliseconds) && milliseconds > 0 && milliseconds <= now + 300_000 ? milliseconds : now);
-}
-
 export async function processWhatsappEvents(events: NormalizedWebhookEvent[]): Promise<WebhookProcessSummary> {
   const summary: WebhookProcessSummary = { received: events.length, processed: 0, duplicates: 0, deliveryUpdates: 0, inbound: 0 };
   if (!process.env.DATABASE_URL) return summary;
@@ -106,6 +99,19 @@ export async function processWhatsappEvents(events: NormalizedWebhookEvent[]): P
         const patch = event.status === "FAILED" ? { providerMessageId: event.providerMessageId, errorMessage: event.errorMessage } : { providerMessageId: event.providerMessageId };
         const res = await markDeliveryStatus(delivery.id, event.status, patch);
         if (res.ok) summary.deliveryUpdates += 1;
+        // Meta 131050: the recipient stopped our marketing inside WhatsApp itself — the same as pressing STOP
+        // (Minber al-Aqsa #273). Yedicihan's campaigns send only to whatsappOptIn profiles, so the opt-in is
+        // switched off for that number. Fail-safe: never blocks processing the webhook.
+        const recipient = (event as { recipient?: string | null }).recipient;
+        if (event.status === "FAILED" && /\b131050\b/.test(String(event.errorMessage ?? "")) && recipient) {
+          const digits = recipient.replace(/\D/g, "");
+          await Promise.resolve()
+            .then(() => prisma.donorCommunicationProfile.updateMany({
+              where: { phone: { in: [...new Set([recipient, "+" + digits, digits])] } },
+              data: { whatsappOptIn: false, consentSource: "meta-whatsapp-131050-stop", lastConsentAt: new Date() },
+            }))
+            .catch((error) => console.error("[whatsapp-webhook] 131050 opt-out not recorded:", error instanceof Error ? error.message : "unknown"));
+        }
       }
       continue;
     }
@@ -135,10 +141,11 @@ export async function processWhatsappEvents(events: NormalizedWebhookEvent[]): P
     }
     summary.processed += 1;
     summary.inbound += 1;
-    // Inbox conversation layer (language tab, unread, ordering). Lazy and fail-safe: never blocks receiving.
-    const contact = normalizePhoneE164(event.from) ?? event.from;
+    // WhatsApp conversations layer (Minber al-Aqsa #249): language tab, unread, ordering. Lazy and fail-safe: never blocks receiving.
+    const contactDigits = String(event.from ?? "").replace(/\D/g, "");
+    const contact = contactDigits.length >= 6 ? `+${contactDigits}` : null;
     if (contact) void import("./inbox-conversations")
-      .then((m) => m.touchInbound({ senderId, phone: contact, text: event.text ?? (event.messageType ? `[${event.messageType}]` : null), profileName: event.profileName ?? null, at: messageEventTime(event.timestamp) }))
+      .then((m) => m.touchInbound({ senderId, phone: contact, text: event.text ?? (event.messageType ? `[${event.messageType}]` : null), profileName: event.profileName ?? null, at: event.timestamp ? new Date(event.timestamp * 1000) : new Date() }))
       .catch(() => undefined);
 
     // Mark the most recent outbound delivery to this contact as REPLIED (best-effort).

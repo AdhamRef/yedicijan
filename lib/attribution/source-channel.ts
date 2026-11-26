@@ -8,7 +8,7 @@
 export const SOURCE_CHANNELS = ["facebook", "instagram", "whatsapp", "email", "google_ads", "google_search", "tiktok", "direct", "other", "unknown"] as const;
 export type SourceChannel = (typeof SOURCE_CHANNELS)[number];
 
-const OWN_HOSTS = /(^|\.)minberiaksa\.org$/i;
+const OWN_HOSTS = /(^|\.)yedicihan\.org$/i;
 const PAYMENT_HOSTS = /(paypal\.com|stripe\.com|albaraka|payfor|qnb|3dsecure|acs\.|bkm\.com\.tr)/i;
 
 function str(v: unknown): string { return typeof v === "string" ? v.trim().toLowerCase() : ""; }

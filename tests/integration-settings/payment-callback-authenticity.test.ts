@@ -6,8 +6,8 @@ import { payForHash, verifyPayForRequestEcho } from "../../lib/payfor";
 const PASS = "merchant-pass-fixture";
 const ID = "6af674e2d1cd34cbb9de7d1a";
 const echo = (over: Record<string, string> = {}) => {
-  const f = { MbrId: "5", OrderId: ID, PurchAmount: "250.00", OkUrl: `https://minberiaksa.org/api/payfor/3dpay/ok?donationId=${ID}&locale=ar`,
-    FailUrl: `https://minberiaksa.org/api/payfor/3dpay/fail?donationId=${ID}&locale=ar`, TxnType: "Auth", InstallmentCount: "0", Rnd: "1763460000000", ProcReturnCode: "V034", ...over };
+  const f = { MbrId: "5", OrderId: ID, PurchAmount: "250.00", OkUrl: `https://www.yedicihan.org/api/payfor/3dpay/ok?donationId=${ID}&locale=ar`,
+    FailUrl: `https://www.yedicihan.org/api/payfor/3dpay/fail?donationId=${ID}&locale=ar`, TxnType: "Auth", InstallmentCount: "0", Rnd: "1763460000000", ProcReturnCode: "V034", ...over };
   const Hash = payForHash({ mbrId: f.MbrId, orderId: f.OrderId, purchAmount: f.PurchAmount, okUrl: f.OkUrl, failUrl: f.FailUrl, txnType: f.TxnType, installmentCount: f.InstallmentCount, rnd: f.Rnd, merchantPass: PASS });
   return { ...f, Hash };
 };
@@ -27,11 +27,12 @@ test("a forged or altered echo is not: other order, other amount, no hash, wrong
 });
 
 const read = (p: string) => fs.readFileSync(p, "utf8");
-test("OK callback: genuineness is checked before ANY status change; approvals still need the bank's signature", () => {
+// Yedicihan: Minber's separate approval-only ResponseHash rule predates #253 and is not part of this port.
+test("OK callback: genuineness is checked before ANY status change", () => {
   const s = read("app/api/payfor/3dpay/ok/route.ts");
-  const gate = s.indexOf("if (!genuine) {"), firstFailed = s.indexOf('status: "FAILED"'), approvalCheck = s.indexOf("if (!verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS)) {");
+  const gate = s.indexOf("if (!genuine) {"), firstFailed = s.indexOf('status: "FAILED"'), firstPaid = s.indexOf('status: "PAID"');
   assert.ok(gate > 0 && gate < firstFailed, "the gate precedes every FAILED write");
-  assert.ok(approvalCheck > gate, "the approval-specific bank signature check is kept");
+  assert.ok(gate < firstPaid, "the gate precedes the PAID write");
   assert.match(s, /orderId === donation\.id \|\| \(!!donation\.providerOrderId && orderId === donation\.providerOrderId\)/);
 });
 
@@ -41,5 +42,13 @@ test("FAIL callback: only a genuine callback marks FAILED and messages the donor
   assert.ok(s.indexOf("const genuine") < s.indexOf('dispatchEvent("DONATION_FAILED"'));
 });
 
-// The browser-reported failure check (#253's access rule on /api/donations/[id]/fail) is not ported here:
-// this repo's checkout does not send a guest token, so guest failure reports would be refused (owner decision).
+// Yedicihan has no separate donation access tokens: the donation id is the guest's access,
+// a signed-in user must own the donation, staff may act on any.
+test("browser-reported failure: access is checked before the donation is touched", () => {
+  const r = read("app/api/donations/[id]/fail/route.ts");
+  const gate = r.indexOf("await authorizeDonationAccess(id)");
+  assert.ok(gate > 0 && gate < r.indexOf("prisma.donation.findUnique"));
+  const a = read("lib/donations/donation-access.ts");
+  assert.ok(a.includes("if (!session) return { allowed: true };"));
+  assert.ok(a.includes("return { allowed: staff || session.user.id === row.donorId };"));
+});

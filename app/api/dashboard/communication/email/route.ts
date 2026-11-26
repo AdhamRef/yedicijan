@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
-import { rawCountDeliveries, rawCountProviderEvents, rawFindDeliveries, rawGroupByDeliveries } from "@/lib/communication/delivery-raw-query";
+import { fastCountDeliveries, fastCountProviderEvents, fastFindDeliveries, fastGroupByDeliveries } from "@/lib/communication/delivery-fast-query";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { RETRYABLE_STATUSES } from "@/lib/communication/communication-runtime-types";
 
@@ -92,16 +92,16 @@ export async function GET(request: NextRequest) {
       byTemplate,
       retryableCount,
     ] = await Promise.all([
-      rawCountDeliveries({ where: rangeWhere }),
-      rawGroupByDeliveries({ by: ["status"], where: rangeWhere, _count: { _all: true } }),
-      rawCountDeliveries({ where: { ...rangeWhere, deliveredAt: { not: null } } }),
-      rawCountDeliveries({ where: { ...rangeWhere, openedAt: { not: null } } }),
-      rawCountDeliveries({ where: { ...rangeWhere, clickedAt: { not: null } } }),
-      rawCountDeliveries({ where: { ...rangeWhere, status: { in: [...FAILED_STATUSES] } } }),
+      fastCountDeliveries({ where: rangeWhere }),
+      fastGroupByDeliveries({ by: ["status"], where: rangeWhere, _count: { _all: true } }),
+      fastCountDeliveries({ where: { ...rangeWhere, deliveredAt: { not: null } } }),
+      fastCountDeliveries({ where: { ...rangeWhere, openedAt: { not: null } } }),
+      fastCountDeliveries({ where: { ...rangeWhere, clickedAt: { not: null } } }),
+      fastCountDeliveries({ where: { ...rangeWhere, status: { in: [...FAILED_STATUSES] } } }),
       // Zero means no webhook event has EVER been stored — engagement metrics are blind, not zero.
-      rawCountProviderEvents({}),
-      rawCountDeliveries({ where: { channel: CHANNEL } }),
-      rawFindDeliveries({
+      fastCountProviderEvents(),
+      fastCountDeliveries({ where: { channel: CHANNEL } }),
+      fastFindDeliveries({
         where: listWhere,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
@@ -113,15 +113,15 @@ export async function GET(request: NextRequest) {
           openedAt: true, clickedAt: true, failedAt: true, retriedAt: true,
         },
       }),
-      rawCountDeliveries({ where: listWhere }),
+      fastCountDeliveries({ where: listWhere }),
       // No `orderBy: { _count: … }` here: on MongoDB it comes back in the wrong order (verified —
       // it returned ascending), which combined with `take` would silently return the *least* used
       // templates. Sorted in JS below instead; the distinct-template count is tiny.
-      rawGroupByDeliveries({ by: ["templateName"], where: rangeWhere, _count: { _all: true } }),
+      fastGroupByDeliveries({ by: ["templateName"], where: rangeWhere, _count: { _all: true } }),
       // Re-sendable backlog. BOUNCED is excluded (a bounce is not fixed by sending again), and rows
       // already retried are excluded — on MongoDB `null` matches only an explicit null, so documents
       // written before the field existed need the `isSet: false` arm or none of them would count.
-      rawCountDeliveries({
+      fastCountDeliveries({
         where: {
           ...rangeWhere,
           status: { in: [...RETRYABLE_STATUSES] },
@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
 
     // Daily buckets for the trend chart, built in JS: MongoDB has no date_trunc through Prisma
     // and the row counts here are small enough that one scan beats N queries.
-    const bucketRows = await rawFindDeliveries({
+    const bucketRows = await fastFindDeliveries({
       where: rangeWhere,
       select: { createdAt: true, status: true, deliveredAt: true, openedAt: true },
       orderBy: { createdAt: "asc" },

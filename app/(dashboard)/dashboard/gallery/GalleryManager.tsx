@@ -2,10 +2,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { ImageUploadField } from "../_components/ImageUploadField";
 import { dt } from "@/lib/dashboard/i18n";
-import { galleryEmailHtml, galleryVariant, type GalleryCaptions, type GalleryImage } from "@/lib/site-gallery/shared";
+import { GALLERY_LOCALES, galleryEmailHtml, galleryVariant, type GalleryCaptions, type GalleryImage } from "@/lib/site-gallery/shared";
 
 const API = "/api/admin/site-gallery";
-const LOCALES = ["ar", "tr", "en", "fr"] as const;
+const LOCALES = GALLERY_LOCALES;
 type Filter = "ALL" | "VISIBLE" | "HIDDEN";
 
 /** "Moments from the field": upload, show or hide on the site, caption, order, and copy links for e-mails. */

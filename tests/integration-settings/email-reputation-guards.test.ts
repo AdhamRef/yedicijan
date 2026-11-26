@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { normalizeElasticEmailEvents, suppressionForError } from "../../lib/communication/providers/elastic-email/webhook-events";
+import fs from "node:fs";
 
 test("permanent refusals in Elastic's error text suppress the address (texts from the 2026-11-18 audit)", () => {
   assert.equal(suppressionForError("Delivery not attempted because Contact's status was 'Invalid' at the time of sending."), "hard-bounce");
@@ -28,4 +29,13 @@ test("a 'suppress' event now carries the suppression its text implies; other eve
   assert.equal(unsub.suppression, "unsubscribe");
   const [opened] = normalizeElasticEmailEvents({ MessageID: "m4", EventType: "Open", To: "a@b.org" });
   assert.equal(opened.suppression, "none");
+});
+
+// Yedicihan: the lapse-reminder rule lives in lib/events/donation-lapsed.ts (it imports Prisma, so the
+// test reads its source rather than importing it).
+test("a reminder the provider accepted counts as sent: full cooldown, no retry on every run", () => {
+  const src = fs.readFileSync("lib/events/donation-lapsed.ts", "utf8");
+  assert.ok(src.includes(`const REMINDER_FAILED_AFTER_PROVIDER_STATUSES = ["FAILED", "BOUNCED", "SKIPPED"];`));
+  assert.ok(src.includes(`{ status: { in: REMINDER_FAILED_AFTER_PROVIDER_STATUSES }, providerMessageId: { not: null } }`));
+  assert.ok(src.includes(`...reminderAlreadySentWhere(cooldownCutoff),`));
 });

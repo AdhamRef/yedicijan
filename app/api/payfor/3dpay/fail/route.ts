@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     });
 
     /* Only a genuine callback about this donation's order may mark it failed and message the donor:
-       the bank's signature, or our own request signature echoed back (owner, 2026-11-18). */
+       the bank's signature, or our own request signature echoed back. */
     const genuine = !!donation
       && (orderId === donation.id || (!!donation.providerOrderId && orderId === donation.providerOrderId))
       && (verifyPayForResponseHash(raw, process.env.PAYFOR_MERCHANT_PASS) || verifyPayForRequestEcho(raw, process.env.PAYFOR_MERCHANT_PASS));

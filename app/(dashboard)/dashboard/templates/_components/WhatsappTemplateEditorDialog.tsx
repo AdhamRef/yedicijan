@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import axios from "axios";
+import { explainMetaTemplateError, metaTemplateFormatProblems } from "@/lib/communication/meta-template-messages";
 import { toast } from "react-hot-toast";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -99,6 +100,15 @@ export function WhatsappTemplateEditorDialog({ id, open, onOpenChange }: Props) 
       toast.error("المحتوى بالعربية مطلوب");
       return;
     }
+    // Meta's format rules for the message body, checked here in Arabic before saving (#267).
+    const formatProblems = metaTemplateFormatProblems(
+      Object.fromEntries(Object.entries(bodies).map(([loc, body]) => [loc, { body: body ?? "" }])),
+      new Set<string>(),
+    );
+    if (formatProblems.length) {
+      toast.error(formatProblems.join("\n"));
+      return;
+    }
     setSaving(true);
     try {
       const translations: Record<string, { body: string }> = {};
@@ -119,8 +129,11 @@ export function WhatsappTemplateEditorDialog({ id, open, onOpenChange }: Props) 
       }
       toast.success("تم الحفظ");
       onOpenChange(false);
-    } catch {
-      toast.error("فشل الحفظ");
+    } catch (error) {
+      // The server's own reason (e.g. a duplicate name), with Meta's known rejections explained in Arabic.
+      const problem = (error as { response?: { data?: { error?: string } } }).response?.data?.error || "فشل الحفظ";
+      const explained = explainMetaTemplateError(problem);
+      toast.error(explained ? `${explained}\n\nتفاصيل تقنية: ${problem}` : problem);
     } finally {
       setSaving(false);
     }

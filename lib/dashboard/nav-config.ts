@@ -17,10 +17,12 @@ export type DashboardNavItem = {
    * slug to a poller and hands the resolved numbers back down.
    */
   badge?: DashboardNavBadgeKey;
+  /** Shown to admins only, whatever permissions a staff member holds. */
+  adminOnly?: boolean;
 };
 
 /** Counters the sidebar knows how to fetch. */
-export type DashboardNavBadgeKey = "inboxUnread";
+export type DashboardNavBadgeKey = "inboxUnread" | "whatsappUnread";
 
 export type DashboardNavGroup = { group: string; items: DashboardNavItem[] };
 
@@ -54,7 +56,6 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
       // Built, API-backed, and previously unreachable. Slides and ticker both control what the
       // PUBLIC site renders, so leaving them unlinked meant no one could edit live UI.
       { key: "slides", title: "الشرائح", href: "/dashboard/slides", icon: "images", keywords: ["slides", "slider", "hero"] },
-      { key: "slides", title: "معرض لقطات من الميدان", href: "/dashboard/gallery", icon: "images", keywords: ["gallery", "photos", "images", "field", "email", "معرض", "صور", "لقطات"] },
       { key: "ticker", title: "شريط التبرعات", href: "/dashboard/ticker", icon: "ticket", keywords: ["ticker", "marquee"] },
     ],
   },
@@ -74,6 +75,8 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
       { key: "messages", title: "الحملات التسويقية", href: "/dashboard/communication/campaigns", icon: "megaphone", keywords: ["campaigns", "marketing", "حملات", "تسويق", "broadcast", "bulk"] },
       { key: "messages", title: "البريد الإلكتروني", href: "/dashboard/communication/email", icon: "mail", keywords: ["email", "بريد", "elastic"] },
       { key: "messages", title: "واتساب", href: "/dashboard/communication/whatsapp", icon: "messageCircle", keywords: ["whatsapp", "واتساب", "meta"] },
+      // WhatsApp conversations (Minber al-Aqsa #256): a new section; the contact-form inbox (/dashboard/inbox) stays separate.
+      { key: "messages", title: "محادثات واتساب", href: "/dashboard/communication/conversations", icon: "messageCircle", keywords: ["conversations", "whatsapp inbox", "chat", "replies", "محادثات", "واتساب", "ردود", "دردشة"], badge: "whatsappUnread" },
       { key: "messages", title: "الرسائل النصية", href: "/dashboard/communication/sms", icon: "messageSquare", keywords: ["sms", "نصية", "netgsm", "brevo"] },
       { key: "templates", title: "قوالب البريد والمحفّزات", href: "/dashboard/templates", icon: "mail", keywords: ["email", "triggers", "محفزات"] },
       // Was the second tab of /dashboard/messages, behind a page that defaults to the outbound
@@ -111,9 +114,11 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
   {
     group: "الإدارة",
     items: [
+      { key: "slides", title: "معرض لقطات من الميدان", href: "/dashboard/gallery", icon: "images", adminOnly: true, keywords: ["gallery", "photos", "images", "field", "email", "معرض", "صور", "لقطات"] },
       { key: "team", title: "الفريق", href: "/dashboard/users/team", icon: "userCog", keywords: ["team", "staff", "permissions", "صلاحيات"] },
+      { key: "generalSettings", title: "تجديدات الخدمات", href: "/dashboard/renewals", icon: "repeat", adminOnly: true, keywords: ["renewal", "subscription", "billing", "expiry", "تجديد", "اشتراك", "دفع"] },
       { key: "generalSettings", title: "الإعدادات", href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways"] },
-      { key: "generalSettings", title: "تجديدات الخدمات", href: "/dashboard/renewals", icon: "repeat", keywords: ["renewal", "subscription", "billing", "expiry", "تجديد", "اشتراك"] },
+      { key: "logs", title: "الأمان وحالة الموقع", href: "/dashboard/security", icon: "shield", adminOnly: true, keywords: ["security", "emergency", "maintenance", "pause", "أمان", "طوارئ", "إيقاف"] },
       { key: "logs", title: "سجلات النظام", href: "/dashboard/logs", icon: "scrollText", keywords: ["logs", "audit", "system"] },
     ],
   },

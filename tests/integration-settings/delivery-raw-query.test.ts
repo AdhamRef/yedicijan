@@ -44,6 +44,10 @@ test("both dashboards run their delivery queries through the index-friendly func
   for (const f of ["app/api/dashboard/communication/email/route.ts", "app/api/dashboard/communication/whatsapp/route.ts"]) {
     const s = fs.readFileSync(f, "utf8");
     assert.doesNotMatch(s, /prisma\.communicationDelivery\.(count|groupBy|findMany)\(/, f);
-    assert.match(s, /from "@\/lib\/communication\/delivery-raw-query"/, f);
+    // Yedicihan: through delivery-fast-query, which falls back to Prisma if the raw path fails.
+    assert.match(s, /from "@\/lib\/communication\/delivery-fast-query"/, f);
   }
+  const w = fs.readFileSync("lib/communication/delivery-fast-query.ts", "utf8");
+  assert.match(w, /from "@\/lib\/communication\/delivery-raw-query"/);
+  assert.equal((w.match(/fallback\("/g) ?? []).length, 4, "every query has a Prisma fallback");
 });

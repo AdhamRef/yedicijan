@@ -497,6 +497,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
         const path = window.location.pathname;
         if (/\/(success|donation-failed)(\/|$)/.test(path)) {
           if (process.env.NODE_ENV !== "production") {
+            // eslint-disable-next-line no-console
             console.debug("[tracking] suppressed canonical event on conversion page", {
               event: partial.event,
               path,
@@ -889,6 +890,7 @@ export default function TrackingPixels({ children }: { children: React.ReactNode
       if (tryFire() || attempts >= MAX_ATTEMPTS) {
         clearInterval(timer);
         if (attempts >= MAX_ATTEMPTS && process.env.NODE_ENV !== "production") {
+          // eslint-disable-next-line no-console
           console.warn("[Donate] fbq never became ready; CAPI fire is the only signal", {
             eventId,
             hasFbq: !!window.fbq,

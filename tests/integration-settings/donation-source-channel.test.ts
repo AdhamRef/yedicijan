@@ -17,14 +17,14 @@ test("tagged sources seen in production map to their channel", () => {
 });
 
 test("untagged visits fall back to click ids, then the referrer", () => {
-  assert.equal(c({ first_landing_page: "https://minberiaksa.org/ar?gclid=abc", session_id: "s" }), "google_ads");
-  assert.equal(c({ first_referrer: "https://l.instagram.com/", landing_page: "https://minberiaksa.org/ar" }), "instagram");
-  assert.equal(c({ first_referrer: "https://lm.facebook.com/", landing_page: "https://minberiaksa.org/ar" }), "facebook");
-  assert.equal(c({ first_referrer: "android-app://com.google.android.gm/", landing_page: "https://minberiaksa.org/ar" }), "email");
-  assert.equal(c({ first_referrer: "https://www.google.com/", landing_page: "https://minberiaksa.org/ar" }), "google_search");
-  assert.equal(c({ first_referrer: "https://www.paypal.com/", landing_page: "https://minberiaksa.org/ar" }), "direct", "a payment return is not a source");
-  assert.equal(c({ first_referrer: "https://minberiaksa.org/ar/bagislar", landing_page: "https://minberiaksa.org/ar" }), "direct", "own site");
-  assert.equal(c({ landing_page: "https://minberiaksa.org/ar", session_id: "s" }), "direct");
+  assert.equal(c({ first_landing_page: "https://www.yedicihan.org/ar?gclid=abc", session_id: "s" }), "google_ads");
+  assert.equal(c({ first_referrer: "https://l.instagram.com/", landing_page: "https://www.yedicihan.org/ar" }), "instagram");
+  assert.equal(c({ first_referrer: "https://lm.facebook.com/", landing_page: "https://www.yedicihan.org/ar" }), "facebook");
+  assert.equal(c({ first_referrer: "android-app://com.google.android.gm/", landing_page: "https://www.yedicihan.org/ar" }), "email");
+  assert.equal(c({ first_referrer: "https://www.google.com/", landing_page: "https://www.yedicihan.org/ar" }), "google_search");
+  assert.equal(c({ first_referrer: "https://www.paypal.com/", landing_page: "https://www.yedicihan.org/ar" }), "direct", "a payment return is not a source");
+  assert.equal(c({ first_referrer: "https://www.yedicihan.org/ar/bagislar", landing_page: "https://www.yedicihan.org/ar" }), "direct", "own site");
+  assert.equal(c({ landing_page: "https://www.yedicihan.org/ar", session_id: "s" }), "direct");
 });
 
 test("no attribution is unknown, never guessed", () => {
@@ -40,12 +40,16 @@ test("the filter accepts only known channels", () => {
 
 import fs from "node:fs";
 test("chart, list and export apply the source filter; the page offers it and keeps the chart type beside the chart", () => {
+  // Yedicihan has no payment-provider filter, so the source filter wraps the country/locale scope.
   assert.match(fs.readFileSync("app/api/admin/donations/chart/route.ts", "utf8"), /mergeDonationSourceFilter\(mergeCountryFilter\(/);
   assert.match(fs.readFileSync("app/api/donations/route.ts", "utf8"), /countryWhere, sourceWhere\]/);
   assert.match(fs.readFileSync("app/api/admin/donations/export/route.ts", "utf8"), /donationSourceWhere\(sp\.get\("source"\)\)/);
   const page = fs.readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
-  assert.equal((page.match(/params\.set\("source", donationSourceFilter\)/g) ?? []).length, 3, "chart, KPI stats and list requests");
-  assert.match(page, /\{dt\("مصدر التبرع"\)\}/);
+  // Yedicihan: the chart and list requests, plus the export dialog defaults.
+  // chart and list (#260), plus the KPI stats and today's card (#287)
+  assert.equal((page.match(/params\.set\("source", donationSourceFilter\)/g) ?? []).length, 4, "chart, list, KPI and today scopes");
+  assert.match(page, /source: donationSourceFilter,/, "export defaults");
+  assert.match(page, /label="مصدر التبرع"|>\s*مصدر التبرع\s*</);
   assert.match(page, /<\/TabsList>\s*<Select value=\{chartView\}/, "chart type sits with the chart controls");
   assert.doesNotMatch(page, /\{\/\* Chart Type \*\/\}/, "and no longer in the filters grid");
 });

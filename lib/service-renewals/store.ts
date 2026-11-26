@@ -40,7 +40,11 @@ const log = (entry: Record<string, unknown>) => raw({ insert: LOG, documents: [{
 
 /** The site's TLS certificate expiry, read from the live site (cached 12 h; null when unreadable). */
 let sslCache: { until: number; date: string | null } | null = null;
-export async function siteCertificateExpiry(host = "minberiaksa.org"): Promise<string | null> {
+/** This site's own host, from NEXT_PUBLIC_SITE_URL (falls back to www.yedicihan.org). */
+function siteHost(): string {
+  try { return new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://www.yedicihan.org").hostname; } catch { return "www.yedicihan.org"; }
+}
+export async function siteCertificateExpiry(host = siteHost()): Promise<string | null> {
   if (sslCache && sslCache.until > Date.now()) return sslCache.date;
   const date = await new Promise<string | null>((resolve) => {
     const socket = tls.connect({ host, port: 443, servername: host, timeout: 5000 }, () => {

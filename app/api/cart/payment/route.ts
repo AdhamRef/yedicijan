@@ -95,6 +95,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Emergency switch (/dashboard/security): while donations are paused, no new payment starts.
+  // Lazy and fail-open: a problem reading the switch never stops a donation.
+  const paused = await import("@/lib/site-security/emergency").then((m) => m.emergencyResponse(request)).catch(() => null);
+  if (paused) return paused;
   try {
     const session = await getServerSession(authOptions);
 
@@ -121,6 +125,13 @@ export async function POST(request: NextRequest) {
     if (type !== "ONE_TIME") {
       return NextResponse.json({ error: "Only one-time donations are supported." }, { status: 400 });
     }
+
+    // Donation guard (observe-only in this release). Loaded lazily and fail-open, so a guard
+    // problem can never stop a donation or affect payment processing.
+    const donationGuard = await import("@/lib/site-security/donation-guard")
+      .then((m) => m.checkDonationGuard(request, { paymentMethod: String(paymentMethod), userId: session?.user?.id ?? null, email: session?.user?.email ?? guest?.email, phone: guest?.phone, deviceId: (body.attribution as Record<string, unknown> | undefined)?.session_id }))
+      .catch(() => ({ response: null, keys: null }));
+    if (donationGuard.response) return donationGuard.response;
 
     // Resolve donor
     let donorId: string;
@@ -304,6 +315,7 @@ export async function POST(request: NextRequest) {
       stream: auditStreamForRole(actorRole),
     });
 
+    void import("@/lib/site-security/donation-guard").then((m) => m.recordDonationGuardAttempt(donationGuard, [donation.id])).catch(() => undefined);
     return NextResponse.json({
       success: true,
       donation,

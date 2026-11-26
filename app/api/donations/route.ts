@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isValidLocale } from "@/lib/locales";
+import { donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere } from "@/lib/dashboard/donation-multi-filter";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/options";
 import { resolveReferralId } from "@/lib/referral-server";
@@ -62,18 +63,16 @@ export async function GET(request: NextRequest) {
     const countryFilter = isAdmin ? searchParams.get("country")?.trim() : null;
 
     const baseWhere: Record<string, unknown> = {
-      ...(campaignId && { items: { some: { campaignId } } }),
+      ...(campaignId && donationCampaignWhere(campaignId)),
       ...(userId && { donorId: userId }),
       ...(referralId && isAdmin && { referralId }),
       ...(!isAdmin && { donorId: session.user.id }),
       ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
       ...(statusFilter && ["PAID", "FAILED"].includes(statusFilter) && { status: statusFilter }),
     };
-    if (categoryId && isAdmin) {
-      baseWhere.OR = [
-        { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-        { categoryItems: { some: { categoryId } } },
-      ];
+    const categoryScope = isAdmin ? donationCategoryWhere(categoryId) : null;
+    if (categoryScope) {
+      baseWhere.OR = categoryScope.OR;
     }
 
     // Free-text donor search (name OR email), admin-only. Kept OUT of `baseWhere`
@@ -93,24 +92,16 @@ export async function GET(request: NextRequest) {
           }
         : null;
 
-    const localeWhere =
-      localeFilter && localeFilter !== "all"
-        ? localeFilter === "__unset"
-          ? { OR: [{ locale: null }, { locale: "" }] }
-          : { locale: localeFilter }
-        : null;
+    // One value gives the same condition as before; "a,b" means any of them (#282).
+    const localeWhere = donationLocaleWhere(localeFilter);
 
-    const countryWhere =
-      countryFilter && countryFilter !== "all"
-        ? countryFilter === "__unset"
-          ? { OR: [{ donorCountryCode: null }, { donorCountryCode: "" }] }
-          : { donorCountryCode: countryFilter.toUpperCase() }
-        : null;
+    const countryWhere = donationCountryWhere(countryFilter);
 
-    // Inline list (must equal SOURCE_CHANNELS in lib/attribution/source-channel.ts). Admin only.
+    // Inline (no new import: sandboxed route tests load this file with a fixed import list). Must equal SOURCE_CHANNELS.
     const DONATION_SOURCE_CHANNELS: readonly string[] = ["facebook", "instagram", "whatsapp", "email", "google_ads", "google_search", "tiktok", "direct", "other", "unknown"];
-    const sourceParam = (searchParams.get("source") ?? "").trim();
-    const sourceWhere = isAdmin && DONATION_SOURCE_CHANNELS.includes(sourceParam) ? { sourceChannel: sourceParam } : null;
+    const sourceParams = (searchParams.get("source") ?? "").split(",").map((v) => v.trim()).filter((v) => DONATION_SOURCE_CHANNELS.includes(v));
+    const sourceWhere = !isAdmin || sourceParams.length === 0 ? null
+      : sourceParams.length === 1 ? { sourceChannel: sourceParams[0] } : { sourceChannel: { in: [...new Set(sourceParams)] } };
     const extraFilters = [searchWhere, localeWhere, countryWhere, sourceWhere].filter((w) => w != null);
     const where: Record<string, unknown> =
       extraFilters.length > 0 ? { AND: [baseWhere, ...extraFilters] } : baseWhere;
@@ -164,6 +155,10 @@ export async function GET(request: NextRequest) {
 
 // POST /api/donations - Create a new donation
 export async function POST(request: NextRequest) {
+  // Emergency switch (/dashboard/security): while donations are paused, no new payment starts.
+  // Lazy and fail-open: a problem reading the switch never stops a donation.
+  const paused = await import("@/lib/site-security/emergency").then((m) => m.emergencyResponse(request)).catch(() => null);
+  if (paused) return paused;
   try {
     const session = await getServerSession(authOptions);
 
@@ -209,6 +204,13 @@ export async function POST(request: NextRequest) {
     if (type !== "ONE_TIME") {
       return NextResponse.json({ error: "Only one-time donations are supported." }, { status: 400 });
     }
+
+    // Donation guard (observe-only in this release). Loaded lazily and fail-open, so a guard
+    // problem can never stop a donation or affect payment processing.
+    const donationGuard = await import("@/lib/site-security/donation-guard")
+      .then((m) => m.checkDonationGuard(request, { paymentMethod: String(paymentMethod), userId: session?.user?.id ?? null, email: session?.user?.email ?? guest?.email, phone: guest?.phone, deviceId: (attribution as Record<string, unknown> | undefined)?.session_id }))
+      .catch(() => ({ response: null, keys: null }));
+    if (donationGuard.response) return donationGuard.response;
 
     // Resolve donorId — authenticated user or guest upsert
     let donorId: string;
@@ -442,6 +444,7 @@ export async function POST(request: NextRequest) {
       stream: auditStreamForRole(actorRole),
     });
 
+    void import("@/lib/site-security/donation-guard").then((m) => m.recordDonationGuardAttempt(donationGuard, [donation.id])).catch(() => undefined);
     return NextResponse.json({
       success: true,
       donation,
