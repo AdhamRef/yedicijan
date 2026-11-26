@@ -1,4 +1,5 @@
 import "server-only";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
@@ -20,4 +21,11 @@ export async function donationAccess(id: string, token?: string): Promise<{ allo
   if (!session) return { allowed: true };
   const staff = userHasDashboardPermission(session.user, "revenue") || userHasDashboardPermission(session.user, "donationsEdit");
   return { allowed: staff || session.user.id === row.donorId };
+}
+
+/** For route handlers: a 403/404 response when access is refused, or null to continue. */
+export async function authorizeDonationAccess(id: string): Promise<NextResponse | null> {
+  if (!/^[a-f\d]{24}$/i.test(id)) return NextResponse.json({ error: "Donation not found" }, { status: 404 });
+  const { allowed } = await donationAccess(id);
+  return allowed ? null : NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
