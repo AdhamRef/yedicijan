@@ -212,7 +212,7 @@ function DashboardContent({
       />
 
       <main
-        className={`flex-1 min-w-0 ${dir === 'rtl' ? 'lg:mr-[268px]' : 'lg:ml-[268px]'}`}
+        className={`dash-shell flex-1 min-w-0 ${dir === 'rtl' ? 'lg:mr-[268px]' : 'lg:ml-[268px]'}`}
       >
         <DashboardTopbar
           crumbs={crumbs}
@@ -224,7 +224,7 @@ function DashboardContent({
         {/* Content well. Pages own their own surfaces (Card, PageHeader, …) — the shell no
             longer wraps every route in a white rounded card, which produced a box-inside-a-box
             with doubled padding on every one of the 151 routes. */}
-        <div className="p-3 sm:p-4 lg:p-6 min-h-[calc(100vh-4rem)]">{children}</div>
+        <div className="dash-content p-3 sm:p-4 lg:p-6 min-h-[calc(100vh-4rem)]">{children}</div>
       </main>
     </div>
   );
