@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import DashboardLayoutClient from "./DashboardLayoutClient";
+import RenewalAlerts from "@/components/dashboard/RenewalAlerts";
 import ar from "../../../i18n/messages/ar.json";
 
 export const metadata: Metadata = {
@@ -40,7 +41,7 @@ export default async function DashboardLayout({
       messages={messages}
       locale={locale}
     >
-      {children}
+      <RenewalAlerts />{children}
     </DashboardLayoutClient>
   );
 }
