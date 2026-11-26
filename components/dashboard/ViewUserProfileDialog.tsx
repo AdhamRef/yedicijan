@@ -87,6 +87,7 @@ const Venus = ({ size, ...props }: LucideProps) => (
   </svg>
 );
 import { DonorAttributionJourney } from "@/components/dashboard/DonorAttributionJourney";
+import DonorContactStatus from "@/components/dashboard/DonorContactStatus";
 
 const CLARITY_PROJECT_ID =
   process.env.NEXT_PUBLIC_CLARITY_ID?.trim() || "u614k028k2";
@@ -465,6 +466,8 @@ export function ViewUserProfileDialog({
                   value={user.lastDonationAt ? formatDateAr(user.lastDonationAt) : "—"}
                 />
               </div>
+
+              {user.role === "DONOR" && <DonorContactStatus userId={user.id} />}
 
               {/* Two-column info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
