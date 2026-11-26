@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import CartReminder from "@/components/CartReminder";
 import DonationPauseBanner from "@/components/DonationPauseBanner";
+import FieldGallery from "@/components/FieldGallery";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
 import IntlProviderClient from "./IntlProviderClient";
 import ar from "../../i18n/messages/ar.json";
@@ -100,6 +101,7 @@ export default async function Rootlayout({
                 <DonationPauseBanner locale={locale} />
                 {children}
               </main>
+              <FieldGallery locale={locale} />
               <Footer />
               <CartReminder />
               <ConfettiProvider />
