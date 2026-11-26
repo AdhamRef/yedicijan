@@ -141,6 +141,12 @@ export async function processWhatsappEvents(events: NormalizedWebhookEvent[]): P
     }
     summary.processed += 1;
     summary.inbound += 1;
+    // WhatsApp conversations layer (Minber al-Aqsa #249): language tab, unread, ordering. Lazy and fail-safe: never blocks receiving.
+    const contactDigits = String(event.from ?? "").replace(/\D/g, "");
+    const contact = contactDigits.length >= 6 ? `+${contactDigits}` : null;
+    if (contact) void import("./inbox-conversations")
+      .then((m) => m.touchInbound({ senderId, phone: contact, text: event.text ?? (event.messageType ? `[${event.messageType}]` : null), profileName: event.profileName ?? null, at: event.timestamp ? new Date(event.timestamp * 1000) : new Date() }))
+      .catch(() => undefined);
 
     // Mark the most recent outbound delivery to this contact as REPLIED (best-effort).
     if (event.from) {

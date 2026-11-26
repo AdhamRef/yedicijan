@@ -41,6 +41,8 @@ import {
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
 import ReactCountryFlag from "react-country-flag";
+import Link from "next/link";
+import { userHasDashboardPermission } from "@/lib/dashboard/permissions";
 import { useCurrency } from "@/context/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { ACTION_PERMISSION_ROWS, DASHBOARD_PERMISSION_ROWS } from "@/lib/dashboard/nav-config";
@@ -327,6 +329,7 @@ export function ViewUserProfileDialog({
   const { convertToCurrency } = useCurrency();
   const { data: session } = useSession();
   const viewerIsAdmin = session?.user?.role === "ADMIN";
+  const canOpenConversations = userHasDashboardPermission(session?.user, "messages");
   const [sendDialog, setSendDialog] = React.useState<{
     open: boolean;
     channel: "email" | "whatsapp";
@@ -663,6 +666,14 @@ export function ViewUserProfileDialog({
                 >
                   <MessageCircle className="w-3.5 h-3.5" /> واتساب
                 </Button>
+                {/* Minber al-Aqsa #274: open this donor's WhatsApp conversation (the page finds it by phone). */}
+                {canOpenConversations && user.phone && (
+                  <Button asChild size="sm" variant="outline" className="h-8 gap-1.5">
+                    <Link href={`/dashboard/communication/conversations?phone=${encodeURIComponent(user.phone)}`} onClick={() => onOpenChange(false)}>
+                      <MessageCircle className="w-3.5 h-3.5" /> محادثة واتساب
+                    </Link>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   onClick={() => setSendDialog({ open: true, channel: "email" })}
