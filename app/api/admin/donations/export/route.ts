@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { donationSourceWhere } from "@/lib/dashboard/donation-source-filter";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
@@ -95,6 +96,8 @@ export async function GET(request: NextRequest) {
           : { donorCountryCode: country.toUpperCase() }
       );
     }
+    const sourceFilter = donationSourceWhere(sp.get("source"));
+    if (sourceFilter) filters.push(sourceFilter);
     const where: Prisma.DonationWhereInput = filters.length > 1 ? { AND: filters } : baseWhere;
 
     const orderBy: Prisma.DonationOrderByWithRelationInput =

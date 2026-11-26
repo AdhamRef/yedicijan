@@ -1,3 +1,4 @@
+import { mergeDonationSourceFilter } from '@/lib/dashboard/donation-source-filter';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const baseWhere = mergeCountryFilter(mergeLocaleFilter(innerWhere, locale), country);
+    const baseWhere = mergeDonationSourceFilter(mergeCountryFilter(mergeLocaleFilter(innerWhere, locale), country), searchParams.get('source'));
 
     // Always fetch both paid and failed donations
     const donations = await prisma.donation.findMany({

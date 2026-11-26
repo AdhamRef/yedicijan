@@ -107,7 +107,11 @@ export async function GET(request: NextRequest) {
           : { donorCountryCode: countryFilter.toUpperCase() }
         : null;
 
-    const extraFilters = [searchWhere, localeWhere, countryWhere].filter((w) => w != null);
+    // Inline (no new import: sandboxed route tests load this file with a fixed import list). Must equal SOURCE_CHANNELS.
+    const DONATION_SOURCE_CHANNELS: readonly string[] = ["facebook", "instagram", "whatsapp", "email", "google_ads", "google_search", "tiktok", "direct", "other", "unknown"];
+    const sourceParam = (searchParams.get("source") ?? "").trim();
+    const sourceWhere = isAdmin && DONATION_SOURCE_CHANNELS.includes(sourceParam) ? { sourceChannel: sourceParam } : null;
+    const extraFilters = [searchWhere, localeWhere, countryWhere, sourceWhere].filter((w) => w != null);
     const where: Record<string, unknown> =
       extraFilters.length > 0 ? { AND: [baseWhere, ...extraFilters] } : baseWhere;
 
