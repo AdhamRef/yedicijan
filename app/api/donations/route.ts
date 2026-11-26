@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isValidLocale } from "@/lib/locales";
+import { donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere } from "@/lib/dashboard/donation-multi-filter";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/options";
 import { resolveReferralId } from "@/lib/referral-server";
@@ -62,18 +63,16 @@ export async function GET(request: NextRequest) {
     const countryFilter = isAdmin ? searchParams.get("country")?.trim() : null;
 
     const baseWhere: Record<string, unknown> = {
-      ...(campaignId && { items: { some: { campaignId } } }),
+      ...(campaignId && donationCampaignWhere(campaignId)),
       ...(userId && { donorId: userId }),
       ...(referralId && isAdmin && { referralId }),
       ...(!isAdmin && { donorId: session.user.id }),
       ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
       ...(statusFilter && ["PAID", "FAILED"].includes(statusFilter) && { status: statusFilter }),
     };
-    if (categoryId && isAdmin) {
-      baseWhere.OR = [
-        { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-        { categoryItems: { some: { categoryId } } },
-      ];
+    const categoryScope = isAdmin ? donationCategoryWhere(categoryId) : null;
+    if (categoryScope) {
+      baseWhere.OR = categoryScope.OR;
     }
 
     // Free-text donor search (name OR email), admin-only. Kept OUT of `baseWhere`
@@ -93,24 +92,16 @@ export async function GET(request: NextRequest) {
           }
         : null;
 
-    const localeWhere =
-      localeFilter && localeFilter !== "all"
-        ? localeFilter === "__unset"
-          ? { OR: [{ locale: null }, { locale: "" }] }
-          : { locale: localeFilter }
-        : null;
+    // One value gives the same condition as before; "a,b" means any of them (#282).
+    const localeWhere = donationLocaleWhere(localeFilter);
 
-    const countryWhere =
-      countryFilter && countryFilter !== "all"
-        ? countryFilter === "__unset"
-          ? { OR: [{ donorCountryCode: null }, { donorCountryCode: "" }] }
-          : { donorCountryCode: countryFilter.toUpperCase() }
-        : null;
+    const countryWhere = donationCountryWhere(countryFilter);
 
     // Inline (no new import: sandboxed route tests load this file with a fixed import list). Must equal SOURCE_CHANNELS.
     const DONATION_SOURCE_CHANNELS: readonly string[] = ["facebook", "instagram", "whatsapp", "email", "google_ads", "google_search", "tiktok", "direct", "other", "unknown"];
-    const sourceParam = (searchParams.get("source") ?? "").trim();
-    const sourceWhere = isAdmin && DONATION_SOURCE_CHANNELS.includes(sourceParam) ? { sourceChannel: sourceParam } : null;
+    const sourceParams = (searchParams.get("source") ?? "").split(",").map((v) => v.trim()).filter((v) => DONATION_SOURCE_CHANNELS.includes(v));
+    const sourceWhere = !isAdmin || sourceParams.length === 0 ? null
+      : sourceParams.length === 1 ? { sourceChannel: sourceParams[0] } : { sourceChannel: { in: [...new Set(sourceParams)] } };
     const extraFilters = [searchWhere, localeWhere, countryWhere, sourceWhere].filter((w) => w != null);
     const where: Record<string, unknown> =
       extraFilters.length > 0 ? { AND: [baseWhere, ...extraFilters] } : baseWhere;

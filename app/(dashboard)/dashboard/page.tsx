@@ -70,6 +70,7 @@ import {
 } from "@/lib/dashboard/format-dashboard-money";
 import { formatIstanbulCalendarMonthLong } from "@/lib/admin/current-calendar-month-utc";
 import { StatsMetricCard } from "@/components/dashboard/StatsMetricCard";
+import MultiPick from "@/components/dashboard/MultiPick";
 import { getDashboardChartPeriodLabelAr } from "@/lib/dashboard/chart-period-label-ar";
 import { getPeriodDateKeys } from "@/lib/dashboard/period-date-range";
 import {
@@ -221,6 +222,10 @@ function getDonationsDateRange(
   return getPeriodDateKeys(period, dateFrom, dateTo);
 }
 
+/** Filters hold "all" or a comma-joined list ("a,b" = any of them; #282). */
+const pickList = (v: string) => (v && v !== "all" ? v.split(",").filter(Boolean) : []);
+const pickValue = (xs: string[]) => (xs.length ? xs.join(",") : "all");
+
 export default function DashboardPage() {
   const locale = useLocale() as string;
   const thisMonthRevenueTitle = `إيرادات شهر ${formatIstanbulCalendarMonthLong(new Date(), locale || "ar")}`;
@@ -320,9 +325,8 @@ export default function DashboardPage() {
   const [donationsStatusFilter, setDonationsStatusFilter] = useState<"all" | "PAID" | "FAILED">("all");
   /** Applied donor search (name or email) for the أحدث التبرعات table — server-side, not a page filter. */
   const [donationsSearch, setDonationsSearch] = useState("");
-  const [donationLocaleFilter, setDonationLocaleFilter] = useState<
-    "all" | "ar" | "en" | "fr" | "tr" | "id" | "pt" | "es" | "de" | "__unset"
-  >("all");
+  // "all", one locale, or several joined by commas (#282).
+  const [donationLocaleFilter, setDonationLocaleFilter] = useState<string>("all");
   const [donationCountryFilter, setDonationCountryFilter] = useState<string>("all");
   const [donationSourceFilter, setDonationSourceFilter] = useState("all");
   const [countryOptions, setCountryOptions] = useState<{ code: string; count: number }[]>([]);
@@ -333,7 +337,6 @@ export default function DashboardPage() {
   const [donationsTotal, setDonationsTotal] = useState(0);
   const [donationsLoading, setDonationsLoading] = useState(false);
   const [donationsFetchedOnce, setDonationsFetchedOnce] = useState(false);
-  const [searchCampaign, setSearchCampaign] = useState("");
   const [donationDetails, setDonationDetails] = useState<{
     open: boolean;
     mode: "attribution" | "payment" | "error";
@@ -1520,13 +1523,13 @@ export default function DashboardPage() {
                 selectedCategory !== "all" && {
                   id: "category",
                   label: "الحملة",
-                  value: categories.find((c) => c.id === selectedCategory)?.name ?? selectedCategory,
+                  value: pickList(selectedCategory).map((id) => categories.find((c) => c.id === id)?.name ?? id).join("، "),
                   onClear: () => setSelectedCategory("all"),
                 },
                 selectedCampaign !== "all" && {
                   id: "campaign",
                   label: "المشروع",
-                  value: campaigns.find((c) => c.id === selectedCampaign)?.title ?? selectedCampaign,
+                  value: pickList(selectedCampaign).map((id) => campaigns.find((c) => c.id === id)?.title ?? id).join("، "),
                   onClear: () => setSelectedCampaign("all"),
                 },
                 selectedUserId !== "all" && {
@@ -1554,60 +1557,18 @@ export default function DashboardPage() {
 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
 
 
-  {/* Category */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      الفئة
-    </label>
-    <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر الفئة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">جميع الفئات</SelectItem>
-        {categories.map((c) => (
-          <SelectItem key={c.id} value={c.id} className="text-xs">
-            {c.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Category — several at once */}
+  <MultiPick label="الفئة" allLabel="جميع الفئات" selected={pickList(selectedCategory)}
+    options={categories.map((c) => ({ value: c.id, label: c.name }))}
+    onChange={(next) => {
+      setSelectedCategory(pickValue(next));
+      // Drop chosen projects that are outside every chosen category.
+      if (next.length) setSelectedCampaign((cur) => pickValue(pickList(cur).filter((id) => { const c = campaigns.find((item) => item.id === id); if (!c) return true; const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : []); return next.some((cid) => ids.includes(cid)); })));
+    }} />
 
-  {/* Campaign */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      المشروع
-    </label>
-    <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اختر المشروع" />
-      </SelectTrigger>
-      <SelectContent>
-        <div className="p-2 border-b border-slate-100">
-          <Input
-            placeholder="بحث..."
-            value={searchCampaign}
-            onChange={(e) => setSearchCampaign(e.target.value)}
-            className="w-full h-8 text-xs"
-          />
-        </div>
-        <SelectItem value="all" className="text-xs">جميع المشاريع</SelectItem>
-        {campaigns
-          .filter((c) => {
-            const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : []);
-            const inCategory = selectedCategory === "all" || ids.includes(selectedCategory);
-            return inCategory && (!searchCampaign ||
-              c.title.toLowerCase().includes(searchCampaign.toLowerCase()));
-          })
-          .map((c) => (
-            <SelectItem key={c.id} value={c.id} className="text-xs">
-              {c.title}
-            </SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Campaign — several at once; limited to the chosen categories */}
+  <MultiPick label="المشروع" allLabel="جميع المشاريع" selected={pickList(selectedCampaign)} onChange={(next) => setSelectedCampaign(pickValue(next))}
+    options={campaigns.filter((c) => { const cats = pickList(selectedCategory); const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : []); return cats.length === 0 || cats.some((cid) => ids.includes(cid)); }).map((c) => ({ value: c.id, label: c.title }))} />
 
   {/* User — hidden when viewing a specific user via link (?userId=...) */}
   {!searchParams.get("userId") && (
@@ -1689,85 +1650,20 @@ export default function DashboardPage() {
     </Select>
   </div>
 
-  {/* Donation source (classified attribution) */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      مصدر التبرع
-    </label>
-    <Select value={donationSourceFilter} onValueChange={setDonationSourceFilter}>
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="كل المصادر" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">كل المصادر</SelectItem>
-        <SelectItem value="facebook" className="text-xs">فيسبوك</SelectItem>
-        <SelectItem value="instagram" className="text-xs">إنستغرام</SelectItem>
-        <SelectItem value="whatsapp" className="text-xs">واتساب</SelectItem>
-        <SelectItem value="email" className="text-xs">البريد الإلكتروني</SelectItem>
-        <SelectItem value="google_ads" className="text-xs">إعلانات Google</SelectItem>
-        <SelectItem value="google_search" className="text-xs">بحث Google</SelectItem>
-        <SelectItem value="tiktok" className="text-xs">تيك توك</SelectItem>
-        <SelectItem value="direct" className="text-xs">مباشر</SelectItem>
-        <SelectItem value="other" className="text-xs">أخرى</SelectItem>
-        <SelectItem value="unknown" className="text-xs">غير معروف</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Donation source (classified attribution) — several at once */}
+  <MultiPick label="مصدر التبرع" allLabel="كل المصادر" selected={pickList(donationSourceFilter)} onChange={(next) => setDonationSourceFilter(pickValue(next))}
+    options={[["facebook", "فيسبوك"], ["instagram", "إنستغرام"], ["whatsapp", "واتساب"], ["email", "البريد الإلكتروني"], ["google_ads", "إعلانات Google"], ["google_search", "بحث Google"], ["tiktok", "تيك توك"], ["direct", "مباشر"], ["other", "أخرى"], ["unknown", "غير معروف"]].map(([value, label]) => ({ value, label }))} />
 
-  {/* Site language (donation row locale) */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      لغة الموقع (التبرع)
-    </label>
-    <Select
-      value={donationLocaleFilter}
-      onValueChange={(v) => setDonationLocaleFilter(v as typeof donationLocaleFilter)}
-    >
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="اللغة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">كل اللغات</SelectItem>
-        <SelectItem value="ar" className="text-xs">العربية</SelectItem>
-        <SelectItem value="en" className="text-xs">English</SelectItem>
-        <SelectItem value="fr" className="text-xs">Français</SelectItem>
-        <SelectItem value="tr" className="text-xs">Türkçe</SelectItem>
-        <SelectItem value="id" className="text-xs">Indonesia</SelectItem>
-        <SelectItem value="pt" className="text-xs">Português</SelectItem>
-        <SelectItem value="es" className="text-xs">Español</SelectItem>
-        <SelectItem value="de" className="text-xs">Deutsch</SelectItem>
-        <SelectItem value="__unset" className="text-xs">غير محدد</SelectItem>
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Site language (donation row locale) — several at once */}
+  <MultiPick label="لغة الموقع (التبرع)" allLabel="كل اللغات" selected={pickList(donationLocaleFilter)} onChange={(next) => setDonationLocaleFilter(pickValue(next))}
+    options={[["ar", "العربية"], ["en", "English"], ["fr", "Français"], ["tr", "Türkçe"], ["id", "Indonesia"], ["pt", "Português"], ["es", "Español"], ["de", "Deutsch"], ["__unset", "غير محدد"]].map(([value, label]) => ({ value, label }))} />
 
-  {/* Donor country */}
-  <div className="space-y-1 text-right">
-    <label className="text-[11px] font-semibold text-slate-600">
-      الدولة
-    </label>
-    <Select
-      value={donationCountryFilter}
-      onValueChange={(v) => setDonationCountryFilter(v)}
-    >
-      <SelectTrigger className="w-full h-10 px-3 text-[13px] rounded-lg border-slate-200 bg-white shadow-sm transition-colors hover:border-slate-300 focus:border-brand focus:ring-2 focus:ring-brand/15">
-        <SelectValue placeholder="الدولة" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all" className="text-xs">كل الدول</SelectItem>
-        {countryOptions.map((c) => (
-          <SelectItem key={c.code} value={c.code} className="text-xs">
-            {getCountryDisplayNameFromCode(c.code, locale || "ar")} ({c.count})
-          </SelectItem>
-        ))}
-        {countryUnsetCount > 0 && (
-          <SelectItem value="__unset" className="text-xs">
-            غير محدد ({countryUnsetCount})
-          </SelectItem>
-        )}
-      </SelectContent>
-    </Select>
-  </div>
+  {/* Donor country — several at once */}
+  <MultiPick label="الدولة" allLabel="كل الدول" selected={pickList(donationCountryFilter)} onChange={(next) => setDonationCountryFilter(pickValue(next))}
+    options={[
+      ...countryOptions.map((c) => ({ value: c.code, label: getCountryDisplayNameFromCode(c.code, locale || "ar"), count: c.count })),
+      ...(countryUnsetCount > 0 ? [{ value: "__unset", label: "غير محدد", count: countryUnsetCount }] : []),
+    ]} />
 
   {/* Donation Status Filter */}
   <div className="space-y-1 text-right">

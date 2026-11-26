@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { donationSourceWhere } from "@/lib/dashboard/donation-source-filter";
+import { donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere } from "@/lib/dashboard/donation-multi-filter";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
@@ -68,34 +69,23 @@ export async function GET(request: NextRequest) {
     }
 
     const baseWhere: Prisma.DonationWhereInput = {
-      ...(campaignId && campaignId !== "all" && { items: { some: { campaignId } } }),
+      ...(campaignId && campaignId !== "all" && (donationCampaignWhere(campaignId) as Prisma.DonationWhereInput)),
       ...(userId && userId !== "all" && { donorId: userId }),
       ...(referralId && referralId !== "all" && { referralId }),
       ...(Object.keys(dateFilter).length > 0 && { createdAt: dateFilter }),
       ...(status && ["PAID", "FAILED"].includes(status) && { status: status as "PAID" | "FAILED" }),
     };
-    if (categoryId && categoryId !== "all") {
-      baseWhere.OR = [
-        { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-        { categoryItems: { some: { categoryId } } },
-      ];
+    const categoryScope = donationCategoryWhere(categoryId) as Prisma.DonationWhereInput | null;
+    if (categoryScope) {
+      baseWhere.OR = categoryScope.OR;
     }
 
     const filters: Prisma.DonationWhereInput[] = [baseWhere];
-    if (locale && locale !== "all") {
-      filters.push(
-        locale === "__unset"
-          ? { OR: [{ locale: null }, { locale: "" }] }
-          : { locale }
-      );
-    }
-    if (country && country !== "all") {
-      filters.push(
-        country === "__unset"
-          ? { OR: [{ donorCountryCode: null }, { donorCountryCode: "" }] }
-          : { donorCountryCode: country.toUpperCase() }
-      );
-    }
+    // One value gives the same condition as before; "a,b" means any of them (#282).
+    const localeFilter = donationLocaleWhere(locale) as Prisma.DonationWhereInput | null;
+    if (localeFilter) filters.push(localeFilter);
+    const countryFilter = donationCountryWhere(country) as Prisma.DonationWhereInput | null;
+    if (countryFilter) filters.push(countryFilter);
     const sourceFilter = donationSourceWhere(sp.get("source"));
     if (sourceFilter) filters.push(sourceFilter);
     const where: Prisma.DonationWhereInput = filters.length > 1 ? { AND: filters } : baseWhere;

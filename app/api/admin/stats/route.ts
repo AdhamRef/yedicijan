@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { campaignCategoryWhere, donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere, idOrIn } from '@/lib/dashboard/donation-multi-filter';
 import { prisma } from '@/lib/prisma';
 import { getCurrentCalendarMonthIstanbulRange } from '@/lib/admin/current-calendar-month-utc';
 import { getServerSession } from 'next-auth';
@@ -44,13 +45,12 @@ function buildDonationWhere(
 ) {
   const dateFilter = { createdAt: { gte: startDate, lte: endDate } };
   const base: Record<string, unknown> = { ...dateFilter };
-  if (campaignId && campaignId !== 'all') {
-    base.items = { some: { campaignId } };
-  } else if (categoryId && categoryId !== 'all') {
-    base.OR = [
-      { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-      { categoryItems: { some: { categoryId } } },
-    ];
+  const campaignScope = donationCampaignWhere(campaignId);
+  const categoryScope = donationCategoryWhere(categoryId);
+  if (campaignScope) {
+    base.items = campaignScope.items;
+  } else if (categoryScope) {
+    base.OR = categoryScope.OR;
   }
   return base;
 }
@@ -58,33 +58,25 @@ function buildDonationWhere(
 /** Same filters as buildDonationWhere but no date — all-time إيرادات (donation amountUSD sum) */
 function buildDonationWhereAllTime(categoryId: string | null, campaignId: string | null) {
   const base: Record<string, unknown> = {};
-  if (campaignId && campaignId !== 'all') {
-    base.items = { some: { campaignId } };
-  } else if (categoryId && categoryId !== 'all') {
-    base.OR = [
-      { items: { some: { campaign: { categoryIds: { has: categoryId } } } } },
-      { categoryItems: { some: { categoryId } } },
-    ];
+  const campaignScope = donationCampaignWhere(campaignId);
+  const categoryScope = donationCategoryWhere(categoryId);
+  if (campaignScope) {
+    base.items = campaignScope.items;
+  } else if (categoryScope) {
+    base.OR = categoryScope.OR;
   }
   return base;
 }
 
+// One value gives the same condition as before; "a,b" means any of them (#282).
 function mergeLocaleFilter(where: Record<string, unknown>, locale: string | null): Record<string, unknown> {
-  if (!locale || locale === 'all') return where;
-  const lw =
-    locale === '__unset'
-      ? { OR: [{ locale: null }, { locale: '' }] }
-      : { locale };
-  return { AND: [where, lw] };
+  const lw = donationLocaleWhere(locale);
+  return lw ? { AND: [where, lw] } : where;
 }
 
 function mergeCountryFilter(where: Record<string, unknown>, country: string | null): Record<string, unknown> {
-  if (!country || country === 'all') return where;
-  const cw =
-    country === '__unset'
-      ? { OR: [{ donorCountryCode: null }, { donorCountryCode: '' }] }
-      : { donorCountryCode: country.toUpperCase() };
-  return { AND: [where, cw] };
+  const cw = donationCountryWhere(country);
+  return cw ? { AND: [where, cw] } : where;
 }
 
 function mergeFilters(
@@ -110,10 +102,12 @@ function buildDonationItemWhere(
       country
     ),
   };
-  if (campaignId && campaignId !== 'all') {
-    base.campaignId = campaignId;
-  } else if (categoryId && categoryId !== 'all') {
-    base.campaign = { categoryIds: { has: categoryId } };
+  const campaignIds = idOrIn(campaignId);
+  const inCategory = campaignCategoryWhere(categoryId);
+  if (campaignIds) {
+    base.campaignId = campaignIds;
+  } else if (inCategory) {
+    base.campaign = inCategory;
   }
   return base;
 }
@@ -132,8 +126,9 @@ function buildDonationCategoryItemWhere(
       country
     ),
   };
-  if (categoryId && categoryId !== 'all') {
-    base.categoryId = categoryId;
+  const categoryIds = idOrIn(categoryId);
+  if (categoryIds) {
+    base.categoryId = categoryIds;
   }
   return base;
 }
