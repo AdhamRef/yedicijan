@@ -534,6 +534,7 @@ export default function DashboardPage() {
       if (selectedCampaign !== "all") params.set("campaignId", selectedCampaign);
       if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
       if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
+      if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
       const response = await fetch(`/api/admin/stats?${params}`);
       const data = await response.json();
       if (!response.ok) {
@@ -548,7 +549,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter]);
+  }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter, donationSourceFilter]);
 
   useEffect(() => {
     fetchStats();
