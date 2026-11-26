@@ -51,4 +51,8 @@ export function galleryCaption(captions: GalleryCaptions, locale: string): strin
 export function galleryHiddenOn(pathname: string): boolean {
   return /^\/[a-z]{2}\/(?:checkout|cart|success|payment-pending|payment-cancelled|auth|error|account)(?:\/|$)/i.test(pathname);
 }
+/** Where the gallery appears (Minber al-Aqsa #295): the home page and each project page only, on this site's routes. */
+export function galleryShownOn(pathname: string): boolean {
+  return /^\/[a-z]{2}\/?$/i.test(pathname) || /^\/[a-z]{2}\/campaign\/[^/]+\/?$/i.test(pathname);
+}
 export const GALLERY_PUBLIC_LIMIT = 12;
