@@ -9,6 +9,12 @@ import { HandCoins, HandHeart, Share2, ShieldCheck, Lock, Sparkles } from "lucid
 import { useSearchParams } from "next/navigation";
 import React, { useState, useEffect } from "react";
 import { useTranslations, useLocale } from "next-intl";
+import { getCurrency, getCurrencySymbol } from "@/hooks/useCampaignValue";
+import { LOW_FUNDING_PERCENT, isolateLtr } from "@/lib/campaign/funding";
+import {
+  DEFAULT_SUGGESTED_DONATION_AMOUNTS,
+  resolveSuggestedAmountsForCurrency,
+} from "@/lib/campaign/suggested-donations";
 
 // Shared across instances (MainPageDummy renders desktop + mobile sidebars); only one should open the dialog
 let openDonationHandledThisLoad = false;
@@ -21,6 +27,7 @@ interface DonationSidebarProps {
 const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarProps) => {
   const t = useTranslations("Campaign");
   const tTrust = useTranslations("SignInDialog");
+  const tB = useTranslations("Brand");
   const locale = useLocale() as "ar" | "en" | "fr";
   const { convertToCurrency } = useCurrency();
   const pathname = usePathname();
@@ -85,9 +92,21 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
     );
   };
 
-  const handleDonate = () => {
+  const [presetAmount, setPresetAmount] = useState<number | undefined>(undefined);
+  const handleDonate = (amount?: number) => {
+    setPresetAmount(typeof amount === "number" ? amount : undefined);
     setIsDonationOpen(true);
   };
+
+  // One-tap presets from the campaign's own amounts (the old sidebar had only a
+  // generic button, so every donor started from an empty amount field).
+  const [currencyCode, setCurrencyCode] = useState("USD");
+  useEffect(() => setCurrencyCode(getCurrency()), []);
+  const quickAmounts = (() => {
+    const cfg = campaign?.suggestedDonations ?? { amounts: [...DEFAULT_SUGGESTED_DONATION_AMOUNTS], byCurrency: {} };
+    const all = [...new Set(resolveSuggestedAmountsForCurrency(cfg, currencyCode).filter((n: number) => n > 0))].sort((a, b) => a - b);
+    return (all.length > 4 ? all.slice(1) : all).slice(0, 4);
+  })();
 
   const handleShare = () => {
     setIsShareOpen(true);
@@ -136,6 +155,7 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
         suggestedShareCounts={campaign.suggestedShareCounts}
         shareLabels={campaign.shareLabels}
         authCallbackUrl={donationCallbackUrl}
+        initialDonationAmount={presetAmount}
       />
     </>
   );
@@ -145,9 +165,9 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
     return (
       <>
         {dialogEl}
-        <div className="fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-[0_-8px_30px_-12px_rgba(2,29,50,.25)]">
+        <div className="fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-md border-t border-line pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_30px_-12px_rgba(18,35,57,.25)]">
           {/* Thin progress strip flush to the top edge */}
-          {!hideAmountAndDonors && showProgress && (
+          {!hideAmountAndDonors && showProgress && pct >= LOW_FUNDING_PERCENT && (
             <div className="h-1 w-full bg-gray-100">
               <div
                 className="h-full bg-gradient-to-r from-burgundy to-gold transition-[width] duration-700"
@@ -158,28 +178,32 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
           <div className="px-4 pt-2.5 pb-3">
             {!hideAmountAndDonors && (
               <div className="flex items-end justify-between mb-2.5">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-medium text-gray-500 leading-none mb-1">
-                    {showProgress ? `${t("from")} ${formatMoney(campaign.targetAmount)}` : t("peopleDonated")}
-                  </p>
-                  <p className="text-xl font-extrabold text-deep leading-none">
-                    {formatMoney(campaign.currentAmount)}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 text-right shrink-0">
-                  {showProgress && (
+                {!showProgress || pct < LOW_FUNDING_PERCENT ? (
+                  /* Open goal or barely funded: no raw "$15" headline. */
+                  <div className="min-w-0">
+                    <p className="text-[15px] font-extrabold text-deep leading-tight">{tB("beFirst")}</p>
+                    {showProgress && (
+                      <p className="mt-0.5 text-[11px] font-medium text-gray-500">
+                        {tB("goal", { amount: isolateLtr(formatMoney(campaign.targetAmount)) })}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-medium text-gray-500 leading-none mb-1">
+                        {`${t("from")} ${formatMoney(campaign.targetAmount)}`}
+                      </p>
+                      <p className="text-xl font-extrabold text-deep leading-none">{formatMoney(campaign.currentAmount)}</p>
+                    </div>
                     <span className="text-sm font-bold text-burgundy tabular-nums">{Math.round(pct)}%</span>
-                  )}
-                  <span className="flex items-center gap-1 text-xs font-semibold text-gray-600">
-                    <HandHeart className="w-4 h-4 text-burgundy" />
-                    {campaign.donationCount}
-                  </span>
-                </div>
+                  </>
+                )}
               </div>
             )}
             <div className="flex gap-2">
               <Button
-                onClick={handleDonate}
+                onClick={() => handleDonate()}
                 className="flex-1 flex gap-2 shape-button bg-burgundy hover:bg-burgundyDark text-white font-bold py-3.5 text-base transition-all duration-200 shadow-soft hover:shadow-lift"
               >
                 <HandCoins className="w-5 h-5" />
@@ -204,15 +228,25 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
     <div className="h-full">
       {dialogEl}
 
-      <div className="sticky top-32 space-y-4">
+      <div className="sticky top-[136px] space-y-4">
         {/* Donation card */}
-        <div className="relative bg-white rounded-3xl border border-gray-100 shadow-soft overflow-hidden">
+        <div className="relative bg-white rounded-[28px] border border-line shadow-[0_30px_60px_-36px_rgba(18,35,57,.4)] overflow-hidden">
           {/* Gold accent header strip */}
-          <div className="h-1.5 w-full bg-gradient-to-r from-burgundy via-burgundy to-gold" />
+          <div className="h-1.5 w-full bg-gradient-to-r from-burgundy to-gold" />
 
           <div className="p-6 lg:p-7">
             {!hideAmountAndDonors ? (
               <>
+                {/* Barely funded: lead with an invitation instead of "$15 of $20,800". */}
+                {showProgress && pct < LOW_FUNDING_PERCENT ? (
+                  <div>
+                    <p className="text-2xl font-extrabold leading-snug text-deep">{tB("beFirst")}</p>
+                    <p className="mt-1.5 text-sm text-gray-500">
+                      {tB("goal", { amount: isolateLtr(formatMoney(campaign.targetAmount)) })}
+                    </p>
+                  </div>
+                ) : (
+                <>
                 {/* Raised amount */}
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <span className="text-[2.6rem] leading-none font-extrabold text-deep tracking-tight">
@@ -237,17 +271,9 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
                     <ProgressBar />
                   </div>
                 )}
+                </>
+                )}
 
-                {/* Donor proof */}
-                <div className="mt-5 flex items-center gap-2.5 rounded-2xl bg-offwhite/70 px-4 py-3">
-                  <div className="w-9 h-9 rounded-full bg-burgundy/10 flex items-center justify-center flex-shrink-0">
-                    <HandHeart className="w-[18px] h-[18px] text-burgundy" />
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    <span className="font-extrabold text-deep">{campaign.donationCount.toLocaleString()}</span>{" "}
-                    {t("peopleDonated")}
-                  </p>
-                </div>
               </>
             ) : (
               <div className="flex items-center gap-3">
@@ -258,10 +284,29 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
               </div>
             )}
 
+            {/* Quick amounts */}
+            {campaign.fundraisingMode !== "SHARES" && quickAmounts.length > 0 && (
+              <div className="mt-6">
+                <p className="mb-2 text-xs font-bold text-gray-500">{tB("chooseAmount")}</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {quickAmounts.map((a: number) => (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => handleDonate(a)}
+                      className="h-12 rounded-xl border border-line text-sm font-extrabold tabular-nums text-deep transition-colors hover:border-deep hover:bg-deep hover:text-white"
+                    >
+                      <span dir="ltr">{getCurrencySymbol()}{a.toLocaleString()}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Action buttons */}
-            <div className="mt-6 space-y-3">
+            <div className="mt-4 space-y-3">
               <Button
-                onClick={handleDonate}
+                onClick={() => handleDonate()}
                 className="w-full flex gap-2 shape-button bg-burgundy hover:bg-burgundyDark text-white font-bold py-6 text-lg transition-all duration-200 shadow-soft hover:shadow-lift"
               >
                 <HandCoins className="w-5 h-5" />

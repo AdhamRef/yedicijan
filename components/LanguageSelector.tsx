@@ -97,7 +97,7 @@ export default function LanguageSwitcher({ onDark = true }: { onDark?: boolean }
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors text-sm font-medium ${
           onDark
             ? "text-white/90 hover:text-white hover:bg-white/10"
-            : "text-gray-700 hover:text-[#A5243D] hover:bg-gray-100"
+            : "text-gray-700 hover:text-burgundy hover:bg-gray-100"
         }`}
       >
         <ReactCountryFlag
@@ -128,7 +128,7 @@ export default function LanguageSwitcher({ onDark = true }: { onDark?: boolean }
               className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors disabled:opacity-60
                 ${
                   lang.code === currentLocale
-                    ? "bg-blue-50 text-[#A5243D] font-semibold"
+                    ? "bg-blue-50 text-burgundy font-semibold"
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
             >

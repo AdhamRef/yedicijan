@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getServerBaseUrl } from "@/lib/server-base-url";
 import React from "react";
 import { prisma } from "@/lib/prisma";
-import { isObjectId, pickLocaleSlug, whereByIdOrAnyLocaleSlug } from "@/lib/slug";
+import { decodeRouteParam, isObjectId, pickLocaleSlug, whereByIdOrAnyLocaleSlug } from "@/lib/slug";
 import { pickTranslation } from "@/lib/i18n/translation-fallback";
 import {
   LOCALE_SEO,
@@ -59,7 +59,7 @@ async function fetchPostForSeo(idOrSlug: string) {
 export async function generateMetadata(args: BlogPostProps): Promise<Metadata> {
   const params = await args.params.catch(() => null);
   const locale = (params?.locale as string) || "ar";
-  const postId = params?.postId as string | undefined;
+  const postId = params?.postId ? decodeRouteParam(params.postId as string) : undefined;
   const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
   // Always anchor canonical to the requested URL so the parent layout's
   // `/{locale}` canonical can never leak through if metadata building fails.
@@ -143,7 +143,8 @@ export async function generateMetadata(args: BlogPostProps): Promise<Metadata> {
 }
 
 export default async function BlogPost({ params: paramsPromise }: BlogPostProps) {
-  const params = await paramsPromise;
+  const rawParams = await paramsPromise;
+  const params = { ...rawParams, postId: decodeRouteParam(rawParams.postId) };
   const baseUrl = await getServerBaseUrl();
   const locale = params.locale || "ar";
   const msgs = await import(`../../../../i18n/messages/${locale}.json`);
@@ -173,7 +174,7 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
   }
 
   // Fetch the post and similar posts (API already returns localized fields)
-  const res = await axios.get(`${baseUrl}/api/posts/${params.postId}`, { params: { locale } });
+  const res = await axios.get(`${baseUrl}/api/posts/${encodeURIComponent(params.postId)}`, { params: { locale } });
   const { post, similarPosts } = res.data;
 
   // Helper to pick a localized value: prefer a top-level localized field, then translations array, then post.fieldAR/EN/FR
@@ -203,28 +204,28 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
   }
 
   return (
-    <div className="w-full bg-gray-100">
-      <div className="min-h-screen pt-10 pb-10 relative max-w-7xl mx-auto">
+    <div className="w-full bg-offwhite">
+      <div className="min-h-screen pt-10 pb-16 relative max-w-7xl mx-auto">
         <Progress className="fixed top-0 left-0 right-0 z-50 h-1 bg-transparent" value={0} />
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-2">
-              <Card className="overflow-hidden">
-                <CardHeader className="space-y-4">
+              <Card className="overflow-hidden rounded-[28px] border-line shadow-none">
+                <CardHeader className="space-y-4 p-6 sm:p-8">
                   <div className="flex items-center justify-between">
-                    <Badge variant="outline">{categoryName}</Badge>
+                    <Badge variant="outline" className="rounded-full border-line bg-offwhite px-3 py-1 font-bold text-burgundy">{categoryName}</Badge>
                     <span className="text-sm text-muted-foreground">
                       {post.createdAt ? formatDistanceToNow(new Date(post.createdAt), { addSuffix: true, locale: locale === 'ar' ? dateAr : undefined }) : ''}
                     </span>
                   </div>
-                  <CardTitle className="text-3xl font-bold leading-tight">{localizedTitle}</CardTitle>
+                  <CardTitle className="text-3xl font-extrabold leading-snug text-deep sm:text-4xl">{localizedTitle}</CardTitle>
                 </CardHeader>
 
                 <div className="relative w-full aspect-video overflow-hidden">
                   <Image src={post?.image || "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg"} alt={localizedTitle || "Post Image"} fill sizes="(max-width: 768px) 100vw, 66vw" className="object-cover" />
                 </div>
 
-                <CardContent className="p-6">
+                <CardContent className="p-6 sm:p-8">
                   {localizedDescription && <p className="lead text-muted-foreground">{localizedDescription}</p>}
                   <Separator className="my-6" />
                   <BlogPostContent content={localizedContent} />
@@ -236,7 +237,7 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
               </Card>
             </div>
 
-            <aside className="flex flex-col gap-4 sticky top-[6.5rem] self-start">
+            <aside className="flex flex-col gap-4 sticky top-[136px] self-start">
               {(() => {
                 const raw = post.campaigns ?? (post.campaign ? [post.campaign] : []);
                 const list = raw as {
@@ -253,9 +254,9 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
                 }[];
                 if (!list.length) return null;
                 return (
-                  <Card className="overflow-hidden">
+                  <Card className="overflow-hidden rounded-[28px] border-line shadow-none">
                     <CardHeader>
-                      <CardTitle className="text-lg font-bold">{t("relatedCampaign")}</CardTitle>
+                      <CardTitle className="text-lg font-extrabold text-deep">{t("relatedCampaign")}</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0 flex flex-col gap-4">
                       {list.map((camp) => {
@@ -274,7 +275,7 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
                           <Link
                             key={camp.id}
                             href={`/${locale}/campaign/${camp.slug || camp.id}`}
-                            className="group block rounded-xl overflow-hidden border border-gray-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#A5243D]/30"
+                            className="group block rounded-2xl overflow-hidden border border-line bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-burgundy/30"
                           >
                             <div className="relative aspect-[4/2.5] overflow-hidden bg-gray-100">
                               <Image
@@ -286,7 +287,7 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
                               {showBar ? (
-                                <div className="absolute top-2 right-2 rounded-lg bg-white/95 px-2 py-0.5 text-xs font-bold text-[#A5243D] shadow-sm">
+                                <div className="absolute top-2 right-2 rounded-lg bg-white/95 px-2 py-0.5 text-xs font-bold text-burgundy shadow-sm">
                                   {progress.toFixed(0)}%
                                 </div>
                               ) : (
@@ -301,7 +302,7 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
                               </h3>
                               <div className="flex justify-between text-xs mb-1.5 gap-1">
                                 <span className="text-gray-700 whitespace-nowrap">
-                                  <span className="font-bold text-[#A5243D]">{Number(camp.currentAmount).toLocaleString()}</span> {t("campaignDonations")}
+                                  <span className="font-bold text-burgundy">{Number(camp.currentAmount).toLocaleString()}</span> {t("campaignDonations")}
                                 </span>
                                 {showBar ? (
                                   <span className="text-gray-600 text-right whitespace-nowrap">
@@ -324,12 +325,12 @@ export default async function BlogPost({ params: paramsPromise }: BlogPostProps)
                               {showBar ? (
                               <div className="w-full bg-gray-100 rounded-full h-1.5">
                                 <div
-                                  className="bg-[#A5243D] h-1.5 rounded-full transition-all duration-500"
+                                  className="bg-burgundy h-1.5 rounded-full transition-all duration-500"
                                   style={{ width: `${progress}%` }}
                                 />
                               </div>
                               ) : null}
-                              <p className="text-center text-xs font-semibold text-[#A5243D] mt-2">{t("donateNow")}</p>
+                              <p className="text-center text-xs font-semibold text-burgundy mt-2">{t("donateNow")}</p>
                             </div>
                           </Link>
                         );

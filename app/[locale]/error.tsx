@@ -46,7 +46,7 @@ export default function Error({
         <div className="flex gap-3 justify-center">
           <button
             onClick={() => reset()}
-            className="inline-flex items-center gap-2 bg-[#A5243D] hover:bg-[#7D1830] text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
+            className="inline-flex items-center gap-2 bg-burgundy hover:bg-burgundyDark text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             {copy.retry}

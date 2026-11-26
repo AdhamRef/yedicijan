@@ -56,8 +56,8 @@ const EditDialog = ({ title, value, onSave, type = "text", icon: Icon }: EditDia
       >
         {/* Icon */}
         {Icon && (
-          <div className="w-8 h-8 rounded-lg bg-[#A5243D]/8 flex items-center justify-center flex-shrink-0">
-            <Icon className="w-4 h-4 text-[#A5243D]" />
+          <div className="w-8 h-8 rounded-lg bg-burgundy/8 flex items-center justify-center flex-shrink-0">
+            <Icon className="w-4 h-4 text-burgundy" />
           </div>
         )}
 
@@ -74,7 +74,7 @@ const EditDialog = ({ title, value, onSave, type = "text", icon: Icon }: EditDia
         </div>
 
         {/* Edit pencil */}
-        <Edit2 className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#A5243D] flex-shrink-0 transition-colors" />
+        <Edit2 className="w-3.5 h-3.5 text-gray-300 group-hover:text-burgundy flex-shrink-0 transition-colors" />
       </button>
 
       {/* Dialog */}
@@ -87,8 +87,8 @@ const EditDialog = ({ title, value, onSave, type = "text", icon: Icon }: EditDia
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-gray-100">
             <div className="flex items-center gap-3">
               {Icon && (
-                <div className="w-9 h-9 rounded-xl bg-[#A5243D]/10 flex items-center justify-center flex-shrink-0">
-                  <Icon className="w-4.5 h-4.5 text-[#A5243D]" />
+                <div className="w-9 h-9 rounded-xl bg-burgundy/10 flex items-center justify-center flex-shrink-0">
+                  <Icon className="w-4.5 h-4.5 text-burgundy" />
                 </div>
               )}
               <DialogTitle className="text-base font-semibold text-gray-900 text-start">
@@ -106,7 +106,7 @@ const EditDialog = ({ title, value, onSave, type = "text", icon: Icon }: EditDia
               onKeyDown={handleKeyDown}
               placeholder={t("enterPlaceholder", { title })}
               dir={isRTL ? "rtl" : "ltr"}
-              className="h-11 rounded-lg border-gray-200 focus:border-[#A5243D] focus:ring-[#A5243D]/20 text-start"
+              className="h-11 rounded-lg border-gray-200 focus:border-burgundy focus:ring-burgundy/20 text-start"
               autoFocus
             />
 
@@ -122,7 +122,7 @@ const EditDialog = ({ title, value, onSave, type = "text", icon: Icon }: EditDia
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex-1 h-10 rounded-lg bg-[#A5243D] hover:bg-[#7D1830] text-white text-sm font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                className="flex-1 h-10 rounded-lg bg-burgundy hover:bg-burgundyDark text-white text-sm font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />

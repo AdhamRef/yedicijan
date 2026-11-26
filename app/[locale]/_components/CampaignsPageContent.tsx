@@ -2,11 +2,12 @@
 
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { HandHeart, ArrowRight, X, ChevronDown, ChevronRight, Check } from "lucide-react";
+import { HandHeart, ArrowRight, X, ChevronDown, Check } from "lucide-react";
 import CampaignCard from "@/app/[locale]/_components/CampaignCard";
 import { useDebounce } from "use-debounce";
 import { useLocale, useTranslations } from "next-intl";
-import { Link } from "@/i18n/routing";
+import PageHero from "@/components/brand/PageHero";
+import BrandDots from "@/components/brand/BrandDots";
 import CategoryIcon from "@/components/CategoryIcon";
 
 interface Campaign {
@@ -278,61 +279,26 @@ const CampaignsPage = ({
   return (
     <main className="min-h-screen bg-offwhite" dir={isRTL ? "rtl" : "ltr"}>
       {/* ── Hero Header ── */}
-      <section className="relative hero-pattern text-white overflow-hidden">
-        {heroImage && (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- slider images can live on any host the admin uploads to */}
-            <img
-              src={heroImage}
-              alt=""
-              aria-hidden="true"
-              fetchPriority="high"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            {/* Keeps the white headline readable over any photo. */}
-            <div className="absolute inset-0 bg-gradient-to-b from-deep/85 via-deep/75 to-deep/90" />
-          </>
-        )}
-        <div className="relative z-10 max-w-7xl mx-auto px-4 lg:px-8 pt-12 pb-20 md:pt-16 md:pb-24 grid gap-10 md:grid-cols-[1fr_420px] md:items-center">
-          <div>
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-ice/70 text-xs mb-8">
-              <Link href="/" className="hover:text-white transition-colors">{t("home") || "Home"}</Link>
-              <ChevronRight className={`w-3 h-3 ${isRTL ? "rotate-180" : ""}`} />
-              <span className="text-white/90 font-medium">{t("campaigns") || "Campaigns"}</span>
-            </div>
-
-            <div className="gold-mark mb-6" />
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-white leading-tight">
-              {t("campaigns") || "Projeler"}
-            </h1>
-            <p className="mt-5 max-w-xl text-lg leading-8 text-ice">
-              {t("heroDescription") || "Support meaningful causes and make a lasting difference in people's lives."}
-            </p>
+      <PageHero
+        image={heroImage}
+        crumbs={[{ href: "/", label: t("home") || "Home" }, { label: t("campaigns") || "Campaigns" }]}
+        eyebrow={t("categoryHubTitle")}
+        title={t("campaigns") || "Projeler"}
+        subtitle={t("heroDescription") || "Support meaningful causes and make a lasting difference in people's lives."}
+        aside={
+          <div className="hidden items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-5 py-4 backdrop-blur md:flex">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gold text-deep">
+              <Check className="h-5 w-5" strokeWidth={3} />
+            </span>
+            <span className="text-sm font-bold">{t("publicBenefitAssociation")}</span>
           </div>
-
-          {/* Info aside card — desktop only. On phones it pushed the categories bar
-              a full screen down without adding anything the hero doesn't already say. */}
-          <aside className="hidden md:block shape-card border border-white/15 bg-white/10 p-8 backdrop-blur">
-            <div className="gold-mark" />
-            <div className="mt-8 flex items-center justify-between gap-6">
-              <div>
-                <h2 className="text-2xl font-extrabold leading-tight">{t("categoryHubTitle")}</h2>
-                <p className="mt-2 text-sm font-medium text-white/70">{t("categoryHubSubtitle")}</p>
-              </div>
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gold text-deep">
-                <Check className="w-6 h-6" strokeWidth={3} />
-              </div>
-            </div>
-            <p className="mt-6 text-sm font-medium text-white/75">{t("publicBenefitAssociation")}</p>
-          </aside>
-        </div>
-      </section>
+        }
+      />
 
       {/* ── Categories bar ── */}
-      <section className="max-w-7xl mx-auto px-4 lg:px-8 -mt-8 relative z-30">
-        <div className="shape-card flex items-center gap-3 bg-white p-3 shadow-lift md:gap-5 md:p-5">
-          <div className="shape-chip w-fit bg-deep px-4 py-2.5 text-xs font-extrabold text-white flex-shrink-0 md:px-7 md:py-3.5 md:text-sm">
+      <section className="max-w-7xl mx-auto px-4 lg:px-8 -mt-7 relative z-30">
+        <div className="flex items-center gap-3 rounded-[24px] border border-line bg-white p-3 shadow-[0_24px_50px_-30px_rgba(18,35,57,.4)] md:gap-5 md:p-4">
+          <div className="w-fit rounded-full bg-deep px-4 py-2.5 text-xs font-extrabold text-white flex-shrink-0 md:px-6 md:py-3 md:text-sm">
             {t("categoriesLabel")}
           </div>
 
@@ -353,10 +319,10 @@ const CampaignsPage = ({
           <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2.5">
             <button
               onClick={() => handleCategoryChange("all")}
-              className={`shape-chip flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 border ${
+              className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-[13px] font-bold transition-all whitespace-nowrap flex-shrink-0 border ${
                 selectedCategory === "all"
-                  ? "bg-burgundy text-white border-burgundy shadow-soft"
-                  : "bg-white text-ink border-gray-200 hover:border-burgundy/50 hover:text-burgundy"
+                  ? "bg-burgundy text-white border-burgundy"
+                  : "bg-white text-deep border-line hover:border-deep"
               }`}
             >
               <HandHeart className="w-3.5 h-3.5" />
@@ -367,10 +333,10 @@ const CampaignsPage = ({
                 key={cat.id}
                 dir={isRTL ? "rtl" : "ltr"}
                 onClick={() => handleCategoryChange(cat.id)}
-                className={`shape-chip flex items-center gap-1.5 px-4 py-2 text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 border ${
+                className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-[13px] font-bold transition-all whitespace-nowrap flex-shrink-0 border ${
                   selectedCategory === cat.id
-                    ? "bg-burgundy text-white border-burgundy shadow-soft"
-                    : "bg-white text-ink border-gray-200 hover:border-burgundy/50 hover:text-burgundy"
+                    ? "bg-burgundy text-white border-burgundy"
+                    : "bg-white text-deep border-line hover:border-deep"
                 }`}
               >
                 {cat.campaignCount != null && (
@@ -390,7 +356,7 @@ const CampaignsPage = ({
       <section className="max-w-7xl mx-auto px-4 lg:px-8 py-10 md:py-12">
         <div>
           <div className="mb-8">
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-deep">{t("allCampaigns") || "All projects"}</h2>
+            <h2 className="inline-flex items-center gap-3 text-2xl sm:text-3xl font-extrabold tracking-tight text-deep"><BrandDots className="text-burgundy" />{t("allCampaigns") || "All projects"}</h2>
           </div>
 
           {error && sortedCampaigns.length > 0 && (
@@ -467,21 +433,6 @@ const CampaignsPage = ({
         </div>
       </section>
 
-      {/* ── General donation CTA ── */}
-      <section className="bg-deep text-white">
-        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="max-w-xl text-2xl sm:text-3xl font-extrabold leading-tight">{t("ctaTitle")}</h2>
-            <p className="mt-2 text-sm font-medium text-white/65">{t("ctaSubtitle")}</p>
-          </div>
-          <Link
-            href="/"
-            className="shape-button inline-flex w-fit items-center justify-center bg-burgundy hover:bg-burgundyDark px-10 py-4 text-sm font-extrabold text-white transition-colors"
-          >
-            {t("ctaButton")}
-          </Link>
-        </div>
-      </section>
     </main>
   );
 };

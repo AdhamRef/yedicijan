@@ -14,17 +14,21 @@ export default {
   			poppins: ["var(--font-poppins)"],
   		},
   		colors: {
-  			// ── Yedicihan brand palette (design_inspiration) ──
+  			// ── Yedicihan brand palette — YEDICIHAN Brand Guidelines: #122339 primary,
+  			// #A6243C secondary, #F6BC51 accent. Token names kept so every page re-skins. ──
   			// The public site (app/[locale] + the shared shell) is built on these.
-  			deep: '#021D32',
-  			navy: '#073452',
-  			soft: '#0B4568',
-  			burgundy: '#A5243D',
-  			burgundyDark: '#7D1830',
-  			gold: '#D8AA55',
-  			offwhite: '#F7F4EF',
-  			ink: '#17212B',
+  			deep: '#122339',
+  			navy: '#1B3150',
+  			soft: '#24406A',
+  			burgundy: '#A6243C',
+  			burgundyDark: '#8A1C31',
+  			gold: '#F6BC51',
+  			offwhite: '#FBF8F3',
+  			ink: '#122339',
   			ice: '#CDE0EA',
+  			// Brand guide 2025: warm paper tones used behind the contour pattern.
+  			sand: '#F3EEE5',
+  			line: '#E7E1D6',
   			// Brand palette. Previously the brand blue was pasted as a raw `#025EB8` literal
   			// in ~750 places across ~170 dashboard files, so a palette change meant editing
   			// every one of them. `brand-600` IS `#025EB8`; `brand-700` is `#024A92` and

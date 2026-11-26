@@ -77,7 +77,7 @@ function CopyButton({
       className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
         copied
           ? "border-green-200 bg-green-50 text-green-600"
-          : "border-gray-200 bg-gray-50 text-gray-500 hover:bg-[#A5243D] hover:border-[#A5243D] hover:text-white"
+          : "border-gray-200 bg-gray-50 text-gray-500 hover:bg-burgundy hover:border-burgundy hover:text-white"
       }`}
     >
       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
@@ -88,9 +88,9 @@ function CopyButton({
 
 function BankCard({ bank, t }: { bank: Bank; t: ReturnType<typeof useTranslations> }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+    <div className="bg-white border border-line rounded-[24px] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-4 px-6 py-5 border-b border-gray-100">
+      <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
         {bank.logo && (
           <div className="relative w-36 h-10 flex-shrink-0">
             <Image src={bank.logo} alt={bank.name} fill className="object-contain object-left" />
@@ -112,7 +112,7 @@ function BankCard({ bank, t }: { bank: Bank; t: ReturnType<typeof useTranslation
       </div>
 
       {/* Swift — mobile only */}
-      <div className="sm:hidden flex items-center justify-between px-6 py-3 bg-gray-50 border-b border-gray-100">
+      <div className="sm:hidden flex items-center justify-between px-4 py-3 bg-offwhite border-b border-line">
         <div>
           <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Swift / BIC</p>
           <p className="text-sm font-black text-gray-800 tracking-widest mt-0.5">{bank.swift}</p>
@@ -121,7 +121,7 @@ function BankCard({ bank, t }: { bank: Bank; t: ReturnType<typeof useTranslation
       </div>
 
       {/* Account holder */}
-      <div className="flex items-center justify-between gap-4 px-6 py-4 bg-[#A5243D]/[0.03] border-b border-gray-100">
+      <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6 bg-offwhite border-b border-line">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold mb-0.5">{t("accountHolder")}</p>
           <p className="text-sm font-bold text-gray-900">{bank.accountName}</p>
@@ -132,8 +132,8 @@ function BankCard({ bank, t }: { bank: Bank; t: ReturnType<typeof useTranslation
       {/* Account rows */}
       <div className="divide-y divide-gray-100">
         {bank.accounts.map((acc) => (
-          <div key={acc.iban} className="px-6 py-4">
-            <div className="flex items-start justify-between gap-4">
+          <div key={acc.iban} className="px-4 py-4 sm:px-6">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="flex-1 min-w-0 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span
@@ -154,7 +154,7 @@ function BankCard({ bank, t }: { bank: Bank; t: ReturnType<typeof useTranslation
                     </span>
                   )}
                 </div>
-                <p className="text-base font-black text-gray-900 tracking-widest font-mono">
+                <p className="font-mono text-[15px] font-black tracking-wider text-deep sm:text-base sm:tracking-widest" dir="ltr">
                   {formatIBAN(acc.iban)}
                 </p>
               </div>
@@ -174,13 +174,13 @@ function BankCard({ bank, t }: { bank: Bank; t: ReturnType<typeof useTranslation
 export default function BankAccountsBlock() {
   const t = useTranslations("BankTransfer");
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
+    <div className="max-w-4xl mx-auto px-4 py-10 sm:py-14 space-y-5">
       {BANKS.map((bank) => (
         <BankCard key={bank.swift} bank={bank} t={t} />
       ))}
       <p className="text-center text-sm text-gray-400 pt-2">
         {t("footer")}{" "}
-        <a href="mailto:info@yedicihan.org" className="text-[#A5243D] font-semibold hover:underline">
+        <a href="mailto:info@yedicihan.org" className="text-burgundy font-semibold hover:underline">
           info@yedicihan.org
         </a>
       </p>

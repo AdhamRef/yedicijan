@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Poppins, Tajawal } from "next/font/google";
+import { Open_Sans, Cairo } from "next/font/google";
 import DeferredGTM from "@/components/DeferredGTM";
 import MicrosoftClarity from "@/components/MicrosoftClarity";
 import EngagementInstrumentation from "@/components/EngagementInstrumentation";
 import { Analytics } from "@vercel/analytics/next";
 import "./[locale]/globals.css";
 
-const poppins = Poppins({
-  weight: ["400", "500", "600", "700"],
-  subsets: ["latin"],
+// Brand guide fonts. Latin: Open Sans. Arabic: TS Damas Sans (licensed, self-hosted
+// via @font-face in globals.css) with Cairo — the guide's second Arabic face — as
+// the fallback. `--font-arabic` is composed in globals.css from these.
+const poppins = Open_Sans({
+  weight: ["400", "500", "600", "700", "800"],
+  subsets: ["latin", "latin-ext"],
   variable: "--font-poppins",
   display: "swap",
 });
 
-const tajawal = Tajawal({
-  weight: ["400", "500", "700"],
-  subsets: ["arabic"],
-  variable: "--font-arabic",
+const tajawal = Cairo({
+  weight: ["400", "500", "600", "700", "800", "900"],
+  subsets: ["arabic", "latin"],
+  variable: "--font-cairo",
   display: "swap",
 });
 

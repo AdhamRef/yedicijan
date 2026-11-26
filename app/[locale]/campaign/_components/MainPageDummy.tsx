@@ -1,5 +1,6 @@
 "use client";
 
+import { LOW_FUNDING_PERCENT } from "@/lib/campaign/funding";
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import axios from "axios";
@@ -17,9 +18,7 @@ import {
   Book,
   ChevronLeft,
   ChevronRight,
-  Users,
   TrendingUp,
-  Heart,
   ShieldCheck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -284,7 +283,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">{t("campaignNotFound")}</h2>
           <p className="text-gray-500 mb-6">{error || t("campaignNotFoundDescription")}</p>
-          <Button onClick={() => window.history.back()} className="bg-[#A5243D] hover:bg-[#7D1830]">
+          <Button onClick={() => window.history.back()} className="bg-burgundy hover:bg-burgundyDark">
             {t("goBack")}
           </Button>
         </div>
@@ -296,7 +295,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
 
   return (
     <>
-      <main className="min-h-screen bg-offwhite/60 pb-28 sm:pb-12">
+      <main className="min-h-screen bg-offwhite pb-28 sm:pb-12">
         <div className="max-w-7xl mx-auto px-0 sm:px-4 sm:py-8">
           <div className="grid lg:grid-cols-12 gap-0 lg:gap-8">
 
@@ -308,7 +307,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <Link
                     href={`/category/${campaign.category.slug || campaign.category.id}`}
-                    className="inline-flex items-center gap-1.5 shape-chip bg-burgundy hover:bg-burgundyDark text-white text-[11px] sm:text-xs font-bold px-3 py-1.5 uppercase tracking-wide transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-deep hover:bg-navy text-white text-xs font-bold px-3.5 py-1.5 transition-colors"
                   >
                     <CategoryIcon name={campaign.category.icon} className="w-3.5 h-3.5" />
                     {getLocalizedProperty(campaign.category, "name")}
@@ -319,8 +318,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                   </span>
                 </div>
 
-                <div className="gold-mark mb-4" />
-                <h1 className="text-2xl sm:text-3xl lg:text-[2.6rem] font-extrabold text-deep leading-[1.12] tracking-tight">
+                <h1 className="text-[28px] sm:text-4xl lg:text-[2.8rem] font-extrabold text-deep leading-[1.12] tracking-tight">
                   {getLocalizedProperty(campaign, "title")}
                 </h1>
               </div>
@@ -369,11 +367,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
 
                   {/* Floating social-proof bar */}
                   <div className="absolute bottom-3.5 inset-x-3.5 z-10 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md text-deep text-xs sm:text-sm font-bold px-3.5 py-2 shadow-sm ring-1 ring-black/5">
-                      <Heart className="w-4 h-4 text-burgundy" fill="currentColor" />
-                      {campaign.donationCount.toLocaleString()} {t("donor")}
-                    </span>
-                    {campaign.showProgress !== false && (
+                    {campaign.showProgress !== false && campaign.progress >= LOW_FUNDING_PERCENT && (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md text-deep text-xs sm:text-sm font-bold px-3.5 py-2 shadow-sm ring-1 ring-black/5 tabular-nums">
                         <TrendingUp className="w-4 h-4 text-gold" />
                         {campaign.progress.toFixed(0)}% {t("completed")}
@@ -443,7 +437,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
               {/* ── Tabs card (no overflow-clip so the inner tab bar can stick) ── */}
               <div className="bg-white rounded-[26px] sm:rounded-[32px] border border-gray-100 shadow-soft mx-4 sm:mx-0">
                 {/* Sticky segmented tab bar */}
-                <div className="sticky top-12 lg:top-[88px] z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2.5 sm:px-3 py-2.5 rounded-t-[26px] sm:rounded-t-[32px]">
+                <div className="sticky top-16 lg:top-[116px] z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2.5 sm:px-3 py-2.5 rounded-t-[26px] sm:rounded-t-[32px]">
                   <div className="grid grid-cols-4 gap-1 rounded-2xl bg-offwhite p-1">
                     {tabs.map(({ id: tabId, labelKey, icon: Icon, badge }) => {
                       const active = activeTab === tabId;
@@ -557,7 +551,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                               {update.image && (
                                 <button
                                   onClick={() => { setModalContent({ type: "image", src: update.image!, alt: getLocalizedProperty(update, "title") }); setIsModalOpen(true); }}
-                                  className="group relative rounded-xl overflow-hidden ring-1 ring-gray-200 hover:ring-[#A5243D] transition-all"
+                                  className="group relative rounded-xl overflow-hidden ring-1 ring-gray-200 hover:ring-burgundy transition-all"
                                 >
                                   <Image src={update.image} alt="" width={96} height={96} className="w-24 h-24 object-cover group-hover:scale-105 transition-transform duration-300" />
                                 </button>
@@ -579,10 +573,10 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                         {/* Add comment */}
                         <div className="mb-5">
                           {session ? (
-                            <form onSubmit={handleAddComment} className="flex gap-3 bg-gray-50 rounded-xl p-3 border border-gray-200 focus-within:border-[#A5243D]/40 focus-within:ring-2 focus-within:ring-[#A5243D]/10 transition-all">
+                            <form onSubmit={handleAddComment} className="flex gap-3 bg-gray-50 rounded-xl p-3 border border-gray-200 focus-within:border-burgundy/40 focus-within:ring-2 focus-within:ring-burgundy/10 transition-all">
                               <Avatar className="w-8 h-8 flex-shrink-0 mt-0.5">
                                 <AvatarImage src={session.user?.image || ""} />
-                                <AvatarFallback className="bg-[#A5243D]/10 text-[#A5243D] text-xs font-bold">
+                                <AvatarFallback className="bg-burgundy/10 text-burgundy text-xs font-bold">
                                   {session.user?.name?.[0] || "U"}
                                 </AvatarFallback>
                               </Avatar>
@@ -596,7 +590,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                                 />
                                 <div className="flex justify-end mt-2">
                                   <Button type="submit" disabled={!newComment.trim() || isSubmitting} size="sm"
-                                    className="bg-[#A5243D] hover:bg-[#7D1830] text-white h-8 gap-1.5 rounded-lg">
+                                    className="bg-burgundy hover:bg-burgundyDark text-white h-8 gap-1.5 rounded-lg">
                                     {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                                     {t("send")}
                                   </Button>
@@ -656,7 +650,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                                   <div>
                                     <Textarea value={editText} onChange={e => setEditText(e.target.value)} className="mb-2 text-sm" rows={2} />
                                     <div className="flex gap-2">
-                                      <Button onClick={() => handleEditComment(comment.id)} disabled={isSubmitting} size="sm" className="bg-[#A5243D] hover:bg-[#7D1830] text-white h-8">
+                                      <Button onClick={() => handleEditComment(comment.id)} disabled={isSubmitting} size="sm" className="bg-burgundy hover:bg-burgundyDark text-white h-8">
                                         {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : t("save")}
                                       </Button>
                                       <Button variant="outline" size="sm" onClick={() => setEditingComment(null)} className="h-8">{t("cancel")}</Button>
@@ -681,16 +675,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                     {activeTab === "info" && (
                       <motion.div key="info" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-6">
                         {/* Stats grid */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="relative overflow-hidden rounded-2xl border border-burgundy/10 bg-gradient-to-br from-burgundy/[0.07] to-burgundy/[0.02] p-4 flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-burgundy/10 text-burgundy">
-                                <Users className="w-4 h-4" />
-                              </span>
-                              <span className="text-[11px] font-bold uppercase tracking-wide text-burgundy">{t("donor")}</span>
-                            </div>
-                            <span className="text-2xl sm:text-3xl font-extrabold text-deep tabular-nums">{campaign.donationCount.toLocaleString()}</span>
-                          </div>
+                        <div className="grid grid-cols-1 gap-3">
                           <div className="relative overflow-hidden rounded-2xl border border-gold/20 bg-gradient-to-br from-gold/[0.12] to-gold/[0.03] p-4 flex flex-col gap-2">
                             <div className="flex items-center gap-2">
                               <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gold/20" style={{ color: "#9a7727" }}>
@@ -709,7 +694,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                             <div className="space-y-2">
                               {[
                                 { stat: campaign.donationStats.first, label: t("firstDonor"), icon: Star, color: "text-amber-500 bg-amber-50" },
-                                { stat: campaign.donationStats.largest, label: t("largestDonor"), icon: Trophy, color: "text-[#A5243D] bg-[#A5243D]/8" },
+                                { stat: campaign.donationStats.largest, label: t("largestDonor"), icon: Trophy, color: "text-burgundy bg-burgundy/8" },
                                 { stat: campaign.donationStats.last, label: t("latestDonor"), icon: Heart, color: "text-rose-500 bg-rose-50" },
                               ].filter(d => d.stat).map(({ stat, label, icon: Icon, color }) => (
                                 <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
@@ -720,7 +705,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                                     <p className="text-[11px] text-gray-400 font-medium">{label}</p>
                                     <p className="text-sm font-bold text-gray-900 truncate">{stat!.donor}</p>
                                   </div>
-                                  <span className="text-sm font-bold text-[#A5243D] flex-shrink-0">{stat!.amount.toLocaleString()}</span>
+                                  <span className="text-sm font-bold text-burgundy flex-shrink-0">{stat!.amount.toLocaleString()}</span>
                                 </div>
                               ))}
                             </div>

@@ -108,8 +108,8 @@ export default function ChangePasswordDialog({ userId, hasPassword, trigger }: P
       <DialogContent dir={isRtl ? "rtl" : "ltr"} className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#A5243D]/10 flex items-center justify-center">
-              <ShieldCheck className="w-4.5 h-4.5 text-[#A5243D]" />
+            <div className="w-9 h-9 rounded-xl bg-burgundy/10 flex items-center justify-center">
+              <ShieldCheck className="w-4.5 h-4.5 text-burgundy" />
             </div>
             <DialogTitle>{hasPassword ? t("change") : t("set")}</DialogTitle>
           </div>
@@ -196,7 +196,7 @@ export default function ChangePasswordDialog({ userId, hasPassword, trigger }: P
             </Button>
             <Button
               type="submit"
-              className="flex-1 bg-[#A5243D] hover:bg-[#7D1830]"
+              className="flex-1 bg-burgundy hover:bg-burgundyDark"
               disabled={submitting}
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("save")}

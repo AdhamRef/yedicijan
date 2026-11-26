@@ -68,8 +68,8 @@ export default function ImpactCard(props: ImpactCardProps) {
   }[] = [
     {
       Icon: HandHeart,
-      accent: "text-[#A5243D]",
-      bg: "from-[#A5243D]/10 to-[#A5243D]/5 border-[#A5243D]/20",
+      accent: "text-burgundy",
+      bg: "from-burgundy/10 to-burgundy/5 border-burgundy/20",
       label: t("totalGiven"),
       value: total,
       hint: t("acrossDonations", { count: props.totalDonationsCount ?? 0 }),
@@ -149,8 +149,8 @@ export function ImpactCompact(props: ImpactCardProps) {
   );
 
   return (
-    <div className="flex flex-col items-stretch gap-2 mt-4 p-3 rounded-xl bg-[#A5243D]/5 border border-[#A5243D]/10">
-      <div className="flex items-center gap-2 text-xs text-[#A5243D]">
+    <div className="flex flex-col items-stretch gap-2 mt-4 p-3 rounded-xl bg-burgundy/5 border border-burgundy/10">
+      <div className="flex items-center gap-2 text-xs text-burgundy">
         <TrendingUp className="w-3.5 h-3.5" />
         <span className="uppercase font-semibold tracking-wider">{t("totalGiven")}</span>
       </div>

@@ -316,7 +316,7 @@ const DonationSuccessPage = () => {
 
   if (!donation) {
     return (
-      <main className="min-h-screen bg-slate-50 flex items-center justify-center" dir={isRtl ? 'rtl' : 'ltr'}>
+      <main className="min-h-screen bg-offwhite flex items-center justify-center" dir={isRtl ? 'rtl' : 'ltr'}>
         <p className="text-slate-600">{t('donationReceivedMessage')}</p>
       </main>
     );
@@ -324,9 +324,10 @@ const DonationSuccessPage = () => {
 
   return (
     <main
-      className="min-h-screen bg-gray-50"
+      className="relative isolate min-h-screen bg-offwhite"
       dir={isRtl ? 'rtl' : 'ltr'}
     >
+      <div className="topo-layer -z-10 text-deep/[0.06]" aria-hidden />
       {id && <DonationTrustMark donationId={id} token={null} />}
       <div className="max-w-3xl mx-auto px-4 py-12 sm:py-16">
         {/* Hero block */}
@@ -336,10 +337,10 @@ const DonationSuccessPage = () => {
           transition={{ duration: 0.4 }}
           className="text-center mb-10"
         >
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-[#A5243D] text-white shadow-lg shadow-[#A5243D]/25 mb-6">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-burgundy text-white shadow-lg shadow-burgundy/25 mb-6">
             <HandHeartIcon className="w-12 h-12" strokeWidth={1.5} />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-2">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-deep mb-2">
             {t('thankYouName', { name: donation.donor?.name ?? '' })}
           </h1>
           <p className="text-lg text-slate-600 max-w-md mx-auto">
@@ -357,11 +358,11 @@ const DonationSuccessPage = () => {
           transition={{ delay: 0.1, duration: 0.35 }}
           className="mb-8"
         >
-          <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50/50 shadow-sm overflow-hidden">
+          <Card className="border border-line bg-white shadow-none rounded-[24px] overflow-hidden">
             <CardContent className="p-5">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md">
+                  <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-deep text-gold">
                     <FileText className="w-6 h-6" />
                   </div>
                   <div className="text-center sm:text-start">
@@ -376,7 +377,7 @@ const DonationSuccessPage = () => {
                 <Button
                   onClick={handleDownloadReceipt}
                   disabled={isDownloading}
-                  className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-5 rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                  className="gap-2 bg-deep hover:bg-navy text-white font-bold px-6 py-5 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                 >
                   {isDownloading ? (
                     <>
@@ -404,14 +405,14 @@ const DonationSuccessPage = () => {
             transition={{ delay: 0.12, duration: 0.35 }}
             className="mb-8"
           >
-            <Card className="border-2 border-[#D8AA55]/30 bg-gradient-to-br from-orange-50 via-amber-50 to-orange-50/40 shadow-sm overflow-hidden">
+            <Card className="border border-gold/40 bg-white shadow-none rounded-[24px] overflow-hidden">
               <CardContent className="p-5 sm:p-6">
                 <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
                   <div className="relative shrink-0">
-                    <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-[#A5243D] to-orange-600 text-white shadow-md">
+                    <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-burgundy text-white">
                       <UserPlus className="w-7 h-7" />
                     </div>
-                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-500 text-white shadow ring-2 ring-white">
+                    <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-6 h-6 rounded-full bg-gold text-deep shadow ring-2 ring-white">
                       <Sparkles className="w-3.5 h-3.5" />
                     </span>
                   </div>
@@ -424,22 +425,22 @@ const DonationSuccessPage = () => {
                     </p>
                     <ul className="mt-2.5 flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1.5 text-[12px] text-slate-700">
                       <li className="inline-flex items-center gap-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-[#A5243D]" />
+                        <ShieldCheck className="w-3.5 h-3.5 text-burgundy" />
                         {t('signupCtaBenefitHistory')}
                       </li>
                       <li className="inline-flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5 text-[#A5243D]" />
+                        <FileText className="w-3.5 h-3.5 text-burgundy" />
                         {t('signupCtaBenefitReceipts')}
                       </li>
                       <li className="inline-flex items-center gap-1.5">
-                        <Heart className="w-3.5 h-3.5 text-[#D8AA55]" />
+                        <Heart className="w-3.5 h-3.5 text-gold" />
                         {t('signupCtaBenefitImpact')}
                       </li>
                     </ul>
                   </div>
                   <Button
                     onClick={() => setSignInOpen(true)}
-                    className="gap-2 bg-[#A5243D] hover:bg-[#7D1830] text-white font-semibold px-6 py-5 rounded-xl shadow-md hover:shadow-lg transition-all shrink-0"
+                    className="gap-2 bg-burgundy hover:bg-burgundyDark text-white font-semibold px-6 py-5 rounded-xl shadow-md hover:shadow-lg transition-all shrink-0"
                   >
                     <UserPlus className="w-5 h-5" />
                     {t('signupCtaButton')}
@@ -608,7 +609,7 @@ const DonationSuccessPage = () => {
             onClick={() =>
               router.push(appendCurrencyQuery('/campaigns', getCurrencyCodeForLinks()))
             }
-            className="gap-2 bg-[#A5243D] hover:bg-[#7D1830] text-white font-medium py-6 px-6 rounded-xl shadow-md"
+            className="gap-2 bg-burgundy hover:bg-burgundyDark text-white font-medium py-6 px-6 rounded-xl shadow-md"
           >
             <Heart className="w-5 h-5" />
             {t('browseCampaigns')}

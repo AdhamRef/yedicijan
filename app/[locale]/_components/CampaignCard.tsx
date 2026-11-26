@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
 import { useSearchParams } from "next/navigation";
-import { getCurrencySymbol } from "@/hooks/useCampaignValue";
+import { getCurrency, getCurrencySymbol } from "@/hooks/useCampaignValue";
 import { formatNumber } from "@/hooks/formatNumber";
 import { useCurrency } from "@/context/CurrencyContext";
 import { useTranslations } from "next-intl";
@@ -14,7 +14,12 @@ import { useTranslations } from "next-intl";
 const DonationDialog = dynamic(() => import("@/components/DonationDialog"), { ssr: false });
 import CategoryIcon from "@/components/CategoryIcon";
 import { Heart, ShoppingCart, Zap } from "lucide-react";
-import type { SuggestedDonationsConfig } from "@/lib/campaign/suggested-donations";
+import { LOW_FUNDING_PERCENT, isolateLtr } from "@/lib/campaign/funding";
+import {
+  DEFAULT_SUGGESTED_DONATION_AMOUNTS,
+  resolveSuggestedAmountsForCurrency,
+  type SuggestedDonationsConfig,
+} from "@/lib/campaign/suggested-donations";
 import type { SuggestedTeamSupportConfig } from "@/lib/campaign/suggested-team-support";
 import { resolveSharePlural, type ShareLabelsConfig } from "@/lib/campaign/share-labels";
 import { useLocale } from "next-intl";
@@ -52,6 +57,8 @@ export interface CampaignCardData {
   /** Per-campaign custom unit names ("sheep" / "meal" / etc.) keyed by locale. */
   shareLabels?: ShareLabelsConfig | null;
   category?: { id?: string; slug?: string | null; name?: string; icon?: string | null } | null;
+  /** Number of donations so far (returned by /api/campaigns). */
+  donationCount?: number;
 }
 
 type DonationDialogCampaignContext = {
@@ -75,8 +82,9 @@ interface CampaignCardProps {
   tall?: boolean;
 }
 
-export function CampaignCard({ campaign, className, onClick, isFeatured = false, listView = false, tall = false }: CampaignCardProps) {
+export function CampaignCard({ campaign, className, onClick, isFeatured = false, listView = false, tall = false, compact = false }: CampaignCardProps) {
   const t = useTranslations("CampaignsPage");
+  const tr = useTranslations("Brand");
   const locale = useLocale();
   const { convertToCurrency } = useCurrency();
   const pathname = usePathname();
@@ -98,9 +106,13 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
   });
 
   const progress = Math.min(Number(campaign.progress ?? 0), 100);
-  const raised = convertToCurrency(Math.round(campaign.currentAmount)).convertedValue ?? 0;
-  const target = convertToCurrency(Math.round(campaign.targetAmount)).convertedValue ?? 0;
+  // Before exchange rates load (and always during SSR) fall back to the USD base
+  // value rather than 0 — "$0 of $0" was rendered on first paint and caused a
+  // hydration mismatch for every USD visitor.
+  const raised = convertToCurrency(Math.round(campaign.currentAmount)).convertedValue ?? Math.round(campaign.currentAmount);
+  const target = convertToCurrency(Math.round(campaign.targetAmount)).convertedValue ?? Math.round(campaign.targetAmount);
   const symbol = getCurrencySymbol();
+  const currencyCode = getCurrency();
   const isOpenGoal = String(campaign.goalType ?? "").toLowerCase() === "open";
   const hasTargetAmount = Number(campaign.targetAmount) > 0;
   const hideBottomStats = isOpenGoal && !hasTargetAmount;
@@ -138,9 +150,11 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
     router,
   ]);
 
-  const handleDonateClick = (e: React.MouseEvent) => {
+  const [presetAmount, setPresetAmount] = useState<number | undefined>(undefined);
+  const handleDonateClick = (e: React.MouseEvent, amount?: number) => {
     e.preventDefault();
     e.stopPropagation();
+    setPresetAmount(amount);
     setAddToCartMode(false);
     setDonationContext(snapshotDonationContext());
     setDonationDialogMounted(true);
@@ -172,6 +186,14 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
 
   const detailHref = `/campaign/${campaign.slug || campaign.id}`;
 
+  // Three one-tap amounts from the campaign's own presets for the active currency.
+  const quickAmounts = (() => {
+    const cfg = campaign.suggestedDonations ?? { amounts: [...DEFAULT_SUGGESTED_DONATION_AMOUNTS], byCurrency: {} };
+    const all = [...new Set(resolveSuggestedAmountsForCurrency(cfg, currencyCode).filter((n) => n > 0))].sort((x, y) => x - y);
+    const pool = all.length > 3 ? all.slice(1) : all;
+    return pool.slice(0, 3);
+  })();
+
   return (
     <>
       {/* ── Mobile horizontal list row (listView only, hidden on sm+) ── */}
@@ -202,58 +224,64 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
         </div>
       )}
 
-      {/* ── Card view (always on sm+, always when not listView) ── */}
+      {/* ── Card view (always on sm+, always when not listView) ──
+            Brand guide 2025: photo on top with an area chip, title below on white,
+            honest funding state, then one-tap amount chips that open checkout
+            with the amount already filled in (Human Appeal / Ehsan pattern). */}
       <div
-        className={`${listView && !isFeatured ? "hidden sm:flex" : "flex"} project-card group/card relative bg-white shape-card overflow-hidden shadow-soft hover:shadow-lift transition-all duration-300 flex-col ${isFeatured ? "ring-1 ring-gold/40" : ""} ${className ?? ""}`}
+        className={`${listView && !isFeatured ? "hidden sm:flex" : "flex"} project-card group/card relative flex-col overflow-hidden rounded-[28px] border border-line bg-white transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_30px_60px_-30px_rgba(18,35,57,.35)] ${className ?? ""}`}
       >
-        {/* Image with title + gold-mark overlaid */}
-        <Link href={detailHref} prefetch={true} onClick={onClick} className="relative flex-1 block">
-          <div className={`relative w-full overflow-hidden h-full ${tall ? "min-h-[16rem] sm:min-h-[19rem]" : "min-h-[12rem] sm:min-h-[14rem]"}`}>
+        <Link href={detailHref} prefetch={true} onClick={onClick} className="relative block">
+          <div className={`relative w-full overflow-hidden bg-sand ${tall || isFeatured ? "aspect-[4/3] sm:aspect-[16/11]" : "aspect-[4/3]"}`}>
             <Image
               src={isFeatured ? buildImgSrc(rawImgSrc, 960, 720) : imgSrc}
               alt={campaign.title}
               fill
-              sizes={isFeatured ? "(max-width: 640px) 90vw, 50vw" : "(max-width: 640px) 70vw, (max-width: 1024px) 300px, 25vw"}
-              className="object-cover group-hover/card:scale-105 transition-transform duration-700 ease-out"
+              sizes={isFeatured ? "(max-width: 640px) 90vw, 50vw" : "(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 30vw"}
+              className="object-cover transition-transform duration-700 ease-out group-hover/card:scale-[1.04]"
               draggable={false}
               priority={isFeatured}
               quality={70}
             />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
 
-            {/* Bottom gradient scrim (design: image-overlay) */}
-            <div className="image-overlay absolute inset-x-0 bottom-0 h-2/3" />
-
-            {/* Featured badge — top end */}
-            {isFeatured && (
-              <div className="absolute top-5 end-5">
-                <span className="shape-chip inline-flex items-center gap-1.5 bg-burgundy text-white text-[11px] font-black px-3 py-1.5 shadow-soft">
-                  <Zap className="w-3 h-3 fill-white" />
+            <div className="absolute inset-x-3.5 top-3.5 flex items-start justify-between gap-2">
+              {campaign.category?.name ? (
+                <span className="inline-flex max-w-[70%] items-center gap-1.5 rounded-full bg-white/95 px-3 py-1 text-xs font-extrabold text-deep">
+                  <CategoryIcon name={campaign.category.icon} className="h-3.5 w-3.5 flex-shrink-0 text-burgundy" />
+                  <span className="truncate">{campaign.category.name}</span>
+                </span>
+              ) : <span />}
+              {isFeatured && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-burgundy px-3 py-1 text-xs font-extrabold text-white">
+                  <Zap className="h-3 w-3 fill-white" />
                   {t("featuredBadge")}
                 </span>
-              </div>
-            )}
-
-            {/* Category label — top start (design places a small white label here) */}
-            {campaign.category?.name && (
-              <span className="absolute top-5 start-5 inline-flex items-center gap-1.5 text-xs font-bold text-white drop-shadow">
-                <CategoryIcon name={campaign.category.icon} className="w-3.5 h-3.5 flex-shrink-0" />
-                <span className="truncate max-w-[8rem]">{campaign.category.name}</span>
-              </span>
-            )}
-
-            {/* gold-mark + title — overlaid at bottom */}
-            <div className={`absolute bottom-0 inset-x-0 ${isFeatured ? "px-5 pb-5" : "px-4 pb-4"}`}>
-              <div className="gold-mark-sm mb-2" />
-              <h3 className={`text-white font-extrabold leading-tight drop-shadow-sm ${isFeatured ? "text-xl lg:text-2xl line-clamp-2" : "text-base sm:text-lg line-clamp-2"}`}>
-                {campaign.title}
-              </h3>
+              )}
             </div>
           </div>
         </Link>
 
-        {/* Body — progress + actions */}
-        <div className="space-y-3 p-3.5 sm:p-4">
-          {campaign.showProgress !== false && !hideBottomStats ? (
+        <div className={`flex flex-1 flex-col ${compact ? "gap-3 p-3.5 sm:p-4" : "gap-3.5 p-5"}`}>
+          <Link href={detailHref} onClick={onClick}>
+            <h3 className={`font-extrabold leading-snug text-deep transition-colors group-hover/card:text-burgundy ${isFeatured ? "text-xl sm:text-2xl" : compact ? "text-[15px] sm:text-base" : "text-[17px] sm:text-lg"} line-clamp-2`}>
+              {campaign.title}
+            </h3>
+          </Link>
+
+          {campaign.showProgress !== false && !hideBottomStats && progress < LOW_FUNDING_PERCENT ? (
+            /* Barely funded: "$0 of $12,000" reads as "nobody trusts this", so lead
+               with an invitation and the goal, and show donors once there are any. */
+            <div className="flex items-center justify-between gap-2 shape-chip bg-offwhite px-3 py-2.5">
+              <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-burgundy">
+                <Heart className="h-3.5 w-3.5" fill="currentColor" aria-hidden />
+                {tr("beFirst")}
+              </span>
+              <span className="whitespace-nowrap text-[11px] font-semibold text-gray-500 tabular-nums">
+                {tr("goal", { amount: isolateLtr(`${symbol}${formatNumber(target)}`) })}
+              </span>
+            </div>
+          ) : campaign.showProgress !== false && !hideBottomStats ? (
             <div className="space-y-2">
               <div className="flex items-end justify-between gap-2">
                 <div className="min-w-0">
@@ -291,33 +319,60 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
             <></>
           )}
 
-          {/* Action row — Detail + Donate, with cart secondary (design: Detay / Bağış Yap).
-              The Detail link is hidden on mobile (the card image already links to the
-              detail page) so Donate can expand and fill the freed space. */}
-          <div className="flex items-center gap-2 pt-0.5">
-            <Link
-              href={detailHref}
-              onClick={onClick}
-              className="hidden sm:inline-flex shape-button border border-gray-200 px-3.5 py-2 text-[13px] font-semibold text-navy hover:bg-offwhite transition-colors whitespace-nowrap"
+          {compact ? (
+            /* Narrow contexts (suggestions, two-up grids): one clear action + cart. */
+            <div className="mt-auto flex items-center gap-2">
+              <button
+                onClick={(e) => handleDonateClick(e)}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-burgundy px-3 text-[13px] font-extrabold text-white transition-colors hover:bg-burgundyDark"
+              >
+                <Heart className="h-4 w-4" />
+                {t("donateNow") || "تبرع الآن"}
+              </button>
+              <button
+                onClick={handleAddToCartClick}
+                aria-label={t("addToCart") || "Add to cart"}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line text-deep transition-colors hover:border-deep"
+              >
+                <ShoppingCart className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+          <>
+          {/* Quick amounts — open checkout with the amount pre-filled. */}
+          <div className="mt-auto grid grid-cols-[repeat(3,minmax(0,1fr))_auto] gap-2 pt-1">
+            {quickAmounts.map((amt) => (
+              <button
+                key={amt}
+                type="button"
+                onClick={(e) => handleDonateClick(e, amt)}
+                className="h-11 rounded-xl border border-line text-sm font-extrabold tabular-nums text-deep transition-colors hover:border-deep hover:bg-deep hover:text-white"
+              >
+                <span dir="ltr">{symbol}{formatNumber(amt)}</span>
+              </button>
+            ))}
+            <button
+              onClick={(e) => handleDonateClick(e)}
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-burgundy px-4 text-sm font-extrabold text-white transition-colors hover:bg-burgundyDark"
             >
+              <Heart className="h-4 w-4" />
+              {t("donateNow") || "تبرع الآن"}
+            </button>
+          </div>
+          <div className="flex items-center justify-between border-t border-line pt-3 text-[13px] font-bold">
+            <Link href={detailHref} onClick={onClick} className="text-deep/70 transition-colors hover:text-burgundy">
               {t("details") || "Detay"}
             </Link>
             <button
               onClick={handleAddToCartClick}
-              aria-label={t("addToCart") || "Add to cart"}
-              title={t("addToCart") || "Add to cart"}
-              className="shape-button border border-gray-200 p-2 text-navy hover:bg-offwhite transition-colors flex-shrink-0 sm:ms-auto"
+              className="inline-flex items-center gap-1.5 text-deep/70 transition-colors hover:text-burgundy"
             >
-              <ShoppingCart className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleDonateClick}
-              className="shape-button inline-flex items-center justify-center gap-1.5 bg-burgundy hover:bg-burgundyDark px-4 py-2 text-[13px] font-semibold text-white transition-colors group/btn flex-1 sm:flex-none whitespace-nowrap"
-            >
-              <Heart className="w-3.5 h-3.5 fill-white/30 group-hover/btn:fill-white/60 transition-all flex-shrink-0" />
-              {t("donateNow") || "تبرع الآن"}
+              <ShoppingCart className="h-4 w-4" />
+              {t("addToCart") || "Add to cart"}
             </button>
           </div>
+          </>
+          )}
         </div>
       </div>
 
@@ -351,6 +406,7 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
             : undefined
         }
         onAuthCheckpoint={storeDonationResume}
+        initialDonationAmount={addToCartMode ? undefined : presetAmount}
       />
       )}
     </>

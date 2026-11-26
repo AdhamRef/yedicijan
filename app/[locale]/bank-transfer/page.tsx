@@ -2,25 +2,29 @@
 
 import { CreditCard } from "lucide-react";
 import { useTranslations } from "next-intl";
+import PageHero from "@/components/brand/PageHero";
 import BankAccountsBlock from "./_components/BankAccountsBlock";
 
 export default function BankTransferPage() {
   const t = useTranslations("BankTransfer");
+  const tB = useTranslations("Brand");
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* Hero */}
-      <div className="bg-[#A5243D]">
-        <div className="max-w-4xl mx-auto px-4 py-12 text-center">
-          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-white/80 text-xs font-semibold mb-4">
-            <CreditCard className="w-3.5 h-3.5" />
-            {t("badge")}
+    <main className="min-h-screen bg-offwhite">
+      <PageHero
+        crumbs={[{ href: "/", label: tB("home") }, { label: t("title") }]}
+        eyebrow={t("badge")}
+        title={t("title")}
+        subtitle={t("subtitle")}
+        aside={
+          <div className="mx-auto hidden max-w-sm items-center gap-4 rounded-[24px] border border-line bg-white p-5 md:flex">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-deep text-gold">
+              <CreditCard className="h-6 w-6" />
+            </span>
+            <p className="text-sm leading-6 text-gray-600">{t("notice")}</p>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white mb-2">{t("title")}</h1>
-          <p className="text-white/65 text-sm sm:text-base max-w-lg mx-auto">{t("subtitle")}</p>
-        </div>
-      </div>
-
+        }
+      />
       <BankAccountsBlock />
     </main>
   );

@@ -304,12 +304,12 @@ export default function GoogleSignInButton({
       />
       {status === "loading" && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-[#A5243D]" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-burgundy" />
         </div>
       )}
       {submitting && (
         <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70 backdrop-blur-sm">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-[#A5243D]" />
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-burgundy" />
         </div>
       )}
     </div>

@@ -103,8 +103,8 @@ export default function SupportForm({ userId }: Props) {
     <div className="space-y-6" dir={isRtl ? "rtl" : "ltr"}>
       <Card className="p-6">
         <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-xl bg-[#A5243D]/10 flex items-center justify-center">
-            <Headphones className="w-5 h-5 text-[#A5243D]" />
+          <div className="w-10 h-10 rounded-xl bg-burgundy/10 flex items-center justify-center">
+            <Headphones className="w-5 h-5 text-burgundy" />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">{t("newTitle")}</h3>
@@ -147,7 +147,7 @@ export default function SupportForm({ userId }: Props) {
           <Button
             type="submit"
             disabled={submitting}
-            className="w-full bg-[#A5243D] hover:bg-[#7D1830] text-white gap-2"
+            className="w-full bg-burgundy hover:bg-burgundyDark text-white gap-2"
           >
             {submitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />

@@ -19,6 +19,7 @@ import {
   subjectLabel,
 } from "@/lib/messages/subjects";
 import { getSocialLinks } from "@/lib/social-links";
+import PageHero from "@/components/brand/PageHero";
 import { track } from "@vercel/analytics";
 
 const PHONE_RAW = "+905306516549";
@@ -31,6 +32,7 @@ const ADDRESS_LINES = [
 
 const ContactPage = () => {
   const t = useTranslations("ContactUs");
+  const tB = useTranslations("Brand");
   const locale = useLocale() as "ar" | "en" | "fr" | "tr";
 
   const messageTypes: MessageSubject[] = MESSAGE_SUBJECTS.filter(
@@ -116,7 +118,7 @@ const ContactPage = () => {
         <a
           href={`tel:${PHONE_RAW}`}
           dir="ltr"
-          className="text-[#A5243D] text-xs font-medium hover:underline"
+          className="text-burgundy text-xs font-medium hover:underline"
         >
           {PHONE_DISPLAY}
         </a>
@@ -129,7 +131,7 @@ const ContactPage = () => {
         <a
           href={`mailto:${EMAIL}`}
           dir="ltr"
-          className="text-[#A5243D] text-xs font-medium hover:underline break-all"
+          className="text-burgundy text-xs font-medium hover:underline break-all"
         >
           {EMAIL}
         </a>
@@ -144,7 +146,7 @@ const ContactPage = () => {
           target="_blank"
           rel="noopener noreferrer"
           dir="ltr"
-          className="text-[#A5243D] text-xs font-medium hover:underline"
+          className="text-burgundy text-xs font-medium hover:underline"
         >
           {PHONE_DISPLAY}
         </a>
@@ -153,19 +155,14 @@ const ContactPage = () => {
   ];
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-offwhite">
       {/* ── Header ── */}
-      <section className="hero-pattern text-white py-14 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <div className="gold-mark mx-auto mb-5" />
-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-2">
-            {t("pageTitle")}
-          </h1>
-          <p className="text-ice text-sm max-w-md mx-auto">
-            {t("subtitle")}
-          </p>
-        </div>
-      </section>
+      <PageHero
+        crumbs={[{ href: "/", label: tB("home") }, { label: t("pageTitle") }]}
+        eyebrow={tB("since")}
+        title={t("pageTitle")}
+        subtitle={t("subtitle")}
+      />
 
       {/* ── Info Cards ── */}
       <section className="max-w-7xl mx-auto px-4 py-10 sm:py-14">
@@ -173,10 +170,10 @@ const ContactPage = () => {
           {contactItems.map(({ Icon, title, content }) => (
             <div
               key={title}
-              className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col items-center text-center hover:shadow-md transition-shadow"
+              className="bg-white rounded-[24px] border border-line p-5 flex flex-col items-center text-center transition-shadow hover:shadow-[0_24px_50px_-30px_rgba(18,35,57,.4)]"
             >
-              <div className="w-12 h-12 rounded-full bg-[#A5243D]/10 flex items-center justify-center mb-3">
-                <Icon className="w-5 h-5 text-[#A5243D]" />
+              <div className="w-12 h-12 rounded-2xl bg-deep flex items-center justify-center mb-3">
+                <Icon className="w-5 h-5 text-gold" />
               </div>
               <h3 className="font-bold text-gray-800 text-sm mb-1">{title}</h3>
               {content}
@@ -187,8 +184,8 @@ const ContactPage = () => {
         {/* ── Form + Map ── */}
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12">
           {/* Contact Form */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">
+          <div className="bg-white rounded-[28px] border border-line p-6 sm:p-8">
+            <h2 className="text-2xl font-extrabold text-deep mb-6">
               {t("contactForm")}
             </h2>
             {isSuccess ? (
@@ -211,7 +208,7 @@ const ContactPage = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, name: e.target.value })
                       }
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10 transition-all"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 transition-all"
                       placeholder={t("namePlaceholder")}
                     />
                   </div>
@@ -226,7 +223,7 @@ const ContactPage = () => {
                       onChange={(e) =>
                         setFormData({ ...formData, phone: e.target.value })
                       }
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10 transition-all"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 transition-all"
                       placeholder="+90 XXX XXX XX XX"
                     />
                   </div>
@@ -242,7 +239,7 @@ const ContactPage = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
                     }
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10 transition-all"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 transition-all"
                     placeholder="example@email.com"
                   />
                 </div>
@@ -258,7 +255,7 @@ const ContactPage = () => {
                         messageType: e.target.value as MessageSubject,
                       })
                     }
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10 transition-all bg-white"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 transition-all bg-white"
                   >
                     {messageTypes.map((type) => (
                       <option key={type} value={type}>
@@ -277,14 +274,14 @@ const ContactPage = () => {
                       setFormData({ ...formData, message: e.target.value })
                     }
                     rows={4}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10 transition-all resize-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 transition-all resize-none"
                     placeholder={t("messagePlaceholder")}
                   />
                 </div>
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting}
-                  className="w-full flex items-center justify-center gap-2 bg-[#A5243D] hover:bg-[#7D1830] text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-60"
+                  className="w-full flex items-center justify-center gap-2 bg-burgundy hover:bg-burgundyDark text-white font-semibold py-3 rounded-lg transition-colors disabled:opacity-60"
                 >
                   {isSubmitting ? (
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -331,7 +328,7 @@ const ContactPage = () => {
                 aria-label={label}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-10 h-10 rounded-full bg-[#A5243D] hover:bg-[#A5243D] text-white flex items-center justify-center transition-colors"
+                className="w-10 h-10 rounded-full bg-burgundy hover:bg-burgundy text-white flex items-center justify-center transition-colors"
               >
                 <Icon className="w-5 h-5" />
               </a>

@@ -85,9 +85,9 @@ export default function AvatarUploader({
 
   return (
     <div className="relative inline-block group">
-      <Avatar className={`${SIZE_CLASSES[size]} ring-4 ring-[#A5243D]/10 shadow-xl`}>
+      <Avatar className={`${SIZE_CLASSES[size]} ring-4 ring-burgundy/10 shadow-xl`}>
         <AvatarImage src={image ?? undefined} alt={name ?? undefined} />
-        <AvatarFallback className="text-2xl bg-[#A5243D] text-white">
+        <AvatarFallback className="text-2xl bg-burgundy text-white">
           {initial}
         </AvatarFallback>
       </Avatar>
@@ -96,7 +96,7 @@ export default function AvatarUploader({
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-[#A5243D] hover:bg-[#7D1830] text-white flex items-center justify-center shadow-lg ring-4 ring-white disabled:opacity-70 transition-colors"
+        className="absolute -bottom-1 -right-1 w-9 h-9 rounded-full bg-burgundy hover:bg-burgundyDark text-white flex items-center justify-center shadow-lg ring-4 ring-white disabled:opacity-70 transition-colors"
         aria-label={t("change")}
         title={t("change")}
       >

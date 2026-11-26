@@ -97,7 +97,7 @@ export default async function Rootlayout({
             <SessionProvider>
               <PreferredLangSync />
               <Navbar />
-              <main className="pt-12 lg:pt-[88px]">
+              <main className="pt-16 lg:pt-[116px]">
                 <DonationPauseBanner locale={locale} />
                 {children}
               </main>

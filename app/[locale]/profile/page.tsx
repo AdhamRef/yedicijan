@@ -284,7 +284,7 @@ const ProfilePage = () => {
   const renderAccount = (u: UserProfile) => (
     <div className="space-y-6">
       {/* Profile header */}
-      <Card className="p-6 sm:p-8 bg-gradient-to-br from-[#A5243D]/5 via-white to-[#A5243D]/5 border-[#A5243D]/15">
+      <Card className="p-6 sm:p-8 bg-gradient-to-br from-burgundy/5 via-white to-burgundy/5 border-burgundy/15">
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
           {id && (
             <AvatarUploader
@@ -305,7 +305,7 @@ const ProfilePage = () => {
               </h2>
               <Badge
                 variant="secondary"
-                className="bg-[#A5243D]/10 text-[#A5243D] border-[#A5243D]/20 gap-1"
+                className="bg-burgundy/10 text-burgundy border-burgundy/20 gap-1"
               >
                 <CheckCircle2 className="w-3 h-3" />
                 {t("account.verified")}
@@ -342,7 +342,7 @@ const ProfilePage = () => {
       {/* Personal info */}
       <section>
         <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <User className="w-5 h-5 text-[#A5243D]" />
+          <User className="w-5 h-5 text-burgundy" />
           {t("account.personalInfo")}
         </h3>
         <Card className="divide-y divide-gray-100 overflow-hidden">
@@ -385,7 +385,7 @@ const ProfilePage = () => {
       {/* Address */}
       <section>
         <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-[#A5243D]" />
+          <MapPin className="w-5 h-5 text-burgundy" />
           {t("account.addressTitle")}
         </h3>
         <Card className="divide-y divide-gray-100 overflow-hidden">
@@ -418,7 +418,7 @@ const ProfilePage = () => {
         {/* Security */}
         <section>
           <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Shield className="w-5 h-5 text-[#A5243D]" />
+            <Shield className="w-5 h-5 text-burgundy" />
             {t("settings.securityTitle")}
           </h3>
           <Card className="p-5">
@@ -437,7 +437,7 @@ const ProfilePage = () => {
         {/* Notifications */}
         <section>
           <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Bell className="w-5 h-5 text-[#A5243D]" />
+            <Bell className="w-5 h-5 text-burgundy" />
             {t("settings.notifications")}
           </h3>
           <Card className="divide-y divide-gray-100">
@@ -553,7 +553,7 @@ const ProfilePage = () => {
 
     const emptyTable = (message: string) => (
       <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-        <Receipt className="w-12 h-12 mb-3 text-[#A5243D] opacity-60" />
+        <Receipt className="w-12 h-12 mb-3 text-burgundy opacity-60" />
         <p className="text-sm font-medium text-center px-4">{message}</p>
       </div>
     );
@@ -562,8 +562,8 @@ const ProfilePage = () => {
       <div className="space-y-6">
         {/* mini stat row */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Card className="p-5 bg-gradient-to-br from-[#A5243D]/8 to-white border-[#A5243D]/20">
-            <p className="text-xs font-semibold text-[#A5243D] uppercase tracking-wider">
+          <Card className="p-5 bg-gradient-to-br from-burgundy/8 to-white border-burgundy/20">
+            <p className="text-xs font-semibold text-burgundy uppercase tracking-wider">
               {t("donations.totalInPeriodTitle")}
             </p>
             <p className="text-2xl font-bold text-gray-900 mt-2">
@@ -626,7 +626,7 @@ const ProfilePage = () => {
                 variant="outline"
                 onClick={() => handleDownloadAll(forReceiptDownload)}
                 disabled={isDownloading !== null || forReceiptDownload.length === 0}
-                className="gap-2 border-[#A5243D] text-[#A5243D] hover:bg-[#A5243D]/5"
+                className="gap-2 border-burgundy text-burgundy hover:bg-burgundy/5"
               >
                 {isDownloading === "all" ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -646,7 +646,7 @@ const ProfilePage = () => {
         <section>
           <div className="mb-3">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <HandHeart className="w-5 h-5 text-[#A5243D]" />
+              <HandHeart className="w-5 h-5 text-burgundy" />
               {t("donations.historyTableTitle")}
             </h3>
             <p className="text-sm text-gray-600 mt-1 max-w-3xl">
@@ -750,7 +750,7 @@ const ProfilePage = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 text-[#A5243D] hover:bg-[#A5243D]/10"
+                                className="h-8 w-8 p-0 text-burgundy hover:bg-burgundy/10"
                                 onClick={() => handleDownload(donation.id)}
                                 disabled={isDownloading === donation.id}
                               >
@@ -794,7 +794,7 @@ const ProfilePage = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="w-12 h-12 animate-spin text-[#A5243D]" />
+        <Loader2 className="w-12 h-12 animate-spin text-burgundy" />
       </div>
     );
   }
@@ -854,7 +854,7 @@ const ProfilePage = () => {
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all",
                 isActive
-                  ? "bg-[#A5243D] text-white shadow-md shadow-[#A5243D]/20"
+                  ? "bg-burgundy text-white shadow-md shadow-burgundy/20"
                   : "text-gray-700 hover:bg-gray-100"
               )}
             >
@@ -894,14 +894,14 @@ const ProfilePage = () => {
         {/* Mobile tabs — label-first; icon only shows alongside on sm+ where there's room. */}
         <div className="lg:hidden sticky top-0 z-50 bg-gray-50 py-2 px-3 sm:px-6 shadow-sm">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex w-full flex-nowrap justify-start gap-1 overflow-x-auto h-auto p-1 bg-[#A5243D]/10 rounded-xl [scrollbar-width:none]">
+            <TabsList className="flex w-full flex-nowrap justify-start gap-1 overflow-x-auto h-auto p-1 bg-burgundy/10 rounded-xl [scrollbar-width:none]">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <TabsTrigger
                     key={item.id}
                     value={item.id}
-                    className="min-h-10 shrink-0 gap-1.5 whitespace-nowrap text-xs sm:text-sm font-medium px-3 py-2 data-[state=active]:bg-[#A5243D] data-[state=active]:text-white data-[state=active]:shadow-sm rounded-lg"
+                    className="min-h-10 shrink-0 gap-1.5 whitespace-nowrap text-xs sm:text-sm font-medium px-3 py-2 data-[state=active]:bg-burgundy data-[state=active]:text-white data-[state=active]:shadow-sm rounded-lg"
                   >
                     <Icon className="w-4 h-4 shrink-0 hidden sm:inline-block" />
                     <span className="whitespace-nowrap text-center leading-5">{item.label}</span>
@@ -921,7 +921,7 @@ const ProfilePage = () => {
             <main className="flex-1 min-w-0">
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-8">
                 <div className="hidden lg:block mb-8 pb-6 border-b border-gray-100">
-                  <div className="border-l-4 border-[#D8AA55] pl-4">
+                  <div className="border-l-4 border-gold pl-4">
                     <h1 className="text-3xl font-bold text-gray-900">
                       {navigationItems.find((item) => item.id === activeTab)?.label}
                     </h1>
