@@ -114,6 +114,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
     items: [
       { key: "slides", title: "معرض لقطات من الميدان", href: "/dashboard/gallery", icon: "images", adminOnly: true, keywords: ["gallery", "photos", "images", "field", "email", "معرض", "صور", "لقطات"] },
       { key: "team", title: "الفريق", href: "/dashboard/users/team", icon: "userCog", keywords: ["team", "staff", "permissions", "صلاحيات"] },
+      { key: "generalSettings", title: "تجديدات الخدمات", href: "/dashboard/renewals", icon: "repeat", adminOnly: true, keywords: ["renewal", "subscription", "billing", "expiry", "تجديد", "اشتراك", "دفع"] },
       { key: "generalSettings", title: "الإعدادات", href: "/dashboard/general/payment-gateways", icon: "settings", keywords: ["settings", "payment", "gateways"] },
       { key: "logs", title: "الأمان وحالة الموقع", href: "/dashboard/security", icon: "shield", adminOnly: true, keywords: ["security", "emergency", "maintenance", "pause", "أمان", "طوارئ", "إيقاف"] },
       { key: "logs", title: "سجلات النظام", href: "/dashboard/logs", icon: "scrollText", keywords: ["logs", "audit", "system"] },

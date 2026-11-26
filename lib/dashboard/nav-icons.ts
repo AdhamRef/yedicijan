@@ -2,7 +2,7 @@ import {
   Activity, Archive, Award, BarChart3, Briefcase, Calendar, Contact, FileClock,
   FileStack, Globe, Heart, HeartHandshake, HeartPulse, History, Images, Inbox,
   Landmark, LayoutDashboard, LayoutTemplate, Lightbulb, Link2, ListChecks, Mail,
-  Megaphone, MessageCircle, MessageSquare, PenLine, Plug, Radar, ScrollText, Send, ShieldAlert,
+  Megaphone, MessageCircle, MessageSquare, PenLine, Plug, Radar, Repeat, ScrollText, Send, ShieldAlert,
   Server, Settings, Target, Ticket, TrendingUp, UserCog, Users, Webhook,
   type LucideIcon,
 } from "lucide-react";
@@ -41,6 +41,7 @@ export const NAV_ICONS = {
   plug: Plug,
   radar: Radar,
   scrollText: ScrollText,
+  repeat: Repeat,
   send: Send,
   shield: ShieldAlert,
   server: Server,
