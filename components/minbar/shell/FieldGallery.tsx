@@ -1,15 +1,23 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { routeForPathname } from "@/lib/minbar/routes";
 import { galleryCaption, galleryHiddenOn, galleryTexts, galleryVariant, type PublicGalleryImage } from "@/lib/site-gallery/shared";
+
+/** This site's routes: home is "/" or "/{locale}", a project is "/{locale}/campaign/{id}" (Minber uses lib/minbar/routes). */
+function galleryRoute(pathname: string): "home" | "projectDetail" | "other" {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] && /^[a-z]{2}$/.test(parts[0])) parts.shift();
+  if (parts.length === 0) return "home";
+  if (parts[0] === "campaign" && parts.length === 2) return "projectDetail";
+  return "other";
+}
 
 /** "Moments from the field": one row of square photos that slides sideways, above the footer of the home page and
     of each project page only (owner, 2026-11-21: it used to appear on every page), with a full-size viewer. */
 export default function FieldGallery({ locale }: { locale: string }) {
   const pathname = usePathname() ?? "";
   const rtl = locale.startsWith("ar");
-  const route = routeForPathname(pathname);
+  const route = galleryRoute(pathname);
   const hidden = galleryHiddenOn(pathname) || (route !== "home" && route !== "projectDetail");
   const row = useRef<HTMLDivElement>(null);
   const slide = (dir: 1 | -1) => { const el = row.current; if (el) el.scrollBy({ left: dir * (rtl ? -1 : 1) * el.clientWidth * 0.85, behavior: "smooth" }); };
