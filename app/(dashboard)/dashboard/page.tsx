@@ -329,6 +329,39 @@ export default function DashboardPage() {
   const [donationLocaleFilter, setDonationLocaleFilter] = useState<string>("all");
   const [donationCountryFilter, setDonationCountryFilter] = useState<string>("all");
   const [donationSourceFilter, setDonationSourceFilter] = useState("all");
+
+  // Saved filter sets: the author's own, plus those shared with the team (#283).
+  type SavedView = { id: string; name: string; filters: Record<string, string>; shared: boolean; mine: boolean; ownerName: string | null };
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]), [activeViewId, setActiveViewId] = useState("");
+  const loadViews = useCallback(() => {
+    fetch("/api/admin/dashboard-views", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.views) setSavedViews(d.views as SavedView[]); }).catch(() => {});
+  }, []);
+  useEffect(() => { loadViews(); }, [loadViews]);
+  const currentFilters = (): Record<string, string> => ({ selectedCategory, selectedCampaign, donationSourceFilter, donationLocaleFilter, donationCountryFilter, donationsStatusFilter, chartPeriod, dateFrom, dateTo });
+  const applyView = (v: SavedView) => {
+    const vf = v.filters;
+    if (vf.selectedCategory) setSelectedCategory(vf.selectedCategory);
+    if (vf.selectedCampaign) setSelectedCampaign(vf.selectedCampaign);
+    if (vf.donationSourceFilter) setDonationSourceFilter(vf.donationSourceFilter);
+    if (vf.donationLocaleFilter) setDonationLocaleFilter(vf.donationLocaleFilter);
+    if (vf.donationCountryFilter) setDonationCountryFilter(vf.donationCountryFilter);
+    if (vf.donationsStatusFilter === "all" || vf.donationsStatusFilter === "PAID" || vf.donationsStatusFilter === "FAILED") setDonationsStatusFilter(vf.donationsStatusFilter);
+    if (vf.chartPeriod && vf.chartPeriod in PERIOD_LABELS) setChartPeriod(vf.chartPeriod as ChartPeriod);
+    setDateFrom(vf.dateFrom ?? ""); setDateTo(vf.dateTo ?? "");
+  };
+  const saveView = async () => {
+    const name = window.prompt("اسم العرض (مثلاً: متبرعو تركيا عبر فيسبوك)");
+    if (!name?.trim()) return;
+    const shared = window.confirm("مشاركة هذا العرض مع الفريق؟ (موافق = مشترك، إلغاء = لي فقط)");
+    await fetch("/api/admin/dashboard-views", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), filters: currentFilters(), shared }) }).catch(() => undefined);
+    loadViews();
+  };
+  const deleteView = async () => {
+    const v = savedViews.find((x) => x.id === activeViewId);
+    if (!v || !v.mine || !window.confirm(`حذف العرض «${v.name}»؟`)) return;
+    await fetch(`/api/admin/dashboard-views?id=${v.id}`, { method: "DELETE" }).catch(() => undefined);
+    setActiveViewId(""); loadViews();
+  };
   const [countryOptions, setCountryOptions] = useState<{ code: string; count: number }[]>([]);
   const [countryUnsetCount, setCountryUnsetCount] = useState(0);
 
@@ -1555,6 +1588,16 @@ export default function DashboardPage() {
 
 
 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+
+  {/* Saved views */}
+  <div className="col-span-full flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-2 text-xs">
+    <select value={activeViewId} onChange={(e) => { setActiveViewId(e.target.value); const v = savedViews.find((x) => x.id === e.target.value); if (v) applyView(v); }} className="h-8 rounded border border-slate-200 bg-white px-2" aria-label="العروض المحفوظة">
+      <option value="">العروض المحفوظة…</option>
+      {savedViews.map((v) => <option key={v.id} value={v.id}>{v.name}{v.shared ? " · مشترك" : ""}{!v.mine && v.ownerName ? ` (${v.ownerName})` : ""}</option>)}
+    </select>
+    <button type="button" onClick={() => void saveView()} className="h-8 rounded border border-slate-300 bg-white px-3 hover:bg-slate-100">💾 حفظ الفلاتر</button>
+    {savedViews.find((x) => x.id === activeViewId)?.mine ? <button type="button" onClick={() => void deleteView()} className="h-8 rounded px-2 text-slate-500 hover:text-red-600">حذف العرض</button> : null}
+  </div>
 
 
   {/* Category — several at once */}
