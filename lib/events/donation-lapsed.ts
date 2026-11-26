@@ -39,6 +39,23 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Delivery statuses that mean "this donor was already reminded" — everything except dead ends. */
 const REMINDER_COUNTED_STATUSES = ["DRAFT", "QUEUED", "RENDERED", "SENT_TO_PROVIDER", "SENT", "DELIVERED", "READ", "OPENED", "CLICKED", "REPLIED", "UNSUBSCRIBED"];
+/**
+ * Accepted by the provider and then refused by the recipient's server (spam block, invalid
+ * address): the message did go out, so the full cooldown applies. Retrying such a reminder on
+ * every run reaches the same donors again and again and hurts the domain's reputation (#248).
+ */
+const REMINDER_FAILED_AFTER_PROVIDER_STATUSES = ["FAILED", "BOUNCED", "SKIPPED"];
+
+/** "Already reminded inside the cooldown": counted statuses, or a failure after the provider accepted it. */
+export function reminderAlreadySentWhere(cooldownCutoff: Date) {
+  return {
+    createdAt: { gte: cooldownCutoff },
+    OR: [
+      { status: { in: REMINDER_COUNTED_STATUSES } },
+      { status: { in: REMINDER_FAILED_AFTER_PROVIDER_STATUSES }, providerMessageId: { not: null } },
+    ],
+  };
+}
 
 export type LapsedTriggerSummary = {
   triggerId: string;
@@ -173,8 +190,7 @@ export async function runDonationLapsedReminders(
         templateId: trigger.templateId,
         origin: "TRIGGER",
         recipientUserId: { in: checkIds },
-        status: { in: REMINDER_COUNTED_STATUSES },
-        createdAt: { gte: cooldownCutoff },
+        ...reminderAlreadySentWhere(cooldownCutoff),
       },
       select: { recipientUserId: true },
     }).catch(() => []);
