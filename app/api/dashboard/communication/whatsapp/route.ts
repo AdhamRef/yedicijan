@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
-import { fastCountDeliveries, fastCountProviderEvents, fastFindDeliveries, fastGroupByDeliveries } from "@/lib/communication/delivery-fast-query";
+import { fastCountDeliveries, fastFindDeliveries, fastGroupByDeliveries } from "@/lib/communication/delivery-fast-query";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { getActiveMetaWhatsappRuntimeConfig } from "@/lib/communication/runtime-config";
 import { RETRYABLE_STATUSES } from "@/lib/communication/communication-runtime-types";
