@@ -46,9 +46,10 @@ test("chart, list and export apply the source filter; the page offers it and kee
   assert.match(fs.readFileSync("app/api/admin/donations/export/route.ts", "utf8"), /donationSourceWhere\(sp\.get\("source"\)\)/);
   const page = fs.readFileSync("app/(dashboard)/dashboard/page.tsx", "utf8");
   // Yedicihan: the chart and list requests, plus the export dialog defaults.
-  assert.equal((page.match(/params\.set\("source", donationSourceFilter\)/g) ?? []).length, 2, "chart and list scopes");
+  // chart and list (#260), plus the KPI stats and today's card (#287)
+  assert.equal((page.match(/params\.set\("source", donationSourceFilter\)/g) ?? []).length, 4, "chart, list, KPI and today scopes");
   assert.match(page, /source: donationSourceFilter,/, "export defaults");
-  assert.match(page, />\s*مصدر التبرع\s*</);
+  assert.match(page, /label="مصدر التبرع"|>\s*مصدر التبرع\s*</);
   assert.match(page, /<\/TabsList>\s*<Select value=\{chartView\}/, "chart type sits with the chart controls");
   assert.doesNotMatch(page, /\{\/\* Chart Type \*\/\}/, "and no longer in the filters grid");
 });
