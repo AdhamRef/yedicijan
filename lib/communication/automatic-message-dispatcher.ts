@@ -141,6 +141,7 @@ export async function sendAutomaticEmailMessage(
     to: input.recipientEmail,
     subject: input.renderedSubject,
     html: input.renderedBody,
+    locale: input.locale,
   });
 
   if (!res.ok) {

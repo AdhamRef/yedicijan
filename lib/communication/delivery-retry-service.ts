@@ -218,6 +218,7 @@ export async function retryDelivery(
       to: recipient,
       subject: row.renderedSubject ?? "",
       html: row.renderedBody,
+      locale: row.locale,
     };
   } else if (channel === "WHATSAPP") {
     const meta = await resolveMetaTemplate(row);

@@ -27,7 +27,30 @@ export type EmailSendInput = {
   senderEmail?: string | null;
   replyTo?: string | null;
   channelName?: string | null;
+  /** The message's language: picks the institution's sender name when none is set explicitly. */
+  locale?: string | null;
 };
+
+/**
+ * The institution's name as the e-mail sender, in the message's language (Minber al-Aqsa #262): the
+ * association's official name as the site shows it (AboutUs.associationName). Other languages use the
+ * English form. A sender name set explicitly always wins; with no language either, the configured name is used.
+ */
+const INSTITUTION_SENDER_NAMES: Record<string, string> = {
+  ar: "جمعية يدي جيهان الدولية للتضامن",
+  en: "Yedicihan International Solidarity Association",
+  fr: "Association Internationale de Solidarité Yedicihan",
+  tr: "Yedicihan Uluslararası Yardımlaşma Derneği",
+  id: "Asosiasi Solidaritas Internasional Yedicihan",
+  pt: "Associação Internacional de Solidariedade Yedicihan",
+  es: "Asociación Internacional de Solidaridad Yedicihan",
+  de: "Yedicihan Internationaler Solidaritätsverein",
+};
+export function institutionSenderName(locale: string | null | undefined): string | null {
+  const lang = (locale ?? "").trim().toLowerCase().split(/[-_]/)[0];
+  if (!lang) return null;
+  return INSTITUTION_SENDER_NAMES[lang] ?? INSTITUTION_SENDER_NAMES.en;
+}
 
 export type EmailSendResult =
   | { ok: true; providerId: typeof EMAIL_PROVIDER_ID; providerMessageId: string | null; internalAccepted: boolean }
@@ -39,7 +62,7 @@ export async function sendEmailMessage(input: EmailSendInput, runtime?: ElasticE
     subject: input.subject,
     html: input.html,
     text: input.text,
-    senderName: input.senderName,
+    senderName: input.senderName?.trim() || institutionSenderName(input.locale) || input.senderName,
     senderEmail: input.senderEmail,
     replyTo: input.replyTo,
     channelName: input.channelName,
