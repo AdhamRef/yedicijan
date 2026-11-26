@@ -115,7 +115,7 @@ export async function executeCampaignSend(campaignId: string, opts: { actor?: Ac
       await markDeliveryStatus(deliveryId, "SKIPPED", { errorMessage: "NO_SENDER_AVAILABLE" });
       base.skipped += 1; bump(base.reasons, "NO_SENDER_AVAILABLE"); continue;
     }
-    const result = await sendPreparedDelivery({ channel, sender, country: recipient.country, to, templateName: rendered.templateName, languageCode: recipient.locale, locale: recipient.locale, subject: rendered.subject, html: rendered.body }, runtime);
+    const result = await sendPreparedDelivery({ channel, sender, country: recipient.country, to, templateName: rendered.templateName, languageCode: recipient.locale, locale: recipient.locale, purpose, subject: rendered.subject, html: rendered.body }, runtime);
     if (!result.ok) {
       const terminal = result.reason.endsWith("_NOT_CONFIGURED") || result.reason.endsWith("_NOT_IMPLEMENTED") || result.reason.includes("SENDER_MISSING") || result.reason === "PROVIDER_DISABLED" || result.reason === "INTEGRATION_DECRYPTION_FAILED" || result.reason === "INTEGRATION_DATABASE_UNAVAILABLE";
       // `detail` carries the provider's own answer — the HTTP status and the scrubbed response body

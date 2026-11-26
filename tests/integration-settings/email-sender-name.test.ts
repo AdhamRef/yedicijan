@@ -24,7 +24,10 @@ test("the sender is the association's name in the message's language", () => {
 test("no language keeps the configured sender; an explicit sender name always wins; every e-mail path passes the language", () => {
   assert.equal(name(null), null);
   assert.equal(name(""), null);
-  assert.match(src, /senderName: input\.senderName\?\.trim\(\) \|\| institutionSenderName\(input\.locale\) \|\| input\.senderName,/);
+  // #268: marketing campaigns keep the configured sender name; the localized name is for automatic messages.
+  assert.match(src, /senderName: input\.senderName\?\.trim\(\) \|\| \(input\.purpose === "MARKETING" \? null : institutionSenderName\(input\.locale\)\) \|\| input\.senderName,/);
+  assert.match(fs.readFileSync("lib/communication/provider-router.ts", "utf8"), /purpose: input\.purpose,\s*\}, bundle\.elasticEmail\)/);
+  assert.match(fs.readFileSync("lib/communication/campaign-send-executor.ts", "utf8"), /locale: recipient\.locale, purpose, subject/);
   assert.match(fs.readFileSync("lib/communication/provider-router.ts", "utf8"), /locale: input\.locale,\s*\}, bundle\.elasticEmail\)/);
   assert.match(fs.readFileSync("lib/communication/automatic-message-dispatcher.ts", "utf8"), /html: input\.renderedBody,\s*locale: input\.locale,/);
   assert.match(fs.readFileSync("lib/communication/campaign-send-executor.ts", "utf8"), /locale: recipient\.locale, subject: rendered\.subject/);

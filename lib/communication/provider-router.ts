@@ -62,6 +62,8 @@ export type PreparedSendInput = {
   text?: string | null;
   /** The recipient's language (e-mail: picks the sender name). */
   locale?: string | null;
+  /** The message purpose (e-mail: MARKETING keeps the configured sender name). */
+  purpose?: string | null;
 };
 
 export type PreparedSendResult =
@@ -96,6 +98,7 @@ export async function sendPreparedDelivery(input: PreparedSendInput, runtime?: C
       text: input.text,
       senderEmail: input.sender?.senderEmail,
       locale: input.locale,
+      purpose: input.purpose,
     }, bundle.elasticEmail);
     if (!res.ok) return { ok: false, provider: EMAIL_PROVIDER_ID, reason: res.reason, detail: res.detail };
     return { ok: true, provider: res.providerId, providerMessageId: res.providerMessageId, internalAccepted: res.internalAccepted };

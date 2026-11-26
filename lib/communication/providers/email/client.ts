@@ -29,6 +29,8 @@ export type EmailSendInput = {
   channelName?: string | null;
   /** The message's language: picks the institution's sender name when none is set explicitly. */
   locale?: string | null;
+  /** MARKETING campaigns keep the configured sender name (#268). */
+  purpose?: string | null;
 };
 
 /**
@@ -62,7 +64,8 @@ export async function sendEmailMessage(input: EmailSendInput, runtime?: ElasticE
     subject: input.subject,
     html: input.html,
     text: input.text,
-    senderName: input.senderName?.trim() || institutionSenderName(input.locale) || input.senderName,
+    // The localized institution name is for automatic messages only, never marketing campaigns (#268).
+    senderName: input.senderName?.trim() || (input.purpose === "MARKETING" ? null : institutionSenderName(input.locale)) || input.senderName,
     senderEmail: input.senderEmail,
     replyTo: input.replyTo,
     channelName: input.channelName,
