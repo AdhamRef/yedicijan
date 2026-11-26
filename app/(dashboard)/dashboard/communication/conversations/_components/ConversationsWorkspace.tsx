@@ -1,0 +1,341 @@
+"use client";
+/*
+ * WhatsApp conversations (ported from Minber al-Aqsa #256, #258, #265, #269, #274, #289). Yedicihan: a new
+ * section beside the contact-form inbox; replies are text only (Minber's attachments and voice notes come
+ * from its older inbox and are not part of Yedicihan).
+ */
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dt } from "@/lib/dashboard/i18n";
+import { inboxAlertsEnabled, notificationPermission, requestNotificationPermission, setInboxAlertsEnabled } from "@/lib/communication/inbox-alerts";
+
+type QuickReply = { id: string; language: string; title: string; body: string };
+type SendableTemplate = { id: string; name: string; language: string; preview: string };
+const TEMPLATE_ERRORS: Record<string, string> = {
+  DO_NOT_CONTACT: "هذا المتبرع طلب عدم التواصل.",
+  TEMPLATE_NEEDS_DATA: "هذا القالب يحتاج بيانات غير موجودة في المحادثة (مثل تفاصيل تبرع). اختر قالباً آخر.",
+  TEMPLATE_NOT_APPROVED: "هذا القالب غير معتمد لدى Meta لهذا الرقم.",
+  MARKETING_OPTED_OUT: "هذا المتبرع أوقف الرسائل التسويقية؛ يمكن إرسال قالب خدمي فقط.",
+};
+
+type Lang = "ar" | "tr" | "fr" | "en";
+type View = "all" | "mine" | "unread" | "done";
+type Conversation = {
+  id: string; phone: string; name: string | null; language: Lang; assigneeId: string | null; assigneeName: string | null;
+  status: "OPEN" | "DONE"; unreadCount: number; lastMessageAt: string | null; lastPreview: string; lastDirection: "in" | "out" | null; windowExpiresAt: string | null;
+};
+type Counts = Record<Lang | "all" | "mine", number>;
+type TimelineItem = { id: string; kind: "inbound" | "outbound" | "status"; at: string | null; text: string | null; status: string | null };
+type Detail = { id: string; phone: string; timeline: TimelineItem[]; donor: { name: string | null; doNotContact: boolean } | null };
+type ReplyWindow = { open: boolean; remainingMs: number };
+
+const LANGS: Array<{ key: Lang; label: string; flag: string }> = [
+  { key: "ar", label: "العربية", flag: "🇸🇦" }, { key: "tr", label: "التركية", flag: "🇹🇷" },
+  { key: "fr", label: "الفرنسية", flag: "🇫🇷" }, { key: "en", label: "الإنجليزية", flag: "🇬🇧" },
+];
+const API = "/api/dashboard/communication/inbox";
+const initials = (c: Conversation) => (c.name || c.phone).replace(/^\+/, "").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+function shortTime(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso), now = new Date();
+  if (sameDay(d, now)) return d.toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" });
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (sameDay(d, y)) return dt("أمس");
+  return d.toLocaleDateString("ar", { day: "numeric", month: "short" });
+}
+function Ticks({ status }: { status: string | null }) {
+  const s = (status || "").toUpperCase();
+  if (s === "FAILED" || s === "BOUNCED") return <span className="text-red-600" title={dt("فشل الإرسال")}>⚠</span>;
+  if (s === "READ" || s === "REPLIED") return <span className="text-sky-500" title={dt("قُرئت")}>✓✓</span>;
+  if (s === "DELIVERED") return <span className="text-slate-400" title={dt("وصلت")}>✓✓</span>;
+  return <span className="text-slate-400" title={dt("أُرسلت")}>✓</span>;
+}
+
+export function ConversationsWorkspace({ currentUserId }: { currentUserId: string | null }) {
+  const [lang, setLang] = useState<Lang | "all">("all");
+  const [view, setView] = useState<View>("all");
+  const [q, setQ] = useState(""), [query, setQuery] = useState("");
+  const [items, setItems] = useState<Conversation[]>([]);
+  const [counts, setCounts] = useState<Counts | null>(null);
+  const [listError, setListError] = useState("");
+  const [activeId, setActiveId] = useState<string | null>(null);
+  // Opened from a donor's profile (?phone=…): search that number and open its conversation (2026-11-20).
+  const [wantedPhone, setWantedPhone] = useState("");
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("phone")?.replace(/\D/g, "") ?? "";
+    if (wanted.length >= 6) { setWantedPhone(wanted); setQ(wanted); setQuery(wanted); }
+  }, []);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [replyWindow, setReplyWindow] = useState<ReplyWindow | null>(null);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false), [notice, setNotice] = useState("");
+  // Phone layout (Minber #289): the conversation tools fold away so the messages and the text box keep the screen.
+  const [showTools, setShowTools] = useState(false);
+  const [staff, setStaff] = useState<Array<{ id: string; name: string }>>([]);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  // The open conversation stays on screen even when it leaves the current list (e.g. marked done).
+  const [pinned, setPinned] = useState<Conversation | null>(null);
+  const listed = useMemo(() => items.find((c) => c.id === activeId) ?? null, [items, activeId]);
+  useEffect(() => { if (listed) setPinned(listed); else if (!activeId) setPinned(null); }, [listed, activeId]);
+  const active = listed ?? (pinned && pinned.id === activeId ? pinned : null);
+  const activeLang = active?.language ?? null;
+
+  // Alerts (sound, browser notification, tab title) are raised by the dashboard layout; this is the per-device switch.
+  const [alertsOn, setAlertsOn] = useState(true), [notifyPerm, setNotifyPerm] = useState<string>("default");
+  useEffect(() => { setAlertsOn(inboxAlertsEnabled()); setNotifyPerm(notificationPermission()); }, []);
+
+  // Team quick replies for the open conversation's language.
+  const [quick, setQuick] = useState<QuickReply[]>([]), [showQuick, setShowQuick] = useState(false), [qTitle, setQTitle] = useState(""), [qBody, setQBody] = useState("");
+  const loadQuick = useCallback(async (lang: string) => {
+    try { const r = await fetch(`${API}/quick-replies?language=${encodeURIComponent(lang)}`, { cache: "no-store" }); if (r.ok) setQuick(((await r.json()) as { replies: QuickReply[] }).replies); } catch { /* keep the last list */ }
+  }, []);
+  useEffect(() => { setShowQuick(false); if (activeLang) void loadQuick(activeLang); }, [activeLang, loadQuick]);
+
+  // Approved templates: the only way back to a donor after the 24-hour window.
+  const [tplOpen, setTplOpen] = useState(false), [tplList, setTplList] = useState<SendableTemplate[] | null>(null), [tplBusy, setTplBusy] = useState(false);
+  useEffect(() => { setTplOpen(false); setTplList(null); }, [activeId]);
+  const openTemplates = async () => {
+    if (!active) return;
+    setTplOpen(true); setTplList(null);
+    try {
+      const r = await fetch(`${API}/templates?conversation=${encodeURIComponent(active.id)}&language=${active.language}`, { cache: "no-store" });
+      const d = (await r.json().catch(() => ({}))) as { templates?: SendableTemplate[]; error?: string };
+      if (!r.ok) { setTplOpen(false); setNotice(dt(TEMPLATE_ERRORS[d.error ?? ""] ?? "تعذّر تحميل القوالب.")); return; }
+      setTplList(d.templates ?? []);
+    } catch { setTplOpen(false); setNotice(dt("تعذّر تحميل القوالب.")); }
+  };
+  const sendTemplate = async (t: SendableTemplate) => {
+    if (!active || tplBusy) return;
+    if (!window.confirm(dt("إرسال القالب «{0}» إلى {1}؟", [t.name, active.name || active.phone]))) return;
+    setTplBusy(true); setNotice("");
+    try {
+      const r = await fetch(`${API}/${encodeURIComponent(active.id)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "template", templateId: t.id, language: active.language }) });
+      const d = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) { setNotice(dt(TEMPLATE_ERRORS[d.error ?? ""] ?? "تعذّر إرسال القالب.") + (TEMPLATE_ERRORS[d.error ?? ""] ? "" : ` (${d.error ?? r.status})`)); return; }
+      setTplOpen(false); await loadDetail(active.id); await loadList();
+    } finally { setTplBusy(false); }
+  };
+
+  useEffect(() => { const t = setTimeout(() => setQuery(q.trim()), 350); return () => clearTimeout(t); }, [q]);
+  useEffect(() => { fetch(`${API}/conversations/staff`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : { staff: [] })).then((d: { staff?: Array<{ id: string; name: string }> }) => setStaff(d.staff ?? [])).catch(() => undefined); }, []);
+
+  const loadList = useCallback(async () => {
+    const p = new URLSearchParams({ language: lang, view, ...(query ? { q: query } : {}) });
+    try {
+      const r = await fetch(`${API}/conversations?${p}`, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+      if (!r.ok) throw new Error(String(r.status));
+      const d = (await r.json()) as { conversations: Conversation[]; counts: Counts };
+      setItems(d.conversations); setCounts(d.counts); setListError("");
+    } catch { setListError(dt("تعذّر تحميل المحادثات")); }
+  }, [lang, view, query]);
+  useEffect(() => { void loadList(); const t = setInterval(() => void loadList(), 10_000); return () => clearInterval(t); }, [loadList]);
+  useEffect(() => {
+    if (!wantedPhone) return;
+    const hit = items.find((c) => String(c.phone).replace(/\D/g, "").endsWith(wantedPhone.slice(-9)));
+    if (hit) { setActiveId(hit.id); setWantedPhone(""); }
+  }, [items, wantedPhone]);
+
+  const loadDetail = useCallback(async (id: string) => {
+    try {
+      const r = await fetch(`${API}/${encodeURIComponent(id)}?limit=60`, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+      if (!r.ok) return;
+      const d = (await r.json()) as { conversation: Detail; replyWindow: ReplyWindow };
+      setDetail(d.conversation); setReplyWindow(d.replyWindow);
+    } catch { /* keep the last good view */ }
+  }, []);
+  useEffect(() => {
+    if (!activeId) return;
+    setDetail(null); setReplyWindow(null); setDraft(""); setNotice("");
+    void loadDetail(activeId);
+    void fetch(`${API}/conversations`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: activeId, read: true }) }).then(() => { window.dispatchEvent(new Event("whatsapp-inbox-updated")); return loadList(); }).catch(() => undefined);
+    const t = setInterval(() => void loadDetail(activeId), 5_000);
+    return () => clearInterval(t);
+  }, [activeId, loadDetail, loadList]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ block: "end" }); }, [detail?.timeline.length]);
+
+  const patch = async (body: Record<string, unknown>) => {
+    if (!activeId) return;
+    await fetch(`${API}/conversations`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: activeId, ...body }) }).catch(() => undefined);
+    // Reflect the change at once on the pinned copy (it may no longer be in the filtered list).
+    setPinned((p) => (p && p.id === activeId ? {
+      ...p,
+      ...(typeof body.language === "string" ? { language: body.language as Lang } : {}),
+      ...(typeof body.status === "string" ? { status: body.status as "OPEN" | "DONE" } : {}),
+      ...(body.unassign ? { assigneeId: null, assigneeName: null } : {}),
+      ...(body.assignToMe ? { assigneeId: currentUserId } : {}),
+      ...(typeof body.assigneeId === "string" ? { assigneeId: body.assigneeId, assigneeName: (body.assigneeName as string | null) ?? null } : {}),
+    } : p));
+    await loadList();
+  };
+
+  const send = async () => {
+    if (!activeId || sending || !draft.trim()) return;
+    setSending(true); setNotice("");
+    try {
+      const res = await fetch(`${API}/${encodeURIComponent(activeId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "reply", body: draft.trim() }) });
+      if (res.ok) { setDraft(""); await loadDetail(activeId); await loadList(); }
+      else {
+        const e = (await res.json().catch(() => ({}))) as { error?: string };
+        setNotice(e.error === "REPLY_WINDOW_CLOSED" ? dt("انتهت نافذة الـ24 ساعة: لا يمكن الرد إلا بقالب معتمد.") : e.error === "DO_NOT_CONTACT" ? dt("هذا المتبرع طلب عدم التواصل.") : dt("تعذّر الإرسال") + (e.error ? ` (${e.error})` : ""));
+      }
+    } finally { setSending(false); }
+  };
+
+  const windowLabel = replyWindow?.open ? dt("نافذة الرد مفتوحة: متبقٍّ {0}", [`${Math.floor(replyWindow.remainingMs / 3_600_000)}:${String(Math.floor((replyWindow.remainingMs % 3_600_000) / 60_000)).padStart(2, "0")}`]) : dt("نافذة الرد مغلقة");
+
+  return (
+    <div className="flex h-[calc(100dvh-7rem)] min-h-[420px] overflow-hidden rounded-xl border bg-white md:h-[calc(100vh-7rem)] md:min-h-[520px]" dir="rtl">
+      {/* ── conversation list ── */}
+      <aside className={`${activeId ? "hidden md:flex" : "flex"} w-full flex-col border-l md:w-[380px] md:min-w-[380px]`}>
+        <div className="space-y-2 border-b p-3">
+          <div className="flex gap-1 overflow-x-auto text-xs">
+            <button type="button" onClick={() => setLang("all")} className={`whitespace-nowrap rounded-full px-3 py-1 ${lang === "all" ? "bg-emerald-700 text-white" : "bg-slate-100"}`}>{dt("الكل")}{counts?.all ? ` · ${counts.all}` : ""}</button>
+            {LANGS.map((l) => (
+              <button key={l.key} type="button" onClick={() => setLang(l.key)} className={`whitespace-nowrap rounded-full px-3 py-1 ${lang === l.key ? "bg-emerald-700 text-white" : "bg-slate-100"}`}>
+                {l.flag} {dt(l.label)}{counts?.[l.key] ? <b className="ms-1 rounded-full bg-emerald-500 px-1.5 text-white">{counts[l.key]}</b> : null}
+              </button>))}
+          </div>
+          <div className="flex gap-1 text-xs">
+            {(["all", "mine", "unread", "done"] as const).map((v) => (
+              <button key={v} type="button" onClick={() => setView(v)} className={`rounded px-2 py-1 ${view === v ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                {v === "all" ? dt("المفتوحة") : v === "mine" ? dt("المعيّنة لي") : v === "unread" ? dt("غير المقروءة") : dt("المنتهية")}{v === "mine" && counts?.mine ? ` · ${counts.mine}` : ""}
+              </button>))}
+          </div>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={dt("بحث بالاسم أو الرقم أو نص الرسالة")} className="w-full rounded-lg bg-slate-100 px-3 py-2 text-sm outline-none" />
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+            <button type="button" onClick={() => { const v = !alertsOn; setInboxAlertsEnabled(v); setAlertsOn(v); }} className="rounded px-2 py-1 hover:bg-slate-100">{alertsOn ? `🔔 ${dt("التنبيهات مفعّلة")}` : `🔕 ${dt("التنبيهات متوقفة")}`}</button>
+            {alertsOn && notifyPerm === "default" ? <button type="button" onClick={async () => setNotifyPerm(await requestNotificationPermission())} className="rounded bg-emerald-50 px-2 py-1 text-emerald-800">{dt("تفعيل إشعارات المتصفح")}</button> : null}
+            {alertsOn && notifyPerm === "denied" ? <span>{dt("إشعارات المتصفح محجوبة من إعدادات المتصفح")}</span> : null}
+          </div>
+        </div>
+        <ul className="flex-1 overflow-y-auto">
+          {listError && <li className="p-4 text-sm text-red-700">{listError}</li>}
+          {!listError && items.length === 0 && <li className="p-6 text-center text-sm text-slate-500">{dt("لا محادثات هنا")}</li>}
+          {items.map((c) => (
+            <li key={c.id}>
+              <button type="button" onClick={() => setActiveId(c.id)} className={`flex w-full items-center gap-3 border-b px-3 py-2.5 text-start hover:bg-slate-50 ${c.id === activeId ? "bg-emerald-50" : ""}`}>
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800">{initials(c)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline justify-between gap-2">
+                    <b className="truncate text-sm" dir="auto">{c.name || c.phone}</b>
+                    <span className={`shrink-0 text-[11px] ${c.unreadCount ? "font-bold text-emerald-600" : "text-slate-400"}`}>{shortTime(c.lastMessageAt)}</span>
+                  </span>
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-slate-500" dir="auto">{c.lastDirection === "out" ? <><Ticks status="SENT" /> </> : null}{c.lastPreview || "—"}</span>
+                    {c.unreadCount ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-emerald-500 px-1 text-[11px] font-bold text-white">{c.unreadCount}</span> : null}
+                  </span>
+                  {c.assigneeName ? <span className="mt-0.5 inline-block rounded bg-slate-100 px-1.5 text-[10px] text-slate-600">👤 {c.assigneeName}</span> : null}
+                </span>
+              </button>
+            </li>))}
+        </ul>
+      </aside>
+
+      {/* ── conversation ── */}
+      <section className={`${activeId ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col bg-[#efeae2]`}>
+        {!active ? (
+          <div className="m-auto text-center text-sm text-slate-500"><p className="text-base font-bold text-slate-700">{dt("اختر محادثة")}</p><p>{dt("المحادثات مصنّفة حسب اللغة، ويمكن تعيين كل محادثة لموظف.")}</p></div>
+        ) : (<>
+          <header className="flex flex-wrap items-center gap-2 border-b bg-white px-2 py-1.5 md:px-3 md:py-2">
+            <button type="button" onClick={() => setActiveId(null)} className="rounded px-2 py-1 text-lg md:hidden" aria-label={dt("رجوع")}>→</button>
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-800">{initials(active)}</span>
+            <span className="min-w-0 flex-1">
+              <b className="block truncate text-sm" dir="auto">{active.name || active.phone}</b>
+              <span className="text-xs text-slate-500" dir="ltr">{active.phone}</span>
+              {detail?.donor?.doNotContact ? <span className="ms-2 rounded bg-red-100 px-1.5 text-[10px] text-red-700">{dt("طلب عدم التواصل")}</span> : null}
+            </span>
+            <span className={`rounded-full px-2 py-1 text-[11px] ${replyWindow?.open ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>⏱ {windowLabel}</span>
+            <button type="button" onClick={() => setShowTools((v) => !v)} className={`grid h-9 w-9 place-items-center rounded-full text-lg md:hidden ${showTools ? "bg-slate-200" : "bg-slate-100"}`} aria-expanded={showTools} aria-label={dt("أدوات المحادثة")}>⋯</button>
+            <div className={`${showTools ? "flex" : "hidden"} w-full flex-wrap items-center gap-2 md:flex md:w-auto`}>
+            <select value={active.language} onChange={(e) => void patch({ language: e.target.value })} className="rounded border px-1 py-1 text-xs" aria-label={dt("اللغة")}>
+              {LANGS.map((l) => <option key={l.key} value={l.key}>{l.flag} {dt(l.label)}</option>)}
+            </select>
+            <select value={active.assigneeId ?? ""} onChange={(e) => { const v = e.target.value; if (!v) void patch({ unassign: true }); else if (v === currentUserId) void patch({ assignToMe: true }); else void patch({ assigneeId: v, assigneeName: staff.find((s) => s.id === v)?.name ?? null }); }} className="max-w-[150px] rounded border px-1 py-1 text-xs" aria-label={dt("المسؤول")}>
+              <option value="">{dt("بلا مسؤول")}</option>
+              {currentUserId && !staff.some((s) => s.id === currentUserId) ? <option value={currentUserId}>{dt("أنا")}</option> : null}
+              {staff.map((s) => <option key={s.id} value={s.id}>{s.id === currentUserId ? `${s.name} (${dt("أنا")})` : s.name}</option>)}
+            </select>
+            <button type="button" onClick={() => void patch({ status: active.status === "DONE" ? "OPEN" : "DONE" })} className={`rounded px-2 py-1 text-xs font-bold ${active.status === "DONE" ? "bg-slate-200" : "bg-emerald-700 text-white"}`}>{active.status === "DONE" ? dt("إعادة فتح") : dt("تم ✓")}</button>
+            </div>
+          </header>
+
+          <div className="flex-1 space-y-1 overflow-y-auto px-4 py-3">
+            {!detail ? <p className="text-center text-sm text-slate-500">{dt("جارٍ التحميل…")}</p> : (() => {
+              // Status lines (SENT/DELIVERED/READ) that follow an outgoing message become its ticks.
+              const rank: Record<string, number> = { SENT: 1, DELIVERED: 2, READ: 3, REPLIED: 3 };
+              const best = new Map<string, string>(); let owner: string | null = null;
+              for (const it of detail.timeline) {
+                if (it.kind === "outbound") { owner = it.id; best.set(it.id, (it.status || "SENT").toUpperCase()); }
+                else if (it.kind === "inbound") owner = null;
+                else if (owner && it.status) { const st = it.status.toUpperCase(), cur = best.get(owner) || "SENT";
+                  if (/FAIL|BOUNCE/.test(st)) best.set(owner, "FAILED"); else if (cur !== "FAILED" && (rank[st] ?? 0) > (rank[cur] ?? 0)) best.set(owner, st); }
+              }
+              return detail.timeline.map((m, i) => {
+              const prev = detail.timeline[i - 1]; const d = m.at ? new Date(m.at) : null;
+              const dayBreak = d && (!prev?.at || !sameDay(new Date(prev.at), d));
+              return (
+                <div key={m.id}>
+                  {dayBreak ? <div className="my-2 text-center"><span className="rounded-md bg-white/80 px-2 py-0.5 text-[11px] text-slate-600 shadow-sm">{d!.toLocaleDateString("ar", { weekday: "long", day: "numeric", month: "long" })}</span></div> : null}
+                  {m.kind === "status" ? (
+                    /FAIL|BOUNCE|ERROR/i.test(m.status || "") ? <p className="text-center text-[11px] text-red-600">⚠ {m.text || m.status}</p> : null
+                  ) : (
+                    <div className={`flex ${m.kind === "inbound" ? "justify-start" : "justify-end"}`}>
+                      <div className={`max-w-[75%] rounded-lg px-3 py-1.5 text-sm shadow-sm ${m.kind === "inbound" ? "rounded-tr-none bg-white" : "rounded-tl-none bg-[#d9fdd3]"}`}>
+                        {m.text ? <p className="whitespace-pre-wrap break-words" dir="auto">{m.text}</p> : null}
+                        <span className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-slate-500">
+                          {d ? d.toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" }) : ""}{m.kind === "outbound" ? <Ticks status={best.get(m.id) ?? m.status} /> : null}
+                        </span>
+                      </div>
+                    </div>)}
+                </div>);
+              });
+            })()}
+            <div ref={bottomRef} />
+          </div>
+
+          <footer className="border-t bg-[#f0f2f5] p-2">
+            {notice ? <p className="mb-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{notice}</p> : null}
+            {replyWindow && !replyWindow.open ? (
+              <div className="space-y-2">
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-800">{dt("مرّت أكثر من 24 ساعة على آخر رسالة من المتبرع، فقواعد واتساب لا تسمح بالرد الحر. أرسل قالباً معتمداً لبدء المحادثة من جديد.")}</p>
+                {!tplOpen ? (
+                  <button type="button" onClick={() => void openTemplates()} className="w-full rounded-lg bg-emerald-700 px-3 py-2 text-sm font-bold text-white">{dt("إرسال قالب معتمد")}</button>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto rounded-lg border bg-white p-2">
+                    <div className="mb-1 flex items-center justify-between text-xs text-slate-500"><span>{dt("القوالب المعتمدة")}</span><button type="button" onClick={() => setTplOpen(false)} aria-label={dt("إغلاق")}>✕</button></div>
+                    {tplList === null ? <p className="p-2 text-xs text-slate-500">{dt("جارٍ التحميل…")}</p> : tplList.length === 0 ? <p className="p-2 text-xs text-slate-500">{dt("لا قوالب معتمدة متاحة لهذا الرقم.")}</p> : tplList.map((t) => (
+                      <div key={t.id} className="border-b py-2 last:border-0">
+                        <div className="flex items-center justify-between gap-2"><b className="truncate text-xs" dir="ltr">{t.name}</b><span className="text-[10px] text-slate-400" dir="ltr">{t.language}</span></div>
+                        <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs text-slate-600" dir="auto">{t.preview}</p>
+                        <button type="button" disabled={tplBusy} onClick={() => void sendTemplate(t)} className="mt-1 rounded bg-emerald-700 px-2 py-1 text-xs text-white disabled:opacity-40">{dt("إرسال")}</button>
+                      </div>))}
+                  </div>
+                )}
+              </div>
+            ) : detail?.donor?.doNotContact ? (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-center text-xs text-red-700">{dt("هذا المتبرع طلب عدم التواصل.")}</p>
+            ) : (<>
+              {showQuick ? <div className="mb-2 max-h-56 overflow-y-auto rounded-lg border bg-white p-2 text-sm">
+                {quick.length === 0 ? <p className="p-2 text-xs text-slate-500">{dt("لا ردود جاهزة لهذه اللغة بعد")}</p> : quick.map((r) => (
+                  <div key={r.id} className="flex items-start gap-2 rounded px-2 py-1 hover:bg-slate-50">
+                    <button type="button" className="min-w-0 flex-1 text-start" onClick={() => { setDraft(r.body); setShowQuick(false); }}><b className="block truncate text-xs">{r.title}</b><span className="block truncate text-xs text-slate-500" dir="auto">{r.body}</span></button>
+                    <button type="button" aria-label={dt("حذف")} className="text-xs text-slate-400 hover:text-red-600" onClick={async () => { await fetch(`${API}/quick-replies?id=${r.id}`, { method: "DELETE" }).catch(() => undefined); if (activeLang) void loadQuick(activeLang); }}>✕</button>
+                  </div>))}
+                <div className="mt-2 space-y-1 border-t pt-2">
+                  <input value={qTitle} onChange={(e) => setQTitle(e.target.value)} maxLength={60} placeholder={dt("عنوان الرد")} className="w-full rounded border px-2 py-1 text-xs" />
+                  <textarea value={qBody} onChange={(e) => setQBody(e.target.value)} maxLength={1000} rows={2} placeholder={dt("نص الرد")} dir="auto" className="w-full rounded border px-2 py-1 text-xs" />
+                  <button type="button" disabled={!qTitle.trim() || !qBody.trim()} onClick={async () => { if (!activeLang) return; await fetch(`${API}/quick-replies`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language: activeLang, title: qTitle, body: qBody }) }).catch(() => undefined); setQTitle(""); setQBody(""); void loadQuick(activeLang); }} className="rounded bg-emerald-700 px-2 py-1 text-xs text-white disabled:opacity-40">{dt("حفظ كرد جاهز")}</button>
+                </div>
+              </div> : null}
+              <div className="flex items-end gap-2">
+                <button type="button" onClick={() => setShowQuick((v) => !v)} className={`grid h-10 w-10 place-items-center rounded-full ${showQuick ? "bg-emerald-100" : "bg-white"}`} aria-label={dt("الردود الجاهزة")} title={dt("الردود الجاهزة")}>⚡</button>
+                <textarea value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+                  rows={1} placeholder={dt("اكتب رسالة")} dir="auto" className="max-h-32 min-h-[40px] min-w-0 flex-1 resize-none rounded-lg bg-white px-3 py-2 text-base outline-none md:text-sm" />
+                <button type="button" onClick={() => void send()} disabled={sending || !draft.trim()} className="grid h-10 w-10 place-items-center rounded-full bg-emerald-600 text-white disabled:opacity-40" aria-label={dt("إرسال")}>➤</button>
+              </div></>)}
+          </footer>
+        </>)}
+      </section>
+    </div>
+  );
+}
