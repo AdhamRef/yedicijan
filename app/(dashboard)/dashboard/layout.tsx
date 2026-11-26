@@ -1,3 +1,4 @@
+import "@/styles/dashboard-utilities.css";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
