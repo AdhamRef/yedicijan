@@ -16,7 +16,7 @@ const icons = {
 } satisfies Record<IntegrationProvider, typeof MessageCircle>;
 
 function formatCheck(value: string | null) {
-  return value ? new Date(value).toLocaleString("ar") : "لم يتم";
+  return value ? new Date(value).toLocaleString("ar", { timeZone: "Europe/Istanbul" }) : "لم يتم";
 }
 
 /**
