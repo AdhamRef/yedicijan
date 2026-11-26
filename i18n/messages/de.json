@@ -648,7 +648,7 @@
     "secure3DCardPrompt": "Gib unten deine Kartendaten ein, um die sichere Zahlung abzuschließen.",
     "sslSecurePayment": "256-Bit-SSL-verschlüsselt · Sichere Zahlung",
     "certificateNoteTitle": "Erhalte deine Spendenbescheinigung ✨",
-    "certificateNoteBody": "Gib deine echte E-Mail-Adresse an, damit wir dir die offizielle Spendenbescheinigung und Quittung der Stiftung zusenden können.",
+    "certificateNoteBody": "Gib deine echte E-Mail-Adresse an, damit wir dir die offizielle Spendenbescheinigung und Quittung der Vereinigung zusenden können.",
     "free": "Kostenlos"
   },
   "DonationSuccess": {
