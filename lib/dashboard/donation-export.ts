@@ -113,7 +113,7 @@ const DONATION_COLUMNS: ColSpec<DonationExportRow>[] = [
   { key: "amount", header: "مبلغ التبرع", width: 14, align: "right", numFmt: "#,##0.00", value: (r) => r.amount },
   { key: "teamSupport", header: "دعم الفريق", width: 14, align: "right", numFmt: "#,##0.00", value: (r) => r.teamSupport },
   { key: "fees", header: "رسوم المعالجة", width: 14, align: "right", numFmt: "#,##0.00", value: (r) => r.fees },
-  { key: "totalAmount", header: "الإجمالي المدفوع", width: 16, align: "right", numFmt: "#,##0.00", value: (r) => r.totalAmount },
+  { key: "totalAmount", header: "الإجمالي المدفوع (بعملة التبرع)", width: 18, align: "right", numFmt: "#,##0.00", value: (r) => r.totalAmount },
   { key: "amountUSD", header: "بالدولار (USD)", width: 14, align: "right", numFmt: "#,##0.00", value: (r) => r.amountUSD },
   { key: "coverFees", header: "غطى الرسوم", width: 12, align: "center", value: (r) => (r.coverFees ? "نعم" : "لا") },
   { key: "campaigns", header: "الحملات", width: 36, value: (r) => r.campaigns.map((c) => c.title).join("؛ ") },
@@ -473,7 +473,8 @@ function addCoverSheet(
 
   sheet.mergeCells("A3:E3");
   const meta = sheet.getCell("A3");
-  meta.value = `أُنشئ في: ${new Date().toLocaleString("ar-EG", { timeZone: "UTC" })} (UTC)`;
+  // Same digits and shape as the period line (yyyy-mm-dd hh:mm), Istanbul time, no hidden direction marks (#285).
+  meta.value = `أُنشئ في: ${new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Istanbul" }).format(new Date()).replace(",", "")} — توقيت إسطنبول`;
   meta.font = { size: 10, color: { argb: "FF64748B" } };
   meta.alignment = { horizontal: "right", indent: 1 };
 
