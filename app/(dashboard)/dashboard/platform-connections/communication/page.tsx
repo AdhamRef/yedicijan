@@ -9,7 +9,7 @@ import { integrationActorFromSession } from "@/lib/integration-settings/http";
 import { resolveCommunicationConnectionsPageAccess } from "@/lib/integration-settings/page-access";
 import { withActiveTestState } from "@/lib/integration-settings/safe-snapshot";
 import { getSchedulerStatus } from "@/lib/communication/scheduler-status";
-import { IntegrationSettingsManager } from "./_components/IntegrationSettingsManager";
+import { IntegrationSettingsManager } from "./_components/ClientOnly";
 
 export const metadata = { title: "مزودو التواصل والإرسال | ربط المنصات والإرسال" };
 export const dynamic = "force-dynamic";
