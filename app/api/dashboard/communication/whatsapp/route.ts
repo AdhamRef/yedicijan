@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
 import { prisma } from "@/lib/prisma";
+import { fastCountDeliveries, fastFindDeliveries, fastGroupByDeliveries } from "@/lib/communication/delivery-fast-query";
 import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { getActiveMetaWhatsappRuntimeConfig } from "@/lib/communication/runtime-config";
 import { RETRYABLE_STATUSES } from "@/lib/communication/communication-runtime-types";
@@ -74,14 +75,14 @@ export async function GET(request: NextRequest) {
       total, byStatus, deliveredCount, readCount, repliedCount, failedCount,
       allTimeTotal, rows, listTotal, bucketRows, templates, metaConfig, retryableCount,
     ] = await Promise.all([
-      prisma.communicationDelivery.count({ where: rangeWhere }),
-      prisma.communicationDelivery.groupBy({ by: ["status"], where: rangeWhere, _count: { _all: true } }),
-      prisma.communicationDelivery.count({ where: { ...rangeWhere, deliveredAt: { not: null } } }),
-      prisma.communicationDelivery.count({ where: { ...rangeWhere, readAt: { not: null } } }),
-      prisma.communicationDelivery.count({ where: { ...rangeWhere, repliedAt: { not: null } } }),
-      prisma.communicationDelivery.count({ where: { ...rangeWhere, status: { in: [...FAILED_STATUSES] } } }),
-      prisma.communicationDelivery.count({ where: { channel: CHANNEL } }),
-      prisma.communicationDelivery.findMany({
+      fastCountDeliveries({ where: rangeWhere }),
+      fastGroupByDeliveries({ by: ["status"], where: rangeWhere, _count: { _all: true } }),
+      fastCountDeliveries({ where: { ...rangeWhere, deliveredAt: { not: null } } }),
+      fastCountDeliveries({ where: { ...rangeWhere, readAt: { not: null } } }),
+      fastCountDeliveries({ where: { ...rangeWhere, repliedAt: { not: null } } }),
+      fastCountDeliveries({ where: { ...rangeWhere, status: { in: [...FAILED_STATUSES] } } }),
+      fastCountDeliveries({ where: { channel: CHANNEL } }),
+      fastFindDeliveries({
         where: listWhere,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
@@ -93,8 +94,8 @@ export async function GET(request: NextRequest) {
           deliveredAt: true, readAt: true, repliedAt: true, failedAt: true, retriedAt: true,
         },
       }),
-      prisma.communicationDelivery.count({ where: listWhere }),
-      prisma.communicationDelivery.findMany({
+      fastCountDeliveries({ where: listWhere }),
+      fastFindDeliveries({
         where: rangeWhere,
         select: { createdAt: true, status: true, deliveredAt: true, readAt: true },
         orderBy: { createdAt: "asc" },
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
       }),
       getActiveMetaWhatsappRuntimeConfig(),
       // Re-sendable backlog — see the identical note on the email route for the `isSet` arm.
-      prisma.communicationDelivery.count({
+      fastCountDeliveries({
         where: {
           ...rangeWhere,
           status: { in: [...RETRYABLE_STATUSES] },

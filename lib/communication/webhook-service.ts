@@ -99,6 +99,19 @@ export async function processWhatsappEvents(events: NormalizedWebhookEvent[]): P
         const patch = event.status === "FAILED" ? { providerMessageId: event.providerMessageId, errorMessage: event.errorMessage } : { providerMessageId: event.providerMessageId };
         const res = await markDeliveryStatus(delivery.id, event.status, patch);
         if (res.ok) summary.deliveryUpdates += 1;
+        // Meta 131050: the recipient stopped our marketing inside WhatsApp itself — the same as pressing STOP
+        // (Minber al-Aqsa #273). Yedicihan's campaigns send only to whatsappOptIn profiles, so the opt-in is
+        // switched off for that number. Fail-safe: never blocks processing the webhook.
+        const recipient = (event as { recipient?: string | null }).recipient;
+        if (event.status === "FAILED" && /\b131050\b/.test(String(event.errorMessage ?? "")) && recipient) {
+          const digits = recipient.replace(/\D/g, "");
+          await Promise.resolve()
+            .then(() => prisma.donorCommunicationProfile.updateMany({
+              where: { phone: { in: [...new Set([recipient, "+" + digits, digits])] } },
+              data: { whatsappOptIn: false, consentSource: "meta-whatsapp-131050-stop", lastConsentAt: new Date() },
+            }))
+            .catch((error) => console.error("[whatsapp-webhook] 131050 opt-out not recorded:", error instanceof Error ? error.message : "unknown"));
+        }
       }
       continue;
     }

@@ -218,6 +218,8 @@ export async function retryDelivery(
       to: recipient,
       subject: row.renderedSubject ?? "",
       html: row.renderedBody,
+      locale: row.locale,
+      purpose: row.purpose,
     };
   } else if (channel === "WHATSAPP") {
     const meta = await resolveMetaTemplate(row);
@@ -381,22 +383,41 @@ export type RetryPreflight = {
  * three-month-old donation receipt today reads to the donor as a new charge. An operator deserves to
  * know that before clicking, not after.
  */
+/**
+ * The preflight runs on every e-mail/WhatsApp dashboard load. Through Prisma its queries become $expr full
+ * scans of CommunicationDelivery; the index-friendly functions return the same results (Minber al-Aqsa #257).
+ * They are loaded on demand and fall back to Prisma on any failure, so the dashboard never breaks over speed.
+ */
+async function preflightQueries() {
+  try {
+    const fast = await import("./delivery-fast-query");
+    return { find: fast.fastFindDeliveries, count: fast.fastCountDeliveries };
+  } catch (error) {
+    if (process.env.NODE_ENV === "production") console.warn("[retryPreflight] index-friendly queries unavailable; using Prisma", error instanceof Error ? error.message : error);
+    return {
+      find: (args: Parameters<typeof prisma.communicationDelivery.findMany>[0]) => prisma.communicationDelivery.findMany(args),
+      count: (args: Parameters<typeof prisma.communicationDelivery.count>[0]) => prisma.communicationDelivery.count(args),
+    };
+  }
+}
+
 export async function retryPreflight(filter: RetryCandidateFilter): Promise<RetryPreflight> {
+  const q = await preflightQueries();
   const range = filter.from || filter.to
     ? { createdAt: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } }
     : {};
   const pending = { OR: [{ retriedAt: null }, { retriedAt: { isSet: false } }] };
 
   const [eligibleRows, alreadyRetried, bounced] = await Promise.all([
-    prisma.communicationDelivery.findMany({
+    q.find({
       where: { channel: filter.channel, status: { in: [...RETRYABLE_STATUSES] }, ...pending, ...range },
       select: { errorMessage: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.communicationDelivery.count({
+    q.count({
       where: { channel: filter.channel, status: { in: [...RETRYABLE_STATUSES] }, retriedAt: { not: null }, ...range },
     }),
-    prisma.communicationDelivery.count({
+    q.count({
       where: { channel: filter.channel, status: { in: [...NON_RETRYABLE_TERMINAL] }, ...range },
     }),
   ]);

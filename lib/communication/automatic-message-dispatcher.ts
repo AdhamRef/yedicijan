@@ -141,6 +141,8 @@ export async function sendAutomaticEmailMessage(
     to: input.recipientEmail,
     subject: input.renderedSubject,
     html: input.renderedBody,
+    locale: input.locale,
+    purpose: input.purpose ?? "TRANSACTIONAL",
   });
 
   if (!res.ok) {
