@@ -71,6 +71,18 @@ const FIELDS: { key: string; Icon: LucideIcon }[] = [
 ];
 /** Base amounts in USD, converted to the site currency. */
 const AMOUNTS_USD = [100, 250, 500, 1000];
+/** A category the team marked as zakat, by slug or name, in any site language. */
+const ZAKAT_CATEGORY = /zakat|zek[aâ]t|زكا/i;
+/** Words that name each destination in a campaign title (any site language). */
+const COUNTRY_WORDS: Record<string, RegExp> = {
+  palestine: /فلسطين|غزة|palestin|filistin|gaza|gazze/i,
+  sudan: /السودان|sudan|soudan/i,
+  yemen: /اليمن|yemen|y[ée]men|jemen/i,
+  africa: /إفريقيا|أفريقيا|افريقيا|africa|afrika|afrique|[áa]frica/i,
+  syria: /سوريا|syria|suriye|syrie|syrien|siria|s[íi]ria|suriah/i,
+};
+/** A relief photo among the site's projects (food, baskets, clothing). */
+const RELIEF_PHOTO = /سلال|سلة|إطعام|طعام|غذائ|كسوة|ملابس|food|basket|gıda|sepet/i;
 const AYAH_103 = "﴿خُذْ مِنْ أَمْوَالِهِمْ صَدَقَةً تُطَهِّرُهُمْ وَتُزَكِّيهِم بِهَا﴾";
 const AYAH_60 = "﴿إِنَّمَا الصَّدَقَاتُ لِلْفُقَرَاءِ وَالْمَسَاكِينِ وَالْعَامِلِينَ عَلَيْهَا وَالْمُؤَلَّفَةِ قُلُوبُهُمْ وَفِي الرِّقَابِ وَالْغَارِمِينَ وَفِي سَبِيلِ اللَّهِ وَابْنِ السَّبِيلِ﴾";
 
@@ -96,16 +108,31 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
   // ── Data: the "zakat" category and its per-country campaigns ──
   const [category, setCategory] = useState<Category | null>(null);
   const [programmes, setProgrammes] = useState<CampaignLite[]>([]);
+  const [siteImage, setSiteImage] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    Promise.all([
-      axios.get(`/api/categories/zakat`, { params: { locale } }).catch(() => null),
-      axios.get(`/api/categories/zakat/campaigns`, { params: { locale, limit: 12 } }).catch(() => null),
-    ]).then(([c, list]) => {
+    (async () => {
+      // The zakat category: slug "zakat", or any category the team named as zakat.
+      let cat = (await axios.get(`/api/categories/zakat`, { params: { locale } }).catch(() => null))?.data;
+      if (!cat?.id) {
+        const all = (await axios.get(`/api/categories`, { params: { locale } }).catch(() => null))?.data;
+        const list: { id: string; slug?: string; name?: string; image?: string | null }[] = all?.items ?? all ?? [];
+        cat = list.find((c) => ZAKAT_CATEGORY.test(`${c.slug ?? ""} ${c.name ?? ""}`)) ?? null;
+      }
+      const items = cat?.slug
+        ? (await axios.get(`/api/categories/${encodeURIComponent(cat.slug)}/campaigns`, { params: { locale, limit: 24 } }).catch(() => null))?.data?.items ?? []
+        : [];
+      // A relief photo from the site's own projects for the hero, until the category has one.
+      let photo: string | null = null;
+      if (!cat?.image && !items[0]?.images?.[0]) {
+        const camps = (await axios.get(`/api/campaigns`, { params: { locale, limit: 40 } }).catch(() => null))?.data?.items ?? [];
+        photo = camps.find((c: CampaignLite) => RELIEF_PHOTO.test(c.title ?? "") && c.images?.[0])?.images?.[0] ?? null;
+      }
       if (!alive) return;
-      if (c?.data?.id) setCategory({ id: c.data.id, name: c.data.name, image: c.data.image });
-      setProgrammes(list?.data?.items ?? []);
-    });
+      if (cat?.id) setCategory({ id: cat.id, name: cat.name, image: cat.image });
+      setProgrammes(items);
+      setSiteImage(photo);
+    })();
     return () => {
       alive = false;
     };
@@ -114,12 +141,18 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
   // ── Pay band ──
   const [dest, setDest] = useState<string>(DESTS[0].key);
   const [fieldKey, setFieldKey] = useState<string>("any");
-  const chosen = programmes.find((p: CampaignLite) => p.slug === `zakat-${dest}`) ?? null;
+  // The country's campaign in the zakat category: slug `zakat-<country>`, else its name in the title.
+  const chosen =
+    programmes.find((p: CampaignLite) => p.slug === `zakat-${dest}`) ??
+    programmes.find((p: CampaignLite) => COUNTRY_WORDS[dest]?.test(p.title ?? "")) ??
+    null;
   const presets = AMOUNTS_USD.map((usd) => Math.round(usd * rate));
   const [amount, setAmount] = useState<number | null>(null);
   const [other, setOther] = useState("");
   const payAmount = other ? num(other) : amount ?? presets[1];
   const canPay = payAmount > 0 && Boolean(chosen || category);
+  // Until the zakat category exists the button still looks live and leads to the WhatsApp line.
+  const canPress = payAmount > 0;
   const [dialogOpen, setDialogOpen] = useState(false);
   const pay = () => {
     if (canPay) setDialogOpen(true);
@@ -169,7 +202,7 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
     document.getElementById("pay")?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
-  const heroImage = programmes[0]?.images?.[0] ?? category?.image ?? null;
+  const heroImage = category?.image ?? programmes[0]?.images?.[0] ?? siteImage ?? "/images/zakat-waqf/zk-baskets.jpg";
 
   const field = (id: string, label: string, unit: React.ReactNode, hint?: string) => (
     <div>
@@ -216,7 +249,7 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
               <li className="text-white">{t("crumb")}</li>
             </ol>
           </nav>
-          <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[1fr_auto]">
             <div className="max-w-2xl">
               <SectionHeading as="h1" tone="dark" eyebrow={t("eyebrow")} title={t("title")} mark={t("titleMark")} subtitle={t("subtitle")} />
               <p className="mt-4 inline-flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-2xl bg-deep/40 px-4 py-2.5 ring-1 ring-white/10 backdrop-blur-sm">
@@ -313,7 +346,7 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
                 <CategoryIcon name={DESTS.find((d) => d.key === dest)?.icon} className={`h-3.5 w-5 ${dest === "africa" ? "text-gold" : ""}`} />
                 {t(`dest_${dest}`)}<span className="text-white/30">·</span>{t(`field_${fieldKey}`)}
               </p>
-              <button type="button" disabled={!canPay} onClick={pay}
+              <button type="button" disabled={!canPress} onClick={pay}
                 className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-gold px-7 text-base font-extrabold text-deep shadow-[0_16px_30px_-16px_rgba(246,188,81,.9)] transition-transform hover:-translate-y-0.5 disabled:opacity-50">
                 <Heart className="h-5 w-5" />{t("payWith", { amount: money(payAmount) })}
               </button>

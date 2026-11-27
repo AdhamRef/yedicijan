@@ -107,7 +107,8 @@ export default function QuickDonateBand({ campaigns }: { campaigns: CampaignCard
           <div className="topo-layer text-white/[0.08]" />
         </div>
 
-        <div className="grid items-end gap-5 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.9fr)_auto] lg:gap-6">
+        {/* grid-cols-1 on phones: an implicit auto column grows to a long project title and pushes the page wider than the screen. */}
+        <div className="grid grid-cols-1 items-end gap-5 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.9fr)_auto] lg:gap-6">
           <div className="self-center lg:border-e lg:border-white/15 lg:pe-6">
             <h2 className="text-xl font-extrabold">{t("qdTitle")}</h2>
             <span className="mt-0.5 inline-flex items-center gap-1.5 text-[13px] text-ice/70">
@@ -117,7 +118,7 @@ export default function QuickDonateBand({ campaigns }: { campaigns: CampaignCard
           </div>
 
           {/* Project */}
-          <div ref={menuRef} className="relative">
+          <div ref={menuRef} className="relative min-w-0">
             <span className={label} id="qd-project-label">{t("qdProject")}</span>
             <button
               type="button"
@@ -157,7 +158,7 @@ export default function QuickDonateBand({ campaigns }: { campaigns: CampaignCard
           </div>
 
           {/* Amount */}
-          <fieldset>
+          <fieldset className="min-w-0">
             <legend className={label}>{t("qdAmount")}</legend>
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.7fr)]">
               {presets.map((p, i) => {

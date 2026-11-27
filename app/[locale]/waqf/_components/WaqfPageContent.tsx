@@ -61,6 +61,9 @@ function useInView(id: string) {
 /** A category the team marked as waqf, by slug or name, in any site language. */
 const WAQF_CATEGORY = /waqf|wakaf|vak[ıi]f|وقف|أوقاف/i;
 
+/** Wells, mosques and schools among the site's projects, in any site language. */
+const WAQF_PROJECT = /بئر|آبار|مسجد|مساجد|بيوت الله|مدرس|well|mosque|school|kuyu|cami|okul|puits|mosqu[ée]e|[ée]cole|brunnen|moschee|schule|pozo|mezquita|escuela|sumur|masjid|sekolah|po[çc]o|mesquita/i;
+
 /** A well, for the Bir Rumah story — matched on the project's title or slug in any site language. */
 const WELL = /بئر|آبار|well|kuyu|sumur|puits|brunnen|pozo|poço/i;
 
@@ -87,11 +90,17 @@ export default function WaqfPageContent() {
         const list: { id: string; slug?: string; name?: string; image?: string | null }[] = all?.items ?? all ?? [];
         cat = list.find((c) => WAQF_CATEGORY.test(`${c.slug ?? ""} ${c.name ?? ""}`)) ?? null;
       }
-      const items = cat?.slug
+      let items = cat?.slug
         ? (await axios.get(`/api/categories/${encodeURIComponent(cat.slug)}/campaigns`, { params: { locale, limit: 24 } }).catch(() => null))?.data?.items ?? []
         : [];
+      // Until a waqf category exists: the site's wells, mosques and schools.
+      if (!cat?.id) {
+        const camps = (await axios.get(`/api/campaigns`, { params: { locale, limit: 60 } }).catch(() => null))?.data?.items ?? [];
+        items = camps.filter((c: Campaign) => WAQF_PROJECT.test(`${c.title ?? ""} ${c.slug ?? ""}`));
+      }
       if (!alive) return;
       if (cat?.id) setCategory({ id: cat.id, name: cat.name, image: cat.image });
+      else setMode("pick");
       setProjects(items);
       setLoaded(true);
     })();
@@ -129,8 +138,9 @@ export default function WaqfPageContent() {
   const minShareUSD = GENERAL_SHARE_USD;
   const wellProject = projects.find((p) => WELL.test(`${p.title ?? ""} ${p.slug ?? ""}`) && p.images?.[0]);
   // The hero shows another project, so the well photo stays for the Bir Rumah story.
-  const heroImage = projects.find((p) => p !== wellProject && p.images?.[0])?.images?.[0] ?? category?.image ?? null;
-  const storyImage = wellProject?.images?.[0] ?? category?.image ?? null;
+  const heroImage = projects.find((p) => p !== wellProject && p.images?.[0])?.images?.[0] ?? category?.image ?? "/images/zakat-waqf/wq-mosque.jpg";
+  const storyImage = wellProject?.images?.[0] ?? "/images/zakat-waqf/wq-well.jpg";
+  const generalImage = category?.image ?? wellProject?.images?.[0] ?? "/images/zakat-waqf/wq-well.jpg";
 
   return (
     <main className="min-h-screen bg-offwhite">
@@ -149,7 +159,7 @@ export default function WaqfPageContent() {
               <li className="text-white">{t("crumb")}</li>
             </ol>
           </nav>
-          <div className="grid items-center gap-8 lg:grid-cols-[1fr_auto]">
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[1fr_auto]">
             <div className="max-w-2xl">
               <SectionHeading as="h1" tone="dark" eyebrow={t("eyebrow")} title={t("title")} mark={t("titleMark")} subtitle={t("subtitle")} />
               <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -180,8 +190,8 @@ export default function WaqfPageContent() {
         <div className="mx-auto grid max-w-7xl items-start gap-6 px-4 sm:px-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8 lg:px-6">
           <div className="rounded-[28px] border border-line bg-white p-4 shadow-[0_30px_70px_-50px_rgba(18,35,57,.6)] sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div role="tablist" aria-label={t("step1")} className="grid w-full grid-cols-2 rounded-2xl bg-sand p-1.5 sm:inline-grid sm:w-auto">
-                {([["general", InfinityIcon], ["pick", Building2]] as const).map(([m, Icon]) => (
+              <div role="tablist" aria-label={t("step1")} className="grid w-full grid-flow-col auto-cols-fr rounded-2xl bg-sand p-1.5 sm:inline-grid sm:w-auto">
+                {([["general", InfinityIcon], ["pick", Building2]] as const).filter(([m]) => m === "pick" || !loaded || category).map(([m, Icon]) => (
                   <button key={m} role="tab" type="button" aria-selected={mode === m} onClick={() => setMode(m)}
                     className={`inline-flex min-h-[46px] items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 text-[14px] font-extrabold transition-all sm:px-5 sm:text-[15px] ${mode === m ? "bg-deep text-white shadow-[0_10px_24px_-14px_rgba(18,35,57,.8)]" : "text-deep hover:bg-white/60"}`}>
                     <Icon className={`h-4 w-4 ${mode === m ? "text-gold" : "text-burgundy"}`} />{t(`mode_${m}`)}
@@ -194,7 +204,7 @@ export default function WaqfPageContent() {
             {mode === "general" ? (
               <div className="mt-5 grid gap-5 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:items-stretch">
                 <div className="relative isolate flex min-h-[220px] flex-col justify-end overflow-hidden rounded-[22px] p-5 text-white">
-                  {(category?.image ?? heroImage) && <Image src={(category?.image ?? heroImage) as string} alt="" fill sizes="(max-width: 768px) 100vw, 40vw" className="-z-10 object-cover" />}
+                  {generalImage && <Image src={generalImage} alt="" fill sizes="(max-width: 768px) 100vw, 40vw" className="-z-10 object-cover" />}
                   <span className="absolute inset-0 -z-10 bg-gradient-to-t from-deep via-deep/55 to-deep/10" aria-hidden />
                   <span className="mb-auto inline-flex w-max items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-extrabold text-deep">{t("sharePrice")} <span className="text-burgundy">{money(conv(GENERAL_SHARE_USD))}</span></span>
                   <b className="text-xl font-black">{t("generalTitle")}</b>

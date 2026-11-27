@@ -18,6 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     id: "Syarat Penggunaan",
     pt: "Termos de Uso",
     es: "Términos de Uso",
+    de: "Nutzungsbedingungen",
   };
   return buildPageMetadata(locale, {
     title: titles[locale] ?? titles.en,

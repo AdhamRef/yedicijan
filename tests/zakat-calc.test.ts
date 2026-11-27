@@ -62,3 +62,16 @@ test("zakat: five destinations in the owner's order, calculator last", () => {
   assert.ok(zakat.indexOf('id="calc"') > zakat.indexOf("── FAQ ──"));
   assert.doesNotMatch(zakat, /notCalculated/);
 });
+
+test("pages stay complete before the zakat / waqf categories exist", () => {
+  const zakat = readFileSync(join(ROOT, "app/[locale]/zakat/_components/ZakatPageContent.tsx"), "utf8");
+  const waqf = readFileSync(join(ROOT, "app/[locale]/waqf/_components/WaqfPageContent.tsx"), "utf8");
+  assert.match(zakat, /ZAKAT_CATEGORY = /);
+  assert.match(zakat, /COUNTRY_WORDS\[dest\]/);
+  assert.match(zakat, /"\/images\/zakat-waqf\/zk-baskets\.jpg"/);
+  assert.match(zakat, /disabled=\{!canPress\}/);
+  assert.match(waqf, /WAQF_PROJECT\.test/);
+  assert.match(waqf, /else setMode\("pick"\)/);
+  assert.match(waqf, /"\/images\/zakat-waqf\/wq-well\.jpg"/);
+  for (const f of ["zk-baskets.jpg", "wq-well.jpg", "wq-mosque.jpg"]) assert.ok(existsSync(join(ROOT, "public/images/zakat-waqf", f)), f);
+});
