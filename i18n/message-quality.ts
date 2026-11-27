@@ -68,11 +68,11 @@ function applyCorrections(messages: MessageObject, corrections: CorrectionMap): 
 
 const AR_CORRECTIONS: CorrectionMap = {
   "Navbar.events": "الأنشطة والفعاليات",
-  "HomePage.newsSubtitle": "آخر أخبار جمعيتنا",
+  "HomePage.newsSubtitle": "آخر أخبار الهيئة",
   "CampaignsSlider.sharesMode": "أسهم — {currency}{price} للسهم",
   "QuickDonate.hadithQuote": "قال رسول الله ﷺ",
   "QuickDonate.customAmount": "أو أدخل مبلغًا مخصصًا",
-  "Footer.description": "جمعية يدي جيهان الدولية للتضامن جمعية عاملة للنفع العام، تقف إلى جانب المحتاجين منذ عام 1961 في مجالات الصحة والإغاثة العاجلة والاستجابة للكوارث والتعليم.",
+  "Footer.description": "الهيئة الدولية للإغاثة الإنسانية مؤسسة خيرية ذات نفع عام، تقف إلى جانب المحتاجين منذ عام 1961 في مجالات الصحة والإغاثة العاجلة والاستجابة للكوارث والتعليم.",
   "AboutUs.ctaTitle": "كن جزءًا من التغيير",
   "AboutUs.ctaDesc": "انضم إلينا في رحلتنا لبناء مستقبل أفضل للأطفال حول العالم.",
   "ContactUs.successMessage": "شكرًا لتواصلك معنا، سنرد عليك قريبًا.",
