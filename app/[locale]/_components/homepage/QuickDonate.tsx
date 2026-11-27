@@ -12,6 +12,7 @@ import { Link } from "@/i18n/routing";
 import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-link";
 import type { SuggestedDonationsConfig } from "@/lib/campaign/suggested-donations";
 import type { ShareLabelsConfig } from "@/lib/campaign/share-labels";
+import InlineBold from "@/components/InlineBold";
 
 // DonationDialog is a large client chunk; loading it lazily keeps it out of the
 // homepage critical path entirely.
@@ -381,7 +382,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
               ) : campaigns.length === 0 ? (
                 <span className="truncate text-start text-xs font-medium text-gray-400">{t("noCampaigns")}</span>
               ) : (
-                <span className="truncate text-start font-medium text-gray-900">{selectedCampaign?.title ?? ""}</span>
+                <span className="truncate text-start font-medium text-gray-900"><InlineBold text={selectedCampaign?.title ?? ""} /></span>
               )}
               <ChevronDown className={`h-4 w-4 flex-shrink-0 text-burgundy transition-transform duration-200 ${campaignDropdownOpen ? "rotate-180" : ""}`} />
             </button>
@@ -401,7 +402,7 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
                           isSelected ? "bg-burgundy/[0.07] font-semibold text-burgundy" : "text-gray-700 hover:bg-gray-50"
                         }`}
                       >
-                        <span className="truncate">{camp.title}</span>
+                        <span className="truncate"><InlineBold text={camp.title} /></span>
                         {isSelected && <Check className="h-3.5 w-3.5 flex-shrink-0 text-burgundy" />}
                       </button>
                     );

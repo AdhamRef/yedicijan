@@ -12,6 +12,7 @@ import {
 } from "@/lib/seo";
 import type { Locale } from "@/lib/seo";
 import { buildSeoFallback, compactSeoFields, type ProjectSeoFields } from "@/lib/campaign/project-seo";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 interface Props {
   params: Promise<{ id: string; locale: string }>;
@@ -112,7 +113,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   const t = pickTranslation(campaign.translations, locale);
-  const localeTitle = t?.title || campaign.title || seo.campaigns.title;
+  const localeTitle = stripBoldMarkers(t?.title || campaign.title) || seo.campaigns.title;
   const localeDescription = t?.description || campaign.description || seo.campaigns.description;
   const localeImage = (t as { image?: string | null } | undefined)?.image || campaign.images?.[0] || `${SITE_URL}/og-image.jpg`;
 
@@ -132,7 +133,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     localeDescription,
     localeImage,
     campaignFields: storedSeo.campaignSeo,
-    campaignTitle: campaign.title,
+    campaignTitle: stripBoldMarkers(campaign.title),
     campaignDescription: campaign.description,
     campaignImage: campaign.images?.[0] || `${SITE_URL}/og-image.jpg`,
   });

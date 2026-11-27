@@ -14,6 +14,7 @@ import {
 } from "@/lib/campaign/suggested-donations";
 import { isolateLtr } from "@/lib/campaign/funding";
 import type { CampaignCardData } from "../CampaignCard";
+import InlineBold from "@/components/InlineBold";
 
 const DonationDialog = dynamic(() => import("@/components/DonationDialog"), { ssr: false });
 
@@ -122,7 +123,7 @@ export default function QuickDonateBand({ campaigns }: { campaigns: CampaignCard
               onClick={() => setMenuOpen((o) => !o)}
               className="flex h-[52px] w-full items-center justify-between gap-3 rounded-2xl border border-white/15 bg-white/[0.08] px-4 text-start font-bold"
             >
-              <span className="truncate">{campaign.title}</span>
+              <span className="truncate"><InlineBold text={campaign.title} /></span>
               <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${menuOpen ? "rotate-180" : ""}`} />
             </button>
             {menuOpen && (
@@ -142,7 +143,7 @@ export default function QuickDonateBand({ campaigns }: { campaigns: CampaignCard
                         c.id === campaign.id ? "bg-offwhite font-bold text-burgundy" : "hover:bg-offwhite"
                       }`}
                     >
-                      <span className="line-clamp-1">{c.title}</span>
+                      <span className="line-clamp-1"><InlineBold text={c.title} /></span>
                       {c.id === campaign.id && <Check className="h-4 w-4 shrink-0" />}
                     </button>
                   </li>

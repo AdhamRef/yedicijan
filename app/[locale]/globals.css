@@ -2,21 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Brand typeface: TS Damas Sans (licensed by the association, self-hosted).
-   Files live in /public/fonts/ts-damas-sans/. Arabic glyphs only (unicode-range):
-   Latin text uses Open Sans as the guide specifies. Until a weight's file is
-   present, Arabic falls back to Cairo (the guide's second Arabic face). ── */
-@font-face { font-family: "TS Damas Sans"; src: url("/fonts/ts-damas-sans/ts-damas-sans-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+FB50-FDFF, U+FE70-FEFF; }
-@font-face { font-family: "TS Damas Sans"; src: url("/fonts/ts-damas-sans/ts-damas-sans-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+FB50-FDFF, U+FE70-FEFF; }
-@font-face { font-family: "TS Damas Sans"; src: url("/fonts/ts-damas-sans/ts-damas-sans-700.woff2") format("woff2"); font-weight: 600 700; font-style: normal; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+FB50-FDFF, U+FE70-FEFF; }
-@font-face { font-family: "TS Damas Sans"; src: url("/fonts/ts-damas-sans/ts-damas-sans-800.woff2") format("woff2"); font-weight: 800 900; font-style: normal; font-display: swap; unicode-range: U+0600-06FF, U+0750-077F, U+0870-08FF, U+FB50-FDFF, U+FE70-FEFF; }
-
-/* next/font puts --font-cairo / --font-poppins on <body>; compose the Arabic
-   stack on the same element so the var() resolves. */
-body {
-  --font-arabic: "TS Damas Sans", var(--font-poppins), var(--font-cairo), "Segoe UI", Tahoma, sans-serif;
-}
-
 * {
   scroll-behavior: smooth;
 }

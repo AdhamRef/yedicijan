@@ -21,6 +21,8 @@ import { useSession } from 'next-auth/react';
 import DonationTrustMark from '@/components/success/DonationTrustMark';
 import SignInDialog from '@/components/SignInDialog';
 import { useTracking } from '@/components/TrackingPixels';
+import InlineBold from "@/components/InlineBold";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 const dateLocales: Record<string, Locale> = { ar, en: enUS, fr, tr, id, pt, es };
 
@@ -545,7 +547,7 @@ const DonationSuccessPage = () => {
                         <div key={item.id} className="flex gap-3 p-3 rounded-lg bg-slate-50">
                           <div className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-slate-200">
                             {imgSrc ? (
-                              <Image src={imgSrc} alt={title} fill className="object-cover" />
+                              <Image src={imgSrc} alt={stripBoldMarkers(title)} fill className="object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-slate-400">
                                 <Heart className="w-6 h-6" />
@@ -553,7 +555,7 @@ const DonationSuccessPage = () => {
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-slate-900 truncate">{title}</p>
+                            <p className="font-medium text-slate-900 truncate"><InlineBold text={title} /></p>
                             <p className="text-sm text-emerald-600 font-medium" dir="ltr">
                               {item.amount.toLocaleString()} {donation.currency}
                               {item.shareCount != null && item.shareCount > 0 && (

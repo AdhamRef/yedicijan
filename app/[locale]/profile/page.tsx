@@ -48,6 +48,7 @@ import CountryPicker, { CountryRow } from "./_components/CountryPicker";
 import ChangePasswordDialog from "./_components/ChangePasswordDialog";
 import ImpactCard, { ImpactCompact } from "./_components/ImpactCard";
 import SupportForm from "./_components/SupportForm";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 interface DonationForProfile {
   id: string;
@@ -541,7 +542,7 @@ const ProfilePage = () => {
       if (items.length === 0) return t("donations.noCampaignTitle");
       return items
         .map((item) => {
-          const title = item.campaign?.title?.trim() || t("donations.noCampaignTitle");
+          const title = stripBoldMarkers(item.campaign?.title).trim() || t("donations.noCampaignTitle");
           const shares =
             item.shareCount != null && item.shareCount > 0
               ? ` (${t("donations.sharesCount", { count: item.shareCount })})`

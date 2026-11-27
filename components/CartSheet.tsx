@@ -16,6 +16,8 @@ import Spinner from "../components/ui/spinner";
 import { useTranslations, useLocale } from "next-intl";
 import { cn } from "@/lib/utils";
 import { resolveShareUnit, type ShareLabelsConfig } from "@/lib/campaign/share-labels";
+import InlineBold from "@/components/InlineBold";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 interface CartItem {
   id: string;
@@ -161,7 +163,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
                         <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                           <Image
                             src={item.campaign.images[0]}
-                            alt={campaignTitle}
+                            alt={stripBoldMarkers(campaignTitle)}
                             fill
                             className="object-cover"
                           />
@@ -173,7 +175,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
                             "text-sm font-semibold text-gray-800 line-clamp-2 leading-snug",
                             isRTL ? "text-right" : "text-left"
                           )}>
-                            {campaignTitle}
+                            <InlineBold text={campaignTitle} />
                           </h3>
                           {item.shareCount != null && item.shareCount > 0 && (() => {
                             const unit = resolveShareUnit(

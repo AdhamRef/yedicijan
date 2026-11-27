@@ -8,6 +8,7 @@ import { Search, HandHeart, X, ArrowRight } from "lucide-react";
 import { Link } from "@/i18n/routing";
 import CampaignCard from "@/app/[locale]/_components/CampaignCard";
 import { useLocale, useTranslations } from "next-intl";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 interface Campaign {
   id: string;
@@ -89,7 +90,7 @@ const MainPage = ({ id, locale: localeProp }: { id: string; locale?: string }) =
 
   const filteredCampaigns = campaigns.filter(
     (c) =>
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      stripBoldMarkers(c.title).toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 

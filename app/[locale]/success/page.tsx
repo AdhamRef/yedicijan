@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { Heart, Gift, Star, Sparkles, ArrowLeft, Check, PartyPopper } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
+import InlineBold from "@/components/InlineBold";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 // Dummy campaign datapixel
 const dummyCampaign = {
@@ -210,12 +212,12 @@ const DonationSuccessPage = () => {
                   <div className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 shadow-md border-2 border-white">
                     <img
                       src={item.campaign.images[0]}
-                      alt={item.campaign.title}
+                      alt={stripBoldMarkers(item.campaign.title)}
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-bold text-gray-900 text-sm leading-tight mb-2">{item.campaign.title}</h4>
+                    <h4 className="font-bold text-gray-900 text-sm leading-tight mb-2"><InlineBold text={item.campaign.title} /></h4>
                     <div className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-3 py-1.5 rounded-lg font-bold text-sm shadow-md">
                       <Heart className="w-4 h-4" fill="currentColor" />
                       {item.amount.toLocaleString()} {donation.currency}

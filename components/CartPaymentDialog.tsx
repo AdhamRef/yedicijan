@@ -43,6 +43,8 @@ import { useSession } from "next-auth/react";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useIpCountry } from "@/hooks/useIpCountry";
+import InlineBold from "@/components/InlineBold";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 const CART_CHECKOUT_RESUME_KEY = "alafiya:cart-checkout-resume:v1";
 const CHECKOUT_RESUME_TTL_MS = 30 * 60 * 1000;
@@ -758,9 +760,9 @@ const CartPaymentDialog = ({
             return (
               <div key={item.id} className={`flex items-center gap-2 w-full min-w-0 ${locale === "ar" ? "flex-row-reverse" : ""}`}>
                 <div className={`flex items-center gap-2 flex-1 min-w-0 overflow-hidden ${locale === "ar" ? "flex-row-reverse" : ""}`}>
-                  <Image src={item.campaign.images[0]} alt={title} width={80} height={80} className="w-14 h-14 sm:w-20 sm:h-20 rounded-lg object-cover flex-shrink-0 shadow-sm" />
+                  <Image src={item.campaign.images[0]} alt={stripBoldMarkers(title)} width={80} height={80} className="w-14 h-14 sm:w-20 sm:h-20 rounded-lg object-cover flex-shrink-0 shadow-sm" />
                   <div className={`min-w-0 max-w-48 ${locale === "ar" ? "text-right" : "text-left"}`}>
-                    <span className="text-gray-900 font-medium text-sm block line-clamp-3" title={title}>{title}</span>
+                    <span className="text-gray-900 font-medium text-sm block line-clamp-3" title={stripBoldMarkers(title)}><InlineBold text={title} /></span>
                     {item.shareCount != null && item.shareCount > 0 && (() => {
                       const unit = resolveShareUnit(
                         item.campaign?.shareLabels ?? null,

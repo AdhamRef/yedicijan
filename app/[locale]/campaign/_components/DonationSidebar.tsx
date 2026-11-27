@@ -15,6 +15,7 @@ import {
   DEFAULT_SUGGESTED_DONATION_AMOUNTS,
   resolveSuggestedAmountsForCurrency,
 } from "@/lib/campaign/suggested-donations";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 // Shared across instances (MainPageDummy renders desktop + mobile sidebars); only one should open the dialog
 let openDonationHandledThisLoad = false;
@@ -135,7 +136,7 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
         isOpen={isShareOpen}
         onClose={() => setIsShareOpen(false)}
         url={shareUrl}
-        title={getLocalizedProperty(campaign, "title")}
+        title={stripBoldMarkers(getLocalizedProperty(campaign, "title"))}
         description={getLocalizedProperty(campaign, "description")}
         image={campaign.images[0]}
       />

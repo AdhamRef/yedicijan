@@ -13,6 +13,7 @@ import { pickAttributionForAudit, toTurkeyIso, writeConversionAudit } from "@/li
 import { recordConversionEvent, type ConversionEventStatus } from "@/lib/tracking/conversion-event-log";
 import { getGa4ServerCredentialsFromSettings } from "@/lib/tracking/tracking-settings";
 import { donationFieldEmpty } from "@/lib/donations/mongo-null";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 type Attribution = Record<string, string>;
 export type DonationConversionSyncOptions = { force?: boolean };
@@ -87,7 +88,7 @@ function buildContents(row: LoadedDonation) {
 }
 
 function primaryContentName(row: LoadedDonation): string {
-  return row.items[0]?.campaign?.title ?? row.categoryItems[0]?.category?.name ?? "Donation";
+  return stripBoldMarkers(row.items[0]?.campaign?.title) || (row.categoryItems[0]?.category?.name ?? "Donation");
 }
 
 function auditMetaPayload(row: LoadedDonation, eventId: string, customData: MetaCustomData) {
@@ -212,7 +213,7 @@ async function sendGa4Purchase(row: LoadedDonation, amount: number, currency: st
   // Join the purchase to the visitor's real GA4 session for THIS Measurement ID only.
   // If the helper is ever unavailable (e.g. a stubbed module), send exactly as before: no session_id.
   const sessionNum = typeof ga4Session.ga4SessionIdForMeasurement === "function" ? ga4Session.ga4SessionIdForMeasurement(attribution as Record<string, unknown> | undefined, gaMeasurementId) : undefined;
-  const items = row.items.map((it) => ({ item_id: it.campaignId, item_name: it.campaign?.title ?? "Donation", item_category: "donation", price: it.amount, quantity: 1 }));
+  const items = row.items.map((it) => ({ item_id: it.campaignId, item_name: stripBoldMarkers(it.campaign?.title) || "Donation", item_category: "donation", price: it.amount, quantity: 1 }));
   for (const ci of row.categoryItems) items.push({ item_id: ci.categoryId, item_name: ci.category?.name ?? "Category", item_category: "donation", price: ci.amount, quantity: 1 });
   if (row.teamSupport > 0) items.push({ item_id: "team_support", item_name: "Team Support", item_category: "team_support", price: row.teamSupport, quantity: 1 });
   if (row.fees > 0) items.push({ item_id: "covered_fees", item_name: "Covered Fees", item_category: "fees", price: row.fees, quantity: 1 });

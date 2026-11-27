@@ -31,6 +31,7 @@ import {
   type PaymentErrorKey,
   type ResolvedPaymentError,
 } from "@/lib/donations/payment-error-catalog";
+import InlineBold from "@/components/InlineBold";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$",
@@ -336,7 +337,7 @@ export default function DonationFailedPage() {
                       className="text-xs sm:text-sm text-gray-700 flex items-center gap-2 truncate"
                     >
                       <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0" />
-                      <span className="truncate">{it.campaign?.title ?? "—"}</span>
+                      <span className="truncate"><InlineBold text={it.campaign?.title ?? "—"} /></span>
                     </li>
                   ))}
                   {donation.items.length > 4 && (

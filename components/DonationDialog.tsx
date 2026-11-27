@@ -69,6 +69,8 @@ import { useSession } from "next-auth/react";
 import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useIpCountry } from "@/hooks/useIpCountry";
+import InlineBold from "@/components/InlineBold";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 type PaymentMethod = "CARD" | "PAYPAL" | null;
 const DONATION_CHECKOUT_RESUME_KEY = "alafiya:donation-checkout-resume:v1";
@@ -119,7 +121,7 @@ interface DonationDialogProps {
 const DonationDialog = ({
   isOpen,
   onClose,
-  campaignTitle = "",
+  campaignTitle: rawCampaignTitle = "",
   campaignId = "",
   campaignImage = "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg",
   targetAmount = 0,
@@ -140,6 +142,8 @@ const DonationDialog = ({
   authCallbackUrl,
   onAuthCheckpoint,
 }: DonationDialogProps) => {
+  // Shown bold where the title is displayed; plain everywhere else (alt, analytics).
+  const campaignTitle = stripBoldMarkers(rawCampaignTitle);
   const isCategoryMode = Boolean(categoryId);
   const openGoal = goalType === GOAL_TYPE_OPEN;
   const shareMode =
@@ -1258,7 +1262,7 @@ const DonationDialog = ({
                 />
                 <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
                   <h2 className="text-white text-2xl font-bold">
-                    {isCategoryMode ? categoryName : campaignTitle}
+                    {isCategoryMode ? categoryName : <InlineBold text={rawCampaignTitle} />}
                   </h2>
                 </div>
               </div>
@@ -2194,7 +2198,7 @@ const DonationDialog = ({
                     {t("oneTimeDonation")}
                   </span>
                   <h2 className="line-clamp-2 text-lg font-extrabold leading-snug text-white drop-shadow-sm sm:text-xl">
-                    {isCategoryMode ? categoryName : campaignTitle}
+                    {isCategoryMode ? categoryName : <InlineBold text={rawCampaignTitle} />}
                   </h2>
                   <div className="gold-mark-sm" />
                 </div>

@@ -34,6 +34,8 @@ import { Link } from "@/i18n/routing";
 import CategoryIcon from "@/components/CategoryIcon";
 import WysiwygEditor from "@/app/[locale]/blog/_components/wysiwyg/wysiwyg-editor";
 import SuggestedCampaigns from "./SuggestedCampaigns";
+import InlineBold from "@/components/InlineBold";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 // Types
 interface Category {
@@ -319,7 +321,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                 </div>
 
                 <h1 className="text-[28px] sm:text-4xl lg:text-[2.8rem] font-extrabold text-deep leading-[1.12] tracking-tight">
-                  {getLocalizedProperty(campaign, "title")}
+                  <InlineBold text={getLocalizedProperty(campaign, "title")} />
                 </h1>
               </div>
 
@@ -346,7 +348,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
                     >
                       <Image
                         src={currentImg}
-                        alt={getLocalizedProperty(campaign, "title")}
+                        alt={stripBoldMarkers(getLocalizedProperty(campaign, "title"))}
                         fill
                         priority={selectedImage === 0}
                         sizes="(max-width: 1024px) 100vw, 66vw"
@@ -722,7 +724,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
               {campaign.videoUrl && (
                 <VideoEmbed
                   rawUrl={campaign.videoUrl}
-                  title={String(campaign.title ?? "")}
+                  title={stripBoldMarkers(String(campaign.title ?? ""))}
                   className="mx-4 sm:mx-0 rounded-2xl sm:rounded-3xl overflow-hidden shadow-soft ring-1 ring-black/5 bg-black"
                 />
               )}

@@ -9,6 +9,7 @@ import { useLocale, useTranslations } from "next-intl";
 import PageHero from "@/components/brand/PageHero";
 import BrandDots from "@/components/brand/BrandDots";
 import CategoryIcon from "@/components/CategoryIcon";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 interface Campaign {
   id: string;
@@ -214,7 +215,7 @@ const CampaignsPage = ({
 
   const filteredCampaigns = useMemo(() => campaigns.filter((c) => {
     if (isRefreshingList) return c.isActive !== false;
-    const matchesSearch = (c.title || "").toLowerCase().includes(searchQuery.toLowerCase()) || (c.description || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = stripBoldMarkers(c.title).toLowerCase().includes(searchQuery.toLowerCase()) || (c.description || "").toLowerCase().includes(searchQuery.toLowerCase());
     // Many-to-many membership: any of the campaign's categories matches.
     const ids = c.categoryIds ?? (c.categoryId ? [c.categoryId] : c.category?.id ? [c.category.id] : []);
     const matchesCategory = selectedCategory === "all" || ids.includes(selectedCategory);

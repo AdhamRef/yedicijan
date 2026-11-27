@@ -23,6 +23,8 @@ import {
 import type { SuggestedTeamSupportConfig } from "@/lib/campaign/suggested-team-support";
 import { resolveSharePlural, type ShareLabelsConfig } from "@/lib/campaign/share-labels";
 import { useLocale } from "next-intl";
+import InlineBold from "@/components/InlineBold";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 const RESUME_KEY = "campaignDonateResume";
 const FALLBACK_IMG = "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg";
@@ -200,14 +202,14 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
       {listView && !isFeatured && (
         <div className="sm:hidden flex flex-row bg-white shape-card overflow-hidden shadow-soft">
           <Link href={detailHref} onClick={onClick} className="relative flex-shrink-0 w-28 aspect-square">
-            <Image src={buildImgSrc(rawImgSrc, 320, 320)} alt={campaign.title} fill sizes="112px" className="object-cover" draggable={false} />
+            <Image src={buildImgSrc(rawImgSrc, 320, 320)} alt={stripBoldMarkers(campaign.title)} fill sizes="112px" className="object-cover" draggable={false} />
           </Link>
           <div className="flex flex-col justify-between flex-1 min-w-0 px-3 py-2.5">
             {campaign.category?.name && (
               <p className="text-[10px] text-gray-500 font-semibold truncate mb-0.5">{campaign.category.name}</p>
             )}
             <Link href={detailHref} onClick={onClick}>
-              <h3 className="text-[13px] font-extrabold text-deep line-clamp-2 leading-snug">{campaign.title}</h3>
+              <h3 className="text-[13px] font-extrabold text-deep line-clamp-2 leading-snug"><InlineBold text={campaign.title} /></h3>
             </Link>
             <div className="mt-1.5">
               <div className="w-full bg-gray-100 rounded-full h-[3px] mb-1">
@@ -235,7 +237,7 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
           <div className={`relative w-full overflow-hidden bg-sand ${tall || isFeatured ? "aspect-[4/3] sm:aspect-[16/11]" : "aspect-[4/3]"}`}>
             <Image
               src={isFeatured ? buildImgSrc(rawImgSrc, 960, 720) : imgSrc}
-              alt={campaign.title}
+              alt={stripBoldMarkers(campaign.title)}
               fill
               sizes={isFeatured ? "(max-width: 640px) 90vw, 50vw" : "(max-width: 640px) 90vw, (max-width: 1024px) 45vw, 30vw"}
               className="object-cover transition-transform duration-700 ease-out group-hover/card:scale-[1.04]"
@@ -265,7 +267,7 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
         <div className={`flex flex-1 flex-col ${compact ? "gap-3 p-3.5 sm:p-4" : "gap-3.5 p-5"}`}>
           <Link href={detailHref} onClick={onClick}>
             <h3 className={`font-extrabold leading-snug text-deep transition-colors group-hover/card:text-burgundy ${isFeatured ? "text-xl sm:text-2xl" : compact ? "text-[15px] sm:text-base" : "text-[17px] sm:text-lg"} line-clamp-2`}>
-              {campaign.title}
+              <InlineBold text={campaign.title} />
             </h3>
           </Link>
 
