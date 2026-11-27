@@ -100,8 +100,12 @@ export default function QuickDonateBand({ campaigns }: { campaigns: CampaignCard
 
   return (
     <section id="give" aria-label={t("qdTitle")} className="relative z-10 -mt-20 scroll-mt-32 px-4 lg:-mt-24">
-      <div className="relative isolate mx-auto max-w-7xl overflow-hidden rounded-[28px] bg-deep px-5 py-6 text-white shadow-[0_40px_80px_-40px_rgba(18,35,57,.75)] sm:px-8 lg:px-8">
-        <div className="topo-layer -z-10 text-white/[0.08]" aria-hidden />
+      {/* No overflow-hidden on the card itself: it would cut off the project list
+          below the card. Only the background pattern is clipped to the corners. */}
+      <div className="relative isolate mx-auto max-w-7xl rounded-[28px] bg-deep px-5 py-6 text-white shadow-[0_40px_80px_-40px_rgba(18,35,57,.75)] sm:px-8 lg:px-8">
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[28px]" aria-hidden>
+          <div className="topo-layer text-white/[0.08]" />
+        </div>
 
         <div className="grid items-end gap-5 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.9fr)_auto] lg:gap-6">
           <div className="self-center lg:border-e lg:border-white/15 lg:pe-6">
