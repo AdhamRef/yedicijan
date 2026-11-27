@@ -1,0 +1,64 @@
+// Zakat arithmetic and the /zakat + /waqf pages' wiring.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { computeZakat, nisabValue } from "../lib/zakat/calc";
+
+const ROOT = join(__dirname, "..");
+const prices = { goldPerGram: 100, silverPerGram: 1 };
+
+test("nisab by standard", () => {
+  assert.equal(nisabValue("gold85", prices), 8500);
+  assert.ok(Math.abs(nisabValue("goldDiyanet", prices) - 8018) < 1e-6);
+  assert.equal(nisabValue("silver", prices), 595);
+});
+
+test("2.5% of net wealth once the nisab is reached, debts deducted, karat applied", () => {
+  const r = computeZakat({ cash: 10000, goldGrams: 24, goldKarat: "18", debts: 1000 }, prices, "gold85");
+  assert.equal(r.assets, 10000 + 24 * 0.75 * 100);
+  assert.equal(r.net, 10800);
+  assert.equal(r.reachesNisab, true);
+  assert.equal(r.zakat, 270);
+});
+
+test("below the nisab nothing is due; silver nisab catches it", () => {
+  const input = { cash: 5000 };
+  assert.equal(computeZakat(input, prices, "gold85").zakat, 0);
+  assert.equal(computeZakat(input, prices, "silver").zakat, 125);
+});
+
+test("negative or junk input never produces zakat", () => {
+  const r = computeZakat({ cash: -500, investments: Number.NaN, debts: 99999 }, prices, "gold85");
+  assert.equal(r.net, 0);
+  assert.equal(r.zakat, 0);
+});
+
+test("pages exist, use the zakat / waqf categories and are linked from footer and sitemap", () => {
+  const zakat = readFileSync(join(ROOT, "app/[locale]/zakat/_components/ZakatPageContent.tsx"), "utf8");
+  const waqf = readFileSync(join(ROOT, "app/[locale]/waqf/_components/WaqfPageContent.tsx"), "utf8");
+  assert.match(zakat, /\/api\/categories\/zakat/);
+  assert.match(waqf, /\/api\/categories\/waqf/);
+  // The donation dialog is used as it is: these pages pass only props it already supports.
+  assert.doesNotMatch(waqf, /initialShareCount/);
+  assert.ok(existsSync(join(ROOT, "app/[locale]/zakat/page.tsx")) && existsSync(join(ROOT, "app/[locale]/waqf/page.tsx")));
+  assert.match(readFileSync(join(ROOT, "components/Footer.tsx"), "utf8"), /href: '\/zakat'/);
+  assert.match(readFileSync(join(ROOT, "app/sitemap.ts"), "utf8"), /"\/waqf"/);
+  assert.doesNotMatch(readFileSync(join(ROOT, "components/DonationDialog.tsx"), "utf8"), /initialShareCount/);
+});
+
+test("waqf: designated projects come from the waqf category, every waqf is in shares of at least $50", () => {
+  const waqf = readFileSync(join(ROOT, "app/[locale]/waqf/_components/WaqfPageContent.tsx"), "utf8");
+  assert.match(waqf, /GENERAL_SHARE_USD = 50/);
+  assert.match(waqf, /Math\.max\(GENERAL_SHARE_USD, Number\(c\.sharePriceUSD\)\)/);
+  assert.match(waqf, /\/api\/categories\/\$\{encodeURIComponent\(cat\.slug\)\}\/campaigns/);
+  assert.match(waqf, /WAQF_CATEGORY = /);
+});
+
+test("zakat: five destinations in the owner's order, calculator last", () => {
+  const zakat = readFileSync(join(ROOT, "app/[locale]/zakat/_components/ZakatPageContent.tsx"), "utf8");
+  const order = [...zakat.matchAll(/\{ key: "(palestine|sudan|yemen|africa|syria)"/g)].map((m) => m[1]);
+  assert.deepEqual(order, ["palestine", "sudan", "yemen", "africa", "syria"]);
+  assert.ok(zakat.indexOf('id="calc"') > zakat.indexOf("── FAQ ──"));
+  assert.doesNotMatch(zakat, /notCalculated/);
+});
