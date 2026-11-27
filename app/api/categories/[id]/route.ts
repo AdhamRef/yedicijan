@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { invalidatePublicCache } from "@/lib/server/swr-cache";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from 'next-auth';
 import { authOptions } from "../../auth/[...nextauth]/options";
@@ -91,6 +92,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  invalidatePublicCache();
   try {
     const { id: idOrSlug } = await params;
     const session = await getServerSession(authOptions);
@@ -242,6 +244,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  invalidatePublicCache();
   try {
     const { id: idOrSlug } = await params;
     const session = await getServerSession(authOptions);
@@ -307,6 +310,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  invalidatePublicCache();
   try {
     const { id: idOrSlug } = await params;
     const session = await getServerSession(authOptions);

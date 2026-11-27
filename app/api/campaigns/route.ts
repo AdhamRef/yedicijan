@@ -17,6 +17,7 @@ import { requireAdminOrDashboardPermission } from "@/lib/dashboard/api-auth";
 import { queueAuditLog } from "@/lib/audit-log";
 import { writeErrorMessage } from "@/lib/dashboard/write-error-message";
 import { parseIncludeInactive } from "@/lib/campaign/include-inactive-query";
+import { cachedJson, invalidatePublicCache, queryKey } from "@/lib/server/swr-cache";
 import { NOT_SOFT_DELETED } from "@/lib/campaign/soft-delete-filter";
 import { pickTranslation, translationLocaleWhere } from "@/lib/i18n/translation-fallback";
 import { parseCategoryPriorities } from "@/lib/campaign/categories";
@@ -28,7 +29,13 @@ import {
   parseAdminCampaignCreatePayload,
 } from "@/lib/campaign/admin-create";
 
+// Public lists are cached briefly (see lib/server/swr-cache); admin queries with inactive rows are not.
 export async function GET(request: NextRequest) {
+  if (parseIncludeInactive(request.nextUrl.searchParams)) return listCampaigns(request);
+  return cachedJson(queryKey("campaigns", request.nextUrl.searchParams), 60_000, () => listCampaigns(request));
+}
+
+async function listCampaigns(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const cursor = searchParams.get("cursor");
@@ -335,6 +342,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, "campaigns");

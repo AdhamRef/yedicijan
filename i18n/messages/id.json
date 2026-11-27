@@ -1297,6 +1297,12 @@
     "fund_general": "Dana wakaf umum",
     "fund_general_d": "Disalurkan ke proyek wakaf yang paling membutuhkan",
     "fundNow": "Sedang mendanai: {title}",
-    "fundShares": "Saham di dana ini"
+    "fundShares": "Saham di dana ini",
+    "fund_housing": "Dana hunian",
+    "fund_housing_d": "Rumah yang dibangun dan dipugar untuk keluarga yang membutuhkan",
+    "fund_energy": "Dana energi",
+    "fund_energy_d": "Panel surya yang menerangi rumah dan sekolah bertahun-tahun",
+    "fund_orphans": "Dana anak yatim",
+    "fund_orphans_d": "Dukungan berkelanjutan untuk anak yatim dan keluarganya"
   }
 }

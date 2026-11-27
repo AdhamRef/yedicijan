@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { invalidatePublicCache } from "@/lib/server/swr-cache";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/options";
@@ -229,6 +230,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ postId: string }> }
 ) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, "blog");
@@ -381,6 +383,7 @@ export async function PATCH(
 
 // DELETE: admin-only delete
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ postId: string }> }) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, "blog");

@@ -1,4 +1,5 @@
 import "server-only";
+import { swr } from "@/lib/server/swr-cache";
 import { prisma } from "@/lib/prisma";
 import {
   computeCampaignProgressPercent,
@@ -16,7 +17,11 @@ const POSTS_PER_PAGE = 9;
  * Server-side initial fetch for the public campaigns page (default filters).
  * The client-side component re-fetches when the user applies filters.
  */
-export async function getInitialCampaignsForPage(locale: string) {
+export function getInitialCampaignsForPage(locale: string) {
+  return swr(`page:getInitialCampaignsForPage:${locale}`, 60000, () => loadInitialCampaignsForPage(locale));
+}
+
+async function loadInitialCampaignsForPage(locale: string) {
   try {
     // Match the default ordering used by /api/campaigns when sortBy is "newest":
     // global priority first (asc), then most-recent first. Mongo's ascending sort places
@@ -128,7 +133,11 @@ export async function getInitialCampaignsForPage(locale: string) {
   }
 }
 
-export async function getCategoriesForPage(locale: string) {
+export function getCategoriesForPage(locale: string) {
+  return swr(`page:getCategoriesForPage:${locale}`, 120000, () => loadCategoriesForPage(locale));
+}
+
+async function loadCategoriesForPage(locale: string) {
   try {
     const rows = await prisma.category.findMany({
       orderBy: [{ order: "asc" }],
@@ -166,7 +175,11 @@ export async function getCategoriesForPage(locale: string) {
 /**
  * Server-side initial fetch for the public blog page.
  */
-export async function getInitialPostsForPage(locale: string) {
+export function getInitialPostsForPage(locale: string) {
+  return swr(`page:getInitialPostsForPage:${locale}`, 120000, () => loadInitialPostsForPage(locale));
+}
+
+async function loadInitialPostsForPage(locale: string) {
   try {
     const rows = await prisma.post.findMany({
       where: { published: true },

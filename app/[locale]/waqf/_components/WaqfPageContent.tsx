@@ -16,8 +16,8 @@ import Image from "next/image";
 import axios from "axios";
 import { useLocale, useTranslations } from "next-intl";
 import {
-  BadgeCheck, Building2, Check, Droplet, GraduationCap, Heart, Infinity as InfinityIcon, Landmark, Lock, Minus, Plus,
-  ScrollText, ShieldCheck, Sparkles, type LucideIcon,
+  BadgeCheck, Baby, Building2, Check, Droplet, GraduationCap, Heart, House, Infinity as InfinityIcon, Landmark, Lock, Minus, Plus,
+  ScrollText, ShieldCheck, Sparkles, Sun, type LucideIcon,
 } from "lucide-react";
 import { Link } from "@/i18n/routing";
 import SectionHeading from "@/components/brand/SectionHeading";
@@ -28,6 +28,7 @@ import { getCurrencySymbol } from "@/hooks/useCampaignValue";
 import { formatNumber } from "@/hooks/formatNumber";
 import { isolateLtr } from "@/lib/campaign/funding";
 import { stripBoldMarkers } from "@/lib/text/inline-bold";
+import { WAQF_MIN_SHARE_USD, type WaqfFundDTO, type WaqfSettingsDTO } from "@/lib/waqf/config";
 
 const DonationDialog = dynamic(() => import("@/components/DonationDialog"), { ssr: false });
 
@@ -37,15 +38,21 @@ type Category = { id: string; name: string; image?: string | null };
 type Mode = "general" | "pick";
 
 /** Every waqf is given in shares; a general-waqf share is $50, the smallest share on the page. */
-const GENERAL_SHARE_USD = 50;
+const GENERAL_SHARE_USD = WAQF_MIN_SHARE_USD;
+/** Solar power projects (homes, schools), in any site language. */
+const ENERGY = /طاقة|شمسي|solar|g[üu]ne[şs]|solaire|surya/i;
+
 /**
  * General waqf is given through funds: shares of $50 in a fund, which goes to the fund's open
  * projects. Each fund pools the site's projects of its kind (title or slug, any site language).
  */
-const FUNDS: { key: string; Icon: LucideIcon | typeof MosqueIcon; match: RegExp; image: string }[] = [
+const FUNDS: { key: string; Icon: LucideIcon | typeof MosqueIcon; match: RegExp; not?: RegExp; image: string }[] = [
   { key: "water", Icon: Droplet, match: /بئر|آبار|well|kuyu|sumur|puits|brunnen|pozo|poço/i, image: "/images/zakat-waqf/wq-well.jpg" },
   { key: "mosques", Icon: MosqueIcon, match: /مسجد|مساجد|بيوت الله|mosque|cami|mosqu[ée]e|moschee|mezquita|masjid|mesquita/i, image: "/images/zakat-waqf/wq-mosque.jpg" },
-  { key: "education", Icon: GraduationCap, match: /مدرس|مدارس|school|okul|[ée]cole|schule|escuela|sekolah|escola/i, image: "/images/zakat-waqf/wq-mosque.jpg" },
+  { key: "education", Icon: GraduationCap, match: /مدرس|مدارس|school|okul|[ée]cole|schule|escuela|sekolah|escola/i, not: ENERGY, image: "/images/zakat-waqf/wq-mosque.jpg" },
+  { key: "housing", Icon: House, match: /منزل|منازل|مساكن|سكني|house|home|konut|evler|maison|logement|haus|häuser|vivienda|casa|rumah|moradia/i, not: ENERGY, image: "/images/zakat-waqf/wq-mosque.jpg" },
+  { key: "energy", Icon: Sun, match: ENERGY, image: "/images/zakat-waqf/wq-well.jpg" },
+  { key: "orphans", Icon: Baby, match: /أيتام|ايتام|يتيم|orphan|yetim|orphelin|waise|hu[ée]rfano|yatim|[óo]rf[ãa]o/i, image: "/images/zakat-waqf/wq-well.jpg" },
 ];
 /** True while the element with this id is on screen — drives the mobile bar. */
 function useInView(id: string) {
@@ -63,8 +70,15 @@ function useInView(id: string) {
 /** A category the team marked as waqf, by slug or name, in any site language. */
 const WAQF_CATEGORY = /waqf|wakaf|vak[ıi]f|وقف|أوقاف/i;
 
-/** Wells, mosques and schools among the site's projects, in any site language. */
-const WAQF_PROJECT = /بئر|آبار|مسجد|مساجد|بيوت الله|مدرس|well|mosque|school|kuyu|cami|okul|puits|mosqu[ée]e|[ée]cole|brunnen|moschee|schule|pozo|mezquita|escuela|sumur|masjid|sekolah|po[çc]o|mesquita/i;
+/** A site project of a kind the waqf funds hold (wells, mosques, schools, homes, solar power, orphans). */
+const isWaqfProject = (c: Campaign) => FUNDS.some((f) => inFund(f, c));
+function inFund(f: (typeof FUNDS)[number], c: Campaign) {
+  const text = `${c?.title ?? ""} ${c?.slug ?? ""}`;
+  return f.match.test(text) && !(f.not && f.not.test(text));
+}
+
+/** Fund kinds with default texts in the site's messages. */
+const FUND_TEXT_KINDS = new Set(["water", "mosques", "education", "housing", "energy", "orphans"]);
 
 /** A well, for the Bir Rumah story — matched on the project's title or slug in any site language. */
 const WELL = /بئر|آبار|well|kuyu|sumur|puits|brunnen|pozo|poço/i;
@@ -81,34 +95,40 @@ export default function WaqfPageContent() {
 
   const [category, setCategory] = useState<Category | null>(null);
   const [projects, setProjects] = useState<Campaign[]>([]);
+  const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
+  const [config, setConfig] = useState<{ settings: WaqfSettingsDTO; funds: WaqfFundDTO[] } | null>(null);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
     (async () => {
+      // One round of parallel requests: categories, the page's funds and settings (set from the
+      // dashboard), and the site's projects.
+      const [allCats, waqf, camps] = await Promise.all([
+        axios.get(`/api/categories`, { params: { locale } }).then((r) => r.data).catch(() => null),
+        axios.get(`/api/waqf`).then((r) => r.data).catch(() => null),
+        axios.get(`/api/campaigns`, { params: { locale, limit: 100 } }).then((r) => r.data?.items ?? []).catch(() => []),
+      ]);
+      const list: { id: string; slug?: string; name?: string; image?: string | null }[] = allCats?.items ?? allCats ?? [];
       // The waqf category: slug "waqf", or any category the team named as waqf.
-      let cat = (await axios.get(`/api/categories/waqf`, { params: { locale } }).catch(() => null))?.data;
-      if (!cat?.id) {
-        const all = (await axios.get(`/api/categories`, { params: { locale } }).catch(() => null))?.data;
-        const list: { id: string; slug?: string; name?: string; image?: string | null }[] = all?.items ?? all ?? [];
-        cat = list.find((c) => WAQF_CATEGORY.test(`${c.slug ?? ""} ${c.name ?? ""}`)) ?? null;
-      }
-      let items = cat?.slug
+      const cat = list.find((c) => c.slug === "waqf") ?? list.find((c) => WAQF_CATEGORY.test(`${c.slug ?? ""} ${c.name ?? ""}`)) ?? null;
+      const catItems: Campaign[] = cat?.slug
         ? (await axios.get(`/api/categories/${encodeURIComponent(cat.slug)}/campaigns`, { params: { locale, limit: 24 } }).catch(() => null))?.data?.items ?? []
         : [];
-      // Until a waqf category exists: the site's wells, mosques and schools.
-      if (!cat?.id) {
-        const camps = (await axios.get(`/api/campaigns`, { params: { locale, limit: 60 } }).catch(() => null))?.data?.items ?? [];
-        items = camps.filter((c: Campaign) => WAQF_PROJECT.test(`${c.title ?? ""} ${c.slug ?? ""}`));
-      }
       if (!alive) return;
-      if (cat?.id) setCategory({ id: cat.id, name: cat.name, image: cat.image });
-      setProjects(items);
+      if (cat?.id) setCategory({ id: cat.id, name: cat.name ?? "", image: cat.image });
+      // Designated waqf: the waqf category's projects, or until it exists the site's projects of the funds' kinds.
+      setProjects(cat?.id ? catItems : camps.filter(isWaqfProject));
+      setAllCampaigns([...catItems, ...camps.filter((c: Campaign) => !catItems.some((x) => x.id === c.id))]);
+      if (waqf?.settings) setConfig({ settings: waqf.settings, funds: Array.isArray(waqf.funds) ? waqf.funds : [] });
       setLoaded(true);
     })();
     return () => {
       alive = false;
     };
   }, [locale]);
+  const settings = config?.settings;
+  const pageShareUSD = Math.max(GENERAL_SHARE_USD, settings?.shareUSD ?? GENERAL_SHARE_USD);
+  const showDesignated = settings?.showDesignated !== false;
 
   const isShares = (c: Campaign) => c?.fundraisingMode === "SHARES" && Number(c?.sharePriceUSD) > 0;
   /** Every waqf project is given in shares: its own share price, never below $50. */
@@ -122,19 +142,57 @@ export default function WaqfPageContent() {
   };
 
   // ── Band state ──
-  const [mode, setMode] = useState<Mode>("general");
+  const [modePick, setMode] = useState<Mode>("general");
+  const mode: Mode = showDesignated ? modePick : "general";
   // A fund's money goes to its open project with the most left to raise, or to the waqf
   // category once the team creates one. The general fund needs that category.
   const funds = useMemo(() => {
-    const list = FUNDS.map((f) => {
-      const pool = projects.filter((p) => f.match.test(`${p.title ?? ""} ${p.slug ?? ""}`));
-      const need = (p: Campaign) => (p.targetAmount > 0 ? p.targetAmount - (p.currentAmount ?? 0) : Number.MAX_SAFE_INTEGER);
-      const project = [...pool].sort((a, b) => need(b) - need(a))[0] ?? null;
-      return { key: f.key, Icon: f.Icon, project, image: project?.images?.[0] ?? f.image };
+    const need = (p: Campaign) => (p.targetAmount > 0 ? p.targetAmount - (p.currentAmount ?? 0) : Number.MAX_SAFE_INTEGER);
+    const pick = (pool: Campaign[]) => [...pool].sort((a, b) => need(b) - need(a))[0] ?? null;
+    const progressOf = (pool: Campaign[]) => {
+      const goal = pool.reduce((n, p) => n + (p.targetAmount > 0 ? p.targetAmount : 0), 0);
+      const raised = pool.reduce((n, p) => n + (p.targetAmount > 0 ? Math.min(p.currentAmount ?? 0, p.targetAmount) : 0), 0);
+      return goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : null;
+    };
+    type Fund = { key: string; Icon: LucideIcon | typeof MosqueIcon; project: Campaign | null; image: string; name: string; description: string; badge: string; shareUSD: number; progress: number | null };
+    // Funds saved from the dashboard win; without any, the six built-in ones.
+    if (config?.funds.length) {
+      const pickText = (f: WaqfFundDTO, k: "name" | "description" | "badge") => {
+        const own = f.texts[locale as keyof WaqfFundDTO["texts"]]?.[k];
+        if (own) return own;
+        if (k === "badge") return "";
+        if (f.kind !== "general" && FUND_TEXT_KINDS.has(f.kind)) return t(k === "name" ? `fund_${f.kind}` : `fund_${f.kind}_d`);
+        return f.texts.en?.[k] || f.texts.ar?.[k] || "";
+      };
+      const out: Fund[] = [];
+      for (const f of config.funds) {
+        const builtIn = FUNDS.find((x) => x.key === f.kind);
+        const pool = f.campaignIds.length
+          ? allCampaigns.filter((c) => f.campaignIds.includes(c.id))
+          : builtIn ? allCampaigns.filter((c) => inFund(builtIn, c)) : [];
+        const project = pick(pool);
+        if (!project && !category) continue;
+        out.push({
+          key: f.id,
+          Icon: builtIn?.Icon ?? InfinityIcon,
+          project,
+          image: f.image ?? project?.images?.[0] ?? builtIn?.image ?? category?.image ?? "/images/zakat-waqf/wq-well.jpg",
+          name: pickText(f, "name"),
+          description: pickText(f, "description"),
+          badge: f.featured ? pickText(f, "badge") : "",
+          shareUSD: Math.max(GENERAL_SHARE_USD, f.shareUSD ?? pageShareUSD),
+          progress: f.showProgress ? progressOf(pool) : null,
+        });
+      }
+      return out;
+    }
+    const list: Fund[] = FUNDS.map((f) => {
+      const project = pick(projects.filter((p) => inFund(f, p)));
+      return { key: f.key, Icon: f.Icon, project, image: project?.images?.[0] ?? f.image, name: t(`fund_${f.key}`), description: t(`fund_${f.key}_d`), badge: "", shareUSD: pageShareUSD, progress: null };
     }).filter((f) => f.project || category);
-    if (category) list.push({ key: "general", Icon: InfinityIcon, project: null, image: category.image ?? "/images/zakat-waqf/wq-well.jpg" });
+    if (category) list.push({ key: "general", Icon: InfinityIcon, project: null, image: category.image ?? "/images/zakat-waqf/wq-well.jpg", name: t("fund_general"), description: t("fund_general_d"), badge: "", shareUSD: pageShareUSD, progress: null });
     return list;
-  }, [projects, category]);
+  }, [projects, allCampaigns, category, config, locale, pageShareUSD, t]);
   const [fundKey, setFundKey] = useState<string | null>(null);
   const fund = funds.find((f) => f.key === fundKey) ?? funds[0] ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -145,18 +203,18 @@ export default function WaqfPageContent() {
   const giveCategory = mode === "general" && !fund?.project ? category : null;
   const [qty, setQty] = useState(1);
   const q = Math.max(1, Math.min(9999, Math.floor(qty) || 1));
-  const unitUSD = target ? shareUSD(target) : GENERAL_SHARE_USD;
+  const unitUSD = target ? shareUSD(target) : fund?.shareUSD ?? pageShareUSD;
   const total = conv(unitUSD * q);
   const canGive = Boolean(giveCampaign || giveCategory);
   const [open, setOpen] = useState(false);
   const inGive = useInView("give");
   const word = (n: number) => t("shares", { count: n });
 
-  const minShareUSD = GENERAL_SHARE_USD;
+  const minShareUSD = pageShareUSD;
   const wellProject = projects.find((p) => WELL.test(`${p.title ?? ""} ${p.slug ?? ""}`) && p.images?.[0]);
   // The hero shows another project, so the well photo stays for the Bir Rumah story.
-  const heroImage = projects.find((p) => p !== wellProject && p.images?.[0])?.images?.[0] ?? category?.image ?? "/images/zakat-waqf/wq-mosque.jpg";
-  const storyImage = wellProject?.images?.[0] ?? "/images/zakat-waqf/wq-well.jpg";
+  const heroImage = settings?.heroImage ?? projects.find((p) => p !== wellProject && p.images?.[0])?.images?.[0] ?? category?.image ?? "/images/zakat-waqf/wq-mosque.jpg";
+  const storyImage = settings?.storyImage ?? wellProject?.images?.[0] ?? "/images/zakat-waqf/wq-well.jpg";
 
   return (
     <main className="min-h-screen bg-offwhite">
@@ -207,7 +265,7 @@ export default function WaqfPageContent() {
           <div className="rounded-[28px] border border-line bg-white p-4 shadow-[0_30px_70px_-50px_rgba(18,35,57,.6)] sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div role="tablist" aria-label={t("step1")} className="grid w-full grid-flow-col auto-cols-fr rounded-2xl bg-sand p-1.5 sm:inline-grid sm:w-auto">
-                {([["general", InfinityIcon], ["pick", Building2]] as const).map(([m, Icon]) => (
+                {([["general", InfinityIcon], ["pick", Building2]] as const).filter(([m]) => m === "general" || showDesignated).map(([m, Icon]) => (
                   <button key={m} role="tab" type="button" aria-selected={mode === m} onClick={() => setMode(m)}
                     className={`inline-flex min-h-[46px] items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 text-[14px] font-extrabold transition-all sm:px-5 sm:text-[15px] ${mode === m ? "bg-deep text-white shadow-[0_10px_24px_-14px_rgba(18,35,57,.8)]" : "text-deep hover:bg-white/60"}`}>
                     <Icon className={`h-4 w-4 ${mode === m ? "text-gold" : "text-burgundy"}`} />{t(`mode_${m}`)}
@@ -230,13 +288,20 @@ export default function WaqfPageContent() {
                           <Image src={f.image} alt="" fill sizes="(max-width: 640px) 112px, 25vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
                           <span className="absolute inset-0 bg-gradient-to-t from-deep/50 to-transparent" aria-hidden />
                           <span className={`absolute start-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full shadow transition-colors ${on ? "bg-burgundy text-white" : "bg-white/90 text-deep/25"}`}><Check className="h-4 w-4" /></span>
+                          {f.badge && <span className="absolute end-2.5 top-2.5 max-w-[70%] truncate rounded-full bg-gold px-2.5 py-0.5 text-[11px] font-extrabold text-deep shadow">{f.badge}</span>}
                           <span className="absolute bottom-2.5 start-2.5 grid h-9 w-9 place-items-center rounded-xl bg-white/95 text-burgundy shadow"><f.Icon className="h-5 w-5" strokeWidth={1.8} /></span>
                         </span>
                         <span className="flex min-w-0 flex-1 flex-col gap-1 p-3.5 sm:p-4">
-                          <b className="text-[15.5px] font-extrabold leading-snug text-deep">{t(`fund_${f.key}`)}</b>
-                          <span className="text-[12.5px] leading-5 text-gray-500">{t(`fund_${f.key}_d`)}</span>
+                          <b className="text-[15.5px] font-extrabold leading-snug text-deep">{f.name}</b>
+                          <span className="text-[12.5px] leading-5 text-gray-500">{f.description}</span>
+                          {f.progress != null && (
+                            <span className="block pt-1">
+                              <span className="block h-1.5 overflow-hidden rounded-full bg-sand"><span className="block h-full rounded-full bg-gradient-to-l from-burgundy to-gold" style={{ width: `${Math.max(f.progress, 2)}%` }} /></span>
+                              <span className="mt-1 block text-[11px] font-bold text-gray-500">{t("completed", { percent: f.progress })}</span>
+                            </span>
+                          )}
                           <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1.5 text-xs font-extrabold text-deep">
-                            <span className="rounded-full bg-sand px-2.5 py-0.5">{t("sharePrice")} <span className="text-burgundy">{money(conv(GENERAL_SHARE_USD))}</span></span>
+                            <span className="rounded-full bg-sand px-2.5 py-0.5">{t("sharePrice")} <span className="text-burgundy">{money(conv(f.shareUSD))}</span></span>
                           </span>
                           {f.project && <span className="line-clamp-1 text-[11.5px] font-bold text-gray-400">{t("fundNow", { title: stripBoldMarkers(f.project.title) })}</span>}
                         </span>
@@ -296,13 +361,21 @@ export default function WaqfPageContent() {
                 {mode === "pick" && target?.images?.[0] ? <Image src={target.images[0]} alt="" fill sizes="56px" className="object-cover" /> : mode === "general" && fund ? <Image src={fund.image} alt="" fill sizes="56px" className="object-cover" /> : <InfinityIcon className="h-7 w-7 text-gold" />}
               </span>
               <span className="min-w-0">
-                <b className="line-clamp-2 font-extrabold leading-snug">{mode === "general" ? (fund ? t(`fund_${fund.key}`) : "—") : target ? stripBoldMarkers(target.title) : "—"}</b>
+                <b className="line-clamp-2 font-extrabold leading-snug">{mode === "general" ? (fund ? fund.name : "—") : target ? stripBoldMarkers(target.title) : "—"}</b>
                 <span className="text-xs text-ice/75">{t("perShare", { amount: money(conv(unitUSD)) })}</span>
                 {mode === "general" && fund?.project && <span className="mt-0.5 line-clamp-1 block text-[11px] text-ice/60">{t("fundNow", { title: stripBoldMarkers(fund.project.title) })}</span>}
               </span>
             </div>
 
             <p className="mt-6 text-xs font-bold text-ice/70">{t("qtyTitle")}</p>
+            {(settings?.quickShares?.length ?? 0) > 0 && (
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {settings!.quickShares.slice(0, 4).map((n) => (
+                  <button key={n} type="button" aria-pressed={q === n} onClick={() => setQty(n)}
+                    className={`h-10 rounded-xl text-sm font-extrabold tabular-nums transition-colors ${q === n ? "bg-gold text-deep" : "bg-white/[0.07] text-white ring-1 ring-white/10 hover:bg-white/15"}`}>{n}</button>
+                ))}
+              </div>
+            )}
             <div className="mt-2 flex items-center justify-between gap-3 rounded-[22px] bg-white/[0.07] p-2 ring-1 ring-white/10">
               <button type="button" aria-label={t("less")} disabled={q <= 1} onClick={() => setQty(q - 1)}
                 className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/10 transition-colors hover:bg-white/20 active:scale-95 disabled:opacity-40"><Minus className="h-6 w-6" /></button>

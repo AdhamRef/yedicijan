@@ -38,7 +38,7 @@ test("pages exist, use the zakat / waqf categories and are linked from footer an
   const zakat = readFileSync(join(ROOT, "app/[locale]/zakat/_components/ZakatPageContent.tsx"), "utf8");
   const waqf = readFileSync(join(ROOT, "app/[locale]/waqf/_components/WaqfPageContent.tsx"), "utf8");
   assert.match(zakat, /c\.slug === "zakat"/);
-  assert.match(waqf, /\/api\/categories\/waqf/);
+  assert.match(waqf, /c\.slug === "waqf"/);
   // The donation dialog is used as it is: these pages pass only props it already supports.
   assert.doesNotMatch(waqf, /initialShareCount/);
   assert.ok(existsSync(join(ROOT, "app/[locale]/zakat/page.tsx")) && existsSync(join(ROOT, "app/[locale]/waqf/page.tsx")));
@@ -49,7 +49,8 @@ test("pages exist, use the zakat / waqf categories and are linked from footer an
 
 test("waqf: designated projects come from the waqf category, every waqf is in shares of at least $50", () => {
   const waqf = readFileSync(join(ROOT, "app/[locale]/waqf/_components/WaqfPageContent.tsx"), "utf8");
-  assert.match(waqf, /GENERAL_SHARE_USD = 50/);
+  assert.match(waqf, /GENERAL_SHARE_USD = WAQF_MIN_SHARE_USD/);
+  assert.match(readFileSync(join(ROOT, "lib/waqf/config.ts"), "utf8"), /WAQF_MIN_SHARE_USD = 50;/);
   assert.match(waqf, /Math\.max\(GENERAL_SHARE_USD, Number\(c\.sharePriceUSD\)\)/);
   assert.match(waqf, /\/api\/categories\/\$\{encodeURIComponent\(cat\.slug\)\}\/campaigns/);
   assert.match(waqf, /WAQF_CATEGORY = /);
@@ -71,10 +72,11 @@ test("pages stay complete before the zakat / waqf categories exist", () => {
   assert.match(zakat, /"\/images\/zakat-waqf\/zk-baskets\.jpg"/);
   assert.match(zakat, /disabled=\{!canPress\}/);
   assert.match(zakat, /const canPress = canPay;/);
-  assert.match(waqf, /WAQF_PROJECT\.test/);
+  assert.match(waqf, /setProjects\(cat\?\.id \? catItems : camps\.filter\(isWaqfProject\)\)/);
+  for (const k of ["water", "mosques", "education", "housing", "energy", "orphans"]) assert.match(waqf, new RegExp(`key: "${k}"`));
   // General waqf stays: funds of $50 shares, each going to its open project (or the waqf category).
   assert.doesNotMatch(waqf, /setMode\("pick"\)/);
-  assert.doesNotMatch(waqf, /\.filter\(\(\[m\]\)/);
+  assert.doesNotMatch(waqf, /m === "pick" \|\| !loaded \|\| category/);
   assert.match(waqf, /const FUNDS: /);
   assert.match(waqf, /giveCampaign = mode === "pick" \? target : fund\?\.project/);
   assert.match(waqf, /giveCategory = mode === "general" && !fund\?\.project \? category/);

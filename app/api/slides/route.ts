@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { invalidatePublicCache } from "@/lib/server/swr-cache";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from 'next-auth';
 import { authOptions } from "../auth/[...nextauth]/options";
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, 'slides');

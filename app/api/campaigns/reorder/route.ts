@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { invalidatePublicCache } from "@/lib/server/swr-cache";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -10,6 +11,7 @@ import { writeErrorMessage } from "@/lib/dashboard/write-error-message";
 const MAX_REORDER_ITEMS = 500;
 
 export async function POST(req: NextRequest) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, "campaigns");

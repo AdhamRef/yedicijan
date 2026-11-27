@@ -3,6 +3,7 @@ import { LOCALE_SEO, buildPageMetadata } from "@/lib/seo";
 import type { Locale } from "@/lib/seo";
 import CampaignsPageContent from "../_components/CampaignsPageContent";
 import { prisma } from "@/lib/prisma";
+import { swr } from "@/lib/server/swr-cache";
 import {
   getInitialCampaignsForPage,
   getCategoriesForPage,
@@ -26,7 +27,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 /** First active homepage slider image — the /campaigns hero reuses it as its backdrop. */
-async function getHeroImage(): Promise<string | null> {
+function getHeroImage(): Promise<string | null> {
+  return swr("page:campaignsHeroSlide", 300_000, loadHeroImage);
+}
+
+async function loadHeroImage(): Promise<string | null> {
   try {
     const slide = await prisma.slide.findFirst({
       where: { isActive: true, image: { not: null } },

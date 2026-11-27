@@ -1,6 +1,6 @@
 import {
   Activity, Archive, Award, BarChart3, Briefcase, Calendar, Contact, FileClock,
-  FileStack, Globe, Heart, HeartHandshake, HeartPulse, History, Images, Inbox,
+  FileStack, Globe, Heart, HeartHandshake, HeartPulse, History, Images, Inbox, Infinity as InfinityIcon,
   Landmark, LayoutDashboard, LayoutTemplate, Lightbulb, Link2, ListChecks, Mail,
   Megaphone, MessageCircle, MessageSquare, PenLine, Plug, Radar, Repeat, ScrollText, Send, ShieldAlert,
   Server, Settings, Target, Ticket, TrendingUp, UserCog, Users, Webhook,
@@ -48,6 +48,7 @@ export const NAV_ICONS = {
   settings: Settings,
   target: Target,
   ticket: Ticket,
+  infinity: InfinityIcon,
   trendingUp: TrendingUp,
   userCog: UserCog,
   users: Users,

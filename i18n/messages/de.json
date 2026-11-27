@@ -1297,6 +1297,12 @@
     "fund_general": "Allgemeiner Waqf-Fonds",
     "fund_general_d": "Fließt in die Waqf-Projekte mit dem größten Bedarf",
     "fundNow": "Derzeit gefördert: {title}",
-    "fundShares": "Anteile am Fonds"
+    "fundShares": "Anteile am Fonds",
+    "fund_housing": "Unterkunfts-Fonds",
+    "fund_housing_d": "Häuser, die für bedürftige Familien gebaut und restauriert werden",
+    "fund_energy": "Energie-Fonds",
+    "fund_energy_d": "Solaranlagen, die Häuser und Schulen jahrelang mit Strom versorgen",
+    "fund_orphans": "Waisen-Fonds",
+    "fund_orphans_d": "Dauerhafte Hilfe für Waisen und ihre Familien"
   }
 }

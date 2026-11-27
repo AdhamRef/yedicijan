@@ -4,6 +4,7 @@
 // PUT /api/campaigns/[id] - Updates campaign data
 
 import { NextRequest, NextResponse } from "next/server";
+import { invalidatePublicCache } from "@/lib/server/swr-cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from 'next-auth';
@@ -328,6 +329,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, "campaigns");
@@ -783,6 +785,7 @@ export async function PUT(
 // CartItem rows are removed because they're transient and would otherwise let
 // a stale cart re-surface a deleted campaign at payment time.
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, 'campaigns');

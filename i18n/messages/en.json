@@ -1297,6 +1297,12 @@
     "fund_general": "General waqf fund",
     "fund_general_d": "We direct it to the waqf projects most in need",
     "fundNow": "Currently funding: {title}",
-    "fundShares": "Shares in the fund"
+    "fundShares": "Shares in the fund",
+    "fund_housing": "Shelter fund",
+    "fund_housing_d": "Homes built and restored for families in need",
+    "fund_energy": "Energy fund",
+    "fund_energy_d": "Solar panels that light homes and schools for years",
+    "fund_orphans": "Orphan care fund",
+    "fund_orphans_d": "Lasting support for orphans and their families"
   }
 }

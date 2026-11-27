@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { invalidatePublicCache } from "@/lib/server/swr-cache";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/options";
@@ -134,6 +135,7 @@ export async function GET(request: NextRequest) {
 
 // POST: create a new post (admin-only) and optionally create translations
 export async function POST(request: NextRequest) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, "blog");

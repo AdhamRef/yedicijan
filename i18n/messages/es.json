@@ -1297,6 +1297,12 @@
     "fund_general": "Fondo de waqf general",
     "fund_general_d": "Se dirige a los proyectos de waqf más necesitados",
     "fundNow": "Financia ahora: {title}",
-    "fundShares": "Participaciones en el fondo"
+    "fundShares": "Participaciones en el fondo",
+    "fund_housing": "Fondo de refugio",
+    "fund_housing_d": "Viviendas construidas y restauradas para familias necesitadas",
+    "fund_energy": "Fondo de energía",
+    "fund_energy_d": "Paneles solares que iluminan hogares y escuelas durante años",
+    "fund_orphans": "Fondo para huérfanos",
+    "fund_orphans_d": "Apoyo duradero para huérfanos y sus familias"
   }
 }
