@@ -81,12 +81,22 @@ const COUNTRY_WORDS: Record<string, RegExp> = {
   africa: /إفريقيا|أفريقيا|افريقيا|africa|afrika|afrique|[áa]frica/i,
   syria: /سوريا|syria|suriye|syrie|syrien|siria|s[íi]ria|suriah/i,
 };
+/** The site's country category for each destination (slug, name or flag icon, any site language). */
+const COUNTRY_CATEGORY: Record<string, RegExp> = {
+  palestine: /flag:PS|فلسطين|غزة|palestin|filistin|gaza|gazze/i,
+  sudan: /flag:SD|السودان|sudan|soudan/i,
+  yemen: /flag:YE|اليمن|yemen|y[ée]men|jemen/i,
+  africa: /إفريقيا|أفريقيا|افريقيا|africa|afrika|afrique|[áa]frica/i,
+  syria: /flag:SY|سوريا|syria|suriye|syrie|syrien|siria|s[íi]ria|suriah/i,
+};
+const WHATSAPP = "905306516549";
 /** A relief photo among the site's projects (food, baskets, clothing). */
 const RELIEF_PHOTO = /سلال|سلة|إطعام|طعام|غذائ|كسوة|ملابس|food|basket|gıda|sepet/i;
 const AYAH_103 = "﴿خُذْ مِنْ أَمْوَالِهِمْ صَدَقَةً تُطَهِّرُهُمْ وَتُزَكِّيهِم بِهَا﴾";
 const AYAH_60 = "﴿إِنَّمَا الصَّدَقَاتُ لِلْفُقَرَاءِ وَالْمَسَاكِينِ وَالْعَامِلِينَ عَلَيْهَا وَالْمُؤَلَّفَةِ قُلُوبُهُمْ وَفِي الرِّقَابِ وَالْغَارِمِينَ وَفِي سَبِيلِ اللَّهِ وَابْنِ السَّبِيلِ﴾";
 
 type Category = { id: string; name: string; image?: string | null };
+type CategoryRow = Category & { slug?: string; icon?: string | null };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CampaignLite = any;
 
@@ -109,15 +119,19 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
   const [category, setCategory] = useState<Category | null>(null);
   const [programmes, setProgrammes] = useState<CampaignLite[]>([]);
   const [siteImage, setSiteImage] = useState<string | null>(null);
+  const [countryCats, setCountryCats] = useState<Record<string, Category>>({});
+  const [catsLoaded, setCatsLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
     (async () => {
-      // The zakat category: slug "zakat", or any category the team named as zakat.
-      let cat = (await axios.get(`/api/categories/zakat`, { params: { locale } }).catch(() => null))?.data;
-      if (!cat?.id) {
-        const all = (await axios.get(`/api/categories`, { params: { locale } }).catch(() => null))?.data;
-        const list: { id: string; slug?: string; name?: string; image?: string | null }[] = all?.items ?? all ?? [];
-        cat = list.find((c) => ZAKAT_CATEGORY.test(`${c.slug ?? ""} ${c.name ?? ""}`)) ?? null;
+      // One call for every category: the zakat one (slug "zakat" or named so) and the country ones.
+      const all = (await axios.get(`/api/categories`, { params: { locale, limit: 100 } }).catch(() => null))?.data;
+      const list: CategoryRow[] = all?.items ?? all ?? [];
+      const cat = list.find((c) => c.slug === "zakat") ?? list.find((c) => ZAKAT_CATEGORY.test(`${c.slug ?? ""} ${c.name ?? ""}`)) ?? null;
+      const byCountry: Record<string, Category> = {};
+      for (const d of DESTS) {
+        const c = list.find((x) => x !== cat && COUNTRY_CATEGORY[d.key].test(`${x.slug ?? ""} ${x.name ?? ""} ${x.icon ?? ""}`));
+        if (c) byCountry[d.key] = { id: c.id, name: c.name, image: c.image };
       }
       const items = cat?.slug
         ? (await axios.get(`/api/categories/${encodeURIComponent(cat.slug)}/campaigns`, { params: { locale, limit: 24 } }).catch(() => null))?.data?.items ?? []
@@ -130,6 +144,8 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
       }
       if (!alive) return;
       if (cat?.id) setCategory({ id: cat.id, name: cat.name, image: cat.image });
+      setCountryCats(byCountry);
+      setCatsLoaded(true);
       setProgrammes(items);
       setSiteImage(photo);
     })();
@@ -139,7 +155,12 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
   }, [locale]);
 
   // ── Pay band ──
-  const [dest, setDest] = useState<string>(DESTS[0].key);
+  const [destPick, setDest] = useState<string>(DESTS[0].key);
+  // Countries that can be paid on the site: a zakat campaign/category, or the country's own category.
+  const payable = (key: string) =>
+    Boolean(category) || Boolean(countryCats[key]) || programmes.some((p: CampaignLite) => p.slug === `zakat-${key}` || COUNTRY_WORDS[key]?.test(p.title ?? ""));
+  const dests = DESTS.filter((d) => !catsLoaded || payable(d.key));
+  const dest = dests.some((d) => d.key === destPick) ? destPick : dests[0]?.key ?? DESTS[0].key;
   const [fieldKey, setFieldKey] = useState<string>("any");
   // The country's campaign in the zakat category: slug `zakat-<country>`, else its name in the title.
   const chosen =
@@ -150,13 +171,15 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
   const [amount, setAmount] = useState<number | null>(null);
   const [other, setOther] = useState("");
   const payAmount = other ? num(other) : amount ?? presets[1];
-  const canPay = payAmount > 0 && Boolean(chosen || category);
-  // Until the zakat category exists the button still looks live and leads to the WhatsApp line.
-  const canPress = payAmount > 0;
+  // Where the money is recorded: the country's zakat campaign, else the zakat category, else the
+  // site's category for that country. Payment is on the site only, so a country with none of
+  // them (no category for it yet) is not offered until the team adds one.
+  const payCategory = chosen ? null : category ?? countryCats[dest] ?? null;
+  const canPay = payAmount > 0 && Boolean(chosen || payCategory);
+  const canPress = canPay;
   const [dialogOpen, setDialogOpen] = useState(false);
   const pay = () => {
     if (canPay) setDialogOpen(true);
-    else document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
   };
 
   // ── Calculator ──
@@ -290,7 +313,7 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
             <fieldset className="min-w-0">
               <legend className="contents">{bandLabel(1, t("step1"))}</legend>
               <div className="grid grid-cols-5 gap-2">
-                {DESTS.map((d) => {
+                {dests.map((d) => {
                   const on = dest === d.key;
                   return (
                     <button key={d.key} type="button" aria-pressed={on} onClick={() => setDest(d.key)} className={`${tile(on)} h-[76px] px-1`}>
@@ -446,7 +469,7 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
       </section>
 
       {/* ── Calculator ── */}
-      <section id="calc" className="scroll-mt-24 border-t border-line bg-sand py-14 sm:py-20">
+      <section id="calc" className="scroll-mt-28 border-t border-line bg-sand py-14 sm:py-20">
         <div className="mx-auto max-w-7xl px-5 lg:px-6">
           <SectionHeading eyebrow={t("calcEyebrow")} title={t("calcHeading")} subtitle={t("calcIntro")} />
 
@@ -562,7 +585,7 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
           <div id="contact" className="mt-8 flex flex-col gap-4 rounded-[24px] bg-white p-5 sm:flex-row sm:items-center sm:px-7">
             <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-burgundy/10 text-burgundy"><MessageCircle className="h-6 w-6" /></span>
             <p className="flex-1"><b className="block text-deep">{t("askTitle")}</b><span className="text-sm text-gray-500">{t("askText")}</span></p>
-            <a href="https://wa.me/905306516549" target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center gap-3 rounded-full bg-deep px-6 font-extrabold text-white hover:bg-deep/90">
+            <a href={`https://wa.me/${WHATSAPP}`} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center justify-center gap-3 rounded-full bg-deep px-6 font-extrabold text-white hover:bg-deep/90">
               {t("askCta")}<span dir="ltr" className="hidden text-sm font-bold text-gold sm:inline">+90 530 651 65 49</span>
             </a>
           </div>
@@ -570,8 +593,8 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
       </section>
 
 
-      {dialogOpen && !chosen && category && (
-        <DonationDialog isOpen onClose={() => setDialogOpen(false)} categoryId={category.id} categoryName={category.name} categoryImage={category.image ?? undefined} initialDonationAmount={payAmount} />
+      {dialogOpen && !chosen && payCategory && (
+        <DonationDialog isOpen onClose={() => setDialogOpen(false)} categoryId={payCategory.id} categoryName={`${t("navLabel")} — ${t(`dest_${dest}`)}`} categoryImage={payCategory.image ?? undefined} initialDonationAmount={payAmount} />
       )}
       {dialogOpen && chosen && (
         <DonationDialog

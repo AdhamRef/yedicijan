@@ -46,6 +46,10 @@ export default async function CampaignsPage({ params }: Props) {
     getCategoriesForPage(locale),
     getHeroImage(),
   ]);
+  // A field photo from the projects themselves (not one of the first cards, which sit right
+  // below); the homepage slide only when no project has a photo.
+  const withPhoto = (initial.items as { images?: string[] }[]).filter((c) => c.images?.[0]);
+  const fieldPhoto = (withPhoto[3] ?? withPhoto[withPhoto.length - 1])?.images?.[0] ?? null;
   return (
     <CampaignsPageContent
       initialCampaigns={initial.items}
@@ -53,7 +57,7 @@ export default async function CampaignsPage({ params }: Props) {
       initialHasMore={initial.hasMore}
       initialTotal={initial.total}
       initialCategories={categories}
-      heroImage={heroImage}
+      heroImage={fieldPhoto ?? heroImage}
     />
   );
 }

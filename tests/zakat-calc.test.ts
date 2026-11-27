@@ -37,7 +37,7 @@ test("negative or junk input never produces zakat", () => {
 test("pages exist, use the zakat / waqf categories and are linked from footer and sitemap", () => {
   const zakat = readFileSync(join(ROOT, "app/[locale]/zakat/_components/ZakatPageContent.tsx"), "utf8");
   const waqf = readFileSync(join(ROOT, "app/[locale]/waqf/_components/WaqfPageContent.tsx"), "utf8");
-  assert.match(zakat, /\/api\/categories\/zakat/);
+  assert.match(zakat, /c\.slug === "zakat"/);
   assert.match(waqf, /\/api\/categories\/waqf/);
   // The donation dialog is used as it is: these pages pass only props it already supports.
   assert.doesNotMatch(waqf, /initialShareCount/);
@@ -70,8 +70,22 @@ test("pages stay complete before the zakat / waqf categories exist", () => {
   assert.match(zakat, /COUNTRY_WORDS\[dest\]/);
   assert.match(zakat, /"\/images\/zakat-waqf\/zk-baskets\.jpg"/);
   assert.match(zakat, /disabled=\{!canPress\}/);
+  assert.match(zakat, /const canPress = canPay;/);
   assert.match(waqf, /WAQF_PROJECT\.test/);
-  assert.match(waqf, /else setMode\("pick"\)/);
+  // General waqf stays: funds of $50 shares, each going to its open project (or the waqf category).
+  assert.doesNotMatch(waqf, /setMode\("pick"\)/);
+  assert.doesNotMatch(waqf, /\.filter\(\(\[m\]\)/);
+  assert.match(waqf, /const FUNDS: /);
+  assert.match(waqf, /giveCampaign = mode === "pick" \? target : fund\?\.project/);
+  assert.match(waqf, /giveCategory = mode === "general" && !fund\?\.project \? category/);
+  // Zakat pays into the country's category when there is no zakat category; never a dead button.
+  assert.match(zakat, /COUNTRY_CATEGORY\[d\.key\]/);
+  assert.match(zakat, /category \?\? countryCats\[dest\]/);
+  // Payment on the site only: no WhatsApp hand-off, and a country without a target is not offered.
+  assert.doesNotMatch(zakat, /wa\.me\/\$\{WHATSAPP\}\?text/);
+  assert.doesNotMatch(zakat, /payWhatsapp/);
+  assert.match(zakat, /const dests = DESTS\.filter\(\(d\) => !catsLoaded \|\| payable\(d\.key\)\)/);
+  assert.doesNotMatch(zakat, /getElementById\("contact"\)\?\.scrollIntoView/);
   assert.match(waqf, /"\/images\/zakat-waqf\/wq-well\.jpg"/);
   for (const f of ["zk-baskets.jpg", "wq-well.jpg", "wq-mosque.jpg"]) assert.ok(existsSync(join(ROOT, "public/images/zakat-waqf", f)), f);
 });
