@@ -18,6 +18,8 @@ const LOGO_URL = '/yedicijan_logo.png';
 const Footer = () => {
   const t = useTranslations('Footer');
   const tB = useTranslations('Brand');
+  const tZakat = useTranslations('Zakat');
+  const tWaqf = useTranslations('Waqf');
   const locale = useLocale() as 'ar' | 'en' | 'fr' | 'tr';
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -129,6 +131,8 @@ const Footer = () => {
   const quickLinks = [
     { label: isTr ? 'Hakkımızda' : isAr ? 'من نحن' : 'About Us', href: '/about-us' },
     { label: isTr ? 'Projeler' : isAr ? 'المشاريع' : 'Projects', href: '/campaigns' },
+    { label: tZakat('navLabel'), href: '/zakat' },
+    { label: tWaqf('navLabel'), href: '/waqf' },
     { label: isTr ? 'Haberler' : isAr ? 'الأخبار' : 'News', href: '/blog' },
     { label: isTr ? 'Banka Hesapları' : isAr ? 'الحسابات البنكية' : 'Bank Accounts', href: '/bank-transfer' },
     { label: isTr ? 'İletişim' : isAr ? 'اتصل بنا' : 'Contact', href: '/contact-us' },
