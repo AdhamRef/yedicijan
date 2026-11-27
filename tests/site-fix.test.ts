@@ -9,7 +9,7 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
 test("desktop nav links never wrap onto two lines", () => {
   const nav = read("components/Navbar.tsx");
-  assert.match(nav, /group relative whitespace-nowrap px-2 xl:px-3/);
+  assert.match(nav, /group relative inline-flex items-center gap-1.5 whitespace-nowrap px-2 xl:px-3/);
   assert.match(nav, /hidden lg:flex items-center gap-0 xl:gap-1 flex-1 min-w-0/);
 });
 

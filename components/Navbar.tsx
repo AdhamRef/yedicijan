@@ -16,6 +16,9 @@ import {
   Phone,
   UserCircle,
   Landmark,
+  Calculator,
+  Infinity as InfinityIcon,
+  type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
@@ -58,6 +61,8 @@ const LOGO_MOBILE_URL = "/yedicijan_logo.png";
 
 const Navbar = () => {
   const t = useTranslations("Navbar");
+  const tZakat = useTranslations("Zakat");
+  const tWaqf = useTranslations("Waqf");
   const locale = useLocale();
   const isRTL = locale === "ar";
   const social = getSocialLinks(locale);
@@ -185,11 +190,15 @@ const Navbar = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user, zustandItems.length, pathname]);
 
-  const navLinks = [
+  // Zakat and waqf sit beside the projects with an icon; the bank accounts link lives in the
+  // top bar on desktop (and stays in the mobile menu), so the main row keeps six links.
+  const navLinks: { href: string; label: string; Icon?: LucideIcon; desktop?: boolean }[] = [
     { href: "/about-us", label: t("about") },
     { href: "/campaigns", label: t("projects") },
+    { href: "/zakat", label: tZakat("navLabel"), Icon: Calculator },
+    { href: "/waqf", label: tWaqf("navLabel"), Icon: InfinityIcon },
     { href: "/blog", label: t("news") },
-    { href: "/bank-transfer", label: t("bankAccounts") },
+    { href: "/bank-transfer", label: t("bankAccounts"), desktop: false },
     { href: "/contact-us", label: t("contact") },
   ];
 
@@ -272,16 +281,17 @@ const Navbar = () => {
 
             {/* Desktop Nav Links */}
             <div className="hidden lg:flex items-center gap-0 xl:gap-1 flex-1 min-w-0">
-              {navLinks.map((link) => {
+              {navLinks.filter((link) => link.desktop !== false).map((link) => {
                 const active = pathname === link.href;
                 return (
                   <Link
                     key={link.href + link.label}
                     href={link.href}
-                    className={`group relative whitespace-nowrap px-2 xl:px-3 py-2 text-[14px] xl:text-[15px] font-bold transition-colors ${
+                    className={`group relative inline-flex items-center gap-1.5 whitespace-nowrap px-2 xl:px-3 py-2 text-[14px] xl:text-[15px] font-bold transition-colors ${
                       active ? "text-deep" : "text-deep/70 hover:text-deep"
                     }`}
                   >
+                    {link.Icon && <link.Icon className={`hidden h-4 w-4 xl:block ${active ? "text-burgundy" : "text-gold group-hover:text-burgundy"}`} strokeWidth={2.2} />}
                     {link.label}
                     <span
                       className={`pointer-events-none absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-gold transition-all duration-300 origin-center ${
@@ -421,8 +431,26 @@ const Navbar = () => {
                   <LanguageSwitcher onDark={false} />
                   <CurrencySelector onDark={false} />
                 </div>
+                {/* Zakat and waqf first, as two tiles */}
+                <div className="grid grid-cols-2 gap-2 border-b border-line px-4 py-3">
+                  {navLinks.filter((link) => link.Icon).map((link) => {
+                    const active = pathname === link.href;
+                    const Icon = link.Icon as LucideIcon;
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className={`flex items-center gap-2.5 rounded-2xl px-3 py-3 text-[14px] font-extrabold transition-colors ${active ? "bg-burgundy text-white" : "bg-deep text-white hover:bg-deep/90"}`}
+                      >
+                        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${active ? "bg-white/15" : "bg-white/10"}`}><Icon className="h-5 w-5 text-gold" /></span>
+                        {link.label}
+                      </Link>
+                    );
+                  })}
+                </div>
                 {/* Nav links */}
-                {navLinks.map((link) => {
+                {navLinks.filter((link) => !link.Icon).map((link) => {
                   const active = pathname === link.href;
                   return (
                     <Link
