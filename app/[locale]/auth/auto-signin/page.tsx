@@ -52,7 +52,7 @@ export default function AutoSignInPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center space-y-4">
-        <Loader2 className="w-10 h-10 animate-spin text-[#A5243D] mx-auto" />
+        <Loader2 className="w-10 h-10 animate-spin text-burgundy mx-auto" />
         <p className="text-gray-600 text-sm font-medium">
           {messages[locale] ?? messages.en}
         </p>

@@ -1,4 +1,4 @@
-import { Shield } from "lucide-react";
+import PageHero from "@/components/brand/PageHero";
 
 type Copy = {
   title: string;
@@ -127,21 +127,14 @@ export default function PolicyPage({ locale }: { locale: string }) {
   const isRTL = locale === "ar";
 
   return (
-    <main dir={isRTL ? "rtl" : "ltr"} className="min-h-screen bg-white">
-      <section className="relative bg-[#A5243D] text-white py-14">
-        <div className="absolute inset-0 opacity-[0.07] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
-        <div className="relative max-w-3xl mx-auto px-4 text-center">
-          <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-3 py-1.5 rounded-full text-xs font-semibold mb-4">
-            <Shield className="w-3.5 h-3.5" />
-            <span>{copy.title}</span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-2">{copy.title}</h1>
-          <p className="text-white/80 text-sm">{copy.subtitle}</p>
-          <p className="text-white/60 text-xs mt-3">{copy.lastUpdated}</p>
-        </div>
-      </section>
+    <main dir={isRTL ? "rtl" : "ltr"} className="min-h-screen bg-offwhite">
+      <PageHero
+        eyebrow={copy.lastUpdated}
+        title={copy.title}
+        subtitle={copy.subtitle}
+      />
 
-      <article className="max-w-3xl mx-auto px-4 py-12 space-y-8">
+      <article className="max-w-3xl mx-auto my-10 sm:my-14 rounded-[28px] border border-line bg-white px-5 py-10 sm:px-10 space-y-8">
         {copy.sections.map((s) => (
           <section key={s.heading}>
             <h2 className="text-lg font-bold text-gray-900 mb-3">{s.heading}</h2>

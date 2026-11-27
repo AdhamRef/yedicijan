@@ -65,13 +65,13 @@ export default function CartReminder() {
       title={label}
       onClick={() => window.dispatchEvent(new CustomEvent(CART_OPEN_EVENT))}
       style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}
-      className="cart-reminder-in group fixed bottom-5 end-5 z-40 inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#A5243D] text-white shadow-lg shadow-[#D8AA55]/40 ring-1 ring-white/20 hover:bg-[#7D1830] hover:shadow-xl hover:shadow-[#D8AA55]/50 hover:scale-[1.06] active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#D8AA55]"
+      className="cart-reminder-in group fixed bottom-5 end-5 z-40 inline-flex items-center justify-center w-14 h-14 rounded-full bg-burgundy text-white shadow-lg shadow-gold/40 ring-1 ring-white/20 hover:bg-burgundyDark hover:shadow-xl hover:shadow-gold/50 hover:scale-[1.06] active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gold"
     >
       <ShoppingCart className="w-6 h-6 transition-transform duration-200 group-hover:scale-110" aria-hidden="true" />
       <span
         dir="ltr"
         aria-hidden="true"
-        className="absolute -top-1 -end-1 min-w-[1.25rem] h-5 px-1 inline-flex items-center justify-center rounded-full bg-white text-[#D8AA55] text-[11px] font-bold leading-none ring-2 ring-[#D8AA55] shadow-sm"
+        className="absolute -top-1 -end-1 min-w-[1.25rem] h-5 px-1 inline-flex items-center justify-center rounded-full bg-white text-gold text-[11px] font-bold leading-none ring-2 ring-gold shadow-sm"
       >
         {count > 99 ? "99+" : count}
       </span>

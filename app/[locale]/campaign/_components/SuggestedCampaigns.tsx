@@ -109,12 +109,12 @@ export default function SuggestedCampaigns({
   return (
     <section
       aria-labelledby="suggested-campaigns-heading"
-      className="bg-white sm:rounded-2xl overflow-hidden px-4 sm:px-6 lg:px-8 py-6 sm:py-8"
+      className="bg-white sm:rounded-[28px] sm:border sm:border-line overflow-hidden px-4 sm:px-6 lg:px-8 py-6 sm:py-8"
     >
       {/* Header */}
       <div className="flex items-start sm:items-center justify-between gap-4 mb-5 sm:mb-6 flex-col sm:flex-row">
         <div className="flex items-start gap-3 min-w-0">
-          <div className="shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-[#A5243D] to-[#D8AA55] text-white flex items-center justify-center shadow-sm shadow-[#D8AA55]/30">
+          <div className="shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-deep text-gold flex items-center justify-center">
             <CategoryIcon name={categoryIcon} className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0">
@@ -135,7 +135,7 @@ export default function SuggestedCampaigns({
         {categoryName && (
           <Link
             href={categoryHref}
-            className="shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold text-[#A5243D] hover:text-[#7D1830] hover:gap-2 transition-all group"
+            className="shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold text-burgundy hover:text-burgundyDark hover:gap-2 transition-all group"
           >
             {t("viewAllInCategory")}
             <Arrow className="w-4 h-4 transition-transform group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5" />
@@ -160,9 +160,9 @@ export default function SuggestedCampaigns({
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-4 sm:overflow-visible sm:px-0 md:grid-cols-3 lg:grid-cols-4 [&::-webkit-scrollbar]:hidden">
           {items!.map((c) => (
-            <CampaignCard key={c.id} campaign={c} compact />
+            <CampaignCard key={c.id} campaign={c} compact className="w-[66%] shrink-0 snap-start sm:w-auto" />
           ))}
         </div>
       )}

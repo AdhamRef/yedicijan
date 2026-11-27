@@ -100,8 +100,8 @@ export default function CountryPicker({
       <DialogContent dir={isRtl ? "rtl" : "ltr"} className="sm:max-w-md max-h-[80vh] flex flex-col">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#A5243D]/10 flex items-center justify-center">
-              <Globe className="w-4.5 h-4.5 text-[#A5243D]" />
+            <div className="w-9 h-9 rounded-xl bg-burgundy/10 flex items-center justify-center">
+              <Globe className="w-4.5 h-4.5 text-burgundy" />
             </div>
             <DialogTitle>{t("title")}</DialogTitle>
           </div>
@@ -131,7 +131,7 @@ export default function CountryPicker({
                   onClick={() => onSelect(country.code, country.name)}
                   className={`w-full flex items-center gap-3 py-2.5 px-2 text-sm transition-colors text-start ${
                     isCurrent
-                      ? "bg-[#A5243D]/10 text-[#A5243D] font-semibold"
+                      ? "bg-burgundy/10 text-burgundy font-semibold"
                       : "hover:bg-gray-50 text-gray-800"
                   }`}
                 >
@@ -144,9 +144,9 @@ export default function CountryPicker({
                   <span className="flex-1 truncate">{country.name}</span>
                   <span className="text-xs font-mono text-gray-400">{country.code}</span>
                   {isCurrent && (saving ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-[#A5243D]" />
+                    <Loader2 className="w-4 h-4 animate-spin text-burgundy" />
                   ) : (
-                    <Check className="w-4 h-4 text-[#A5243D]" />
+                    <Check className="w-4 h-4 text-burgundy" />
                   ))}
                 </button>
               );
@@ -178,8 +178,8 @@ export function CountryRow({
       onClick={onClick}
       className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors group text-start"
     >
-      <div className="w-8 h-8 rounded-lg bg-[#A5243D]/8 flex items-center justify-center flex-shrink-0">
-        <Globe className="w-4 h-4 text-[#A5243D]" />
+      <div className="w-8 h-8 rounded-lg bg-burgundy/8 flex items-center justify-center flex-shrink-0">
+        <Globe className="w-4 h-4 text-burgundy" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wide leading-none mb-1">
@@ -197,7 +197,7 @@ export function CountryRow({
           <span className="truncate">{countryName ?? tCp("none")}</span>
         </div>
       </div>
-      <ChevronsUpDown className="w-3.5 h-3.5 text-gray-300 group-hover:text-[#A5243D] flex-shrink-0 transition-colors" />
+      <ChevronsUpDown className="w-3.5 h-3.5 text-gray-300 group-hover:text-burgundy flex-shrink-0 transition-colors" />
     </button>
   );
 }

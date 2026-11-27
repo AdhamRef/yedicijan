@@ -3,7 +3,7 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import MainPage from "./_components/MainPage";
 import { prisma } from "@/lib/prisma";
-import { isObjectId, pickLocaleSlug, whereByIdOrAnyLocaleSlug } from "@/lib/slug";
+import { isObjectId, pickLocaleSlug, whereByIdOrAnyLocaleSlug, decodeRouteParam } from "@/lib/slug";
 import { pickTranslation } from "@/lib/i18n/translation-fallback";
 import {
   LOCALE_SEO,
@@ -34,7 +34,8 @@ async function fetchCategoryForSeo(idOrSlug: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id, locale } = await params;
+  const { id: rawId, locale } = await params;
+  const id = decodeRouteParam(rawId);
   const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
   // Always anchor canonical to the requested URL so the parent layout's
   // `/{locale}` canonical can never leak through if the DB lookup fails.
@@ -79,7 +80,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = `${name} | ${seo.siteName}`;
 
   return {
-    title,
+    // `absolute`: the title already ends with the site name, so the layout's
+    // "%s | site" template would otherwise repeat it.
+    title: { absolute: title },
     description,
     keywords: seo.keywords,
     alternates,
@@ -103,7 +106,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CategoryPage({ params }: Props) {
-  const { id, locale } = await params;
+  const { id: rawId, locale } = await params;
+  const id = decodeRouteParam(rawId);
 
   // Redirect to the canonical per-locale slug when the URL doesn't match —
   // e.g. after a language switch keeps the previous locale's slug, or when

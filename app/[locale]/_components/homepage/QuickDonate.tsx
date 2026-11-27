@@ -267,13 +267,13 @@ const QuickDonate: React.FC<QuickDonateProps> = ({ initialCategories = [] }) => 
         {/* ── Left: emotional photo panel ── */}
         <div className="relative min-h-[340px] lg:min-h-[600px]">
           <Image
-            src="https://i0.wp.com/www.middleeastmonitor.com/wp-content/uploads/2022/08/AA-20220820-28691570-28691558-DAILY_LIFE_IN_GAZA.jpg?fit=920%2C613&ssl=1"
+            src="/yedigirls.jpg"
+            /* Own field photo — previously hot-linked a news agency image (rights + an extra third-party host on the page). */
             alt=""
             aria-hidden
             fill
-            priority
             sizes="(max-width: 1024px) 100vw, 50vw"
-            className="object-cover"
+            className="object-cover object-center"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-deep via-deep/65 to-deep/20" />
           <div className="absolute inset-0 opacity-[0.07] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:18px_18px]" />

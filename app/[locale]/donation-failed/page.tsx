@@ -183,13 +183,14 @@ export default function DonationFailedPage() {
   const Arrow = isRtl ? ArrowLeft : ArrowRight;
 
   return (
-    <main className="min-h-screen bg-gray-50" dir={isRtl ? "rtl" : "ltr"}>
+    <main className="min-h-screen bg-offwhite" dir={isRtl ? "rtl" : "ltr"}>
       <Toaster position="top-center" />
 
       {/* ───────────────────────────── Hero ───────────────────────────────── */}
-      <section className="bg-gradient-to-br from-rose-600 via-rose-600 to-rose-700">
+      <section className="relative isolate overflow-hidden bg-deep">
+        <div className="topo-layer -z-10 text-white/[0.08]" aria-hidden />
         <div className="max-w-3xl mx-auto px-4 py-12 sm:py-14 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-white/15 border border-white/30 mb-5 shadow-lg shadow-rose-900/20">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-burgundy mb-5 shadow-lg">
             <AlertCircle className="w-8 h-8 text-white" strokeWidth={2.25} />
           </div>
           <Badge className="bg-white/15 hover:bg-white/20 border-white/30 text-white/95 backdrop-blur-sm font-semibold uppercase tracking-wider text-[11px] mb-4">
@@ -263,7 +264,7 @@ export default function DonationFailedPage() {
                     <span
                       className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold mt-0.5 ${
                         idx === 0
-                          ? "bg-[#A5243D] text-white"
+                          ? "bg-burgundy text-white"
                           : "bg-gray-200 text-gray-600"
                       }`}
                     >
@@ -300,9 +301,9 @@ export default function DonationFailedPage() {
 
         {/* ───────────── Donation summary + Retry ────────────────────────── */}
         {!loading && donation && (
-          <Card className="p-5 sm:p-7 border-2 border-[#A5243D]/20 bg-gradient-to-br from-[#A5243D]/5 to-white">
+          <Card className="p-5 sm:p-7 border-2 border-burgundy/20 bg-gradient-to-br from-burgundy/5 to-white">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-9 h-9 rounded-lg bg-[#A5243D]/10 text-[#A5243D] flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-burgundy/10 text-burgundy flex items-center justify-center">
                 <RefreshCw className="w-4.5 h-4.5" />
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-gray-900">{t("retry.title")}</h3>
@@ -322,7 +323,7 @@ export default function DonationFailedPage() {
                 </div>
                 <Badge
                   variant="outline"
-                  className="border-[#A5243D]/30 text-[#A5243D] bg-[#A5243D]/5"
+                  className="border-burgundy/30 text-burgundy bg-burgundy/5"
                 >
                   {t("retry.oneTime")}
                 </Badge>
@@ -351,7 +352,7 @@ export default function DonationFailedPage() {
               onClick={handleRetry}
               disabled={retrying}
               size="lg"
-              className="w-full sm:w-auto bg-[#A5243D] hover:bg-[#7D1830] text-white font-semibold gap-2 px-6"
+              className="w-full sm:w-auto bg-burgundy hover:bg-burgundyDark text-white font-semibold gap-2 px-6"
             >
               {retrying ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -367,12 +368,12 @@ export default function DonationFailedPage() {
 
         {/* Even without a donationId, give the user a path forward */}
         {!loading && !donation && (
-          <Card className="p-5 sm:p-7 text-center border-2 border-[#A5243D]/20 bg-[#A5243D]/5">
+          <Card className="p-5 sm:p-7 text-center border-2 border-burgundy/20 bg-burgundy/5">
             <h3 className="text-lg font-bold text-gray-900 mb-2">{t("noDonation.title")}</h3>
             <p className="text-sm text-gray-600 mb-5">{t("noDonation.description")}</p>
             <Link
               href="/campaigns"
-              className="inline-flex items-center gap-2 bg-[#A5243D] hover:bg-[#7D1830] text-white font-semibold text-sm px-5 py-2.5 rounded-full transition-colors"
+              className="inline-flex items-center gap-2 bg-burgundy hover:bg-burgundyDark text-white font-semibold text-sm px-5 py-2.5 rounded-full transition-colors"
             >
               {t("noDonation.cta")}
               <Arrow className="w-4 h-4" />

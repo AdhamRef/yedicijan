@@ -99,7 +99,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
         className="w-full sm:max-w-md p-0 flex flex-col"
       >
         {/* ── Header ── */}
-        <SheetHeader className="px-6 py-5 border-b bg-[#A5243D]">
+        <SheetHeader className="px-6 py-5 border-b bg-burgundy">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/15 rounded-xl">
               <ShoppingCart className="h-5 w-5 text-white" />
@@ -121,7 +121,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
             {items.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mb-5">
-                  <ShoppingCart className="h-9 w-9 text-[#A5243D]" />
+                  <ShoppingCart className="h-9 w-9 text-burgundy" />
                 </div>
                 <h3 className="text-base font-bold text-gray-800 mb-1">
                   {t('emptyCart')}
@@ -134,7 +134,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
                     onOpenChange(false);
                     router.push(appendCurrencyQuery("/campaigns", getCurrencyCodeForLinks()));
                   }}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[#A5243D] hover:bg-[#0150a0] text-white text-sm font-semibold rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-5 py-2.5 bg-burgundy hover:bg-[#0150a0] text-white text-sm font-semibold rounded-lg transition-colors"
                 >
                   <Heart className="h-4 w-4" />
                   {t('browseCampaigns')}
@@ -183,7 +183,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
                             );
                             return (
                               <p className={cn(
-                                "text-xs text-[#A5243D] font-medium",
+                                "text-xs text-burgundy font-medium",
                                 isRTL ? "text-right" : "text-left"
                               )}>
                                 {unit
@@ -192,7 +192,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
                               </p>
                             );
                           })()}
-                          <span className="inline-flex items-center self-start gap-1 bg-[#A5243D]/10 text-[#A5243D] text-xs font-bold px-2.5 py-1 rounded-full">
+                          <span className="inline-flex items-center self-start gap-1 bg-burgundy/10 text-burgundy text-xs font-bold px-2.5 py-1 rounded-full">
                             {formatAmount(item.amount, item.currency)}
                           </span>
                         </div>
@@ -235,14 +235,14 @@ const CartSheet: React.FC<CartSheetProps> = ({
               <Separator />
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold text-gray-800">{t('total')}</span>
-                <span className="text-xl font-bold text-[#A5243D]">{formatAmount(totals.total, totals.displayCurrency)}</span>
+                <span className="text-xl font-bold text-burgundy">{formatAmount(totals.total, totals.displayCurrency)}</span>
               </div>
             </div>
 
             {/* Checkout */}
             <button
               onClick={handleCheckout}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-[#A5243D] hover:bg-[#7D1830] active:scale-[0.98] text-white text-sm font-bold rounded-xl transition-all"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-burgundy hover:bg-burgundyDark active:scale-[0.98] text-white text-sm font-bold rounded-xl transition-all"
             >
               <Heart className="h-4 w-4" />
               {t('proceedToDonate')}

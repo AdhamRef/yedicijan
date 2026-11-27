@@ -91,7 +91,7 @@ export default async function HomePage({ params }: Props) {
       { items: [] }
     ),
     safeFetch<{ items?: unknown[]; nextCursor?: string | null; hasMore?: boolean }>(
-      `${base}/api/campaigns?limit=5&sortBy=priority&locale=${locale}`,
+      `${base}/api/campaigns?limit=6&sortBy=priority&locale=${locale}`,
       { items: [], hasMore: false }
     ),
     safeFetch<{ items?: unknown[] }>(

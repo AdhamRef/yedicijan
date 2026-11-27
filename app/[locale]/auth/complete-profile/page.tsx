@@ -39,9 +39,9 @@ const LOGO_URL = "/yedicijan_logo.png";
 // wash as a texture, so the auth screen shares the homepage's visual language.
 const TEXTURE_URL = "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektoru.jpg";
 
-// The page lives inside <main className="pt-12 lg:pt-[88px]">, so a full 100dvh
+// The page lives inside <main className="pt-16 lg:pt-[116px]">, so a full 100dvh
 // would push past the fold. Subtracting the navbar keeps the card on one screen.
-const SHELL_HEIGHT = "h-[calc(100dvh-3rem)] max-h-[calc(100dvh-3rem)] lg:h-[calc(100dvh-88px)] lg:max-h-[calc(100dvh-88px)]";
+const SHELL_HEIGHT = "h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] lg:h-[calc(100dvh-116px)] lg:max-h-[calc(100dvh-116px)]";
 
 export default function CompleteProfilePage() {
   const { data: session, status } = useSession();
@@ -130,7 +130,7 @@ export default function CompleteProfilePage() {
 
   if (pageLoading || status === "loading") {
     return (
-      <div className={`${SHELL_HEIGHT} flex items-center justify-center bg-[#A5243D]`}>
+      <div className={`${SHELL_HEIGHT} flex items-center justify-center bg-burgundy`}>
         <Loader2 className="w-6 h-6 animate-spin text-white/60" />
       </div>
     );
@@ -145,14 +145,14 @@ export default function CompleteProfilePage() {
 
   const selCls = (filled: boolean) =>
     `w-full border rounded-xl py-2.5 px-3 text-sm outline-none appearance-none cursor-pointer transition-all bg-white
-     focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10
+     focus:border-burgundy focus:ring-2 focus:ring-burgundy/10
      ${filled
-       ? "text-gray-800 border-[#A5243D]/50"
+       ? "text-gray-800 border-burgundy/50"
        : "text-gray-400 border-gray-200 hover:border-gray-300"}`;
 
   return (
     <div
-      className={`${SHELL_HEIGHT} relative overflow-hidden bg-[#A5243D] flex flex-col items-center justify-center px-4 py-5`}
+      className={`${SHELL_HEIGHT} relative overflow-hidden bg-burgundy flex flex-col items-center justify-center px-4 py-5`}
       dir={isRTL ? "rtl" : "ltr"}
     >
 
@@ -224,7 +224,7 @@ export default function CompleteProfilePage() {
             {needPhone && (
               <div className="space-y-1.5">
                 <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  <Phone className="w-3 h-3 text-[#A5243D]" />
+                  <Phone className="w-3 h-3 text-burgundy" />
                   {t("phoneLabel")}
                 </label>
                 <div className="overflow-visible phone-input-wrapper">
@@ -233,7 +233,7 @@ export default function CompleteProfilePage() {
                     value={phone}
                     onChange={setPhone}
                     className="w-full overflow-visible"
-                    inputClassName="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10 transition-all"
+                    inputClassName="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 transition-all"
                   />
                 </div>
               </div>
@@ -243,7 +243,7 @@ export default function CompleteProfilePage() {
             {needBirthdate && (
               <div className="space-y-1.5">
                 <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  <Calendar className="w-3 h-3 text-[#A5243D]" />
+                  <Calendar className="w-3 h-3 text-burgundy" />
                   {tD("dateOfBirthLabel")}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -276,7 +276,7 @@ export default function CompleteProfilePage() {
             {needGender && (
               <div className="space-y-1.5">
                 <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                  <Users className="w-3 h-3 text-[#A5243D]" />
+                  <Users className="w-3 h-3 text-burgundy" />
                   {tD("genderLabel")}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -293,8 +293,8 @@ export default function CompleteProfilePage() {
                         onClick={() => setGender(key)}
                         className={`flex flex-col items-center justify-center gap-1 py-3 rounded-xl border transition-all text-center ${
                           active
-                            ? "border-[#A5243D] bg-[#A5243D] text-white shadow-sm"
-                            : "border-gray-200 bg-white text-gray-500 hover:border-[#A5243D]/40 hover:text-[#A5243D]"
+                            ? "border-burgundy bg-burgundy text-white shadow-sm"
+                            : "border-gray-200 bg-white text-gray-500 hover:border-burgundy/40 hover:text-burgundy"
                         }`}
                       >
                         <span className={`text-base leading-none ${active ? "text-white" : "text-gray-400"}`}>{symbol}</span>
@@ -311,7 +311,7 @@ export default function CompleteProfilePage() {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="w-full flex items-center justify-center gap-2 bg-[#A5243D] hover:bg-[#7D1830] disabled:opacity-60 text-white text-sm font-bold py-3 rounded-xl transition-colors active:scale-[0.98] shadow-sm"
+              className="w-full flex items-center justify-center gap-2 bg-burgundy hover:bg-burgundyDark disabled:opacity-60 text-white text-sm font-bold py-3 rounded-xl transition-colors active:scale-[0.98] shadow-sm"
             >
               {saving
                 ? <Loader2 className="w-4 h-4 animate-spin" />

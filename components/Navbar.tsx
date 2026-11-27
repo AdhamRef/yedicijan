@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Phone,
   UserCircle,
+  Landmark,
 } from "lucide-react";
 import Image from "next/image";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
@@ -208,8 +209,8 @@ const Navbar = () => {
     <>
       <header className="fixed top-0 left-0 right-0 z-50">
         {/* ── Top Utility Bar (desktop only) — slim ── */}
-        <div className="bg-deep text-offwhite text-xs hidden lg:block border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-8">
+        <div className="bg-deep text-ice text-[13px] hidden lg:block">
+          <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-10">
             {/* Left: social icons + phone */}
             <div className="flex items-center gap-0.5">
               {[
@@ -223,23 +224,30 @@ const Navbar = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={label}
-                  className="p-1.5 rounded-md hover:text-burgundy transition-colors"
+                  className="p-1.5 rounded-md hover:text-gold transition-colors"
                 >
                   <Icon className="w-3.5 h-3.5" />
                 </a>
               ))}
               <a
                 href="https://wa.me/905306516549"
-                className="ms-2 ps-3 border-s border-gray-200 flex items-center gap-1.5 hover:text-burgundy transition-colors"
+                className="ms-2 ps-3 border-s border-white/15 flex items-center gap-1.5 hover:text-gold transition-colors"
               >
                 <Phone className="w-3.5 h-3.5" />
                 <span dir="ltr">+90 530 651 65 49</span>
               </a>
+              <Link
+                href="/bank-transfer"
+                className="ms-3 ps-3 border-s border-white/15 flex items-center gap-1.5 hover:text-gold transition-colors"
+              >
+                <Landmark className="w-3.5 h-3.5" />
+                {t("bankAccounts")}
+              </Link>
             </div>
             {/* Right: language + currency */}
             <div className="flex items-center gap-3">
               <LanguageSwitcher onDark={true} />
-              <div className="border-s border-gray-200 ps-3">
+              <div className="border-s border-white/15 ps-3">
                 <CurrencySelector onDark={true} />
               </div>
             </div>
@@ -248,35 +256,35 @@ const Navbar = () => {
 
         {/* ── Main Navbar — compact light ── */}
         <nav
-          className={`bg-white/90 backdrop-blur-md border-b transition-shadow duration-300 ${
-            isScrolled ? "border-gray-200 shadow-sm" : "border-gray-200"
+          className={`bg-offwhite/95 backdrop-blur-md border-b border-line transition-shadow duration-300 ${
+            isScrolled ? "shadow-[0_10px_30px_-20px_rgba(18,35,57,.45)]" : ""
           }`}
         >
-          <div className="max-w-7xl mx-auto px-4 flex items-center h-12 lg:h-14 gap-2">
+          <div className="max-w-7xl mx-auto px-4 lg:px-6 flex items-center h-16 lg:h-[76px] gap-2 lg:gap-6">
 
             {/* Logo — always visible */}
             <Link href="/" className="flex-shrink-0 flex items-center gap-2">
               {/* Mobile: narrow square logo */}
-              <Image src={LOGO_MOBILE_URL} alt="Logo" width={48} height={48} className="lg:hidden h-7 w-auto object-contain" />
+              <Image src={LOGO_MOBILE_URL} alt="YediCihan 1961" width={716} height={270} priority className="lg:hidden h-8 w-auto object-contain" />
               {/* Desktop: wide logo — width must match aspect ratio to prevent blur */}
-              <Image src={LOGO_URL} alt="Logo" width={240} height={48} className="hidden lg:block h-8 w-auto object-contain" />
+              <Image src={LOGO_URL} alt="YediCihan 1961" width={716} height={270} priority className="hidden lg:block h-11 w-auto object-contain" />
             </Link>
 
             {/* Desktop Nav Links */}
-            <div className="hidden lg:flex items-center gap-0.5 flex-1 justify-center">
+            <div className="hidden lg:flex items-center gap-1 flex-1">
               {navLinks.map((link) => {
                 const active = pathname === link.href;
                 return (
                   <Link
                     key={link.href + link.label}
                     href={link.href}
-                    className={`group relative px-3 py-1 text-[13px] font-semibold uppercase tracking-wide transition-colors ${
-                      active ? "text-burgundy" : "text-gray-600 hover:text-burgundy"
+                    className={`group relative px-3 py-2 text-[15px] font-bold transition-colors ${
+                      active ? "text-deep" : "text-deep/70 hover:text-deep"
                     }`}
                   >
                     {link.label}
                     <span
-                      className={`pointer-events-none absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-burgundy to-gold transition-all duration-300 origin-center ${
+                      className={`pointer-events-none absolute inset-x-3 bottom-0 h-[3px] rounded-full bg-gold transition-all duration-300 origin-center ${
                         active
                           ? "opacity-100 scale-x-100"
                           : "opacity-0 scale-x-0 group-hover:opacity-70 group-hover:scale-x-100"
@@ -290,27 +298,30 @@ const Navbar = () => {
             {/* Desktop: Donate button */}
             <Link
               href="/campaigns"
-              className="hidden lg:flex items-center gap-1.5 shape-button bg-burgundy hover:bg-burgundyDark text-white font-bold text-[13px] px-4 py-1.5 transition-colors flex-shrink-0"
+              className="hidden lg:flex items-center gap-2 rounded-full bg-burgundy hover:bg-burgundyDark text-white font-bold text-[15px] px-6 h-12 shadow-[0_14px_30px_-14px_rgba(166,36,60,.7)] transition-colors flex-shrink-0"
             >
-            
-              <Heart className="w-4 h-4 fill-white/30" />
+              <Heart className="w-4 h-4" />
               {t("donate") || "BAĞIŞ YAP"}
             </Link>
 
             {/* Spacer — pushes right-side items to the edge on mobile */}
             <div className="flex-1 lg:hidden" />
 
-            {/* Mobile: Language + Currency */}
-            <div className="flex lg:hidden items-center gap-0.5">
-              <LanguageSwitcher onDark={false} />
-              <CurrencySelector onDark={false} />
-            </div>
+            {/* Mobile: compact donate pill — language and currency live in the menu
+                so the bar keeps logo + three clear actions. */}
+            <Link
+              href="/campaigns"
+              className="lg:hidden inline-flex h-10 items-center gap-1.5 rounded-full bg-burgundy px-4 text-[13px] font-bold text-white flex-shrink-0"
+            >
+              <Heart className="w-3.5 h-3.5" />
+              {t("donate") || "BAĞIŞ YAP"}
+            </Link>
 
             {/* Cart button — always visible */}
             <button
               type="button"
               onClick={openCart}
-              className="relative p-2 text-gray-600 hover:text-burgundy transition-colors flex-shrink-0"
+              className="relative grid h-10 w-10 lg:h-11 lg:w-11 place-items-center rounded-full border border-line bg-white text-deep hover:border-burgundy/40 hover:text-burgundy transition-colors flex-shrink-0"
               aria-label="Cart"
             >
               <ShoppingCart className="w-5 h-5" />
@@ -385,7 +396,7 @@ const Navbar = () => {
       );
                   setIsSignInOpen(true);
                 }}
-                className="hidden lg:flex items-center gap-1.5 text-[13px] font-semibold text-gray-700 hover:text-burgundy border border-gray-200 hover:border-burgundy/40 rounded-full px-4 py-1.5 transition-colors flex-shrink-0 ms-1"
+                className="hidden lg:flex items-center gap-1.5 h-11 text-[14px] font-bold text-deep hover:text-burgundy border border-line bg-white hover:border-burgundy/40 rounded-full px-5 transition-colors flex-shrink-0"
               >
                 {t("signIn") || "Giriş Yap"}
               </button>
@@ -394,7 +405,7 @@ const Navbar = () => {
             {/* Mobile: Hamburger */}
             <button
               type="button"
-              className="lg:hidden p-2 text-gray-700 flex-shrink-0"
+              className="lg:hidden grid h-10 w-10 place-items-center rounded-full border border-line bg-white text-deep flex-shrink-0"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Menu"
             >
@@ -404,7 +415,12 @@ const Navbar = () => {
 
           {/* ── Mobile Menu ── */}
           {isMobileMenuOpen && (
-            <div className="lg:hidden overflow-hidden border-t border-gray-200 bg-white animate-fade-in">
+            <div className="lg:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-line bg-white animate-fade-in">
+                {/* Language + currency */}
+                <div className="flex items-center justify-between gap-3 border-b border-line bg-offwhite px-5 py-3">
+                  <LanguageSwitcher onDark={false} />
+                  <CurrencySelector onDark={false} />
+                </div>
                 {/* Nav links */}
                 {navLinks.map((link) => {
                   const active = pathname === link.href;
@@ -413,13 +429,13 @@ const Navbar = () => {
                       key={link.href + link.label}
                       href={link.href}
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center gap-3 px-5 py-3 text-sm font-semibold uppercase tracking-wide border-b border-gray-100 transition-colors ${
+                      className={`flex items-center gap-3 px-5 py-3.5 text-[15px] font-bold border-b border-line transition-colors ${
                         active
-                          ? "text-burgundy bg-offwhite"
-                          : "text-gray-700 hover:bg-gray-50"
+                          ? "text-deep bg-offwhite"
+                          : "text-deep/80 hover:bg-offwhite"
                       }`}
                     >
-                      <span className={`h-4 w-0.5 rounded-full transition-colors ${active ? "bg-gradient-to-b from-burgundy to-gold" : "bg-transparent"}`} />
+                      <span className={`h-5 w-1 rounded-full transition-colors ${active ? "bg-gold" : "bg-transparent"}`} />
                       {link.label}
                     </Link>
                   );
@@ -462,16 +478,16 @@ const Navbar = () => {
                   <Link
                     href="/campaigns"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="flex-1 flex items-center justify-center gap-1.5 shape-button bg-burgundy hover:bg-burgundyDark text-white font-bold text-sm px-4 py-2.5 transition-colors"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-full bg-burgundy hover:bg-burgundyDark text-white font-bold text-[15px] px-4 h-12 transition-colors"
                   >
-                    <Heart className="w-4 h-4 fill-white/30" />
+                    <Heart className="w-4 h-4" />
                     {t("donate") || "BAĞIŞ YAP"}
                   </Link>
                   {!session?.user && (
                     <button
                       type="button"
                       onClick={() => { setIsMobileMenuOpen(false); setIsSignInOpen(true); }}
-                      className="flex-1 flex items-center justify-center text-sm font-semibold text-burgundy border border-burgundy/40 shape-button px-4 py-2.5 hover:bg-offwhite transition-colors"
+                      className="flex-1 flex items-center justify-center text-[15px] font-bold text-deep border border-line bg-white rounded-full px-4 h-12 hover:bg-offwhite transition-colors"
                     >
                       {t("signIn") || "Giriş Yap"}
                     </button>

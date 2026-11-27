@@ -235,3 +235,19 @@ export const slugDelegates = (prisma: PrismaClient) => ({
   post: prisma.post,
   postCategory: prisma.postCategory,
 });
+
+/**
+ * Dynamic route params can reach the page still percent-encoded (Arabic slugs
+ * arrive as `%D9%85%D8%B4...`). Looking those up verbatim misses the record, which
+ * made every Arabic campaign page fall back to the generic title with
+ * `noindex` and a double-encoded canonical. Decoding is idempotent for ASCII
+ * slugs and ObjectIds, and a malformed sequence is returned unchanged.
+ */
+export function decodeRouteParam(value: string): string {
+  if (!value || !value.includes("%")) return value;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}

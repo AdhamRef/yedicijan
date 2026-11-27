@@ -1,5 +1,6 @@
 "use client";
 
+import PageHero from "@/components/brand/PageHero";
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "@/i18n/routing";
@@ -33,6 +34,7 @@ const BlogPage = ({
   initialHasMore = false,
 }: BlogPageContentProps = {}) => {
   const t = useTranslations("Blog");
+  const tB = useTranslations("Brand");
   const locale = useLocale();
   const dateLocale = dateLocaleMap[locale] ?? enUS;
 
@@ -91,35 +93,25 @@ const BlogPage = ({
   };
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen bg-offwhite">
       {/* ── Header ── */}
-      <section
-        className="relative hero-pattern text-white py-14 sm:py-20 overflow-hidden"
-        style={{ backgroundImage: "url('/hero2.jpg')", backgroundSize: "cover", backgroundPosition: "center" }}
+      <PageHero
+        crumbs={[{ href: "/", label: tB("home") }, { label: t("title") || "Haberler" }]}
+        eyebrow={t("news") || "HABERLER"}
+        title={t("title") || "Haberler"}
+        subtitle={t("subtitle") || undefined}
       >
-        <div className="absolute inset-0 bg-deep/85" />
-        <div className="relative max-w-7xl mx-auto px-4 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <BookOpen className="w-6 h-6 text-gold" />
-            <span className="text-sm font-bold uppercase tracking-widest text-ice">{t("news") || "HABERLER"}</span>
-          </div>
-          <div className="gold-mark mx-auto mb-5" />
-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-2">{t("title") || "Haberler"}</h1>
-          <p className="text-ice text-sm max-w-xl mx-auto mb-6">{t("subtitle") || ""}</p>
-
-          {/* Search */}
-          <div className="relative max-w-md mx-auto">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t("searchPlaceholder") || "Haber ara..."}
-              className="w-full pl-10 pr-4 py-2.5 shape-chip text-sm text-ink bg-white outline-none shadow-soft"
-            />
-          </div>
+        <div className="relative mt-7 max-w-md">
+          <Search className="absolute start-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t("searchPlaceholder") || "Haber ara..."}
+            className="h-12 w-full rounded-full border border-line bg-white pe-4 ps-11 text-sm text-deep outline-none focus:border-deep"
+          />
         </div>
-      </section>
+      </PageHero>
 
       {/* ── Posts Grid ── */}
       <section className="max-w-7xl mx-auto px-4 py-10 sm:py-14">

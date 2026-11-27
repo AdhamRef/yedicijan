@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import MainPageDummy from "../_components/MainPageDummy";
 import { prisma } from "@/lib/prisma";
-import { isObjectId, pickLocaleSlug, whereByIdOrAnyLocaleSlug } from "@/lib/slug";
+import { decodeRouteParam, isObjectId, pickLocaleSlug, whereByIdOrAnyLocaleSlug } from "@/lib/slug";
 import { pickTranslation } from "@/lib/i18n/translation-fallback";
 import {
   LOCALE_SEO,
@@ -90,7 +90,8 @@ const URGENCY_PREFIX: Record<string, string> = {
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { id, locale } = await params;
+  const { id: rawId, locale } = await params;
+  const id = decodeRouteParam(rawId);
   const seo = LOCALE_SEO[locale as Locale] ?? LOCALE_SEO.en;
   const requestedCanonical = `${SITE_URL}/${locale}/campaign/${encodeURIComponent(id)}`;
 
@@ -161,7 +162,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const fullOgTitle = `${prefix}${ogTitle} | ${seo.siteName}`;
 
   return {
-    title: fullTitle,
+    // `absolute`: fullTitle already ends with the site name (see layout template).
+    title: { absolute: fullTitle },
     description,
     keywords: seo.keywords,
     alternates,
@@ -185,7 +187,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CampaignPage({ params }: Props) {
-  const { id, locale } = await params;
+  const { id: rawId, locale } = await params;
+  const id = decodeRouteParam(rawId);
 
   try {
     const campaign = await prisma.campaign.findFirst({

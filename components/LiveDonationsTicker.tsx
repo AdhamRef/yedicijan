@@ -210,6 +210,7 @@ export default function LiveDonationsGlass() {
 
   return (
     <div
+      data-live-ticker
       className={cn(
         "fixed bottom-6 z-50 pointer-events-none",
         "left-1/2 -translate-x-1/2",

@@ -153,7 +153,7 @@ function CurrencySelectorInner({
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md transition-colors text-sm font-medium ${
           onDark
             ? "text-white/90 hover:text-white hover:bg-white/10"
-            : "text-gray-700 hover:text-[#A5243D] hover:bg-gray-100"
+            : "text-gray-700 hover:text-burgundy hover:bg-gray-100"
         }`}
       >
         <span className="font-bold">{current?.symbol}</span>
@@ -175,7 +175,7 @@ function CurrencySelectorInner({
               className={`flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors
                 ${
                   selectedCurrency === curr.code
-                    ? "bg-blue-50 text-[#A5243D] font-semibold"
+                    ? "bg-blue-50 text-burgundy font-semibold"
                     : "text-gray-700 hover:bg-gray-50"
                 }`}
             >

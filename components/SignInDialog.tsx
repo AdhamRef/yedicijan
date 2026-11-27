@@ -69,7 +69,7 @@ function AuthField({
         placeholder={placeholder}
         autoComplete={autoComplete}
         dir={type === "email" || type === "password" ? "ltr" : isRTL ? "rtl" : "ltr"}
-        className={`w-full border border-gray-200 rounded-xl py-2.5 text-sm outline-none focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10 transition-all bg-white text-gray-800 placeholder-gray-400
+        className={`w-full border border-gray-200 rounded-xl py-2.5 text-sm outline-none focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 transition-all bg-white text-gray-800 placeholder-gray-400
           ${isRTL ? "pr-9 pl-3" : "pl-9 pr-3"}
           ${rightSlot ? (isRTL ? "pl-10" : "pr-10") : ""}`}
       />
@@ -292,7 +292,7 @@ export function SignInPanel({
         <>
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="bg-[#A5243D] px-4 pt-6 pb-5 sm:px-6 sm:pt-7 sm:pb-6 text-center relative shrink-0">
+        <div className="bg-burgundy px-4 pt-6 pb-5 sm:px-6 sm:pt-7 sm:pb-6 text-center relative shrink-0">
           {screen !== "options" && (
             <button
               type="button"
@@ -379,7 +379,7 @@ export function SignInPanel({
                   <Zap className="h-3 w-3 shrink-0 fill-white/90" aria-hidden />
                   <span className="whitespace-nowrap">{t("googleFastestWay")}</span>
                 </div>
-                <div className="rounded-xl bg-gradient-to-br from-[#A5243D] via-[#6366f1] to-[#f59e0b] p-[2px] shadow-[0_4px_16px_-4px_rgba(2,94,184,0.45)]">
+                <div className="rounded-xl bg-gradient-to-br from-burgundy via-[#6366f1] to-[#f59e0b] p-[2px] shadow-[0_4px_16px_-4px_rgba(2,94,184,0.45)]">
                   <div className="flex w-full items-center justify-center rounded-[10px] bg-gradient-to-b from-white to-slate-50 px-1 py-1">
                     <GoogleSignInButton
                       callbackUrl={googleCallbackUrl}
@@ -410,7 +410,7 @@ export function SignInPanel({
               {/* <button
                 type="button"
                 onClick={() => { setScreen("auth"); setError(null); }}
-                className="w-full flex items-center justify-center gap-3 px-4 py-3 sm:py-3.5 bg-[#A5243D] hover:bg-[#0150a0] text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 sm:py-3.5 bg-burgundy hover:bg-[#0150a0] text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
               >
                 <Mail className="w-4 h-4 flex-shrink-0" />
                 {t("signInWithEmail")}
@@ -421,14 +421,14 @@ export function SignInPanel({
               {onSkip && (
                 <div className="relative pt-2">
                   <div
-                    className={`pointer-events-none absolute -top-1 z-10 flex max-w-[calc(100%-2rem)] items-center gap-1 rounded-full bg-gradient-to-r from-[#A5243D] via-[#0e7bd1] to-[#39a0ec] px-2 py-1 text-[10px] font-bold leading-none text-white shadow-md ring-2 ring-white sm:text-[11px] ${
+                    className={`pointer-events-none absolute -top-1 z-10 flex max-w-[calc(100%-2rem)] items-center gap-1 rounded-full bg-gradient-to-r from-burgundy via-[#0e7bd1] to-[#39a0ec] px-2 py-1 text-[10px] font-bold leading-none text-white shadow-md ring-2 ring-white sm:text-[11px] ${
                       isRTL ? "left-3" : "right-3"
                     }`}
                   >
                     <UserCheck2 className="h-3 w-3 shrink-0 fill-white/90" aria-hidden />
                     <span className="whitespace-nowrap font-medium">{t("withoutLoginBadge")}</span>
                   </div>
-                  <div className="rounded-xl bg-gradient-to-br from-[#A5243D] via-[#3b82f6] to-[#60a5fa] p-[2px] shadow-[0_4px_16px_-4px_rgba(2,94,184,0.35)]">
+                  <div className="rounded-xl bg-gradient-to-br from-burgundy via-[#3b82f6] to-[#60a5fa] p-[2px] shadow-[0_4px_16px_-4px_rgba(2,94,184,0.35)]">
                     <button
                       type="button"
                       onClick={() => {
@@ -439,13 +439,13 @@ export function SignInPanel({
                     >
                       <span
                         aria-hidden
-                        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#A5243D]/5 via-transparent to-[#60a5fa]/[0.07] opacity-0 transition-opacity group-hover:opacity-100"
+                        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-burgundy/5 via-transparent to-[#60a5fa]/[0.07] opacity-0 transition-opacity group-hover:opacity-100"
                       />
-                      <Heart className="relative h-4 w-4 shrink-0 text-[#D8AA55]" aria-hidden />
+                      <Heart className="relative h-4 w-4 shrink-0 text-gold" aria-hidden />
                       <span className="relative">{t("donateAsGuest")}</span>
                       <ArrowRight
                         aria-hidden
-                        className={`relative h-4 w-4 shrink-0 text-[#A5243D]/70 transition-transform group-hover:text-[#A5243D] ${
+                        className={`relative h-4 w-4 shrink-0 text-burgundy/70 transition-transform group-hover:text-burgundy ${
                           isRTL ? "rotate-180 group-hover:-translate-x-1" : "group-hover:translate-x-1"
                         }`}
                       />
@@ -457,9 +457,9 @@ export function SignInPanel({
               {/* Terms */}
               <p className="text-[11px] text-center text-gray-400 leading-relaxed pt-1">
                 {t("termsAgreement")}{" "}
-                <Link href="/terms" className="text-[#A5243D] hover:underline font-medium">{t("termsOfUse")}</Link>
+                <Link href="/terms" className="text-burgundy hover:underline font-medium">{t("termsOfUse")}</Link>
                 {" "}{t("and")}{" "}
-                <Link href="/privacy" className="text-[#A5243D] hover:underline font-medium">{t("privacyPolicy")}</Link>
+                <Link href="/privacy" className="text-burgundy hover:underline font-medium">{t("privacyPolicy")}</Link>
               </p>
             </>
           )}
@@ -476,7 +476,7 @@ export function SignInPanel({
                     onClick={() => { setAuthMode(mode); setError(null); }}
                     className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
                       authMode === mode
-                        ? "bg-white text-[#A5243D] shadow-sm"
+                        ? "bg-white text-burgundy shadow-sm"
                         : "text-gray-500 hover:text-gray-700"
                     }`}
                   >
@@ -521,7 +521,7 @@ export function SignInPanel({
                     value={form.phone}
                     onChange={(v) => setForm((f) => ({ ...f, phone: v }))}
                     className="w-full overflow-visible"
-                    inputClassName="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#A5243D] focus:ring-2 focus:ring-[#A5243D]/10 transition-all"
+                    inputClassName="w-full min-w-0 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-burgundy focus:ring-2 focus:ring-burgundy/10 transition-all"
                   />
                 </div>
               )}
@@ -547,8 +547,8 @@ export function SignInPanel({
                       onClick={() => setForm((f) => ({ ...f, gender: g }))}
                       className={`py-2 text-xs font-medium rounded-xl border transition-all ${
                         form.gender === g
-                          ? "bg-[#A5243D] text-white border-[#A5243D]"
-                          : "bg-white text-gray-600 border-gray-200 hover:border-[#A5243D]/40"
+                          ? "bg-burgundy text-white border-burgundy"
+                          : "bg-white text-gray-600 border-gray-200 hover:border-burgundy/40"
                       }`}
                     >
                       {t(`gender${g.charAt(0).toUpperCase() + g.slice(1)}` as "genderMale" | "genderFemale" | "genderPreferNotToSay")}
@@ -592,7 +592,7 @@ export function SignInPanel({
                 type="button"
                 onClick={authMode === "signin" ? handleSignIn : handleRegister}
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 bg-[#A5243D] hover:bg-[#0150a0] disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 bg-burgundy hover:bg-[#0150a0] disabled:opacity-60 text-white text-sm font-semibold py-3 rounded-xl transition-all active:scale-[0.98]"
               >
                 {loading
                   ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -604,9 +604,9 @@ export function SignInPanel({
               {/* Terms */}
               <p className="text-[11px] text-center text-gray-400 leading-relaxed">
                 {t("termsAgreement")}{" "}
-                <Link href="/terms" className="text-[#A5243D] hover:underline font-medium">{t("termsOfUse")}</Link>
+                <Link href="/terms" className="text-burgundy hover:underline font-medium">{t("termsOfUse")}</Link>
                 {" "}{t("and")}{" "}
-                <Link href="/privacy" className="text-[#A5243D] hover:underline font-medium">{t("privacyPolicy")}</Link>
+                <Link href="/privacy" className="text-burgundy hover:underline font-medium">{t("privacyPolicy")}</Link>
               </p>
             </>
           )}
@@ -615,8 +615,8 @@ export function SignInPanel({
           {screen === "otp" && (
             <div className="flex flex-col items-center text-center gap-4 py-2">
               {/* Icon */}
-              <div className="w-16 h-16 rounded-full bg-[#A5243D]/8 flex items-center justify-center">
-                <Inbox className="w-8 h-8 text-[#A5243D]" />
+              <div className="w-16 h-16 rounded-full bg-burgundy/8 flex items-center justify-center">
+                <Inbox className="w-8 h-8 text-burgundy" />
               </div>
 
               {/* Description */}
@@ -655,7 +655,7 @@ export function SignInPanel({
                     type="button"
                     onClick={handleResendLink}
                     disabled={loading}
-                    className="text-xs text-[#A5243D] hover:underline font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+                    className="text-xs text-burgundy hover:underline font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
                   >
                     {loading
                       ? <Loader2 className="w-3 h-3 animate-spin" />

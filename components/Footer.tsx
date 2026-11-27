@@ -1,7 +1,8 @@
 'use client';
+import YCMark from '@/components/brand/YCMark';
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Mail, Phone, MapPin, Facebook, Instagram, Twitter, Send, Heart, ChevronRight } from 'lucide-react';
+import { Mail, Phone, MapPin, Facebook, Instagram, Twitter, Send, Heart } from 'lucide-react';
 import { useTranslations, useLocale } from 'next-intl';
 import { useSession } from 'next-auth/react';
 import { usePathname, useRouter } from '@/i18n/routing';
@@ -16,6 +17,7 @@ const LOGO_URL = '/yedicijan_logo.png';
 
 const Footer = () => {
   const t = useTranslations('Footer');
+  const tB = useTranslations('Brand');
   const locale = useLocale() as 'ar' | 'en' | 'fr' | 'tr';
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -128,7 +130,7 @@ const Footer = () => {
     { label: isTr ? 'Hakkımızda' : isAr ? 'من نحن' : 'About Us', href: '/about-us' },
     { label: isTr ? 'Projeler' : isAr ? 'المشاريع' : 'Projects', href: '/campaigns' },
     { label: isTr ? 'Haberler' : isAr ? 'الأخبار' : 'News', href: '/blog' },
-    { label: isTr ? 'Faaliyetler' : isAr ? 'الأنشطة' : 'Activities', href: '/campaigns' },
+    { label: isTr ? 'Banka Hesapları' : isAr ? 'الحسابات البنكية' : 'Bank Accounts', href: '/bank-transfer' },
     { label: isTr ? 'İletişim' : isAr ? 'اتصل بنا' : 'Contact', href: '/contact-us' },
     { label: isTr ? 'Gizlilik Politikası' : isAr ? 'سياسة الخصوصية' : 'Privacy Policy', href: '/privacy' },
     { label: isTr ? 'Kullanım Şartları' : isAr ? 'شروط الاستخدام' : 'Terms of Use', href: '/terms' },
@@ -142,26 +144,36 @@ const Footer = () => {
   ] as const;
 
   return (
-    <footer className="relative overflow-hidden bg-gradient-to-b from-deep to-[#01101c] text-white">
-      {/* Gold hairline accent at the very top */}
-      <div className="h-0.5 w-full bg-gradient-to-r from-burgundy via-gold to-burgundy" />
-      {/* Decorative radial glow */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-40 end-0 w-[36rem] h-[36rem] rounded-full opacity-[0.07]"
-        style={{ background: 'radial-gradient(closest-side, #D8AA55, transparent)' }}
-      />
+    <footer className="relative isolate overflow-hidden bg-deep text-white">
+      <div className="topo-layer -z-10 text-white/[0.07]" aria-hidden />
+
+      {/* ── Closing call to action — red band with the YC monogram ── */}
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 lg:pt-20">
+        <div className="relative isolate flex flex-col items-start gap-5 overflow-hidden rounded-[28px] bg-burgundy px-6 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-9">
+          <YCMark className="absolute -bottom-12 end-[-10px] -z-10 h-auto w-52 text-white/[0.08]" />
+          <div>
+            <p className="text-[22px] font-extrabold leading-snug sm:text-[28px]">{tB('footerCtaTitle')}</p>
+            <p className="mt-1 text-sm text-white/80">{tB('footerCtaText')}</p>
+          </div>
+          <Link
+            href="/campaigns"
+            className="inline-flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-full bg-gold px-7 sm:w-auto text-[15px] font-extrabold text-deep transition-colors hover:bg-[#ffc965]"
+          >
+            <Heart className="h-4 w-4" />
+            {tB('donateNow')}
+          </Link>
+        </div>
+      </div>
 
       {/* ── Main content ── */}
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-16">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-10 lg:gap-x-8">
 
           {/* ── Brand ── */}
-          <div className="sm:col-span-2 lg:col-span-1 flex flex-col">
+          <div className="col-span-2 lg:col-span-1 flex flex-col">
             <Link href="/" className="inline-block mb-5">
-              <Image src={LOGO_URL} alt="Logo" width={161} height={56} className="h-14 w-auto object-contain brightness-0 invert" />
+              <Image src={LOGO_URL} alt="YediCihan 1961" width={716} height={270} className="h-14 w-auto object-contain brightness-0 invert" />
             </Link>
-            <div className="gold-mark mb-5" />
             <p className="text-sm text-ice/75 leading-relaxed mb-6 max-w-xs">
               {t('aboutUsDesc1')}
             </p>
@@ -172,7 +184,7 @@ const Footer = () => {
                   key={label}
                   href={href}
                   aria-label={label}
-                  className="w-10 h-10 rounded-xl bg-white/[0.06] ring-1 ring-white/10 hover:ring-gold/50 hover:bg-burgundy text-gold hover:text-white flex items-center justify-center transition-all duration-200"
+                  className="w-10 h-10 rounded-full ring-1 ring-white/20 hover:bg-gold hover:text-deep hover:ring-gold text-white flex items-center justify-center transition-all duration-200"
                 >
                   <Icon className="w-4 h-4" />
                 </a>
@@ -184,16 +196,16 @@ const Footer = () => {
           <div>
             <h4 className="flex flex-col text-sm font-bold text-white mb-5">
               {isTr ? 'Online Bağış' : isAr ? 'التبرع الإلكتروني' : 'Online Donate'}
-              <span className="mt-2 h-0.5 w-9 rounded-full bg-gradient-to-r from-gold to-burgundy" />
+              <span className="mt-2 h-[3px] w-8 rounded-full bg-gold" />
             </h4>
             <ul className="space-y-2.5">
               {categories.map((cat) => (
                 <li key={cat.id}>
                   <Link
                     href={`/category/${cat.slug || cat.id}`}
-                    className="group flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors"
+                    className="group flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors sm:gap-2.5 sm:text-[15px]"
                   >
-                    <ChevronRight className={`w-3.5 h-3.5 text-gold flex-shrink-0 transition-transform group-hover:translate-x-0.5 ${isAr ? 'rotate-180' : ''}`} />
+                    <span className="h-1 w-1 flex-shrink-0 rounded-full bg-burgundy transition-colors group-hover:bg-gold" />
                     {cat.name}
                   </Link>
                 </li>
@@ -205,16 +217,16 @@ const Footer = () => {
           <div>
             <h4 className="flex flex-col text-sm font-bold text-white mb-5">
               {isTr ? 'Bağlantılar' : isAr ? 'روابط سريعة' : 'Quick Links'}
-              <span className="mt-2 h-0.5 w-9 rounded-full bg-gradient-to-r from-gold to-burgundy" />
+              <span className="mt-2 h-[3px] w-8 rounded-full bg-gold" />
             </h4>
             <ul className="space-y-2.5">
               {quickLinks.map((item) => (
                 <li key={item.label}>
                   <Link
                     href={item.href}
-                    className="group flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors"
+                    className="group flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors sm:gap-2.5 sm:text-[15px]"
                   >
-                    <ChevronRight className={`w-3.5 h-3.5 text-gold flex-shrink-0 transition-transform group-hover:translate-x-0.5 ${isAr ? 'rotate-180' : ''}`} />
+                    <span className="h-1 w-1 flex-shrink-0 rounded-full bg-burgundy transition-colors group-hover:bg-gold" />
                     {item.label}
                   </Link>
                 </li>
@@ -223,10 +235,10 @@ const Footer = () => {
           </div>
 
           {/* ── Contact + Message ── */}
-          <div className="sm:col-span-2 lg:col-span-1">
+          <div className="col-span-2 lg:col-span-1">
             <h4 className="flex flex-col text-sm font-bold text-white mb-5">
               {isTr ? 'İletişim' : isAr ? 'تواصل معنا' : 'Contact'}
-              <span className="mt-2 h-0.5 w-9 rounded-full bg-gradient-to-r from-gold to-burgundy" />
+              <span className="mt-2 h-[3px] w-8 rounded-full bg-gold" />
             </h4>
 
             {/* Contact info */}
@@ -235,7 +247,7 @@ const Footer = () => {
                 <span className="w-8 h-8 rounded-lg bg-white/[0.06] ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
                   <MapPin className="w-4 h-4 text-gold" />
                 </span>
-                <span className="mt-1.5" dir="ltr">Bağlar, Mimar Sinan Cd. No:38, 34209 Bağcılar / İstanbul</span>
+                <span className="mt-1.5" dir={isAr ? 'rtl' : 'ltr'}>{isAr ? 'شارع معمار سنان رقم 38، باغلار، 34209 باغجلار / إسطنبول' : 'Bağlar, Mimar Sinan Cd. No:38, 34209 Bağcılar / İstanbul'}</span>
               </li>
               <li>
                 <a
@@ -269,12 +281,12 @@ const Footer = () => {
                 placeholder={t('messagePlaceholder')}
                 disabled={isSubmitting}
                 rows={3}
-                className="w-full px-4 py-3 text-sm shape-chip bg-white/[0.06] border border-white/15 text-white placeholder:text-white/40 focus:outline-none focus:border-gold/60 focus:ring-2 focus:ring-gold/20 focus:bg-white/10 resize-none disabled:opacity-50 transition-all"
+                className="w-full px-4 py-3 text-sm rounded-2xl bg-white/[0.06] border border-white/15 text-white placeholder:text-white/40 focus:outline-none focus:border-gold/60 focus:ring-2 focus:ring-gold/20 focus:bg-white/10 resize-none disabled:opacity-50 transition-all"
               />
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex items-center justify-center gap-2 w-full py-3 shape-button bg-burgundy hover:bg-burgundyDark text-white text-sm font-bold transition-all duration-200 ring-1 ring-gold/30 shadow-soft hover:shadow-lift disabled:opacity-50"
+                className="flex items-center justify-center gap-2 w-full h-12 rounded-full bg-white/10 hover:bg-gold hover:text-deep text-white text-sm font-bold transition-all duration-200 ring-1 ring-white/20 disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
                 {isSubmitting ? t('sending') : t('send')}
@@ -290,17 +302,13 @@ const Footer = () => {
       </div>
 
       {/* ── Bottom bar ── */}
-      <div className="relative border-t border-white/10 bg-black/20">
+      <div className="relative border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-white/50">
           <p className="flex items-center gap-1.5">
             <Heart className="w-3 h-3 text-gold fill-gold/30" />
             {t('copyright', { year: new Date().getFullYear() })}
           </p>
-          <p
-            className="hover:text-gold transition-colors"
-          >
-            {t('developedBy')}
-          </p>
+          <p dir="ltr">YediCihan Uluslararası Yardımlaşma Derneği · 1961</p>
         </div>
       </div>
 
