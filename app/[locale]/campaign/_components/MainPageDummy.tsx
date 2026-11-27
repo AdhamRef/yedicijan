@@ -439,7 +439,7 @@ const IntegratedCampaignPage = ({ id, locale: propLocale }: { id: string; locale
               {/* ── Tabs card (no overflow-clip so the inner tab bar can stick) ── */}
               <div className="bg-white rounded-[26px] sm:rounded-[32px] border border-gray-100 shadow-soft mx-4 sm:mx-0">
                 {/* Sticky segmented tab bar */}
-                <div className="sticky top-16 lg:top-[116px] z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2.5 sm:px-3 py-2.5 rounded-t-[26px] sm:rounded-t-[32px]">
+                <div className="sticky top-[100px] lg:top-[116px] z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 px-2.5 sm:px-3 py-2.5 rounded-t-[26px] sm:rounded-t-[32px]">
                   <div className="grid grid-cols-4 gap-1 rounded-2xl bg-offwhite p-1">
                     {tabs.map(({ id: tabId, labelKey, icon: Icon, badge }) => {
                       const active = activeTab === tabId;

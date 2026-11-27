@@ -217,6 +217,19 @@ const Navbar = () => {
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50">
+        {/* ── Phones: a slim bar above the header with the two giving pages ── */}
+        <div className="grid h-9 grid-cols-2 bg-deep text-[13px] font-extrabold text-white lg:hidden">
+          {navLinks.filter((link) => link.Icon).map((link, i) => {
+            const Icon = link.Icon as LucideIcon;
+            const active = pathname === link.href;
+            return (
+              <Link key={link.href} href={link.href} aria-current={active ? "page" : undefined}
+                className={`flex items-center justify-center gap-1.5 transition-colors ${i > 0 ? "border-s border-white/15" : ""} ${active ? "bg-white/10 text-gold" : "hover:text-gold"}`}>
+                <Icon className="h-4 w-4 text-gold" />{link.label}
+              </Link>
+            );
+          })}
+        </div>
         {/* ── Top Utility Bar (desktop only) — slim ── */}
         <div className="bg-deep text-ice text-[13px] hidden lg:block">
           <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-10">
@@ -425,7 +438,7 @@ const Navbar = () => {
 
           {/* ── Mobile Menu ── */}
           {isMobileMenuOpen && (
-            <div className="lg:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-line bg-white animate-fade-in">
+            <div className="lg:hidden max-h-[calc(100dvh-100px)] overflow-y-auto border-t border-line bg-white animate-fade-in">
                 {/* Language + currency */}
                 <div className="flex items-center justify-between gap-3 border-b border-line bg-offwhite px-5 py-3">
                   <LanguageSwitcher onDark={false} />

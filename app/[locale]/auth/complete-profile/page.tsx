@@ -41,7 +41,7 @@ const TEXTURE_URL = "https://i.ibb.co/N2zVsqfg/calisma-alanlarimiz-egitim-sektor
 
 // The page lives inside <main className="pt-16 lg:pt-[116px]">, so a full 100dvh
 // would push past the fold. Subtracting the navbar keeps the card on one screen.
-const SHELL_HEIGHT = "h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] lg:h-[calc(100dvh-116px)] lg:max-h-[calc(100dvh-116px)]";
+const SHELL_HEIGHT = "h-[calc(100dvh-100px)] max-h-[calc(100dvh-100px)] lg:h-[calc(100dvh-116px)] lg:max-h-[calc(100dvh-116px)]";
 
 export default function CompleteProfilePage() {
   const { data: session, status } = useSession();

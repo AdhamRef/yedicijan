@@ -1215,11 +1215,11 @@
     "calcPending": "Hesaplamak için mallarınızı girin"
   },
   "Waqf": {
-    "navLabel": "Vakıf hisseleri",
-    "metaTitle": "Vakıf Hissesi | Kuyu, Cami ve Okulda Sadaka-i Câriye",
+    "navLabel": "Vakıf fonları",
+    "metaTitle": "Vakıf Fonları | Kuyu, Cami ve Okulda Sadaka-i Câriye",
     "metaDescription": "Bir kuyuya, camiye ya da okula vakıf hissesiyle ortak olun; fayda sürdükçe sevabınız da sürsün. Yedi Cihan, 1961'den beri.",
-    "crumb": "Vakıf hisseleri",
-    "eyebrow": "Vakıf hisseleri",
+    "crumb": "Vakıf fonları",
+    "eyebrow": "Vakıf fonları",
     "title": "Tek bir hisse,",
     "titleMark": "hiç bitmeyen bir sevap",
     "subtitle": "Su veren bir kuyuya, namaz kılınan bir camiye ya da çocukların okuduğu bir okula hissenizle ortak olun. Eser kalır, sevabı sizin ve sevdiklerinizin olur.",
@@ -1232,7 +1232,7 @@
     "hadithSource": "Müslim",
     "step1": "Vakıf türü",
     "mode_general": "Genel vakıf",
-    "mode_general_d": "En çok ihtiyaç duyan vakıf projelerine yönlendiririz",
+    "mode_general_d": "Bir fon seçin ve hisse alın; hisselerinizi fonun projelerine biz yönlendiririz",
     "mode_pick": "Belirli vakıf",
     "mode_pick_d": "Vakfınızın gideceği projeyi siz seçin",
     "sharePrice": "Hisse bedeli",
@@ -1256,7 +1256,7 @@
     "rule3_d": "Mirasçılarla ihtilaf olmaması için vakfedenin adına kayıt altına alınır.",
     "q1": "Vakıf, normal sadakadan nasıl farklıdır?",
     "a1": "Normal sadaka bir kez harcanır; vakıf ise kalıcı bir eserdir — kuyu, cami ya da okul — ve yıllarca fayda sağlamaya devam eder.",
-    "q2": "Zekât vakıf hissesine verilebilir mi?",
+    "q2": "Zekât vakıf fonuna verilebilir mi?",
     "a2": "İhtiyatlı olan vermemektir; çünkü zekât hak sahibine temlik edilmelidir. Zekâtınızı zekât sayfasından verin, vakfı sadakanızdan yapın.",
     "q3": "Anne babam ya da vefat etmiş biri adına vakfedebilir miyim?",
     "a3": "Evet, bağış yaparken onun adına niyet edin; vakfın sevabı inşallah ona ulaşır.",
@@ -1286,6 +1286,17 @@
     "perShare": "hisse {amount}",
     "sharesWord": "{count, plural, other {hisse}}",
     "panelTitle": "Vakfınız",
-    "panelTotal": "Toplam"
+    "panelTotal": "Toplam",
+    "stepFund": "Fon seçin",
+    "fund_water": "Su fonu",
+    "fund_water_d": "Köylere ve kamplara yıllarca su veren kuyular",
+    "fund_mosques": "Allah'ın evleri fonu",
+    "fund_mosques_d": "Namaz için inşa edilen ve onarılan camiler",
+    "fund_education": "Eğitim fonu",
+    "fund_education_d": "Çocuklar için onarılan ve donatılan okullar",
+    "fund_general": "Genel vakıf fonu",
+    "fund_general_d": "En çok ihtiyaç duyulan vakıf projelerine yönlendirilir",
+    "fundNow": "Şu an desteklenen: {title}",
+    "fundShares": "Fondaki hisseler"
   }
 }

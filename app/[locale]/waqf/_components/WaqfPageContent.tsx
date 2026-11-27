@@ -38,12 +38,14 @@ type Mode = "general" | "pick";
 
 /** Every waqf is given in shares; a general-waqf share is $50, the smallest share on the page. */
 const GENERAL_SHARE_USD = 50;
-/** Optional field for a general waqf; "any" leaves it to the team. */
-const FIELDS: { key: string; Icon: LucideIcon | typeof MosqueIcon }[] = [
-  { key: "any", Icon: Heart },
-  { key: "water", Icon: Droplet },
-  { key: "mosques", Icon: MosqueIcon },
-  { key: "education", Icon: GraduationCap },
+/**
+ * General waqf is given through funds: shares of $50 in a fund, which goes to the fund's open
+ * projects. Each fund pools the site's projects of its kind (title or slug, any site language).
+ */
+const FUNDS: { key: string; Icon: LucideIcon | typeof MosqueIcon; match: RegExp; image: string }[] = [
+  { key: "water", Icon: Droplet, match: /بئر|آبار|well|kuyu|sumur|puits|brunnen|pozo|poço/i, image: "/images/zakat-waqf/wq-well.jpg" },
+  { key: "mosques", Icon: MosqueIcon, match: /مسجد|مساجد|بيوت الله|mosque|cami|mosqu[ée]e|moschee|mezquita|masjid|mesquita/i, image: "/images/zakat-waqf/wq-mosque.jpg" },
+  { key: "education", Icon: GraduationCap, match: /مدرس|مدارس|school|okul|[ée]cole|schule|escuela|sekolah|escola/i, image: "/images/zakat-waqf/wq-mosque.jpg" },
 ];
 /** True while the element with this id is on screen — drives the mobile bar. */
 function useInView(id: string) {
@@ -100,7 +102,6 @@ export default function WaqfPageContent() {
       }
       if (!alive) return;
       if (cat?.id) setCategory({ id: cat.id, name: cat.name, image: cat.image });
-      else setMode("pick");
       setProjects(items);
       setLoaded(true);
     })();
@@ -122,15 +123,31 @@ export default function WaqfPageContent() {
 
   // ── Band state ──
   const [mode, setMode] = useState<Mode>("general");
-  const [fieldKey, setFieldKey] = useState("any");
+  // A fund's money goes to its open project with the most left to raise, or to the waqf
+  // category once the team creates one. The general fund needs that category.
+  const funds = useMemo(() => {
+    const list = FUNDS.map((f) => {
+      const pool = projects.filter((p) => f.match.test(`${p.title ?? ""} ${p.slug ?? ""}`));
+      const need = (p: Campaign) => (p.targetAmount > 0 ? p.targetAmount - (p.currentAmount ?? 0) : Number.MAX_SAFE_INTEGER);
+      const project = [...pool].sort((a, b) => need(b) - need(a))[0] ?? null;
+      return { key: f.key, Icon: f.Icon, project, image: project?.images?.[0] ?? f.image };
+    }).filter((f) => f.project || category);
+    if (category) list.push({ key: "general", Icon: InfinityIcon, project: null, image: category.image ?? "/images/zakat-waqf/wq-well.jpg" });
+    return list;
+  }, [projects, category]);
+  const [fundKey, setFundKey] = useState<string | null>(null);
+  const fund = funds.find((f) => f.key === fundKey) ?? funds[0] ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = useMemo(() => projects.find((p) => p.id === selectedId) ?? projects[0] ?? null, [projects, selectedId]);
   const target = mode === "pick" ? selected : null;
+  // What the dialog is opened for: a project (designated, or a fund's project), else the waqf category.
+  const giveCampaign = mode === "pick" ? target : fund?.project ?? null;
+  const giveCategory = mode === "general" && !fund?.project ? category : null;
   const [qty, setQty] = useState(1);
   const q = Math.max(1, Math.min(9999, Math.floor(qty) || 1));
   const unitUSD = target ? shareUSD(target) : GENERAL_SHARE_USD;
   const total = conv(unitUSD * q);
-  const canGive = mode === "general" ? Boolean(category) : Boolean(target);
+  const canGive = Boolean(giveCampaign || giveCategory);
   const [open, setOpen] = useState(false);
   const inGive = useInView("give");
   const word = (n: number) => t("shares", { count: n });
@@ -140,7 +157,6 @@ export default function WaqfPageContent() {
   // The hero shows another project, so the well photo stays for the Bir Rumah story.
   const heroImage = projects.find((p) => p !== wellProject && p.images?.[0])?.images?.[0] ?? category?.image ?? "/images/zakat-waqf/wq-mosque.jpg";
   const storyImage = wellProject?.images?.[0] ?? "/images/zakat-waqf/wq-well.jpg";
-  const generalImage = category?.image ?? wellProject?.images?.[0] ?? "/images/zakat-waqf/wq-well.jpg";
 
   return (
     <main className="min-h-screen bg-offwhite">
@@ -186,12 +202,12 @@ export default function WaqfPageContent() {
       </section>
 
       {/* ── Give: type toggle + general card / projects, beside a sticky "your waqf" panel ── */}
-      <section id="give" className="relative z-10 -mt-16 scroll-mt-24 pb-14 sm:pb-20">
+      <section id="give" className="relative z-10 -mt-16 scroll-mt-28 pb-14 sm:pb-20">
         <div className="mx-auto grid max-w-7xl items-start gap-6 px-4 sm:px-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8 lg:px-6">
           <div className="rounded-[28px] border border-line bg-white p-4 shadow-[0_30px_70px_-50px_rgba(18,35,57,.6)] sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div role="tablist" aria-label={t("step1")} className="grid w-full grid-flow-col auto-cols-fr rounded-2xl bg-sand p-1.5 sm:inline-grid sm:w-auto">
-                {([["general", InfinityIcon], ["pick", Building2]] as const).filter(([m]) => m === "pick" || !loaded || category).map(([m, Icon]) => (
+                {([["general", InfinityIcon], ["pick", Building2]] as const).map(([m, Icon]) => (
                   <button key={m} role="tab" type="button" aria-selected={mode === m} onClick={() => setMode(m)}
                     className={`inline-flex min-h-[46px] items-center justify-center gap-2 whitespace-nowrap rounded-xl px-3 text-[14px] font-extrabold transition-all sm:px-5 sm:text-[15px] ${mode === m ? "bg-deep text-white shadow-[0_10px_24px_-14px_rgba(18,35,57,.8)]" : "text-deep hover:bg-white/60"}`}>
                     <Icon className={`h-4 w-4 ${mode === m ? "text-gold" : "text-burgundy"}`} />{t(`mode_${m}`)}
@@ -202,28 +218,34 @@ export default function WaqfPageContent() {
             </div>
 
             {mode === "general" ? (
-              <div className="mt-5 grid gap-5 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:items-stretch">
-                <div className="relative isolate flex min-h-[220px] flex-col justify-end overflow-hidden rounded-[22px] p-5 text-white">
-                  {generalImage && <Image src={generalImage} alt="" fill sizes="(max-width: 768px) 100vw, 40vw" className="-z-10 object-cover" />}
-                  <span className="absolute inset-0 -z-10 bg-gradient-to-t from-deep via-deep/55 to-deep/10" aria-hidden />
-                  <span className="mb-auto inline-flex w-max items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-extrabold text-deep">{t("sharePrice")} <span className="text-burgundy">{money(conv(GENERAL_SHARE_USD))}</span></span>
-                  <b className="text-xl font-black">{t("generalTitle")}</b>
-                  <span className="mt-1 text-sm leading-6 text-white/85">{t("generalText")}</span>
-                </div>
-                <div>
-                  <p className="mb-3 flex items-center gap-2 text-sm font-extrabold text-deep">{t("stepField")}<span className="rounded-full bg-sand px-2 py-0.5 text-[11px] font-bold text-gray-500">{t("optional")}</span></p>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {FIELDS.map(({ key, Icon }) => {
-                      const on = fieldKey === key;
-                      return (
-                        <button key={key} type="button" aria-pressed={on} onClick={() => setFieldKey(key)}
-                          className={`flex h-[84px] flex-col items-center justify-center gap-1.5 rounded-2xl border-[1.5px] text-center transition-colors ${on ? "border-deep bg-deep text-white" : "border-line bg-offwhite text-deep hover:border-deep/40"}`}>
-                          <Icon className={`h-6 w-6 ${on ? "text-gold" : "text-burgundy"}`} strokeWidth={1.8} />
-                          <span className="text-[13px] font-extrabold">{t(`field_${key}`)}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              <div className="mt-5">
+                <p className="mb-3 text-sm font-extrabold text-deep">{t("stepFund")}</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+                  {funds.map((f) => {
+                    const on = fund?.key === f.key;
+                    return (
+                      <button key={f.key} type="button" aria-pressed={on} onClick={() => setFundKey(f.key)}
+                        className={`group relative flex overflow-hidden rounded-[20px] border-2 bg-white text-start transition-all sm:flex-col ${on ? "border-burgundy shadow-[0_22px_44px_-30px_rgba(166,36,60,.7)]" : "border-line hover:border-deep/30"}`}>
+                        <span className="relative block w-[112px] shrink-0 bg-sand sm:aspect-[4/3] sm:w-full">
+                          <Image src={f.image} alt="" fill sizes="(max-width: 640px) 112px, 25vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                          <span className="absolute inset-0 bg-gradient-to-t from-deep/50 to-transparent" aria-hidden />
+                          <span className={`absolute start-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full shadow transition-colors ${on ? "bg-burgundy text-white" : "bg-white/90 text-deep/25"}`}><Check className="h-4 w-4" /></span>
+                          <span className="absolute bottom-2.5 start-2.5 grid h-9 w-9 place-items-center rounded-xl bg-white/95 text-burgundy shadow"><f.Icon className="h-5 w-5" strokeWidth={1.8} /></span>
+                        </span>
+                        <span className="flex min-w-0 flex-1 flex-col gap-1 p-3.5 sm:p-4">
+                          <b className="text-[15.5px] font-extrabold leading-snug text-deep">{t(`fund_${f.key}`)}</b>
+                          <span className="text-[12.5px] leading-5 text-gray-500">{t(`fund_${f.key}_d`)}</span>
+                          <span className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1.5 text-xs font-extrabold text-deep">
+                            <span className="rounded-full bg-sand px-2.5 py-0.5">{t("sharePrice")} <span className="text-burgundy">{money(conv(GENERAL_SHARE_USD))}</span></span>
+                          </span>
+                          {f.project && <span className="line-clamp-1 text-[11.5px] font-bold text-gray-400">{t("fundNow", { title: stripBoldMarkers(f.project.title) })}</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {loaded && funds.length === 0 && (
+                    <p className="col-span-full rounded-[20px] border border-dashed border-line bg-offwhite px-6 py-8 text-center text-sm text-gray-600">{t("noProjects")}</p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -271,11 +293,12 @@ export default function WaqfPageContent() {
             <p className="text-sm font-bold text-gold">{t("panelTitle")}</p>
             <div className="mt-3 flex items-center gap-3">
               <span className="relative grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white/10">
-                {mode === "pick" && target?.images?.[0] ? <Image src={target.images[0]} alt="" fill sizes="56px" className="object-cover" /> : <InfinityIcon className="h-7 w-7 text-gold" />}
+                {mode === "pick" && target?.images?.[0] ? <Image src={target.images[0]} alt="" fill sizes="56px" className="object-cover" /> : mode === "general" && fund ? <Image src={fund.image} alt="" fill sizes="56px" className="object-cover" /> : <InfinityIcon className="h-7 w-7 text-gold" />}
               </span>
               <span className="min-w-0">
-                <b className="line-clamp-2 font-extrabold leading-snug">{mode === "general" ? t("generalTitle") : target ? stripBoldMarkers(target.title) : "—"}</b>
-                <span className="text-xs text-ice/75">{mode === "general" && <>{t(`field_${fieldKey}`)}<span className="mx-1.5 text-white/30">·</span></>}{t("perShare", { amount: money(conv(unitUSD)) })}</span>
+                <b className="line-clamp-2 font-extrabold leading-snug">{mode === "general" ? (fund ? t(`fund_${fund.key}`) : "—") : target ? stripBoldMarkers(target.title) : "—"}</b>
+                <span className="text-xs text-ice/75">{t("perShare", { amount: money(conv(unitUSD)) })}</span>
+                {mode === "general" && fund?.project && <span className="mt-0.5 line-clamp-1 block text-[11px] text-ice/60">{t("fundNow", { title: stripBoldMarkers(fund.project.title) })}</span>}
               </span>
             </div>
 
@@ -351,7 +374,7 @@ export default function WaqfPageContent() {
       </section>
 
       {/* ── Rules ── */}
-      <section id="rules" className="scroll-mt-24 py-14 sm:py-20">
+      <section id="rules" className="scroll-mt-28 py-14 sm:py-20">
         <div className="mx-auto max-w-7xl px-5 lg:px-6">
           <SectionHeading eyebrow={t("rulesEyebrow")} title={t("rulesTitle")} align="center" />
           <ol className="mx-auto mt-10 grid max-w-5xl gap-4 md:grid-cols-3">
@@ -394,23 +417,23 @@ export default function WaqfPageContent() {
         </div>
       </section>
 
-      {open && mode === "general" && category && (
-        <DonationDialog isOpen onClose={() => setOpen(false)} categoryId={category.id} categoryName={category.name} categoryImage={category.image ?? undefined} initialDonationAmount={Math.round(total * 100) / 100} />
+      {open && giveCategory && (
+        <DonationDialog isOpen onClose={() => setOpen(false)} categoryId={giveCategory.id} categoryName={fund ? t(`fund_${fund.key}`) : giveCategory.name} categoryImage={giveCategory.image ?? undefined} initialDonationAmount={Math.round(total * 100) / 100} />
       )}
-      {open && mode === "pick" && target && (
+      {open && giveCampaign && (
         <DonationDialog
           isOpen
           onClose={() => setOpen(false)}
-          campaignId={target.id}
-          campaignTitle={target.title}
-          campaignImage={target.images?.[0]}
-          targetAmount={target.targetAmount}
-          amountRaised={target.currentAmount}
+          campaignId={giveCampaign.id}
+          campaignTitle={giveCampaign.title}
+          campaignImage={giveCampaign.images?.[0]}
+          targetAmount={giveCampaign.targetAmount}
+          amountRaised={giveCampaign.currentAmount}
           fundraisingMode="AMOUNT"
-          goalType={target.goalType}
+          goalType={giveCampaign.goalType}
           sharePriceUSD={null}
-          suggestedDonations={target.suggestedDonations ?? null}
-          suggestedTeamSupport={target.suggestedTeamSupport ?? null}
+          suggestedDonations={giveCampaign.suggestedDonations ?? null}
+          suggestedTeamSupport={giveCampaign.suggestedTeamSupport ?? null}
           initialDonationAmount={Math.round(total * 100) / 100}
         />
       )}
