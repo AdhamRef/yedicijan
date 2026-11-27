@@ -18,6 +18,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     id: "Kebijakan Privasi",
     pt: "Política de Privacidade",
     es: "Política de Privacidad",
+    de: "Datenschutzerklärung",
   };
   return buildPageMetadata(locale, {
     title: titles[locale] ?? titles.en,

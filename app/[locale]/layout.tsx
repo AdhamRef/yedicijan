@@ -48,7 +48,9 @@ export async function generateMetadata({
   const alternates = buildHreflang("/", locale);
 
   return {
-    title: { default: seo.title, template: seo.titleTemplate },
+    // `absolute`, so the root layout's Arabic template is not appended on other languages;
+    // the identity template leaves each page's own (branded) title untouched.
+    title: { absolute: seo.title, template: seo.titleTemplate },
     description: seo.description,
     keywords: seo.keywords,
     icons: { icon: "/yedicijan_logo.png" },
