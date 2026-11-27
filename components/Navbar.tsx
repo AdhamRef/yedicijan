@@ -260,7 +260,7 @@ const Navbar = () => {
             isScrolled ? "shadow-[0_10px_30px_-20px_rgba(18,35,57,.45)]" : ""
           }`}
         >
-          <div className="max-w-7xl mx-auto px-4 lg:px-6 flex items-center h-16 lg:h-[76px] gap-2 lg:gap-6">
+          <div className="max-w-7xl mx-auto px-4 lg:px-6 flex items-center h-16 lg:h-[76px] gap-2 lg:gap-3 xl:gap-6">
 
             {/* Logo — always visible */}
             <Link href="/" className="flex-shrink-0 flex items-center gap-2">
@@ -271,14 +271,14 @@ const Navbar = () => {
             </Link>
 
             {/* Desktop Nav Links */}
-            <div className="hidden lg:flex items-center gap-1 flex-1">
+            <div className="hidden lg:flex items-center gap-0 xl:gap-1 flex-1 min-w-0">
               {navLinks.map((link) => {
                 const active = pathname === link.href;
                 return (
                   <Link
                     key={link.href + link.label}
                     href={link.href}
-                    className={`group relative px-3 py-2 text-[15px] font-bold transition-colors ${
+                    className={`group relative whitespace-nowrap px-2 xl:px-3 py-2 text-[14px] xl:text-[15px] font-bold transition-colors ${
                       active ? "text-deep" : "text-deep/70 hover:text-deep"
                     }`}
                   >
@@ -298,7 +298,7 @@ const Navbar = () => {
             {/* Desktop: Donate button */}
             <Link
               href="/campaigns"
-              className="hidden lg:flex items-center gap-2 rounded-full bg-burgundy hover:bg-burgundyDark text-white font-bold text-[15px] px-6 h-12 shadow-[0_14px_30px_-14px_rgba(166,36,60,.7)] transition-colors flex-shrink-0"
+              className="hidden lg:flex items-center gap-2 rounded-full bg-burgundy hover:bg-burgundyDark text-white font-bold text-[15px] whitespace-nowrap px-4 xl:px-6 h-12 shadow-[0_14px_30px_-14px_rgba(166,36,60,.7)] transition-colors flex-shrink-0"
             >
               <Heart className="w-4 h-4" />
               {t("donate") || "BAĞIŞ YAP"}
@@ -396,7 +396,7 @@ const Navbar = () => {
       );
                   setIsSignInOpen(true);
                 }}
-                className="hidden lg:flex items-center gap-1.5 h-11 text-[14px] font-bold text-deep hover:text-burgundy border border-line bg-white hover:border-burgundy/40 rounded-full px-5 transition-colors flex-shrink-0"
+                className="hidden lg:flex items-center gap-1.5 h-11 text-[14px] font-bold text-deep hover:text-burgundy border border-line bg-white hover:border-burgundy/40 rounded-full whitespace-nowrap px-4 xl:px-5 transition-colors flex-shrink-0"
               >
                 {t("signIn") || "Giriş Yap"}
               </button>
