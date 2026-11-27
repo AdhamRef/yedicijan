@@ -14,7 +14,6 @@ import { useTranslations } from "next-intl";
 const DonationDialog = dynamic(() => import("@/components/DonationDialog"), { ssr: false });
 import CategoryIcon from "@/components/CategoryIcon";
 import { Heart, ShoppingCart, Zap } from "lucide-react";
-import { LOW_FUNDING_PERCENT, isolateLtr } from "@/lib/campaign/funding";
 import {
   DEFAULT_SUGGESTED_DONATION_AMOUNTS,
   resolveSuggestedAmountsForCurrency,
@@ -87,6 +86,7 @@ interface CampaignCardProps {
 export function CampaignCard({ campaign, className, onClick, isFeatured = false, listView = false, tall = false, compact = false }: CampaignCardProps) {
   const t = useTranslations("CampaignsPage");
   const tr = useTranslations("Brand");
+  const th = useTranslations("HomeRedesign");
   const locale = useLocale();
   const { convertToCurrency } = useCurrency();
   const pathname = usePathname();
@@ -271,34 +271,40 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
             </h3>
           </Link>
 
-          {campaign.showProgress !== false && !hideBottomStats && progress < LOW_FUNDING_PERCENT ? (
-            /* Barely funded: "$0 of $12,000" reads as "nobody trusts this", so lead
-               with an invitation and the goal, and show donors once there are any. */
-            <div className="flex items-center justify-between gap-2 shape-chip bg-offwhite px-3 py-2.5">
-              <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-burgundy">
-                <Heart className="h-3.5 w-3.5" fill="currentColor" aria-hidden />
-                {tr("beFirst")}
-              </span>
-              <span className="whitespace-nowrap text-[11px] font-semibold text-gray-500 tabular-nums">
-                {tr("goal", { amount: isolateLtr(`${symbol}${formatNumber(target)}`) })}
-              </span>
-            </div>
-          ) : campaign.showProgress !== false && !hideBottomStats ? (
+          {campaign.showProgress !== false && !hideBottomStats ? (
+            /* Fixed goal: always a progress bar. With nothing raised yet the amount
+               slot invites the first gift instead of reading "$0". */
             <div className="space-y-2">
               <div className="flex items-end justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{t("raised") || "جُمع"}</p>
-                  <p className="text-deep font-black leading-none mt-0.5 whitespace-nowrap tabular-nums">{symbol}{formatNumber(raised)}</p>
+                  {raised > 0 ? (
+                    <>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{t("raised") || "جُمع"}</p>
+                      <p className="text-deep font-black leading-none mt-0.5 whitespace-nowrap tabular-nums">{symbol}{formatNumber(raised)}</p>
+                    </>
+                  ) : (
+                    <p className="inline-flex items-center gap-1.5 text-[12px] font-bold text-burgundy">
+                      <Heart className="h-3.5 w-3.5" fill="currentColor" aria-hidden />
+                      {tr("beFirst")}
+                    </p>
+                  )}
                 </div>
                 <div className="text-end min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">{t("goal") || "الهدف"}</p>
                   <p className="text-gray-500 font-semibold leading-none mt-0.5 whitespace-nowrap tabular-nums">{symbol}{formatNumber(target)}</p>
                 </div>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5">
+              <div
+                className="w-full bg-gray-100 rounded-full h-1.5"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress)}
+                data-card-progress
+              >
                 <div
                   className="bg-gradient-to-r from-burgundy to-gold rounded-full h-1.5 transition-all duration-500"
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${raised > 0 ? Math.max(progress, 2) : 0}%` }}
                 />
               </div>
             </div>
@@ -342,7 +348,7 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
           ) : (
           <>
           {/* Quick amounts — open checkout with the amount pre-filled. */}
-          <div className="mt-auto grid grid-cols-[repeat(3,minmax(0,1fr))_auto] gap-2 pt-1">
+          <div className="mt-auto grid grid-cols-4 gap-2 pt-1">
             {quickAmounts.map((amt) => (
               <button
                 key={amt}
@@ -353,9 +359,18 @@ export function CampaignCard({ campaign, className, onClick, isFeatured = false,
                 <span dir="ltr">{symbol}{formatNumber(amt)}</span>
               </button>
             ))}
+            {/* Donor types their own amount: opens checkout on the amount step (no preset). */}
+            <button
+              type="button"
+              data-other-amount
+              onClick={(e) => handleDonateClick(e)}
+              className="h-11 whitespace-nowrap rounded-xl border border-dashed border-deep/30 px-1 text-[13px] font-extrabold text-deep transition-colors hover:border-deep hover:bg-deep hover:text-white"
+            >
+              {th("otherAmount")}
+            </button>
             <button
               onClick={(e) => handleDonateClick(e)}
-              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-burgundy px-4 text-sm font-extrabold text-white transition-colors hover:bg-burgundyDark"
+              className="col-span-4 inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-burgundy px-4 text-sm font-extrabold text-white transition-colors hover:bg-burgundyDark"
             >
               <Heart className="h-4 w-4" />
               {t("donateNow") || "تبرع الآن"}
