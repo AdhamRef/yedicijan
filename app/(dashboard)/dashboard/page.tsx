@@ -1,5 +1,6 @@
 "use client";
 
+import { useLiveDonationRefresh } from "@/hooks/useLiveDonationRefresh";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useLocale } from "next-intl";
 import Link from "next/link";
@@ -593,8 +594,9 @@ export default function DashboardPage() {
 
   // Donations list — uses تصفية النتائج + chart time span (period + from/to) + sort
   const fetchDonations = useCallback(
-    async (page: number, append: boolean) => {
-      setDonationsLoading(true);
+    async (page: number, append: boolean, quiet = false) => {
+      // A quiet refresh (live update) keeps the list on screen and stays silent on errors.
+      if (!quiet) setDonationsLoading(true);
       try {
         const { start, end } = getDonationsDateRange(chartPeriod, dateFrom, dateTo);
         const params = new URLSearchParams();
@@ -615,7 +617,7 @@ export default function DashboardPage() {
         const res = await fetch(`/api/donations?${params}`);
         const data = await res.json();
         if (!res.ok) {
-          toast.error(data?.error || "فشل في تحميل التبرعات");
+          if (!quiet) toast.error(data?.error || "فشل في تحميل التبرعات");
           return;
         }
         const list = Array.isArray(data.donations) ? data.donations : [];
@@ -623,9 +625,9 @@ export default function DashboardPage() {
         setDonationsTotal(data.pagination?.total ?? 0);
       } catch (error) {
         console.error("Error fetching donations:", error);
-        toast.error("فشل في تحميل التبرعات");
+        if (!quiet) toast.error("فشل في تحميل التبرعات");
       } finally {
-        setDonationsLoading(false);
+        if (!quiet) setDonationsLoading(false);
         setDonationsFetchedOnce(true);
       }
     },
@@ -652,6 +654,10 @@ export default function DashboardPage() {
     setDonationsPage(1);
     fetchDonations(1, false);
   }, [loading, selectedCategory, selectedCampaign, selectedUserId, chartPeriod, dateFrom, dateTo, donationsSortBy, donationsSortOrder, donationsStatusFilter, donationLocaleFilter, donationCountryFilter, donationsSearch, fetchDonations]);
+
+  // Live: the latest donations refresh every 30 s while the tab is visible, on focus, and
+  // after an edit elsewhere — only on the first page, so "load more" is never reset.
+  useLiveDonationRefresh(() => fetchDonations(1, false, true), !loading && donationsPage === 1);
 
   const loadMoreDonations = () => {
     const next = donationsPage + 1;

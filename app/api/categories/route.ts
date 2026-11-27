@@ -11,9 +11,17 @@ import {
   normalizeUserSlug,
 } from "@/lib/slug";
 import { CATEGORY_ACTIVE_OR_UNSET } from "@/lib/campaign/soft-delete-filter";
+import { cachedJson, invalidatePublicCache, queryKey } from "@/lib/server/swr-cache";
+
+// Public lists are cached briefly (see lib/server/swr-cache); admin queries with inactive rows are not.
+export async function GET(request: NextRequest) {
+  const p = request.nextUrl.searchParams;
+  if (p.get('isActiveFalse') === 'true' || p.get('includeInactive') === 'true') return listCategories(request);
+  return cachedJson(queryKey('categories', p), 120_000, () => listCategories(request));
+}
 
 // GET: supports locale-aware translations, search, cursor pagination, optional counts, and sorting
-export async function GET(request: NextRequest) {
+async function listCategories(request: NextRequest) {
   try {
     const params = request.nextUrl.searchParams;
     const cursor = params.get('cursor');
@@ -116,6 +124,7 @@ export async function GET(request: NextRequest) {
 
 // POST: admin-only; supports creating translations in a transaction
 export async function POST(request: NextRequest) {
+  invalidatePublicCache();
   try {
     // Auth check: only admins can create categories
     const session = await getServerSession(authOptions);

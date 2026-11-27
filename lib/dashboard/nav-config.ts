@@ -57,6 +57,7 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
       // PUBLIC site renders, so leaving them unlinked meant no one could edit live UI.
       { key: "slides", title: "الشرائح", href: "/dashboard/slides", icon: "images", keywords: ["slides", "slider", "hero"] },
       { key: "ticker", title: "شريط التبرعات", href: "/dashboard/ticker", icon: "ticket", keywords: ["ticker", "marquee"] },
+      { key: "waqf", title: "الصناديق الوقفية", href: "/dashboard/waqf", icon: "infinity", keywords: ["waqf", "funds", "وقف", "صناديق"] },
     ],
   },
   {
@@ -159,6 +160,7 @@ export const DASHBOARD_PERMISSION_ROWS: {
   // pages are linked in the nav above, they must also be grantable.
   { key: "slides", group: "الحملات والمحتوى", title: "الشرائح" },
   { key: "ticker", group: "الحملات والمحتوى", title: "شريط التبرعات" },
+  { key: "waqf", group: "الحملات والمحتوى", title: "الصناديق الوقفية" },
   // Group was "التشغيل / التواصل"; التشغيل no longer exists, so these two are plain التواصل.
   { key: "templates", group: "التواصل", title: "قوالب البريد والمحفّزات" },
   // The outbound send log page is gone; `messages` now grants the inbox and the per-channel

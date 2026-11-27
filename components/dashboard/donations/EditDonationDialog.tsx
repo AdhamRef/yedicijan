@@ -1,5 +1,6 @@
 "use client";
 
+import { DONATION_FINANCIAL_UPDATED } from "@/hooks/useLiveDonationRefresh";
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "react-hot-toast";
@@ -263,6 +264,8 @@ export function EditDonationDialog({ donationId, onClose, onSaved }: Props) {
         categoryItems,
       });
       toast.success("تم تعديل التبرع وتحديث الإجماليات");
+      // Lets any open donations list (the dashboard home's live list) refresh at once.
+      window.dispatchEvent(new Event(DONATION_FINANCIAL_UPDATED));
       onSaved();
       onClose();
     } catch (err) {

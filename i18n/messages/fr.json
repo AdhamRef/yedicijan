@@ -1297,6 +1297,12 @@
     "fund_general": "Fonds de waqf général",
     "fund_general_d": "Dirigé vers les projets de waqf les plus nécessiteux",
     "fundNow": "Finance actuellement : {title}",
-    "fundShares": "Parts dans le fonds"
+    "fundShares": "Parts dans le fonds",
+    "fund_housing": "Fonds de l’abri",
+    "fund_housing_d": "Des maisons construites et restaurées pour les familles démunies",
+    "fund_energy": "Fonds de l’énergie",
+    "fund_energy_d": "Des panneaux solaires qui éclairent maisons et écoles pendant des années",
+    "fund_orphans": "Fonds des orphelins",
+    "fund_orphans_d": "Un soutien durable aux orphelins et à leurs familles"
   }
 }

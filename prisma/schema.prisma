@@ -1698,3 +1698,42 @@ model CommunicationCampaignTrackingLink {
 
   @@index([campaignId, status])
 }
+
+/* ===================== WAQF FUNDS PAGE (/waqf) ===================== */
+/// One row: the /waqf page's own settings, edited from /dashboard/waqf. New collection; nothing
+/// else reads it. Donations still go through the existing dialog to a project or category.
+model WaqfPageSettings {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  heroImage      String?
+  storyImage     String?
+  /// Price of one share in a fund, in USD; never below 50.
+  shareUSD       Float    @default(50)
+  /// Share counts offered as one-tap chips in the "your waqf" panel.
+  quickShares    Int[]    @default([1, 3, 5, 10])
+  showDesignated Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/// A waqf fund shown under "general waqf" on /waqf. Its shares pay into the linked project with
+/// the most left to raise (or, with none linked, the site projects of its kind).
+model WaqfFund {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Built-in kind used for the icon and for finding projects when none are linked:
+  /// water | mosques | education | housing | energy | orphans | general.
+  kind         String   @default("general")
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  featured     Boolean  @default(false)
+  image        String?
+  /// Own share price in USD (never below 50); null = the page's share price.
+  shareUSD     Float?
+  /// Projects this fund pays into (Campaign ids).
+  campaignIds  String[] @default([])
+  /// Show the linked projects' combined progress on the card.
+  showProgress Boolean  @default(false)
+  /// { [locale]: { name, description, badge } } for the site's eight languages.
+  texts        Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

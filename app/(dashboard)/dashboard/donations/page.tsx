@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useDebounce } from 'use-debounce';
 import axios from 'axios';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -93,11 +94,23 @@ export default function DonationsPage() {
   const [selectedDonations, setSelectedDonations] = useState<string[]>([]);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  // Search and the date/amount sort run on the server, across every page — the page used to
+  // filter only the ten rows it had loaded, so donations on other pages never matched.
+  const [debouncedSearch] = useDebounce(searchQuery.trim(), 350);
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
+  const serverSort = sortField === 'totalAmount' ? 'amount' : sortField === 'createdAt' ? 'date' : null;
   useEffect(() => {
     const fetchData = async () => {
       try {
         const response = await axios.get('/api/donations', {
-          params: { page, limit: itemsPerPage },
+          params: {
+            page,
+            limit: itemsPerPage,
+            ...(debouncedSearch ? { search: debouncedSearch } : {}),
+            ...(serverSort ? { sortBy: serverSort, sortOrder: sortDirection } : {}),
+          },
         });
         setDonations(response.data.donations);
         setTotalPages(response.data.pagination.pages);
@@ -110,7 +123,7 @@ export default function DonationsPage() {
     };
 
     fetchData();
-  }, [page]);
+  }, [page, debouncedSearch, serverSort, sortDirection, itemsPerPage]);
 
   const handleSort = (field: keyof Donation) => {
     if (field === sortField) {
@@ -142,43 +155,44 @@ export default function DonationsPage() {
 
     setDeleteLoading(true);
     try {
-      await Promise.all(selectedDonations.map(id => axios.delete(`/api/donations/${id}`)));
-      setDonations(donations.filter(donation => !selectedDonations.includes(donation.id)));
-      setSelectedDonations([]);
-      toast.success('Donations deleted successfully');
-    } catch (error) {
-      console.error('Error deleting donations:', error);
-      toast.error('Failed to delete donations');
+      // Each delete stands alone: report what went through and what was refused, instead of a
+      // single failure message while most of the batch was in fact deleted.
+      const results = await Promise.allSettled(selectedDonations.map(id => axios.delete(`/api/donations/${id}`)));
+      const done = selectedDonations.filter((_, i) => results[i].status === 'fulfilled');
+      const refused = selectedDonations.length - done.length;
+      setDonations(donations.filter(donation => !done.includes(donation.id)));
+      setSelectedDonations(selectedDonations.filter(id => !done.includes(id)));
+      if (done.length) toast.success(`حُذف ${done.length} تبرع`);
+      if (refused) toast.error(`تعذّر حذف ${refused} تبرع — ما زالت محددة`);
     } finally {
       setDeleteLoading(false);
     }
   };
 
-  const filteredDonations = donations
-    .filter(donation => {
-      const matchesSearch = donation.items.some(item =>
-        item.campaign.title.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      return matchesSearch;
-    })
-    .sort((a, b) => {
-      if (sortDirection === 'asc') {
-        return a[sortField] > b[sortField] ? 1 : -1;
-      }
-      return a[sortField] < b[sortField] ? 1 : -1;
-    });
+  // The server already filtered, sorted (date/amount) and paged. Other columns sort within the
+  // page, empty values last whichever the direction.
+  const filteredDonations = serverSort
+    ? donations
+    : [...donations].sort((a, b) => {
+        const x = a[sortField];
+        const y = b[sortField];
+        const ex = x === null || x === undefined || x === '';
+        const ey = y === null || y === undefined || y === '';
+        if (ex || ey) return ex === ey ? 0 : ex ? 1 : -1;
+        const c = String(x).localeCompare(String(y), 'ar', { numeric: true });
+        return sortDirection === 'asc' ? c : -c;
+      });
 
-  const paginatedDonations = filteredDonations.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage
-  );
+  // The server returns exactly one page; slicing it again emptied every page after the first.
+  const paginatedDonations = filteredDonations;
 
   const exportToCSV = () => {
-    const headers = ['Amount', 'Currency', 'Status', 'Payment Method', 'Created At', 'Donor Name', 'Campaigns'];
+    const headers = ['Amount', 'Currency', 'Status', 'Type', 'Payment Method', 'Created At', 'Donor Name', 'Campaigns'];
     const csvData = filteredDonations.map(donation => [
       donation.totalAmount,
       donation.currency,
       donation.status,
+      (donation as { type?: string }).type === 'MONTHLY' ? 'Monthly' : 'One-time',
       donation.paymentMethod,
       format(new Date(donation.createdAt), 'PPP', { locale: ar }),
       donation.donor.name,

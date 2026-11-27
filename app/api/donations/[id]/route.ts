@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '../../auth/[...nextauth]/options';
 import { Prisma } from '@prisma/client';
 import { userHasDashboardPermission } from '@/lib/dashboard/permissions';
+import { guestDonationView } from '@/lib/donations/guest-view';
 import { convertAmountInCurrencyToUsd, normalizeDonationCurrencyCode } from '@/lib/exchange/convert-amount-in-currency-to-usd';
 import {
   writeAuditLog,
@@ -14,6 +15,8 @@ import {
   recomputeCategoryCurrentAmount as sharedRecomputeCategory,
 } from "@/lib/campaign/current-amount";
 
+const NO_STORE = { 'Cache-Control': 'private, no-store' };
+
 // GET /api/donations/[id] - Get donation (transaction) by ID
 export async function GET(
   request: NextRequest,
@@ -21,8 +24,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    if (!id) {
-      return NextResponse.json({ error: 'Donation ID required' }, { status: 400 });
+    // An id that is not a Mongo ObjectId can never match; answer before touching the database.
+    if (!id || !/^[a-f\d]{24}$/i.test(id)) {
+      return NextResponse.json({ error: 'Donation not found' }, { status: 404, headers: NO_STORE });
     }
     const session = await getServerSession(authOptions);
 
@@ -78,7 +82,7 @@ export async function GET(
     if (!donation) {
       return NextResponse.json(
         { error: 'Donation not found' },
-        { status: 404 }
+        { status: 404, headers: NO_STORE }
       );
     }
 
@@ -86,17 +90,22 @@ export async function GET(
     // the access token (same posture as a payment-session id). For
     // authenticated users, still require ownership or revenue-dashboard
     // permission to prevent cross-account snooping.
+    let fullAccess = false;
     if (session) {
       const canViewAllDonations =
         userHasDashboardPermission(session.user, 'revenue') ||
         userHasDashboardPermission(session.user, 'donationsEdit');
       if (!canViewAllDonations && session.user.id !== donation.donorId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE });
       }
+      fullAccess = true;
     }
 
+    // The raw bank payload never leaves the server, whoever asks.
+    const { providerRaw: _raw, ...safe } = donation;
+    void _raw;
     const response = {
-      ...donation,
+      ...safe,
       type: donation.subscriptionId ? ('MONTHLY' as const) : ('ONE_TIME' as const),
       // Default to CARD on read for legacy rows where the field was never
       // written. Every current create path sets CARD or PAYPAL explicitly,
@@ -104,7 +113,11 @@ export async function GET(
       paymentMethod: donation.paymentMethod ?? 'CARD',
       paymentStatus: donation.status,
     };
-    return NextResponse.json(response);
+    // A guest (donation id only) gets the reduced view; the owner and the team get it all.
+    if (!fullAccess) {
+      return NextResponse.json(guestDonationView(response), { headers: NO_STORE });
+    }
+    return NextResponse.json(response, { headers: NO_STORE });
   } catch (error) {
     console.error('Error fetching donation:', error);
     return NextResponse.json(

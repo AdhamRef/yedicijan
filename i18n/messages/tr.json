@@ -1297,6 +1297,12 @@
     "fund_general": "Genel vakıf fonu",
     "fund_general_d": "En çok ihtiyaç duyulan vakıf projelerine yönlendirilir",
     "fundNow": "Şu an desteklenen: {title}",
-    "fundShares": "Fondaki hisseler"
+    "fundShares": "Fondaki hisseler",
+    "fund_housing": "Barınma fonu",
+    "fund_housing_d": "İhtiyaç sahibi aileler için inşa edilen ve onarılan evler",
+    "fund_energy": "Enerji fonu",
+    "fund_energy_d": "Evleri ve okulları yıllarca aydınlatan güneş panelleri",
+    "fund_orphans": "Yetim fonu",
+    "fund_orphans_d": "Yetimlere ve ailelerine kalıcı destek"
   }
 }

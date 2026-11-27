@@ -251,8 +251,11 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
       {text}
     </p>
   );
-  const tile = (on: boolean) =>
-    `flex flex-col items-center justify-center gap-1.5 rounded-2xl border text-center transition-colors ${on ? "border-white bg-white text-deep" : "border-white/15 bg-white/[0.06] text-white hover:border-white/40"}`;
+  // Countries and fields: one compact row of pills, like the projects page's category row
+  // (scrolls sideways on phones, wraps from sm up).
+  const pillRow = "flex gap-1 overflow-x-auto rounded-full bg-white/[0.06] p-1.5 ring-1 ring-white/10 [scrollbar-width:none] sm:flex-wrap sm:rounded-[22px] [&::-webkit-scrollbar]:hidden";
+  const pill = (on: boolean) =>
+    `flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-bold transition-colors ${on ? "bg-white text-deep shadow-[0_8px_18px_-10px_rgba(0,0,0,.6)]" : "text-ice/85 hover:bg-white/10 hover:text-white"}`;
 
   return (
     <main className="min-h-screen bg-offwhite">
@@ -312,13 +315,13 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
           <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-7">
             <fieldset className="min-w-0">
               <legend className="contents">{bandLabel(1, t("step1"))}</legend>
-              <div className="grid grid-cols-5 gap-2">
+              <div className={pillRow}>
                 {dests.map((d) => {
                   const on = dest === d.key;
                   return (
-                    <button key={d.key} type="button" aria-pressed={on} onClick={() => setDest(d.key)} className={`${tile(on)} h-[76px] px-1`}>
-                      <CategoryIcon name={d.icon} className={`h-5 w-7 ${d.icon === "Globe" ? (on ? "text-deep" : "text-gold") : ""}`} />
-                      <span className="text-[12.5px] font-extrabold leading-tight sm:text-[13px]">{t(`dest_${d.key}`)}</span>
+                    <button key={d.key} type="button" aria-pressed={on} onClick={() => setDest(d.key)} className={pill(on)}>
+                      <CategoryIcon name={d.icon} className={`h-3 w-4 ${d.icon === "Globe" ? (on ? "text-burgundy" : "text-gold") : ""}`} />
+                      {t(`dest_${d.key}`)}
                     </button>
                   );
                 })}
@@ -327,18 +330,16 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
 
             <fieldset className="min-w-0">
               <legend className="contents">{bandLabel(2, t("stepField"), <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-ice/80">{t("optional")}</span>)}</legend>
-              <div className="-mx-5 flex snap-x scroll-px-5 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-7 sm:overflow-visible sm:pb-0 [&::-webkit-scrollbar]:hidden">
-                <span className="w-3 shrink-0 sm:hidden" aria-hidden />
+              <div className={pillRow}>
                 {FIELDS.map(({ key, Icon }) => {
                   const on = fieldKey === key;
                   return (
-                    <button key={key} type="button" aria-pressed={on} onClick={() => setFieldKey(key)} className={`${tile(on)} h-[76px] w-[78px] shrink-0 snap-start px-1 sm:w-auto`}>
-                      <Icon className={`h-5 w-5 ${on ? "text-burgundy" : "text-gold"}`} strokeWidth={1.8} />
-                      <span className="text-[12px] font-extrabold leading-tight">{t(`field_${key}`)}</span>
+                    <button key={key} type="button" aria-pressed={on} onClick={() => setFieldKey(key)} className={pill(on)}>
+                      <Icon className={`h-4 w-4 ${on ? "text-burgundy" : "text-gold"}`} strokeWidth={1.8} />
+                      {t(`field_${key}`)}
                     </button>
                   );
                 })}
-                <span className="w-3 shrink-0 sm:hidden" aria-hidden />
               </div>
             </fieldset>
           </div>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cachedJson, invalidatePublicCache } from "@/lib/server/swr-cache";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/options";
@@ -13,7 +14,11 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
  * GET: Fetch live donation ticker configuration
  * Returns the active ticker config with all settings
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
+  return cachedJson("live-donation-ticker", 300_000, readTicker);
+}
+
+async function readTicker() {
   try {
     // Get the first active ticker configuration
     const ticker = await prisma.liveDonationTicker.findFirst({
@@ -48,6 +53,7 @@ export async function GET(request: NextRequest) {
  * POST: Create or update ticker configuration (admin-only)
  */
 export async function POST(request: NextRequest) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, 'ticker');
@@ -120,6 +126,7 @@ export async function POST(request: NextRequest) {
  * PATCH: Update existing ticker configuration (admin-only)
  */
 export async function PATCH(request: NextRequest) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, 'ticker');
@@ -181,6 +188,7 @@ export async function PATCH(request: NextRequest) {
  * DELETE: Delete ticker configuration (admin-only)
  */
 export async function DELETE(request: NextRequest) {
+  invalidatePublicCache();
   try {
     const session = await getServerSession(authOptions);
     const denied = requireAdminOrDashboardPermission(session, 'ticker');

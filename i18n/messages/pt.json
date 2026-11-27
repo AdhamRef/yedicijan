@@ -1297,6 +1297,12 @@
     "fund_general": "Fundo de waqf geral",
     "fund_general_d": "Direcionado aos projetos de waqf mais necessitados",
     "fundNow": "Financia agora: {title}",
-    "fundShares": "Cotas no fundo"
+    "fundShares": "Cotas no fundo",
+    "fund_housing": "Fundo de abrigo",
+    "fund_housing_d": "Casas construídas e restauradas para famílias carenciadas",
+    "fund_energy": "Fundo de energia",
+    "fund_energy_d": "Painéis solares que iluminam casas e escolas durante anos",
+    "fund_orphans": "Fundo dos órfãos",
+    "fund_orphans_d": "Apoio duradouro aos órfãos e às suas famílias"
   }
 }
