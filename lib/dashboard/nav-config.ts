@@ -105,10 +105,9 @@ export const DASHBOARD_NAV_GROUPS: DashboardNavGroup[] = [
       { key: "platformConnections", title: "بكسلات التتبع", href: "/dashboard/platform-connections/tracking", icon: "radar", keywords: ["pixels", "meta", "tiktok", "snap"] },
       { key: "platformConnections", title: "مزودو التواصل والإرسال", href: "/dashboard/platform-connections/communication", icon: "server", keywords: ["providers", "twilio", "smtp", "whatsapp"] },
       { key: "platformConnections", title: "فحص الاتصال", href: "/dashboard/platform-connections/health", icon: "heartPulse", keywords: ["health", "status", "diagnostics"] },
-      // No dedicated "telegram" permission key exists, and inventing one would need a matching
-      // grant UI. It is an outbound integration, so it sits under platformConnections with the
-      // other providers. Donation notifications depend on this page being configurable.
-      { key: "platformConnections", title: "تيليجرام", href: "/dashboard/telegram", icon: "send", keywords: ["telegram", "bot", "notifications"] },
+      // Holds the bot token, so it needs the same grant as managing provider credentials;
+      // the page rule in permissions.ts and this entry use the same key.
+      { key: "platformConnectionsAdmin", title: "تيليجرام", href: "/dashboard/telegram", icon: "send", keywords: ["telegram", "bot", "notifications"] },
     ],
   },
   {

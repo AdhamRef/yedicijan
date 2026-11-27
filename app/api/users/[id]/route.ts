@@ -168,7 +168,7 @@ export async function PUT(
   try {
     const { id } = await params;
     const session = await getServerSession(authOptions);
-    if (!session) {
+    if (!session?.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -197,6 +197,9 @@ export async function PUT(
       clarityId: rawClarityId,
     } = body;
 
+    if (role !== undefined && !["ADMIN", "STAFF", "DONOR"].includes(role)) {
+      return NextResponse.json({ error: "INVALID_ROLE" }, { status: 400 });
+    }
     const isSelf = session.user.id === id;
     const wantsAuthorityChange =
       role !== undefined || rawDashboardPermissions !== undefined;
@@ -209,6 +212,7 @@ export async function PUT(
         dashboardPermissions: true,
         name: true,
         email: true,
+        updatedAt: true,
       },
     });
     if (!existing) {
@@ -273,10 +277,27 @@ export async function PUT(
 
       if (existingUser) {
         return NextResponse.json(
-          { error: 'Email already exists' },
-          { status: 400 }
+          { error: 'EMAIL_EXISTS' },
+          { status: 409 }
         );
       }
+    }
+
+    // Nobody changes their own role or dashboard access, admins included: a slip of the
+    // checkbox would lock them out, and another admin should make that change.
+    if (isSelf && wantsAuthorityChange) {
+      return NextResponse.json({ error: "لا يمكنك تعديل دورك أو صلاحياتك من هذه الواجهة." }, { status: 409 });
+    }
+    if (existing.email?.endsWith("@deleted.invalid")) {
+      return NextResponse.json({ error: "ACCOUNT_CLOSED" }, { status: 410 });
+    }
+    // Optional optimistic lock: a form that sends the updatedAt it loaded is refused if the
+    // row changed since, instead of silently overwriting the other edit.
+    if (
+      body.updatedAt !== undefined &&
+      (typeof body.updatedAt !== "string" || new Date(body.updatedAt).getTime() !== existing.updatedAt.getTime())
+    ) {
+      return NextResponse.json({ error: "PROFILE_CONFLICT" }, { status: 409 });
     }
 
     let nextDashboardPermissions: string[] | undefined;
@@ -324,11 +345,12 @@ export async function PUT(
       }
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id },
+    const update = (client: Pick<typeof prisma, "user">) => client.user.update({
+      where: { id, ...(body.updatedAt !== undefined ? { updatedAt: new Date(body.updatedAt) } : {}) },
       data: {
         ...(name !== undefined && { name }),
-        ...(email !== undefined && { email }),
+        // A new address is not a verified one.
+        ...(email !== undefined && { email, ...(email !== existing.email ? { emailVerified: null } : {}) }),
         ...(countryCode !== undefined && {
           countryCode: countryCode === "" ? null : countryCode,
         }),
@@ -368,6 +390,16 @@ export async function PUT(
       },
     });
 
+    // Lock the acting administrator before changing another account's authority, so two
+    // admins demoting each other at the same moment conflict instead of leaving no admin.
+    const updatedUser = wantsAuthorityChange
+      ? await prisma.$transaction(async (tx) => {
+          const actor = await tx.user.updateMany({ where: { id: session.user.id, role: "ADMIN" }, data: { updatedAt: new Date() } });
+          if (actor.count !== 1) throw new Error("AUTHORITY_CHANGED");
+          return update(tx);
+        })
+      : await update(prisma);
+
     if (isAdmin && wantsAuthorityChange) {
       const actor = session.user;
       const targetName = existing.name ?? existing.email ?? id;
@@ -388,8 +420,14 @@ export async function PUT(
       });
     }
 
-    return NextResponse.json(updatedUser);
+    // Never send the password hash back; the profile UI only needs to know one exists.
+    const { password: _password, ...safeUpdatedUser } = updatedUser;
+    return NextResponse.json({ ...safeUpdatedUser, hasPassword: Boolean(_password) });
   } catch (error) {
+    const code = (error as { code?: string })?.code;
+    if (code === "P2025" || code === "P2034") return NextResponse.json({ error: "PROFILE_CONFLICT" }, { status: 409 });
+    if (code === "P2002") return NextResponse.json({ error: "EMAIL_EXISTS" }, { status: 409 });
+    if (error instanceof Error && error.message === "AUTHORITY_CHANGED") return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     console.error('Error updating user:', error);
     return NextResponse.json(
       { error: 'Failed to update user' },

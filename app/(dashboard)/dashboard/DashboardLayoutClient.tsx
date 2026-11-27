@@ -18,7 +18,7 @@ import type { Session } from "next-auth";
 import {
   userCanEnterDashboard,
   userHasDashboardPermission,
-  pathToDashboardPermission,
+  userCanOpenDashboardPath,
   getFirstAllowedDashboardHref,
 } from "@/lib/dashboard/permissions";
 import {
@@ -87,8 +87,7 @@ function DashboardContent({
   useEffect(() => {
     if (status !== "authenticated" || !session?.user) return;
     if (!userCanEnterDashboard(session.user)) { router.replace("/"); return; }
-    const required = pathToDashboardPermission(pathname);
-    if (required && !userHasDashboardPermission(session.user, required)) {
+    if (!userCanOpenDashboardPath(session.user, pathname)) {
       const fallback = getFirstAllowedDashboardHref(session.user, DASHBOARD_NAV_HREFS_ORDERED, dashboardHrefToPermissionKey);
       router.replace(fallback || "/");
     }
