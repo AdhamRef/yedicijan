@@ -39,7 +39,7 @@ export type EmailSendInput = {
  * English form. A sender name set explicitly always wins; with no language either, the configured name is used.
  */
 const INSTITUTION_SENDER_NAMES: Record<string, string> = {
-  ar: "جمعية يدي جيهان الدولية للتضامن",
+  ar: "الهيئة الدولية للإغاثة الإنسانية",
   en: "Yedicihan International Solidarity Association",
   fr: "Association Internationale de Solidarité Yedicihan",
   tr: "Yedicihan Uluslararası Yardımlaşma Derneği",

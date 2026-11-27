@@ -30,15 +30,15 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE),
 
   title: {
-    default: "جمعية يدي جيهان | زكاة، تبرع، صدقة، إغاثة إنسانية",
-    template: "%s | جمعية يدي جيهان",
+    default: "الهيئة الدولية للإغاثة الإنسانية | زكاة، تبرع، صدقة، إغاثة إنسانية",
+    template: "%s | الهيئة الدولية للإغاثة الإنسانية",
   },
 
   description:
-    "جمعية يدي جيهان الدولية للتضامن: جمعية تركية عاملة للنفع العام تأسست عام 1961، تعمل في الصحة والإغاثة العاجلة والاستجابة للكوارث والمساعدات التعليمية. تبرع، زكاة، صدقة جارية. Yedicihan International Solidarity Association — a Turkish public-benefit association founded in 1961, working in healthcare, emergency relief, disaster response and educational aid.",
+    "الهيئة الدولية للإغاثة الإنسانية (Yedi Cihan): مؤسسة خيرية تركية ذات نفع عام تأسست عام 1961، تعمل في الصحة والإغاثة العاجلة والاستجابة للكوارث والمساعدات التعليمية. تبرع، زكاة، صدقة جارية. Yedicihan International Solidarity Association — a Turkish public-benefit association founded in 1961, working in healthcare, emergency relief, disaster response and educational aid.",
 
   keywords: [
-    "يدي جيهان", "جمعية يدي جيهان", "جمعية عاملة للنفع العام", "جمعية خيرية تركية",
+    "الهيئة الدولية للإغاثة الإنسانية", "يدي جيهان", "مؤسسة ذات نفع عام", "جمعية خيرية تركية",
     "تبرع", "زكاة المال", "صدقة جارية", "تبرع اونلاين", "زكاة اونلاين",
     "إغاثة عاجلة", "إغاثة الكوارث", "مساعدات تعليمية", "مساعدات طبية",
     "تبرع للزلزال", "ترميم المنازل", "مشاريع إنسانية", "حملات تبرع", "تبرع رمضان",
@@ -90,11 +90,11 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: SITE,
-    siteName: "Yedicihan | يدي جيهان",
-    title: "جمعية يدي جيهان | زكاة، تبرع، صدقة، إغاثة إنسانية",
+    siteName: "Yedicihan | الهيئة الدولية للإغاثة الإنسانية",
+    title: "الهيئة الدولية للإغاثة الإنسانية | زكاة، تبرع، صدقة، إغاثة إنسانية",
     description:
-      "جمعية عاملة للنفع العام منذ 1961 — الصحة، الإغاثة العاجلة، الاستجابة للكوارث، والتعليم. تبرع، زكاة، صدقة جارية. A Turkish public-benefit association serving since 1961 in healthcare, emergency relief, disaster response and education.",
-    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Yedicihan – يدي جيهان" }],
+      "مؤسسة ذات نفع عام منذ 1961 — الصحة، الإغاثة العاجلة، الاستجابة للكوارث، والتعليم. تبرع، زكاة، صدقة جارية. A Turkish public-benefit association serving since 1961 in healthcare, emergency relief, disaster response and education.",
+    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Yedicihan – الهيئة الدولية للإغاثة الإنسانية" }],
     locale: "ar_SA",
     alternateLocale: ["en_US", "fr_FR", "tr_TR", "id_ID", "pt_BR", "es_ES", "de_DE"],
   },
@@ -103,7 +103,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     site: "@yedicihann",
     creator: "@yedicihann",
-    title: "Yedicihan | يدي جيهان – جمعية عاملة للنفع العام منذ 1961",
+    title: "Yedicihan | الهيئة الدولية للإغاثة الإنسانية – مؤسسة ذات نفع عام منذ 1961",
     description:
       "الصحة، الإغاثة العاجلة، الاستجابة للكوارث، والتعليم — زكاة، صدقة، تبرع. Healthcare, emergency relief, disaster response and education since 1961.",
     images: [OG_IMAGE],
@@ -129,7 +129,7 @@ const organizationSchema = {
   "@type": ["Organization", "NGO"],
   "@id": `${SITE}/#organization`,
   name: "Yedicihan",
-  alternateName: ["يدي جيهان", "Yedicihan Derneği", "يدي جيهان"],
+  alternateName: ["الهيئة الدولية للإغاثة الإنسانية", "يدي جيهان", "Yedicihan Derneği"],
   url: SITE,
   logo: {
     "@type": "ImageObject",
@@ -175,7 +175,7 @@ const websiteSchema = {
   "@type": "WebSite",
   "@id": `${SITE}/#website`,
   url: SITE,
-  name: "Yedicihan | يدي جيهان",
+  name: "Yedicihan | الهيئة الدولية للإغاثة الإنسانية",
   description:
     "Donate for Syrian medical aid, zakat, sadaqah, and orphan sponsorship. تبرع لعمليات طبية عاجلة وإغاثة إنسانية في سوريا.",
   inLanguage: ["ar", "en", "fr", "tr", "id", "pt", "es", "de"],
@@ -196,7 +196,7 @@ const faqSchema = {
   mainEntity: [
     {
       "@type": "Question",
-      name: "كيف يمكنني التبرع لجمعية يدي جيهان؟",
+      name: "كيف يمكنني التبرع للهيئة الدولية للإغاثة الإنسانية؟",
       acceptedAnswer: {
         "@type": "Answer",
         text: "يمكنك التبرع مباشرة عبر موقعنا الإلكتروني باختيار المشروع المناسب وإتمام الدفع بأمان عبر بطاقتك الائتمانية، أو عبر التحويل البنكي إلى أحد حساباتنا المعلنة في صفحة الحسابات البنكية. جميع التبرعات موثقة وتصل إلى المستفيدين.",
@@ -204,7 +204,7 @@ const faqSchema = {
     },
     {
       "@type": "Question",
-      name: "هل يمكنني دفع زكاتي عبر منصة يدي جيهان؟",
+      name: "هل يمكنني دفع زكاتي عبر منصة الهيئة الدولية للإغاثة الإنسانية؟",
       acceptedAnswer: {
         "@type": "Answer",
         text: "نعم، نقبل زكاة المال وزكاة الفطر، وتُوزَّع على المستحقين وفق الشروط الشرعية المعتمدة. يمكنك تخصيص تبرعك للزكاة عند إتمام عملية الدفع.",

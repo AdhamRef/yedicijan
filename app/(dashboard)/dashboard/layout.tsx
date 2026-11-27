@@ -8,7 +8,7 @@ import RenewalAlerts from "@/components/dashboard/RenewalAlerts";
 import ar from "../../../i18n/messages/ar.json";
 
 export const metadata: Metadata = {
-  title: "لوحة التحكم | يدي جيهان",
+  title: "لوحة التحكم | الهيئة الدولية للإغاثة الإنسانية",
   description: "إدارة المشاريع والتبرعات والمستخدمين",
   icons: { icon: "/logometayedi.avif" },
   robots: { index: false, follow: false },
