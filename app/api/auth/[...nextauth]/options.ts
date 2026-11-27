@@ -228,10 +228,16 @@ export const authOptions: NextAuthOptions = {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.sub },
-            select: { role: true, dashboardPermissions: true },
+            select: { role: true, dashboardPermissions: true, email: true },
           });
-          
-          if (dbUser) {
+
+          // JWT cookies outlive the account. The role and permissions in the token were
+          // copied at sign-in, so a deleted or closed account (or a demoted admin whose row
+          // is gone) must not keep them: it keeps only an empty donor session.
+          if (!dbUser || dbUser.email?.endsWith("@deleted.invalid")) {
+            session.user.role = "DONOR";
+            session.user.dashboardPermissions = [];
+          } else {
             session.user.role = dbUser.role;
             session.user.dashboardPermissions = dbUser.dashboardPermissions ?? [];
           }

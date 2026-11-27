@@ -108,6 +108,9 @@ const PATH_RULES: { prefix: string; key: DashboardPermissionKey }[] = [
   { prefix: "/dashboard/pixels", key: "pixels" },
   { prefix: "/dashboard/donations", key: "revenue" },
   { prefix: "/dashboard/general", key: "generalSettings" },
+  // The bot token page. Without its own rule it fell through to the "/dashboard → revenue"
+  // catch-all, so a staffer with revenue access opened a page whose API is admin-only.
+  { prefix: "/dashboard/telegram", key: "platformConnectionsAdmin" },
   { prefix: "/dashboard", key: "revenue" },
 ];
 export function pathToDashboardPermission(pathname: string): DashboardPermissionKey | null {
@@ -120,6 +123,12 @@ export function pathToDashboardPermission(pathname: string): DashboardPermission
 export function userCanEnterDashboard(user: UserLike | undefined): boolean {
   return user?.role === "ADMIN" || (user?.role === "STAFF" && hasAnyDashboardRoutePermission(user));
 }
+/** One check for "may this user open this dashboard page" — the route guard and the
+ *  first-allowed-page redirect both use it, so they can never disagree. */
+export function userCanOpenDashboardPath(user: UserLike | undefined, pathname: string): boolean {
+  const key = pathToDashboardPermission(pathname.replace(/\/$/, "") || "/dashboard");
+  return !key || userHasDashboardPermission(user, key);
+}
 export function sessionHasDashboardPermission(session: Session | null, key: DashboardPermissionKey): boolean {
   return userHasDashboardPermission(session?.user as UserLike | undefined, key);
 }
@@ -130,7 +139,7 @@ export function sanitizeDashboardPermissions(raw: unknown): DashboardPermissionK
 export function getFirstAllowedDashboardHref(user: UserLike | undefined, orderedHrefs: string[], hrefToKey: (href: string) => DashboardPermissionKey | null): string | null {
   for (const href of orderedHrefs) {
     const key = hrefToKey(href);
-    if (key && userHasDashboardPermission(user, key)) return href;
+    if (key && userCanOpenDashboardPath(user, href)) return href;
   }
   return null;
 }
