@@ -19,111 +19,111 @@
     "description": "Wir konnten deine Zahlung nicht abschließen. Das kann durch eine Kartenablehnung, ein Netzwerkproblem oder eine Unterbrechung beim Zahlungsanbieter passieren. Es wurde kein Betrag abgebucht.",
     "tryAgain": "Erneut spenden",
     "manualFallback": "Wenn du die Kartenzahlung nicht erneut versuchen möchtest, kannst du deine Spende per Banküberweisung an eines der unten aufgeführten Konten abschließen.",
-    "reassurance": "You haven't been charged for the attempt. Let's get this fixed.",
-    "loading": "Looking up your donation…",
+    "reassurance": "Für diesen Versuch wurde nichts abgebucht. Wir lösen das gemeinsam.",
+    "loading": "Ihre Spende wird gesucht…",
     "severitySoft": "Card issue",
-    "severityHard": "Bank declined",
-    "howToFixTitle": "How to fix it",
-    "rawMessageToggle": "Technical details from the bank",
+    "severityHard": "Von der Bank abgelehnt",
+    "howToFixTitle": "So lösen Sie das Problem",
+    "rawMessageToggle": "Technische Details der Bank",
     "rawCodeLabel": "Code",
     "retry": {
-      "title": "Try this donation again",
-      "description": "One tap retries the exact same donation through our secure checkout — no need to re-enter the details.",
-      "cta": "Retry donation now",
+      "title": "Diese Spende erneut versuchen",
+      "description": "Mit einem Klick starten Sie genau dieselbe Spende über unseren sicheren Bezahlvorgang neu — ohne erneute Eingabe.",
+      "cta": "Spende jetzt erneut versuchen",
       "amountLabel": "Amount",
-      "moreItems": "+{count} more project(s)",
+      "moreItems": "{count, plural, one {+# weiteres Projekt} other {+# weitere Projekte}}",
       "oneTime": "One-time",
       "securedBy": "Sichere Zahlung mit der 3D-Secure-Verifizierung deiner Bank.",
-      "failed": "We couldn't restart your donation. Please try again or use the bank transfer below.",
-      "payforHint": "Please re-enter your card on the campaign page to complete the donation."
+      "failed": "Ihre Spende konnte nicht neu gestartet werden. Bitte versuchen Sie es erneut oder nutzen Sie die Banküberweisung unten.",
+      "payforHint": "Bitte geben Sie Ihre Karte auf der Projektseite erneut ein, um die Spende abzuschließen."
     },
     "noDonation": {
-      "title": "Pick a project to support",
-      "description": "We couldn't find the failed donation. You can start a new donation from any of our projects.",
-      "cta": "Browse projects"
+      "title": "Wählen Sie ein Projekt",
+      "description": "Wir konnten die fehlgeschlagene Spende nicht finden. Sie können bei jedem unserer Projekte eine neue Spende starten.",
+      "cta": "Projekte ansehen"
     },
     "errors": {
       "commonTips": {
-        "tipRetry": "Try the same card again — temporary errors usually clear within a few minutes.",
-        "tipCheckBalance": "Make sure your card has enough balance for the donation amount.",
-        "tipUseAnotherCard": "Try a different card or payment method.",
-        "tipContactBank": "Call your bank to ask why the payment was blocked.",
-        "tipUseTransfer": "Use the bank transfer option below — it always works."
+        "tipRetry": "Versuchen Sie es mit derselben Karte erneut — vorübergehende Fehler verschwinden meist nach wenigen Minuten.",
+        "tipCheckBalance": "Prüfen Sie, ob Ihre Karte für den Spendenbetrag ausreichend gedeckt ist.",
+        "tipUseAnotherCard": "Nutzen Sie eine andere Karte oder Zahlungsart.",
+        "tipContactBank": "Rufen Sie Ihre Bank an und fragen Sie, warum die Zahlung blockiert wurde.",
+        "tipUseTransfer": "Nutzen Sie die Banküberweisung unten — sie funktioniert immer."
       },
       "insufficientFunds": {
-        "title": "Insufficient funds",
-        "reason": "Your bank reported that the card doesn't have enough balance to complete this donation.",
-        "fix": "Top up your card, lower the donation amount, or try a different card."
+        "title": "Unzureichende Deckung",
+        "reason": "Ihre Bank meldet, dass die Karte für diese Spende nicht ausreichend gedeckt ist.",
+        "fix": "Laden Sie Ihre Karte auf, verringern Sie den Betrag oder nutzen Sie eine andere Karte."
       },
       "cardDeclined": {
-        "title": "Your bank declined the card",
-        "reason": "Your card issuer refused this transaction. This is the bank's call, not ours — they don't always share the exact reason.",
-        "fix": "Try another card, or contact your bank to find out why it was blocked."
+        "title": "Ihre Bank hat die Karte abgelehnt",
+        "reason": "Ihr Kartenaussteller hat die Zahlung abgelehnt. Das entscheidet die Bank, nicht wir — und sie nennt nicht immer den Grund.",
+        "fix": "Nutzen Sie eine andere Karte oder fragen Sie Ihre Bank nach dem Grund der Sperre."
       },
       "expiredCard": {
-        "title": "The card has expired",
-        "reason": "The card you used is past its expiry date. Banks won't process payments on expired cards.",
-        "fix": "Switch to a valid card. Your bank can issue a replacement if needed."
+        "title": "Die Karte ist abgelaufen",
+        "reason": "Die verwendete Karte hat ihr Ablaufdatum überschritten. Banken verarbeiten keine Zahlungen mit abgelaufenen Karten.",
+        "fix": "Nutzen Sie eine gültige Karte. Ihre Bank stellt Ihnen bei Bedarf eine neue aus."
       },
       "invalidCvc": {
-        "title": "The security code (CVV) was wrong",
-        "reason": "The 3- or 4-digit CVV/CVC didn't match what your bank has on file.",
-        "fix": "Double-check the security code on the back of your card and try again."
+        "title": "Der Sicherheitscode (CVV) ist falsch",
+        "reason": "Der 3- oder 4-stellige CVV/CVC stimmt nicht mit den Daten Ihrer Bank überein.",
+        "fix": "Prüfen Sie den Code auf der Kartenrückseite und versuchen Sie es erneut."
       },
       "incorrectNumber": {
-        "title": "The card number looks wrong",
-        "reason": "The card number we sent didn't match a valid card at your bank.",
-        "fix": "Re-enter the 16-digit card number carefully and try again."
+        "title": "Die Kartennummer scheint falsch zu sein",
+        "reason": "Die übermittelte Nummer passt zu keiner gültigen Karte bei Ihrer Bank.",
+        "fix": "Geben Sie die 16-stellige Kartennummer sorgfältig erneut ein."
       },
       "lostOrStolen": {
-        "title": "Card reported lost or stolen",
-        "reason": "Your bank flagged this card as lost or stolen and won't allow new payments on it.",
-        "fix": "Contact your bank for a replacement, then try a different card here."
+        "title": "Karte als verloren oder gestohlen gemeldet",
+        "reason": "Ihre Bank hat diese Karte als verloren oder gestohlen markiert und lässt keine Zahlungen mehr zu.",
+        "fix": "Beantragen Sie bei Ihrer Bank eine Ersatzkarte und nutzen Sie hier eine andere Karte."
       },
       "doNotHonor": {
-        "title": "Generic decline by your bank",
-        "reason": "Your bank refused the transaction without telling us exactly why. This is often a fraud-prevention block on cross-border donations.",
-        "fix": "Call the number on the back of your card and ask them to approve this charity donation, then retry."
+        "title": "Allgemeine Ablehnung durch Ihre Bank",
+        "reason": "Ihre Bank hat die Zahlung ohne genaue Begründung abgelehnt. Oft ist das eine Betrugsschutz-Sperre für Auslandsspenden.",
+        "fix": "Rufen Sie die Nummer auf der Kartenrückseite an, lassen Sie diese Spende freigeben und versuchen Sie es erneut."
       },
       "limitExceeded": {
-        "title": "Daily or monthly limit reached",
-        "reason": "Your card's daily spend limit or transaction count for the month has been exceeded.",
-        "fix": "Lower the donation amount, wait until tomorrow, or try a different card."
+        "title": "Tages- oder Monatslimit erreicht",
+        "reason": "Das tägliche Ausgabenlimit oder die monatliche Transaktionsanzahl Ihrer Karte ist überschritten.",
+        "fix": "Verringern Sie den Betrag, warten Sie bis morgen oder nutzen Sie eine andere Karte."
       },
       "currencyNotSupported": {
-        "title": "Currency not supported by your card",
-        "reason": "Your card can't process payments in the donation currency.",
-        "fix": "Switch the currency from the top-right of the site, or use a card that supports international payments."
+        "title": "Währung wird von Ihrer Karte nicht unterstützt",
+        "reason": "Ihre Karte kann in der Spendenwährung nicht zahlen.",
+        "fix": "Wechseln Sie die Währung oben rechts auf der Seite oder nutzen Sie eine Karte für internationale Zahlungen."
       },
       "authenticationFailed": {
-        "title": "3-D Secure check failed",
-        "reason": "Your bank's 3-D Secure verification didn't go through. This usually means the SMS/app code was wrong or timed out.",
-        "fix": "Make sure your phone is reachable, then retry. Have the bank's 3DS app ready before you tap retry."
+        "title": "3-D-Secure-Prüfung fehlgeschlagen",
+        "reason": "Die 3-D-Secure-Prüfung Ihrer Bank wurde nicht abgeschlossen. Meist war der SMS- oder App-Code falsch oder abgelaufen.",
+        "fix": "Halten Sie Ihr Telefon bereit und versuchen Sie es erneut. Öffnen Sie die App Ihrer Bank vor dem nächsten Versuch."
       },
       "processingError": {
-        "title": "Temporary processing error",
-        "reason": "The payment didn't go through, but it's not a problem with your card — something on the bank's side glitched.",
-        "fix": "Wait a minute and retry. Most processing errors clear by themselves."
+        "title": "Vorübergehender Verarbeitungsfehler",
+        "reason": "Die Zahlung kam nicht zustande, Ihre Karte ist aber nicht schuld — bei der Bank gab es eine kurze Störung.",
+        "fix": "Warten Sie eine Minute und versuchen Sie es erneut. Solche Fehler beheben sich meist von selbst."
       },
       "networkError": {
-        "title": "Connection problem",
-        "reason": "We couldn't reach the bank to process the payment. This is almost always a transient network issue.",
-        "fix": "Check your internet connection, then retry. The exact same card will most likely succeed."
+        "title": "Verbindungsproblem",
+        "reason": "Wir konnten die Bank nicht erreichen. Das ist fast immer eine kurzzeitige Netzwerkstörung.",
+        "fix": "Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut. Dieselbe Karte wird sehr wahrscheinlich funktionieren."
       },
       "issuerUnavailable": {
-        "title": "Your bank's system is unavailable",
-        "reason": "Your card issuer's payment system is temporarily down or unreachable.",
-        "fix": "Wait a few minutes and try again, or use a different card from another bank."
+        "title": "Das System Ihrer Bank ist nicht erreichbar",
+        "reason": "Das Zahlungssystem Ihres Kartenausstellers ist vorübergehend nicht erreichbar.",
+        "fix": "Warten Sie einige Minuten oder nutzen Sie die Karte einer anderen Bank."
       },
       "fraudSuspected": {
-        "title": "Blocked as suspected fraud",
-        "reason": "Your bank's fraud system flagged the donation. Charity donations from a new merchant can trigger this — it's a false positive most of the time.",
-        "fix": "Call the number on the back of your card, confirm it's really you, and ask them to whitelist this merchant."
+        "title": "Wegen Betrugsverdacht gesperrt",
+        "reason": "Das Betrugsschutzsystem Ihrer Bank hat die Spende markiert. Spenden an eine neue Organisation lösen das manchmal aus — meist ein Fehlalarm.",
+        "fix": "Rufen Sie die Nummer auf der Kartenrückseite an, bestätigen Sie die Zahlung und lassen Sie diesen Empfänger freigeben."
       },
       "generic": {
-        "title": "Payment didn't go through",
-        "reason": "Something stopped the payment from completing. We weren't given a specific reason.",
-        "fix": "Try again, switch to a different card, or use the bank transfer option below."
+        "title": "Die Zahlung ist nicht durchgegangen",
+        "reason": "Etwas hat den Abschluss der Zahlung verhindert; ein genauer Grund wurde nicht übermittelt.",
+        "fix": "Versuchen Sie es erneut, nutzen Sie eine andere Karte oder die Banküberweisung unten."
       }
     }
   },
@@ -718,7 +718,7 @@
       "support": "Support",
       "supportDesc": "Hilfe und Unterstützung erhalten",
       "logout": "Abmelden",
-      "settingsDesc": "Security, password and notification preferences"
+      "settingsDesc": "Sicherheit, Passwort und Benachrichtigungen"
     },
     "toast": {
       "accountDeleted": "Konto gelöscht",
@@ -729,7 +729,7 @@
       "receiptDownloadFailed": "Quittung konnte nicht heruntergeladen werden",
       "allReceiptsDownloadSuccess": "Alle Quittungen erfolgreich heruntergeladen",
       "allReceiptsDownloadFailed": "Einige Quittungen konnten nicht heruntergeladen werden",
-      "notificationsUpdated": "Notification preferences saved"
+      "notificationsUpdated": "Benachrichtigungseinstellungen gespeichert"
     },
     "account": {
       "name": "Name",
@@ -765,7 +765,7 @@
       "deleteAccount": "Konto löschen",
       "deleteAccountWarning": "Wenn du dein Konto löschst, werden alle deine Daten dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "deleteAccountButton": "Konto löschen",
-      "securityTitle": "Security & password"
+      "securityTitle": "Sicherheit und Passwort"
     },
     "deleteDialog": {
       "title": "Möchtest du dein Konto wirklich löschen?",
@@ -859,23 +859,23 @@
       "requestLabel": "Anfrage #{id}",
       "closed": "Geschlossen",
       "requestDetailsPreview": "Anfragedetails erscheinen hier...",
-      "newTitle": "Open a support request",
-      "newSubtitle": "Our team will get back to you by email.",
+      "newTitle": "Supportanfrage senden",
+      "newSubtitle": "Unser Team antwortet Ihnen per E-Mail.",
       "subjectLabel": "Topic",
       "bodyLabel": "Your message",
-      "bodyPlaceholder": "Tell us what's going on…",
-      "bodyHint": "{remaining} characters remaining",
+      "bodyPlaceholder": "Beschreiben Sie Ihr Anliegen…",
+      "bodyHint": "Noch {remaining} Zeichen",
       "submit": "Send request",
-      "sent": "Your message was sent",
-      "failed": "Could not send your message",
-      "errorMin": "Message must be at least 3 characters",
-      "historyTitle": "Your previous requests",
-      "historySubtitle": "The last 50 messages you've sent through this form.",
-      "historyEmpty": "You haven't sent any support messages yet.",
+      "sent": "Ihre Nachricht wurde gesendet",
+      "failed": "Ihre Nachricht konnte nicht gesendet werden",
+      "errorMin": "Die Nachricht muss mindestens 3 Zeichen lang sein",
+      "historyTitle": "Ihre bisherigen Anfragen",
+      "historySubtitle": "Die letzten 50 Nachrichten, die Sie über dieses Formular gesendet haben.",
+      "historyEmpty": "Sie haben noch keine Supportnachricht gesendet.",
       "subjects": {
         "COMPLAINT": "Complaint",
-        "DONATION_ISSUE": "Donation issue",
-        "CAMPAIGN_SUPPORT": "Project / campaign question",
+        "DONATION_ISSUE": "Problem mit einer Spende",
+        "CAMPAIGN_SUPPORT": "Frage zu einem Projekt",
         "PARTNERSHIP": "Partnership",
         "VOLUNTEERING": "Volunteering",
         "GENERAL": "General"
@@ -891,51 +891,51 @@
     "avatar": {
       "change": "Change photo",
       "remove": "Remove photo",
-      "updated": "Profile photo updated",
-      "removed": "Profile photo removed",
-      "failed": "Could not update your photo",
-      "notImage": "Please pick an image file",
-      "tooLarge": "Image must be smaller than 2 MB"
+      "updated": "Profilbild aktualisiert",
+      "removed": "Profilbild entfernt",
+      "failed": "Ihr Bild konnte nicht aktualisiert werden",
+      "notImage": "Bitte wählen Sie eine Bilddatei",
+      "tooLarge": "Das Bild muss kleiner als 2 MB sein"
     },
     "countryPicker": {
-      "title": "Choose your country",
-      "search": "Search countries…",
-      "noResults": "No countries match your search",
-      "none": "Not specified"
+      "title": "Land auswählen",
+      "search": "Land suchen…",
+      "noResults": "Kein Land entspricht Ihrer Suche",
+      "none": "Keine Angabe"
     },
     "password": {
       "label": "Password",
-      "descSet": "Your account is protected with a password. You can change it any time.",
-      "descUnset": "You signed in with a social provider. Set a password to also sign in with email.",
-      "change": "Change password",
-      "set": "Set a password",
-      "currentLabel": "Current password",
+      "descSet": "Ihr Konto ist durch ein Passwort geschützt, das Sie jederzeit ändern können.",
+      "descUnset": "Sie haben sich über ein soziales Netzwerk angemeldet. Legen Sie ein Passwort fest, um sich auch per E-Mail anzumelden.",
+      "change": "Passwort ändern",
+      "set": "Passwort festlegen",
+      "currentLabel": "Aktuelles Passwort",
       "newLabel": "New password",
-      "confirmLabel": "Confirm new password",
-      "hint": "At least 8 characters. Mix letters, numbers and a symbol for a strong password.",
-      "show": "Show password",
-      "hide": "Hide password",
-      "save": "Save password",
+      "confirmLabel": "Neues Passwort bestätigen",
+      "hint": "Mindestens 8 Zeichen. Kombinieren Sie Buchstaben, Zahlen und Sonderzeichen.",
+      "show": "Passwort anzeigen",
+      "hide": "Passwort verbergen",
+      "save": "Passwort speichern",
       "cancel": "Cancel",
-      "success": "Password updated",
-      "failed": "Could not update your password",
-      "errorMinLength": "Password must be at least 8 characters",
-      "errorMismatch": "New passwords do not match",
+      "success": "Passwort aktualisiert",
+      "failed": "Ihr Passwort konnte nicht aktualisiert werden",
+      "errorMinLength": "Das Passwort muss mindestens 8 Zeichen lang sein",
+      "errorMismatch": "Die neuen Passwörter stimmen nicht überein",
       "strengthWeak": "Weak",
       "strengthOk": "OK",
       "strengthStrong": "Strong"
     },
     "impact": {
       "totalGiven": "Total given",
-      "supportedCampaigns": "Supported projects",
+      "supportedCampaigns": "Unterstützte Projekte",
       "streak": "Streak",
-      "acrossDonations": "across {count} donation(s)",
-      "distinctCampaigns": "Distinct projects you've supported",
-      "monthsStreak": "{count} month(s) in a row",
-      "noStreak": "Start a streak",
-      "lastDonation": "Last donation",
-      "badgesEarned": "{count} badge(s) earned",
-      "badgesHint": "View your badges on the homepage donor board"
+      "acrossDonations": "{count, plural, one {in # Spende} other {in # Spenden}}",
+      "distinctCampaigns": "Verschiedene Projekte, die Sie unterstützt haben",
+      "monthsStreak": "{count, plural, one {# Monat in Folge} other {# Monate in Folge}}",
+      "noStreak": "Starten Sie eine Serie",
+      "lastDonation": "Letzte Spende",
+      "badgesEarned": "{count, plural, one {# Abzeichen erhalten} other {# Abzeichen erhalten}}",
+      "badgesHint": "Ihre Abzeichen sehen Sie auf der Spenderwand der Startseite"
     }
   },
   "MessageSubjects": {
@@ -957,6 +957,107 @@
     "dobDayPlaceholder": "Tag",
     "dobMonthPlaceholder": "Monat",
     "dobYearPlaceholder": "Jahr"
+  },
+  "HomeRedesign": {
+    "badge": "Vom türkischen Staat als gemeinnützig anerkannter Verein",
+    "titleTop": "Ihre Spende kommt an –",
+    "titleTo": "dort, wo sie",
+    "titleMark": "gebraucht wird",
+    "subtitle": "Seit 1961 bringen wir Ihr Vertrauen zu den bedürftigsten Familien in 23 Ländern: Nothilfe, sauberes Wasser, Unterkunft, Bildung und Moscheen — jedes Projekt mit Fotos aus dem Einsatzgebiet dokumentiert.",
+    "browse": "Projekte ansehen",
+    "fact1": "Jahre humanitäre Arbeit",
+    "fact2": "Einsatzländer",
+    "fact3": "Hilfsbereiche",
+    "photoTag": "Vor Ort",
+    "photoCaption": "Wir sind selbst vor Ort — und übergeben Ihre Spende persönlich",
+    "donorsSoFar": "{count, plural, =0 {Seien Sie der erste Unterstützer} one {# Spender bisher} other {# Spender bisher}}",
+    "qdTitle": "Schnell spenden",
+    "qdHint": "In unter einer Minute",
+    "qdProject": "Projekt wählen",
+    "qdAmount": "Betrag wählen",
+    "mostPopular": "Am häufigsten gewählt",
+    "otherAmount": "Anderer Betrag",
+    "donateCta": "{amount} spenden",
+    "donateCtaEmpty": "Betrag wählen",
+    "trustSecure": "Sichere, verschlüsselte Zahlung",
+    "trustReceipt": "Sofortige Spendenquittung per E-Mail",
+    "trustBank": "Oder per Überweisung auf unsere Konten",
+    "worldsEyebrow": "Unsere Arbeit",
+    "worldsTitle": "Sieben Bereiche der Hilfe…",
+    "worldsMark": "eine Mission",
+    "worldsText": "Wir ermitteln den Bedarf zuerst vor Ort und stellen ihn Ihnen dann in klaren Bereichen vor — damit Sie genau bestimmen, wohin Ihre Spende geht.",
+    "nameMeaning": "Nachhaltiges Geben, Entwicklung, Leben — dafür arbeiten wir seit 1961: Hilfe, die heute rettet, und Projekte, die morgen weiter wirken.",
+    "worldsCore": "Bereiche · 23 Länder",
+    "w1": "Nothilfe",
+    "w1s": "Gaza · Sudan",
+    "w2": "Wasser",
+    "w2s": "Brunnen und Anlagen",
+    "w3": "Moscheen",
+    "w3s": "Bau und Sanierung",
+    "w4": "Unterkunft",
+    "w4s": "Häuser und Zelte",
+    "w5": "Bildung",
+    "w5s": "Schulsanierung",
+    "w6": "Familienhilfe",
+    "w6s": "Kleidung und Pakete",
+    "w7": "Saisonale Hilfe",
+    "w7s": "Zakat · Qurban · Fitr",
+    "projectsEyebrow": "Jetzt offen",
+    "projectsTitle": "Projekte,",
+    "projectsMark": "die auf Sie warten",
+    "all": "Alle",
+    "allProjects": "Alle Projekte",
+    "reachEyebrow": "Wo wir helfen",
+    "countries": "Länder",
+    "reachText": "Mit Niederlassungen und lokalen wie internationalen Partnern, vom Balkan bis zum Horn von Afrika — wir erreichen auch schwer zugängliche Orte.",
+    "rMiddleEast": "Naher Osten",
+    "rAfrica": "Afrika",
+    "rAsia": "Asien",
+    "rBalkans": "Balkan",
+    "cMiddleEast": "Palästina,Syrien,Libanon,Jemen,Türkei,Ägypten",
+    "cAfrica": "Sudan,Somalia,Äthiopien,Eritrea,Tschad,Benin,Togo,Kamerun,Burkina Faso,Tansania",
+    "cAsia": "Pakistan,Bangladesch,Myanmar",
+    "cBalkans": "Bosnien,Albanien,Kosovo,Nordmazedonien",
+    "howEyebrow": "Transparenz",
+    "howTitle": "Wie kommt",
+    "howMark": "Ihre Spende an?",
+    "howSubtitle": "Wir sagen nicht nur, dass sie angekommen ist — wir zeigen Ihnen, wo und wie.",
+    "stamp": "Abgeschlossene Projekte ✓",
+    "how1Title": "Wir ermitteln den Bedarf vor Ort",
+    "how1Desc": "Eine Erhebung vor Ort legt Prioritäten fest und ermittelt die bedürftigsten Familien, bevor ein Projekt startet.",
+    "how2Title": "Sie wählen und spenden sicher",
+    "how2Desc": "Per Karte oder Überweisung, mit sofortiger Quittung in Ihrem Postfach.",
+    "how3Title": "Unsere Teams und Partner liefern",
+    "how3Desc": "Eine würdevolle Übergabe, mit Schildern, die Projekt und Ort nennen.",
+    "how4Title": "Wir dokumentieren die Wirkung",
+    "how4Desc": "Übergabefotos und Projektneuigkeiten erscheinen auf der Projektseite.",
+    "t1": "Seit 1961",
+    "t1s": "Lange Tradition der Wohltätigkeit",
+    "t2": "Unter Aufsicht des türkischen Finanzministeriums",
+    "t2s": "Offiziell eingetragen in der Republik Türkei",
+    "t3": "Professionelle Dokumentation",
+    "t3s": "Fotos, Schilder und Berichte zu jedem Projekt",
+    "t4": "Sichere, verschlüsselte Zahlung",
+    "t4s": "Zertifizierte Bank-Zahlungssysteme",
+    "banksLabel": "Unsere Konten bei:",
+    "ibanLink": "IBAN-Nummern anzeigen",
+    "newsEyebrow": "Aktuelles",
+    "newsTitle": "Neues",
+    "newsMark": "aus dem Einsatz",
+    "mobileBarHint": "Sichere Zahlung · Sofortige Quittung",
+    "mobileBar": "Jetzt spenden"
+  },
+  "Brand": {
+    "donateNow": "Jetzt spenden",
+    "footerCtaTitle": "Ihre Spende kommt an — und wir zeigen Ihnen, wo",
+    "footerCtaText": "Wählen Sie ein Projekt und werden Sie noch heute Teil der Wirkung.",
+    "since": "Seit 1961",
+    "home": "Startseite",
+    "donors": "{count, plural, =0 {Noch keine Spender} one {# Spender} other {# Spender}}",
+    "beFirst": "Gehören Sie zu den ersten Unterstützern",
+    "goal": "Ziel {amount}",
+    "funded": "{percent} % finanziert",
+    "chooseAmount": "Betrag wählen"
   },
   "Zakat": {
     "metaTitle": "Zakat-Rechner & Zakat online zahlen | Aktueller Nisab für Gold und Silber",
