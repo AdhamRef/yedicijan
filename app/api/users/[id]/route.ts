@@ -436,7 +436,20 @@ export async function PUT(
   }
 }
 
-// DELETE /api/users/[id] - Delete user (admin only)
+/** Placeholder identity written over a closed account. `.invalid` is a reserved TLD, so
+ *  nothing is ever delivered to it, and the id keeps `email` unique. */
+const DELETED_DONOR_NAME = 'متبرع محذوف';
+function deletedEmailFor(id: string) {
+  return `deleted+${id}@deleted.invalid`;
+}
+
+// DELETE /api/users/[id] — close an account (admin only).
+//
+// Financial records are append-only, so this never deletes the user row or anything that
+// hangs off it financially: donations and subscriptions keep pointing at the same donorId
+// and project totals stay as they are. What goes is the person — personal data is
+// overwritten, sign-in becomes impossible, and saved cards, OAuth links, sessions and the
+// cart are removed. (It used to delete the user's donations and subscriptions outright.)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -447,22 +460,77 @@ export async function DELETE(
     const adminDenied = requireAdminSession(session);
     if (adminDenied) return adminDenied;
 
+    if (session!.user.id === id) {
+      return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, role: true },
     });
-
     if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+    if (user.email?.endsWith('@deleted.invalid')) {
+      return NextResponse.json({ error: 'ACCOUNT_CLOSED' }, { status: 410 });
+    }
+    if (user.role === 'ADMIN') {
+      return NextResponse.json({ error: 'ADMIN_ACCOUNT_CHANGE_ROLE_FIRST' }, { status: 409 });
+    }
+
+    // A live plan would keep charging a card whose owner can no longer manage it.
+    const livePlans = await prisma.subscription.count({
+      where: { donorId: id, status: { in: ['ACTIVE', 'PAUSED'] } },
+    });
+    if (livePlans > 0) {
       return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
+        {
+          error: 'ACTIVE_SUBSCRIPTIONS',
+          message: `This donor has ${livePlans} active or paused recurring plan(s). Cancel them before deleting the account.`,
+        },
+        { status: 409 }
       );
     }
 
+    const donationCount = await prisma.donation.count({ where: { donorId: id } });
+
     await prisma.$transaction(async (tx) => {
-      await tx.donation.deleteMany({ where: { donorId: id } });
-      await tx.subscription.deleteMany({ where: { donorId: id } });
-      await tx.user.delete({ where: { id } });
+      const current = await tx.user.findUnique({ where: { id }, select: { role: true } });
+      if (!current || current.role === 'ADMIN') throw new Error('ACCOUNT_CHANGED');
+      if (await tx.subscription.count({ where: { donorId: id, status: { in: ['ACTIVE', 'PAUSED'] } } })) {
+        throw new Error('ACTIVE_SUBSCRIPTIONS');
+      }
+      await tx.account.deleteMany({ where: { userId: id } });
+      await tx.session.deleteMany({ where: { userId: id } });
+      await tx.cartItem.deleteMany({ where: { userId: id } });
+      await tx.creditCard.deleteMany({ where: { userId: id } });
+      await tx.donorCommunicationProfile.updateMany({
+        where: { userId: id },
+        data: { email: null, phone: null, doNotContact: true, emailOptIn: false, smsOptIn: false, whatsappOptIn: false },
+      });
+      await tx.user.update({
+        where: { id },
+        data: {
+          name: DELETED_DONOR_NAME,
+          email: deletedEmailFor(id),
+          emailVerified: null,
+          image: null,
+          password: null,
+          phone: null,
+          birthdate: null,
+          gender: null,
+          city: null,
+          region: null,
+          clarityId: null,
+          country: null,
+          countryCode: null,
+          countryName: null,
+          role: 'DONOR',
+          dashboardPermissions: [],
+          emailNotifications: false,
+          smsNotifications: false,
+        },
+      });
     });
 
     const actor = session!.user;
@@ -471,17 +539,25 @@ export async function DELETE(
       actorName: actor.name,
       actorRole: actor.role ?? 'ADMIN',
       action: 'USER_DELETE',
-      messageAr: `${actor.name ?? 'مدير'} حذف المستخدم ${user.name ?? user.email ?? id}`,
-      messageEn: `${actor.name ?? 'Admin'} deleted user ${user.email}`,
+      messageAr: `${actor.name ?? 'مدير'} حذف حساب المستخدم ${user.name ?? user.email ?? id} (أُخفيت بياناته الشخصية وبقيت سجلاته المالية: ${donationCount} تبرع)`,
+      messageEn: `${actor.name ?? 'Admin'} closed and anonymized user ${user.email ?? id}; ${donationCount} donation record(s) kept`,
       entityType: 'User',
       entityId: id,
+      metadata: { previousRole: user.role, donationsKept: donationCount },
     });
 
     return NextResponse.json(
-      { message: 'User, donations and subscriptions deleted successfully' },
+      {
+        message: 'Account closed. Personal data removed; donation and subscription records kept.',
+        donationsKept: donationCount,
+      },
       { status: 200 }
     );
   } catch (error) {
+    if (error instanceof Error && ['ACCOUNT_CHANGED', 'ACTIVE_SUBSCRIPTIONS'].includes(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
+    if ((error as { code?: string })?.code === 'P2034') return NextResponse.json({ error: 'ACCOUNT_CHANGED' }, { status: 409 });
     console.error('Error deleting user:', error);
     return NextResponse.json(
       { error: 'Failed to delete user' },
