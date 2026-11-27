@@ -65,7 +65,8 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
           <h1 className="mt-5 text-[34px] font-black leading-[1.2] sm:mt-6 sm:leading-[1.15] tracking-tight text-deep sm:text-5xl lg:text-[62px]">
             {t("titleTop")}
             <br />
-            <span className="whitespace-nowrap">
+            {/* Line two may wrap in long languages (fr, de, id); the highlighted words stay together. */}
+            <span>
               {t("titleTo") ? `${t("titleTo")} ` : ""}
               <span className="brand-mark">{t("titleMark")}</span>
             </span>
