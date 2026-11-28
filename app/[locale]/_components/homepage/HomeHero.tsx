@@ -7,20 +7,13 @@ import { ArrowLeft, Heart, MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
 import BrandDots from "@/components/brand/BrandDots";
+import { cld, cldSrcSet } from "@/lib/cloudinary-url";
 import type { SlideItem } from "./HeroSlider";
-
-function cld(src: string, width: number): string {
-  if (!src.includes("res.cloudinary.com")) return src;
-  return src.replace(/\/upload\//, `/upload/f_auto,q_auto,w_${width},c_limit/`);
-}
 
 /** Widths the hero photo is offered in; a phone takes the 640 one instead of 1200. */
 const HERO_WIDTHS = [480, 640, 900, 1200];
 const HERO_SIZES = "(max-width: 640px) 92vw, (max-width: 1024px) 560px, 560px";
-function cldSrcSet(src: string): string | undefined {
-  if (!src.includes("res.cloudinary.com")) return undefined;
-  return HERO_WIDTHS.map((w) => `${cld(src, w)} ${w}w`).join(", ");
-}
+const heroSrcSet = (src: string) => cldSrcSet(src, HERO_WIDTHS);
 
 interface HomeHeroProps {
   slides: SlideItem[];
@@ -47,17 +40,31 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
   // The first photo is the page's largest paint: ask for it in the document head, at the right
   // size, before the stylesheet and scripts are done.
   if (main[0]) {
-    preload(cld(main[0], 1200), { as: "image", fetchPriority: "high", imageSrcSet: cldSrcSet(main[0]), imageSizes: HERO_SIZES });
+    preload(cld(main[0], 1200), { as: "image", fetchPriority: "high", imageSrcSet: heroSrcSet(main[0]), imageSizes: HERO_SIZES });
   }
 
+  // The other photos are mounted, and the cross-fade starts, only after the visitor's first
+  // scroll / touch / click / key. Before that the first photo stays alone: a later slide fading
+  // in during load became the page's "largest paint" at 6 s (PageSpeed LCP 5.7 s, or no LCP at
+  // all), and phones downloaded three photos nobody had seen yet.
   const [current, setCurrent] = useState(0);
+  const [rotating, setRotating] = useState(false);
   useEffect(() => {
     if (main.length <= 1) return;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const events = ["scroll", "pointerdown", "keydown", "touchstart"] as const;
+    const start = () => {
+      events.forEach((e) => window.removeEventListener(e, start));
+      setRotating(true);
+    };
+    events.forEach((e) => window.addEventListener(e, start, { passive: true, once: true }));
+    return () => events.forEach((e) => window.removeEventListener(e, start));
+  }, [main.length]);
+  useEffect(() => {
+    if (!rotating) return;
     const id = setInterval(() => setCurrent((c) => (c + 1) % main.length), 6000);
     return () => clearInterval(id);
-  }, [main.length]);
+  }, [rotating, main.length]);
 
   const facts = [
     { value: String(new Date().getFullYear() - 1961), label: t("fact1") },
@@ -68,7 +75,7 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
   return (
     <section className="relative isolate overflow-hidden bg-offwhite pb-28 pt-7 sm:pt-14 lg:pb-36">
       <div className="topo-layer -z-10 text-deep/[0.08]" aria-hidden />
-      <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 sm:gap-12 lg:grid-cols-[1.02fr_.98fr] lg:gap-14 lg:px-6">
+      <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 sm:gap-12 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,.98fr)] lg:gap-14 lg:px-6">
         {/* ── Copy ── */}
         <div>
           <span className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-line bg-white py-1.5 pe-3 ps-1.5 text-[11.5px] font-bold leading-5 text-deep shadow-[0_8px_24px_-16px_rgba(18,35,57,.4)] sm:gap-2.5 sm:rounded-full sm:pe-4 sm:ps-2 sm:text-[13px]">
@@ -120,12 +127,12 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
         {/* ── Collage ── */}
         <div className="relative mx-auto h-[300px] w-full max-w-[560px] sm:h-[520px] lg:h-[590px]" aria-hidden>
           <div className="absolute inset-0 overflow-hidden rounded-[28px] bg-sand shadow-[0_30px_60px_-30px_rgba(18,35,57,.45)] sm:bottom-16 sm:start-0 sm:end-14 sm:rounded-b-[28px] sm:rounded-t-[200px] lg:rounded-t-[240px]">
-            {main.map((src, i) => (
+            {(rotating ? main : main.slice(0, 1)).map((src, i) => (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 key={src}
                 src={cld(src, 1200)}
-                srcSet={cldSrcSet(src)}
+                srcSet={heroSrcSet(src)}
                 sizes={HERO_SIZES}
                 alt=""
                 loading={i === 0 ? "eager" : "lazy"}

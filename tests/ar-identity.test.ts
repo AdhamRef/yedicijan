@@ -23,7 +23,7 @@ test("runtime Arabic corrections and metadata carry the new name", () => {
   const seo = read("lib/seo.ts");
   assert.ok(seo.includes(`siteName: "${ORG}"`));
   assert.ok(!seo.includes("منذ 2011") && !seo.includes("تأسست 2011"), "wrong founding year in Arabic SEO");
-  const layout = read("app/layout.tsx");
+  const layout = read("components/root/RootDocument.tsx");
   assert.ok(layout.includes(`template: "%s | ${ORG}"`));
   assert.match(layout, /alternateName: \[[^\]]*"يدي جيهان"/, "old name kept as alternate for search");
 });

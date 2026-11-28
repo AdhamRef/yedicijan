@@ -8,17 +8,22 @@ import { join } from "node:path";
 const root = join(__dirname, "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
-test("root layout: lang and dir come from the request locale, not hard-coded ar/rtl", () => {
-  const l = read("app/layout.tsx");
-  assert.match(l, /export default async function RootLayout/);
-  assert.match(l, /await getLocale\(\)/);
-  assert.match(l, /<html lang=\{locale\} dir=\{localeDirection\(locale\)\}/);
-  assert.doesNotMatch(l, /<html lang="ar" dir="rtl"/);
-  assert.doesNotMatch(l, /content="Arabic"/);
+test("one root document per area: <html lang dir> from the [locale] param, not a guess", () => {
+  const doc = read("components/root/RootDocument.tsx");
+  assert.match(doc, /<html lang=\{lang\} dir=\{localeDirection\(lang\)\}/);
+  assert.doesNotMatch(doc, /getLocale/);
+  assert.doesNotMatch(doc, /content="Arabic"/);
+  assert.ok(!existsSync(join(root, "app/layout.tsx")), "no top-level root layout: it could not know the language");
+  const loc = read("app/[locale]/layout.tsx");
+  assert.match(loc, /<RootDocument locale=\{locale\}>/);
+  assert.match(loc, /\.\.\.rootMetadata,/);
+  for (const p of ["app/(dashboard)/layout.tsx", "app/auth/layout.tsx"]) {
+    assert.match(read(p), /<RootDocument locale="ar">/, p);
+  }
 });
 
-test("root layout: no render-blocking or 404 scripts in the head", () => {
-  const l = read("app/layout.tsx");
+test("root document: no render-blocking or 404 scripts in the head", () => {
+  const l = read("components/root/RootDocument.tsx");
   assert.doesNotMatch(l, /contentsquare/);
   assert.doesNotMatch(l, /@vercel\/analytics/);
   assert.doesNotMatch(l, /\/bg\.webp/);
@@ -60,8 +65,8 @@ test("hero: LCP image preloaded with high priority and responsive sizes", () => 
   assert.match(h, /new Date\(\)\.getFullYear\(\) - 1961/);
 });
 
-test("CSS inlined, main keeps the viewport height so the footer does not jump", () => {
-  assert.match(read("next.config.ts"), /inlineCss: true/);
+test("CSS not inlined (245 KB twice per page), main keeps the viewport height", () => {
+  assert.doesNotMatch(read("next.config.ts"), /inlineCss: true/);
   assert.match(read("app/[locale]/layout.tsx"), /min-h-\[100svh\]/);
 });
 
@@ -75,9 +80,30 @@ test("a11y: footer heading order, bank copy buttons named, quick-donate contrast
   assert.doesNotMatch(q, /text-ice\/60/);
 });
 
-test("live ticker: an inactive ticker (404) is quiet", () => {
+test("live ticker: no active ticker is 200 { active: false }, not a 404 logged in every browser", () => {
+  const r = read("app/api/live-donation-ticker/route.ts");
+  assert.match(r, /return NextResponse\.json\(\{ active: false \}\);/);
+  assert.doesNotMatch(r, /No active ticker configuration found/);
   const t = read("components/LiveDonationsTicker.tsx");
-  assert.match(t, /setError\("inactive"\)/);
+  assert.match(t, /if \(!data\?\.id\) \{\s*setError\("inactive"\);/);
+  // The dashboard form stays empty instead of reading fields of { active: false }.
+  assert.match(read("app/(dashboard)/dashboard/ticker/page.tsx"), /if \(data\?\.id\) \{/);
+});
+
+test("hero: only the first photo until the visitor interacts; grid columns ignore min-content", () => {
+  const h = read("app/[locale]/_components/homepage/HomeHero.tsx");
+  assert.match(h, /\(rotating \? main : main\.slice\(0, 1\)\)\.map/);
+  assert.match(h, /\["scroll", "pointerdown", "keydown", "touchstart"\]/);
+  assert.match(h, /lg:grid-cols-\[minmax\(0,1\.02fr\)_minmax\(0,\.98fr\)\]/);
+});
+
+test("homepage photos at their shown size (Cloudinary), the upload SDK module untouched", () => {
+  const how = read("app/[locale]/_components/homepage/HowItWorks.tsx");
+  assert.match(how, /src=\{cld\(a, 900\)\}/);
+  assert.match(how, /src=\{cld\(b, 600\)\}/);
+  assert.match(read("app/[locale]/_components/homepage/HomePageContent.tsx"), /src=\{cld\(post\.image, 800\)\}/);
+  assert.match(read("lib/cloudinary-url.ts"), /f_auto,q_auto,w_\$\{width\},c_limit/);
+  assert.match(read("lib/cloudinary.ts"), /export default cloudinary/);
 });
 
 test("llms.txt exists", () => {

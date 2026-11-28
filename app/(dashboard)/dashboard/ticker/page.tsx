@@ -58,8 +58,9 @@ export default function TickerAdminPanel() {
     setLoading(true);
     try {
       const response = await fetch("/api/live-donation-ticker");
-      if (response.ok) {
-        const data = await response.json();
+      const data = response.ok ? await response.json() : null;
+      // { active: false } = no ticker yet: keep the empty form.
+      if (data?.id) {
         setConfig({
           id: data.id,
           isActive: true,

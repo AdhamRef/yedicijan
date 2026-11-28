@@ -10,6 +10,7 @@ import DonationPauseBanner from "@/components/DonationPauseBanner";
 import FieldGallery from "@/components/FieldGallery";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
 import IntlProviderClient from "./IntlProviderClient";
+import RootDocument, { rootMetadata } from "@/components/root/RootDocument";
 import ar from "../../i18n/messages/ar.json";
 import en from "../../i18n/messages/en.json";
 import fr from "../../i18n/messages/fr.json";
@@ -48,6 +49,8 @@ export async function generateMetadata({
   const alternates = buildHreflang("/", locale);
 
   return {
+    // This layout is now a root layout (it renders <html>): the site-wide metadata is merged here.
+    ...rootMetadata,
     // `absolute`, so the root layout's Arabic template is not appended on other languages;
     // the identity template leaves each page's own (branded) title untouched.
     title: { absolute: seo.title, template: seo.titleTemplate },
@@ -88,6 +91,7 @@ export default async function Rootlayout({
   const dir = locale === "ar" ? "rtl" : "ltr";
 
   return (
+    <RootDocument locale={locale}>
     <IntlProviderClient locale={locale || "ar"} messages={messages}>
       <SyncHtmlDir locale={locale} />
       <MarketingRuntime>
@@ -115,5 +119,6 @@ export default async function Rootlayout({
         </div>
       </MarketingRuntime>
     </IntlProviderClient>
+    </RootDocument>
   );
 }

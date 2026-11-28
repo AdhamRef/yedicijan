@@ -4,9 +4,8 @@ import { Poppins, Tajawal } from "next/font/google";
 import DeferredGTM from "@/components/DeferredGTM";
 import MicrosoftClarity from "@/components/MicrosoftClarity";
 import EngagementInstrumentation from "@/components/EngagementInstrumentation";
-import { getLocale } from "next-intl/server";
 import { isKnownLocale, localeDirection } from "@/lib/locales";
-import "./[locale]/globals.css";
+import "@/app/[locale]/globals.css";
 
 // The site's original fonts (Poppins + Tajawal), kept under the Seven Worlds
 // redesign. 800 is loaded because the redesign uses font-extrabold headings.
@@ -27,7 +26,7 @@ const tajawal = Tajawal({
 const SITE = process.env.NEXT_PUBLIC_SITE_URL || "https://www.yedicihan.org";
 const OG_IMAGE = `/yedicijan_logo.png`;
 
-export const metadata: Metadata = {
+export const rootMetadata: Metadata = {
   metadataBase: new URL(SITE),
 
   title: {
@@ -258,23 +257,16 @@ const breadcrumbSchema = {
   ],
 };
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  // The page's own language and direction from the first byte. A hard-coded ar/rtl made every
-  // other language arrive right-to-left and flip after loading — a layout shift, and the wrong
-  // language for search engines and screen readers. Routes without a locale (dashboard) use ar.
-  let locale = "ar";
-  try {
-    const l = await getLocale();
-    if (isKnownLocale(l)) locale = l;
-  } catch {
-    /* no request locale: keep ar */
-  }
+/**
+ * The site's <html> document: fonts, head tags, structured data and analytics.
+ * Each root layout (the public site under [locale], the dashboard, auth) renders it with its own
+ * language, so <html lang dir> is right in the first byte — also on statically rendered pages,
+ * where a single root layout outside [locale] could not know the language (it always said ar).
+ */
+export default function RootDocument({ locale, children }: { locale: string; children: React.ReactNode }) {
+  const lang = isKnownLocale(locale) ? locale : "ar";
   return (
-    <html lang={locale} dir={localeDirection(locale)} suppressHydrationWarning>
+    <html lang={lang} dir={localeDirection(lang)} suppressHydrationWarning>
       <head>
         <meta name="geo.region" content="TR-34" />
         <meta name="geo.placename" content="İstanbul" />
