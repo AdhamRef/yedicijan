@@ -88,16 +88,12 @@ const CartPaymentDialog = ({
   ) : (
     <span className={btnRow}>{t("next")}<ChevronRight className="h-4 w-4 shrink-0" aria-hidden /></span>
   );
-  const confirmDonationLabel = isRTL ? (
-    <span className={btnRow}>{t("confirmDonation")}<ChevronLeft className="h-4 w-4 shrink-0" aria-hidden /></span>
-  ) : (
-    <span className={btnRow}>{t("confirmDonation")}<ChevronRight className="h-4 w-4 shrink-0" aria-hidden /></span>
-  );
 
   // Trimmed flow for higher conversion: cover-fees folded into teamSupport,
   // sign-in step removed (guests skip auth, authed users keep going).
+  // Two steps, like the single donation: review the lines (team support is an optional row
+  // there, "no thanks" by default), then pay.
   const STEPS = [
-    { title: t("teamSupport"),    subtitle: t("teamSupportDesc") },
     { title: t("confirmation"),   subtitle: t("confirmationDesc") },
     { title: t("paymentInfo"),    subtitle: t("paymentInfoDesc") },
   ];
@@ -125,7 +121,7 @@ const CartPaymentDialog = ({
 
   // ── state ──────────────────────────────────────────────────────────────
   const [currentStep, setCurrentStep]     = useState(0);
-  const [teamSupport, setTeamSupport]     = useState<number | null>(null);
+  const [teamSupport, setTeamSupport]     = useState<number | null>(0);
   const [coverFees,   setCoverFees]       = useState(false);
   const paymentMethod = "CARD";
   // Manual card inputs for the bank 3D rails (PayFor / Albaraka)
@@ -197,6 +193,9 @@ const CartPaymentDialog = ({
   useEffect(() => {
     if (!isOpen) {
       checkoutTrackedRef.current = false;
+      // Start again at the review on the next open (the dialog stays mounted in the navbar).
+      setCurrentStep(0);
+      setTeamSupport(0);
     } else {
       hasFailedRef.current = false;
     }
@@ -790,8 +789,22 @@ const CartPaymentDialog = ({
             </div>
           </div>
         </div>
+        <div dir={dir} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+          <p className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
+            <span className="font-semibold text-gray-800">{t("wantToSupportTeam")}</span>
+            <span className="text-[11px] text-gray-500">{t("optionalShort")}</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {teamSupportOptions.map((o) => (
+              <button key={o.value} type="button" aria-pressed={teamSupport === o.value} onClick={() => setTeamSupport(o.value)}
+                className={`h-9 rounded-full border px-3.5 text-[13px] font-semibold transition-colors ${teamSupport === o.value ? "border-burgundy bg-burgundy text-white" : "border-gray-200 bg-white text-gray-700 hover:border-burgundy/40"}`}>
+                <span dir={o.value === 0 ? undefined : "ltr"}>{o.value === 0 ? o.label : `${o.value} ${getCurrency()}`}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div dir={dir} className="flex gap-4 w-full">
-          <Button variant="outline" onClick={handleBack} className="flex-1 inline-flex items-center justify-center gap-2">{backLabel}</Button>
+          <Button variant="outline" onClick={currentStep === 0 ? onClose : handleBack} className="flex-1 inline-flex items-center justify-center gap-2">{backLabel}</Button>
           <Button onClick={handleNext} className="flex-1 shape-button bg-burgundy hover:bg-burgundyDark text-white shadow-soft inline-flex items-center justify-center gap-2">{nextLabel}</Button>
         </div>
         <p className="text-xs text-center text-gray-500 leading-relaxed px-2 break-words">
@@ -974,7 +987,7 @@ const CartPaymentDialog = ({
               (paymentMethod === "CARD" && !selectedCardId && useOwnCardForm && !isCardValid())
             }
             className="flex-1 shape-button bg-burgundy hover:bg-burgundyDark text-white shadow-soft inline-flex items-center justify-center gap-2">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : confirmDonationLabel}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <span className="inline-flex items-center gap-1.5">{t("donateAmount", { amount: `${totalAmount.toFixed(2)} ${getCurrency()}` })}</span>}
           </Button>
         </div>
 
@@ -998,7 +1011,7 @@ const CartPaymentDialog = ({
       if (payforPopupRef.current && !payforPopupRef.current.closed) payforPopupRef.current.close();
       onClose();
     }}>
-      <DialogContent dir={isRTL ? "rtl" : "ltr"} className="w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] max-h-screen overflow-y-auto overflow-x-hidden p-0 rounded-none sm:rounded-[28px_8px_28px_8px] rtl:sm:rounded-[8px_28px_8px_28px] sm:shadow-lift sm:ring-1 sm:ring-deep/5 top-0 sm:top-[50%] translate-y-0 sm:translate-y-[-50%]" closeClassName="text-white hover:text-white/80" aria-describedby={undefined}>
+      <DialogContent dir={isRTL ? "rtl" : "ltr"} className="content-start w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] max-h-screen overflow-y-auto overflow-x-hidden p-0 rounded-none sm:rounded-[28px_8px_28px_8px] rtl:sm:rounded-[8px_28px_8px_28px] sm:shadow-lift sm:ring-1 sm:ring-deep/5 top-0 sm:top-[50%] translate-y-0 sm:translate-y-[-50%]" closeClassName="text-white hover:text-white/80" aria-describedby={undefined}>
         <DialogTitle className="sr-only">{t("confirmation")}</DialogTitle>
         {mounted && (
           <>

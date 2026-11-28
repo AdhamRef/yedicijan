@@ -95,3 +95,18 @@ test("logic review: strict cart lines, choices saved on the donation, dialog res
   assert.equal((w.match(/note=\{waqfNote\}/g) ?? []).length, 2);
   assert.doesNotMatch(w, /t\(`fund_\$\{fund\.key\}`\)/);
 });
+
+test("cart checkout: two steps like the single donation, total on the pay button, no blank band on phones", () => {
+  const c = read("components/CartPaymentDialog.tsx");
+  const steps = c.slice(c.indexOf("const STEPS = ["), c.indexOf("];", c.indexOf("const STEPS = [")));
+  assert.equal((steps.match(/\{ title:/g) ?? []).length, 2);
+  assert.match(c, /useState<number \| null>\(0\)/);
+  assert.match(c, /t\("donateAmount"/);
+  assert.match(c, /className="content-start w-full h-full/);
+});
+
+test("ticker: 'no active ticker' is cached too", () => {
+  const r = read("app/api/live-donation-ticker/route.ts");
+  assert.match(r, /swr\("live-donation-ticker", 300_000/);
+  assert.match(r, /: null;/);
+});
