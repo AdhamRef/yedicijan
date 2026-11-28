@@ -110,15 +110,15 @@ export default function LiveDonationsGlass() {
       try {
         // The categories are only needed when a ticker is configured: ask for them after.
         const tickerRes = await fetch("/api/live-donation-ticker");
-        // No active ticker (404) is a normal state, not an error to log.
-        if (tickerRes.status === 404) {
+        if (!tickerRes.ok) throw new Error("Failed to fetch ticker configuration");
+        const data = await tickerRes.json();
+        // No active ticker ({ active: false }) is a normal state, not an error to log.
+        if (!data?.id) {
           setError("inactive");
           setIsLoading(false);
           return;
         }
-        if (!tickerRes.ok) throw new Error("Failed to fetch ticker configuration");
         const categoriesRes = await fetch(`/api/categories?locale=${locale}&limit=100`);
-        const data = await tickerRes.json();
         setConfig(data);
 
         if (categoriesRes.ok) {

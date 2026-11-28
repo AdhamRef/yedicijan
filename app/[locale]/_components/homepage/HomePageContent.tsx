@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useEffect, useState } from "react";
+import { cld, cldSrcSet } from "@/lib/cloudinary-url";
 import dynamic from "next/dynamic";
 import axios from "axios";
 import { ArrowLeft } from "lucide-react";
@@ -193,7 +194,7 @@ const HomePage: React.FC<HomePageContentProps> = ({
                   <div className="aspect-[16/10] overflow-hidden bg-sand">
                     {post.image && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={post.image} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                      <img src={cld(post.image, 800)} srcSet={cldSrcSet(post.image, [480, 800])} sizes="(max-width: 768px) 92vw, 400px" alt="" loading="lazy" decoding="async" className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
                     )}
                   </div>
                   <div className="p-5">

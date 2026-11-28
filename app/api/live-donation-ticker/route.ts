@@ -33,11 +33,10 @@ export async function GET() {
           }
         : null;
     });
+    // No active ticker is a normal state: 200 with { active: false }, not 404 — browsers log
+    // every 404 as a console error (PageSpeed "Best Practices"), on every homepage visit.
     if (!config) {
-      return NextResponse.json(
-        { error: 'No active ticker configuration found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ active: false });
     }
     return NextResponse.json(config);
   } catch (error) {

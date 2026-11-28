@@ -3,6 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import SectionHeading from "@/components/brand/SectionHeading";
+import { cld, cldSrcSet } from "@/lib/cloudinary-url";
 
 /**
  * Transparency: the path a gift takes, next to a torn-edge photo board of
@@ -19,13 +20,13 @@ export default function HowItWorks({ images }: { images: string[] }) {
           {a && (
             <div className="torn-edge-soft absolute inset-0 bottom-14 end-10 -rotate-2 overflow-hidden rounded-md bg-sand shadow-[0_30px_60px_-30px_rgba(18,35,57,.45)] sm:bottom-28 sm:end-24">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={a} alt="" loading="lazy" className="h-full w-full object-cover" />
+              <img src={cld(a, 900)} srcSet={cldSrcSet(a, [480, 700, 900, 1200])} sizes="(max-width: 1024px) 85vw, 560px" alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             </div>
           )}
           {b && (
             <div className="torn-edge absolute bottom-0 end-0 h-32 w-40 rotate-3 overflow-hidden rounded-md border-8 border-white bg-sand shadow-[0_30px_60px_-30px_rgba(18,35,57,.45)] sm:h-56 sm:w-72">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={b} alt="" loading="lazy" className="h-full w-full object-cover" />
+              <img src={cld(b, 600)} srcSet={cldSrcSet(b, [320, 600])} sizes="(max-width: 640px) 160px, 288px" alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             </div>
           )}
           <span className="absolute start-4 top-5 -rotate-6 rounded-2xl bg-burgundy px-4 py-2.5 text-sm font-extrabold text-white shadow-lg">

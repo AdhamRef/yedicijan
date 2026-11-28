@@ -76,9 +76,8 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "framer-motion", "motion", "@radix-ui/react-icons", "date-fns", "react-use"],
     optimizeCss: true,
-    // The stylesheet goes inside the HTML instead of three render-blocking requests (PageSpeed:
-    // ~1 s on a phone before anything is drawn).
-    inlineCss: true,
+    // No `inlineCss`: it put the whole 245 KB stylesheet in every page twice (a <style> tag and
+    // the RSC payload) — ~480 KB more HTML to parse per visit and nothing cached between pages.
   },
   images: {
     formats: ["image/avif", "image/webp"],
