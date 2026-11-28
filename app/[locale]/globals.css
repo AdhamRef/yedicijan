@@ -358,7 +358,7 @@ input[type="checkbox"]:checked::before {
   clip-path: polygon(0 1.5%, 6% 0, 14% 1.5%, 23% 0, 33% 1.2%, 44% 0, 56% 1.5%, 67% 0, 78% 1.2%, 89% 0, 100% 1.5%, 99% 14%, 100% 27%, 99% 40%, 100% 54%, 99% 68%, 100% 82%, 99% 100%, 86% 98.5%, 74% 100%, 61% 98.8%, 48% 100%, 35% 98.5%, 22% 100%, 10% 98.8%, 0 100%, 1% 86%, 0 72%, 1% 58%, 0 44%, 1% 30%, 0 16%);
 }
 @keyframes brand-spin { to { transform: rotate(360deg); } }
-.brand-spin { animation: brand-spin 28s linear infinite; }
+.brand-spin { animation: brand-spin 28s linear infinite; transform-origin: 50% 50%; will-change: transform; }
 @media (prefers-reduced-motion: reduce) {
   .brand-spin { animation: none; }
 }

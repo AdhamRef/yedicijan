@@ -1,0 +1,16 @@
+# Yedicihan (Yedi Cihan Uluslararası Yardımlaşma Derneği)
+
+> A Turkish public-benefit humanitarian association, founded in 1961, working in 23 countries: emergency relief, water wells, mosques, shelter, education, orphan and family support, in Gaza, Sudan, Syria, Yemen and Africa. The site is in Arabic, English, Turkish, French, German, Spanish, Indonesian and Portuguese.
+
+## Pages
+- [Projects](https://yedicihan.org/en/campaigns): open donation projects, by country.
+- [Zakat](https://yedicihan.org/en/zakat): zakat calculator (gold and silver nisab) and zakat payment by country.
+- [Waqf funds](https://yedicihan.org/en/waqf): waqf shares in funds (water, mosques, education, shelter, energy, orphans) or a chosen project.
+- [About](https://yedicihan.org/en/about-us)
+- [News and field reports](https://yedicihan.org/en/blog)
+- [Bank accounts](https://yedicihan.org/en/bank-transfer)
+- [Contact](https://yedicihan.org/en/contact-us)
+
+## Notes
+- Arabic is the default language: replace /en/ with /ar/, /tr/, /fr/, /de/, /es/, /id/ or /pt/.
+- Donations are paid on the site with 3D Secure cards.

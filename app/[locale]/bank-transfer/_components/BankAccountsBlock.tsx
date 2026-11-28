@@ -73,8 +73,11 @@ function CopyButton({
   };
   return (
     <button
+      type="button"
       onClick={handleCopy}
-      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
+      // Icon-only on most rows: a screen reader needs the action and what is copied.
+      aria-label={copied ? t("copied") : `${label ?? t("copy")}: ${text}`}
+      className={`inline-flex min-h-8 min-w-8 items-center justify-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all ${
         copied
           ? "border-green-200 bg-green-50 text-green-600"
           : "border-gray-200 bg-gray-50 text-gray-500 hover:bg-burgundy hover:border-burgundy hover:text-white"

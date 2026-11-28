@@ -198,10 +198,10 @@ const Footer = () => {
 
           {/* ── Online Donate ── */}
           <div>
-            <h4 className="flex flex-col text-sm font-bold text-white mb-5">
+            <h2 className="flex flex-col text-sm font-bold text-white mb-5">
               {isTr ? 'Online Bağış' : isAr ? 'التبرع الإلكتروني' : 'Online Donate'}
               <span className="mt-2 h-[3px] w-8 rounded-full bg-gold" />
-            </h4>
+            </h2>
             <ul className="space-y-2.5">
               {categories.map((cat) => (
                 <li key={cat.id}>
@@ -219,10 +219,10 @@ const Footer = () => {
 
           {/* ── Quick Links ── */}
           <div>
-            <h4 className="flex flex-col text-sm font-bold text-white mb-5">
+            <h2 className="flex flex-col text-sm font-bold text-white mb-5">
               {isTr ? 'Bağlantılar' : isAr ? 'روابط سريعة' : 'Quick Links'}
               <span className="mt-2 h-[3px] w-8 rounded-full bg-gold" />
-            </h4>
+            </h2>
             <ul className="space-y-2.5">
               {quickLinks.map((item) => (
                 <li key={item.label}>
@@ -240,10 +240,10 @@ const Footer = () => {
 
           {/* ── Contact + Message ── */}
           <div className="col-span-2 lg:col-span-1">
-            <h4 className="flex flex-col text-sm font-bold text-white mb-5">
+            <h2 className="flex flex-col text-sm font-bold text-white mb-5">
               {isTr ? 'İletişim' : isAr ? 'تواصل معنا' : 'Contact'}
               <span className="mt-2 h-[3px] w-8 rounded-full bg-gold" />
-            </h4>
+            </h2>
 
             {/* Contact info */}
             <ul className="space-y-3 mb-6">
