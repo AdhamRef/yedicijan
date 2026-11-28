@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cachedJson, invalidatePublicCache } from "@/lib/server/swr-cache";
+import { swr, invalidatePublicCache } from "@/lib/server/swr-cache";
 import { PrismaClient } from "@prisma/client";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/options";
@@ -15,31 +15,31 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
  * Returns the active ticker config with all settings
  */
 export async function GET() {
-  return cachedJson("live-donation-ticker", 300_000, readTicker);
-}
-
-async function readTicker() {
   try {
-    // Get the first active ticker configuration
-    const ticker = await prisma.liveDonationTicker.findFirst({
-      where: { isActive: true },
-      orderBy: { updatedAt: 'desc' }
+    // "No active ticker" is cached too: the homepage asks on every visit, and each miss cost a
+    // database round trip (~0.3 s). A dashboard change clears the cache (POST/PATCH/DELETE).
+    const config = await swr("live-donation-ticker", 300_000, async () => {
+      const ticker = await prisma.liveDonationTicker.findFirst({
+        where: { isActive: true },
+        orderBy: { updatedAt: 'desc' }
+      });
+      return ticker
+        ? {
+            id: ticker.id,
+            donorNames: ticker.donorNames,
+            amountRanges: ticker.amountRanges,
+            minIntervalSeconds: ticker.minIntervalSeconds,
+            maxIntervalSeconds: ticker.maxIntervalSeconds,
+          }
+        : null;
     });
-
-    if (!ticker) {
+    if (!config) {
       return NextResponse.json(
         { error: 'No active ticker configuration found' },
         { status: 404 }
       );
     }
-
-    return NextResponse.json({
-      id: ticker.id,
-      donorNames: ticker.donorNames,
-      amountRanges: ticker.amountRanges,
-      minIntervalSeconds: ticker.minIntervalSeconds,
-      maxIntervalSeconds: ticker.maxIntervalSeconds,
-    });
+    return NextResponse.json(config);
   } catch (error) {
     console.error('Error fetching ticker config:', error);
     return NextResponse.json(
