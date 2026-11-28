@@ -39,6 +39,13 @@ export default function DeferredGTM() {
       script.src = `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`;
       document.head.appendChild(script);
 
+      // ContentSquare (session analytics) used to load from the page head on every view,
+      // ~170 KB before the page was usable. It now starts with GTM.
+      const cs = document.createElement("script");
+      cs.async = true;
+      cs.src = "https://t.contentsquare.net/uxa/e81365186c19c.js";
+      document.head.appendChild(cs);
+
       cleanup();
     };
 

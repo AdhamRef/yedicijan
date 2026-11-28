@@ -198,9 +198,9 @@ export default function QuickDonateBand({ campaigns }: { campaigns: CampaignCard
                     setCustom(e.target.value);
                     setSelected(null);
                   }}
-                  className="h-[52px] w-full rounded-2xl border border-dashed border-white/30 bg-transparent pe-11 ps-3 text-sm font-bold text-white placeholder:text-ice/60 focus:border-gold focus:outline-none"
+                  className="h-[52px] w-full rounded-2xl border border-dashed border-white/30 bg-transparent pe-11 ps-3 text-sm font-bold text-white placeholder:text-ice/80 focus:border-gold focus:outline-none"
                 />
-                <span className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-xs font-bold text-ice/60">{currencyCode}</span>
+                <span className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-xs font-bold text-ice/90">{currencyCode}</span>
               </div>
             </div>
           </fieldset>

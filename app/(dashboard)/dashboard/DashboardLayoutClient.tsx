@@ -12,8 +12,6 @@ import { ConfettiProvider } from "@/components/providers/confetti-provider";
 import { CurrencyProvider } from "@/context/CurrencyContext";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
 import { ViewUserProfileProvider } from "@/context/ViewUserProfileContext";
-import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import type { Session } from "next-auth";
 import {
   userCanEnterDashboard,
@@ -322,8 +320,6 @@ export default function DashboardLayoutClient({
           </Toaster>
         </SessionProvider>
       </CurrencyProvider>
-      <Analytics />
-      <SpeedInsights />
     </NextIntlClientProvider>
   );
 }

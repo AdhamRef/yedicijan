@@ -30,7 +30,7 @@ test("photo page heroes stay readable on phones", () => {
 test("phones: zakat and waqf bar above the header, content offset to match", () => {
   const nav = read("components/Navbar.tsx");
   assert.match(nav, /grid h-9 grid-cols-2 bg-deep[^"]*lg:hidden/);
-  assert.match(read("app/[locale]/layout.tsx"), /<main className="pt-\[100px\] lg:pt-\[116px\]">/);
+  assert.match(read("app/[locale]/layout.tsx"), /<main className="min-h-\[100svh\] pt-\[100px\] lg:pt-\[116px\]">/);
   assert.doesNotMatch(nav, /100dvh-4rem/);
 });
 

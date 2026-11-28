@@ -4,7 +4,8 @@ import { Poppins, Tajawal } from "next/font/google";
 import DeferredGTM from "@/components/DeferredGTM";
 import MicrosoftClarity from "@/components/MicrosoftClarity";
 import EngagementInstrumentation from "@/components/EngagementInstrumentation";
-import { Analytics } from "@vercel/analytics/next";
+import { getLocale } from "next-intl/server";
+import { isKnownLocale, localeDirection } from "@/lib/locales";
 import "./[locale]/globals.css";
 
 // The site's original fonts (Poppins + Tajawal), kept under the Seven Worlds
@@ -257,26 +258,33 @@ const breadcrumbSchema = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // The page's own language and direction from the first byte. A hard-coded ar/rtl made every
+  // other language arrive right-to-left and flip after loading — a layout shift, and the wrong
+  // language for search engines and screen readers. Routes without a locale (dashboard) use ar.
+  let locale = "ar";
+  try {
+    const l = await getLocale();
+    if (isKnownLocale(l)) locale = l;
+  } catch {
+    /* no request locale: keep ar */
+  }
   return (
-    <html lang="ar" dir="rtl" suppressHydrationWarning>
+    <html lang={locale} dir={localeDirection(locale)} suppressHydrationWarning>
       <head>
         <meta name="geo.region" content="TR-34" />
         <meta name="geo.placename" content="İstanbul" />
         <meta name="classification" content="charity, humanitarian, nonprofit" />
         <meta name="rating" content="general" />
         <meta name="revisit-after" content="3 days" />
-        <meta name="language" content="Arabic" />
 
         <link rel="preconnect" href="https://res.cloudinary.com" />
         <link rel="dns-prefetch" href="https://i.ibb.co" />
-        <link rel="preload" href="/bg.webp" as="image" type="image/webp" />
 
-        <script src="https://t.contentsquare.net/uxa/e81365186c19c.js" async />
       </head>
       <body
         className={`${poppins.variable} ${tajawal.variable} font-arabic antialiased`}
@@ -311,7 +319,6 @@ export default function RootLayout({
           <EngagementInstrumentation />
         </Suspense>
         <DeferredGTM />
-        <Analytics />
       </body>
     </html>
   );

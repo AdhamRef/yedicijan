@@ -76,6 +76,9 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react", "framer-motion", "motion", "@radix-ui/react-icons", "date-fns", "react-use"],
     optimizeCss: true,
+    // The stylesheet goes inside the HTML instead of three render-blocking requests (PageSpeed:
+    // ~1 s on a phone before anything is drawn).
+    inlineCss: true,
   },
   images: {
     formats: ["image/avif", "image/webp"],

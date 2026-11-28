@@ -2,6 +2,7 @@
 
 import YCMark from "@/components/brand/YCMark";
 import React, { useEffect, useState } from "react";
+import { preload } from "react-dom";
 import { ArrowLeft, Heart, MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/routing";
@@ -11,6 +12,14 @@ import type { SlideItem } from "./HeroSlider";
 function cld(src: string, width: number): string {
   if (!src.includes("res.cloudinary.com")) return src;
   return src.replace(/\/upload\//, `/upload/f_auto,q_auto,w_${width},c_limit/`);
+}
+
+/** Widths the hero photo is offered in; a phone takes the 640 one instead of 1200. */
+const HERO_WIDTHS = [480, 640, 900, 1200];
+const HERO_SIZES = "(max-width: 640px) 92vw, (max-width: 1024px) 560px, 560px";
+function cldSrcSet(src: string): string | undefined {
+  if (!src.includes("res.cloudinary.com")) return undefined;
+  return HERO_WIDTHS.map((w) => `${cld(src, w)} ${w}w`).join(", ");
 }
 
 interface HomeHeroProps {
@@ -35,6 +44,12 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
   const main = images.length > 1 ? images.slice(0, Math.max(1, images.length - 1)) : images;
   const second = images.length > 1 ? images[images.length - 1] : null;
 
+  // The first photo is the page's largest paint: ask for it in the document head, at the right
+  // size, before the stylesheet and scripts are done.
+  if (main[0]) {
+    preload(cld(main[0], 1200), { as: "image", fetchPriority: "high", imageSrcSet: cldSrcSet(main[0]), imageSizes: HERO_SIZES });
+  }
+
   const [current, setCurrent] = useState(0);
   useEffect(() => {
     if (main.length <= 1) return;
@@ -45,7 +60,7 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
   }, [main.length]);
 
   const facts = [
-    { value: "65", label: t("fact1") },
+    { value: String(new Date().getFullYear() - 1961), label: t("fact1") },
     { value: "23", label: t("fact2") },
     { value: "7", label: t("fact3") },
   ];
@@ -110,10 +125,13 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
               <img
                 key={src}
                 src={cld(src, 1200)}
+                srcSet={cldSrcSet(src)}
+                sizes={HERO_SIZES}
                 alt=""
                 loading={i === 0 ? "eager" : "lazy"}
                 fetchPriority={i === 0 ? "high" : "auto"}
-                className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${i === current ? "opacity-100" : "opacity-0"}`}
+                decoding={i === 0 ? "sync" : "async"}
+                className={`absolute inset-0 h-full w-full object-cover ${i === current ? "opacity-100" : "opacity-0"} ${current > 0 || i > 0 ? "transition-opacity duration-1000" : ""}`}
               />
             ))}
             <div className="absolute inset-0 bg-gradient-to-t from-deep/60 via-transparent to-transparent" />
@@ -135,7 +153,10 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
 
           {/* Seal: rotating brand line around the YC monogram */}
           <div className="absolute -top-5 end-3 grid h-20 w-20 -rotate-6 place-items-center rounded-full bg-gold sm:-top-6 sm:end-0 sm:h-36 sm:w-36 shadow-[0_30px_60px_-30px_rgba(18,35,57,.45)] sm:-top-6 sm:h-36 sm:w-36">
-            <svg viewBox="0 0 150 150" className="brand-spin absolute inset-0 h-full w-full">
+            {/* The ring turns on an HTML wrapper, and the SVG is laid out left-to-right: Safari did not
+                animate the spinning <svg> itself on the right-to-left (Arabic) page. */}
+            <div className="brand-spin absolute inset-0" aria-hidden>
+            <svg viewBox="0 0 150 150" direction="ltr" style={{ direction: "ltr" }} className="h-full w-full">
               <defs>
                 <path id="hero-seal-path" d="M75 75m-58 0a58 58 0 1 1 116 0a58 58 0 1 1-116 0" />
               </defs>
@@ -143,6 +164,7 @@ export default function HomeHero({ slides, fallbackImages }: HomeHeroProps) {
                 <textPath href="#hero-seal-path">YEDİCİHAN · SINCE 1961 · YEDİCİHAN · SINCE 1961 ·</textPath>
               </text>
             </svg>
+            </div>
             <YCMark className="relative h-auto w-9 text-deep sm:w-16" />
           </div>
 

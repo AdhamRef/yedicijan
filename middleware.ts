@@ -16,6 +16,11 @@ const intl = createIntlMiddleware({
   locales: LOCALES,
   defaultLocale: DEFAULT_LOCALE,
   localePrefix: 'always',
+  // No `Link: …hreflang` response header. Each page already lists its language versions in the
+  // HTML head (with each language's own slug), and the header repeated the URL-encoded Arabic
+  // slug eight times: on a long project name it passed nginx's 4 KB header buffer and the page
+  // answered 502 Bad Gateway (e.g. the water-tanker project in Yemen).
+  alternateLinks: false,
 });
 
 const CURRENCY_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
@@ -37,11 +42,40 @@ function safeDecode(pathname: string): string {
   }
 }
 
+/**
+ * The site answers on both yedicihan.org and www.yedicihan.org, while canonical links name one
+ * of them (NEXT_PUBLIC_SITE_URL), so search engines see two copies of every page. Pages on the
+ * other host move permanently to the canonical one — but only when the sign-in host
+ * (NEXTAUTH_URL) is the same, so a session cookie is never left behind on the old host.
+ * API, auth and callback routes are outside this middleware's matcher and are never moved.
+ */
+function canonicalHostRedirect(req: NextRequest): NextResponse | null {
+  const site = process.env.NEXT_PUBLIC_SITE_URL;
+  const auth = process.env.NEXTAUTH_URL;
+  if (!site || !auth) return null;
+  let target: URL;
+  try {
+    target = new URL(site);
+    if (new URL(auth).host !== target.host) return null;
+  } catch {
+    return null;
+  }
+  const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || '').split(',')[0].trim().toLowerCase();
+  if (!host || host === target.host) return null;
+  // Only the www / apex twin of the canonical host; anything else (localhost, an IP) is left alone.
+  if (host.replace(/^www\./, '') !== target.host.replace(/^www\./, '')) return null;
+  const url = new URL(req.nextUrl.pathname + req.nextUrl.search, target.origin);
+  return NextResponse.redirect(url, 308);
+}
+
 // Runs before SSR so the page renders with `currency` already in cookies —
 // otherwise scripts/pixels would fire with the default (USD) before the
 // client-side `?currency=` sync catches up.
 export default function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
+
+  const hostRedirect = canonicalHostRedirect(req);
+  if (hostRedirect) return hostRedirect;
 
   // Locale-less URL (e.g. a share link generated with auto-locale): pick a
   // locale from the visitor's country and redirect. URLs that already include
