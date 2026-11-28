@@ -29,6 +29,8 @@ import { useSession, signOut } from "next-auth/react";
 import CartSheet from "../components/CartSheet";
 import { useCart } from "@/hooks/useCart";
 import { CART_OPEN_EVENT, CART_CHANGED_EVENT } from "@/components/CartReminder";
+import { CART_ADDED_EVENT } from "@/lib/cart/client";
+import type { CartLineView } from "@/lib/cart/line";
 import CurrencySelector from "./CurrencySelector";
 import LanguageSwitcher from "./LanguageSelector";
 import SignInDialog from "@/components/SignInDialog";
@@ -41,20 +43,7 @@ import { appendCurrencyQuery, getCurrencyCodeForLinks } from "@/lib/currency-lin
 import { CURRENCY_COOKIE_UPDATED_EVENT } from "@/components/CurrencyFromUrlSync";
 import { getSocialLinks } from "@/lib/social-links";
 
-interface CartItem {
-  id: string;
-  campaignId: string;
-  amount: number;
-  amountUSD: number;
-  currency: string;
-  userId: string;
-  createdAt: string;
-  campaign: {
-    id: string;
-    title: string;
-    images: string[];
-  };
-}
+type CartItem = CartLineView;
 
 const LOGO_URL = "/yedicijan_logo.png";
 const LOGO_MOBILE_URL = "/yedicijan_logo.png";
@@ -101,6 +90,11 @@ const Navbar = () => {
     }
   }, [searchParams, pathname, router, session?.user, zustandItems.length]);
 
+  // The guest cart lives in localStorage; restore it once mounted.
+  useEffect(() => {
+    void useCart.persist.rehydrate();
+  }, []);
+
   useEffect(() => {
     const fetchCartItems = async () => {
       if (session?.user && status === "authenticated") {
@@ -115,7 +109,27 @@ const Navbar = () => {
       }
     };
     fetchCartItems();
+    // Re-read after any add or remove elsewhere on the page (no page reload needed).
+    window.addEventListener(CART_CHANGED_EVENT, fetchCartItems);
+    return () => window.removeEventListener(CART_CHANGED_EVENT, fetchCartItems);
   }, [session, status]);
+
+  // The cart button lights up for a moment whenever something is added.
+  const [cartPulse, setCartPulse] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onAdded = () => {
+      setCartPulse(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setCartPulse(false), 1800);
+    };
+    window.addEventListener(CART_ADDED_EVENT, onAdded);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener(CART_ADDED_EVENT, onAdded);
+    };
+  }, []);
+  const cartCount = session?.user ? cartItems.length : zustandItems.length;
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 10);
@@ -169,7 +183,8 @@ const Navbar = () => {
     if (session?.user) {
       setCartGuestMode(false);
       setIsCartOpen(true);
-    } else if (zustandItems.length > 0) {
+    } else if (useCart.getState().items.length > 0) {
+      // Read the store directly: a line added a moment ago may not have re-rendered yet.
       setCartGuestMode(true);
       setIsCartOpen(true);
     } else {
@@ -344,13 +359,18 @@ const Navbar = () => {
             <button
               type="button"
               onClick={openCart}
-              className="relative grid h-10 w-10 lg:h-11 lg:w-11 place-items-center rounded-full border border-line bg-white text-deep hover:border-burgundy/40 hover:text-burgundy transition-colors flex-shrink-0"
-              aria-label="Cart"
+              className={`relative grid h-10 w-10 lg:h-11 lg:w-11 place-items-center rounded-full border transition-all duration-300 flex-shrink-0 ${
+                cartCount > 0
+                  ? "border-gold bg-gold text-deep shadow-[0_0_0_4px_rgba(246,188,81,.25)] hover:shadow-[0_0_0_6px_rgba(246,188,81,.3)]"
+                  : "border-line bg-white text-deep hover:border-burgundy/40 hover:text-burgundy"
+              } ${cartPulse ? "scale-110 shadow-[0_0_0_8px_rgba(246,188,81,.35)]" : ""}`}
+              aria-label={cartCount > 0 ? `${t("cart")} (${cartCount})` : t("cart")}
             >
-              <ShoppingCart className="w-5 h-5" />
-              {(session?.user ? cartItems.length : zustandItems.length) > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 bg-burgundy text-white text-[10px] font-extrabold rounded-full w-4 h-4 flex items-center justify-center ring-2 ring-white">
-                  {session?.user ? cartItems.length : zustandItems.length}
+              {cartPulse && <span className="absolute inset-0 animate-ping rounded-full bg-gold/60" aria-hidden />}
+              <ShoppingCart className="relative w-5 h-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-burgundy text-white text-[10px] font-extrabold rounded-full min-w-4 h-4 px-1 flex items-center justify-center ring-2 ring-white">
+                  {cartCount}
                 </span>
               )}
             </button>

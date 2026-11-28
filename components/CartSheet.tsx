@@ -15,26 +15,12 @@ import Image from "next/image";
 import Spinner from "../components/ui/spinner";
 import { useTranslations, useLocale } from "next-intl";
 import { cn } from "@/lib/utils";
-import { resolveShareUnit, type ShareLabelsConfig } from "@/lib/campaign/share-labels";
+import { resolveShareUnit } from "@/lib/campaign/share-labels";
 import InlineBold from "@/components/InlineBold";
 import { stripBoldMarkers } from "@/lib/text/inline-bold";
+import { lineImage, lineTitle, type CartLineView } from "@/lib/cart/line";
 
-interface CartItem {
-  id: string;
-  amount: number;
-  amountUSD: number;
-  currency: string;
-  shareCount?: number | null;
-  campaign: {
-    id: string;
-    title: string;
-    images: string[];
-    /** Per-campaign custom unit names ("sheep" / "meal" / etc.) keyed by locale.
-     *  When present, the cart shows e.g. "3 sheep" instead of "3 shares". */
-    shareLabels?: ShareLabelsConfig | null;
-    translations?: { locale: string; title: string }[];
-  };
-}
+type CartItem = CartLineView;
 
 interface CartSheetProps {
   open: boolean;
@@ -86,7 +72,7 @@ const CartSheet: React.FC<CartSheetProps> = ({
     onOpenDonationDialog();
   };
 
-  const formatAmount = (amount: number, currency: string) =>
+  const formatAmount = (amount: number, currency: string = "USD") =>
     new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
@@ -145,9 +131,8 @@ const CartSheet: React.FC<CartSheetProps> = ({
             ) : (
               <div className="space-y-3">
                 {items.map((item) => {
-                  const campaignTitle =
-                    item.campaign.translations?.find((tr) => tr.locale === locale)?.title ??
-                    item.campaign.title;
+                  const campaignTitle = lineTitle(item, locale);
+                  const image = lineImage(item);
 
                   return (
                     <div
@@ -161,12 +146,14 @@ const CartSheet: React.FC<CartSheetProps> = ({
                       <div className="flex gap-3 items-start">
                         {/* Image */}
                         <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                          <Image
-                            src={item.campaign.images[0]}
-                            alt={stripBoldMarkers(campaignTitle)}
-                            fill
-                            className="object-cover"
-                          />
+                          {image && (
+                            <Image
+                              src={image}
+                              alt={stripBoldMarkers(campaignTitle)}
+                              fill
+                              className="object-cover"
+                            />
+                          )}
                         </div>
 
                         {/* Details */}

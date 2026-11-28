@@ -50,6 +50,7 @@ import { useReferralCode } from "@/hooks/useReferralCode";
 import { useCurrency } from "@/context/CurrencyContext";
 import { formatNumber } from "@/hooks/formatNumber";
 import { useCart } from "@/hooks/useCart";
+import { CART_ADDED_EVENT, CART_CHANGED_EVENT } from "@/lib/cart/client";
 import {
   resolveShareUnit,
   resolveSharePlural,
@@ -97,6 +98,8 @@ interface DonationDialogProps {
   categoryImage?: string;
   /** Pre-fill amount (e.g. from QuickDonate) */
   initialDonationAmount?: number;
+  /** Saved with the donation for the team (e.g. zakat country and fields). */
+  note?: string;
   /** Campaign quick-pick amounts; per-currency overrides resolved with current cookie currency */
   suggestedDonations?: SuggestedDonationsConfig | null;
   /** Campaign-level override for team-support quick-pick amounts. Falls back to global defaults if null/empty. */
@@ -131,6 +134,7 @@ const DonationDialog = ({
   categoryName = "",
   categoryImage,
   initialDonationAmount,
+  note,
   suggestedDonations,
   suggestedTeamSupport,
   goalType = "FIXED",
@@ -191,17 +195,6 @@ const DonationDialog = ({
       <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
     </span>
   );
-  const confirmDonationLabel = isRTL ? (
-    <span className={btnRow}>
-      {t("confirmDonation")}
-      <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden />
-    </span>
-  ) : (
-    <span className={btnRow}>
-      {t("confirmDonation")}
-      <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />
-    </span>
-  );
   const getReferralCode = useReferralCode();
 
   // Helper function to get locale-specific property
@@ -237,16 +230,18 @@ const DonationDialog = ({
 
   // Trimmed flow for higher conversion: cover-fees folded into teamSupport,
   // sign-in step removed entirely (guests skip auth, authed users keep going).
+  // Two steps: the amount (team support is an optional row on the same screen) and payment,
+  // which opens with a short summary. The separate team-support and confirmation steps made the
+  // donor click through two screens that asked nothing new.
   const DONATION_STEPS: DonationStep[] = [
     { title: t("donationAmount"), subtitle: t("donationAmountDesc") },
-    { title: t("teamSupport"), subtitle: t("teamSupportDesc") },
-    { title: t("confirmation"), subtitle: t("confirmationDesc") },
     { title: t("paymentInfo"), subtitle: t("paymentInfoDesc") },
   ];
 
   const [currentStep, setCurrentStep] = useState(0);
   const [donationAmount, setDonationAmount] = useState<number>(0);
-  const [teamSupport, setTeamSupport] = useState<number | null>(null);
+  // "No thanks" by default, so the donor never has to answer before moving on.
+  const [teamSupport, setTeamSupport] = useState<number | null>(0);
   const [coverFees, setCoverFees] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CARD");
   // Manual card inputs for the bank 3D rails (PayFor / Albaraka)
@@ -378,6 +373,11 @@ const DonationDialog = ({
   // Reset guest fields and saved card selection on close
   useEffect(() => {
     if (!isOpen) {
+      // The dialog stays mounted on project cards: without this, reopening it showed the step
+      // and amount left from the previous time.
+      setCurrentStep(0);
+      setDonationAmount(0);
+      setTeamSupport(0);
       setGuestFirstName("");
       setGuestLastName("");
       setGuestEmail("");
@@ -631,6 +631,24 @@ const DonationDialog = ({
     });
   };
 
+  // Opening straight on payment (an amount chosen on the card) still reports the checkout
+  // funnel: InitiateCheckout and AddPaymentInfo, once each.
+  useEffect(() => {
+    if (!isOpen || DONATION_STEPS[currentStep]?.title !== t("paymentInfo") || donationAmount <= 0) return;
+    if (!checkoutTrackedRef.current) {
+      checkoutTrackedRef.current = true;
+      tracking?.trackInitiateCheckout({
+        value: donationAmount,
+        currency: getCurrency(),
+        numItems: 1,
+        contentIds: campaignId ? [campaignId] : categoryId ? [categoryId] : undefined,
+        donationType: "ONE_TIME",
+      });
+    }
+    trackPaymentInfoStep();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, currentStep, donationAmount]);
+
   const persistCheckoutResume = (targetStep?: number) => {
     if (typeof window === "undefined") return;
     try {
@@ -703,8 +721,9 @@ const DonationDialog = ({
       // ── Funnel events on step transitions ──────────────────────────────────
       const currency = getCurrency();
 
-      // Reached confirmation step → InitiateCheckout (once per session)
-      if (nextTitle === t("confirmation") && !checkoutTrackedRef.current) {
+      // Leaving the amount for payment → InitiateCheckout (once per session). This used to fire
+      // on the confirmation step, which no longer exists.
+      if (nextTitle === t("paymentInfo") && !checkoutTrackedRef.current) {
         checkoutTrackedRef.current = true;
         tracking?.trackInitiateCheckout({
           value: donationAmount,
@@ -971,6 +990,42 @@ const DonationDialog = ({
               )}
             </div>
 
+            {!oneTimeOnly && (
+              <div dir={dir} className="rounded-2xl border border-gray-100 bg-gray-50/70 p-3">
+                <p className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                  <span className="font-semibold text-gray-800">{t("wantToSupportTeam")}</span>
+                  <span className="text-[11px] text-gray-500">{t("optionalShort")}</span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {teamSupportOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={teamSupport === option.value}
+                      onClick={() => setTeamSupport(option.value)}
+                      className={`h-9 rounded-full border px-3.5 text-[13px] font-semibold transition-colors ${
+                        teamSupport === option.value
+                          ? "border-burgundy bg-burgundy text-white"
+                          : "border-gray-200 bg-white text-gray-700 hover:border-burgundy/40"
+                      }`}
+                    >
+                      <span dir={option.value === 0 ? undefined : "ltr"}>
+                        {option.value === 0 ? option.label : `${option.value} ${getCurrency()}`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                {donationAmount > 0 && (
+                  <div className="mt-3 flex items-center justify-between border-t border-gray-200/70 pt-2.5 text-sm">
+                    <span className="text-gray-600">{t("total")}</span>
+                    <span className="font-bold text-burgundy" dir="ltr">
+                      {totalAmount.toFixed(2)} {getCurrency()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-between gap-4 mt-6 flex-wrap">
               <Button
                 type="button"
@@ -1019,8 +1074,11 @@ const DonationDialog = ({
                           currency: getCurrency(),
                           ...(shareMode ? { shareCount } : {}),
                         });
-                        addItem(response.data || []);
+                        void response;
                       }
+                      // The navbar re-reads the cart and lights the cart button; no page reload.
+                      window.dispatchEvent(new CustomEvent(CART_CHANGED_EVENT));
+                      window.dispatchEvent(new CustomEvent(CART_ADDED_EVENT));
                       tracking?.trackAddToCart({
                         value: donationAmount,
                         currency: getCurrency(),
@@ -1028,7 +1086,6 @@ const DonationDialog = ({
                         contentName: campaignTitle,
                         quantity: 1,
                       });
-                      if (session?.user?.id) window.location.reload();
                     } catch (error) {
                       console.error("Error adding to cart:", error);
                       toast.error(t("failedToAddToCart"));
@@ -1376,6 +1433,21 @@ const DonationDialog = ({
       case t("paymentInfo"):
         return (
           <div className="space-y-6 overflow-visible">
+            {/* What is being paid, in one glance (replaces the old confirmation step). */}
+            <div dir={dir} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-3">
+              <div className="min-w-0 text-sm">
+                <p className="text-gray-600">
+                  {t("amount")}: <b className="text-gray-900" dir="ltr">{formatNumber(donationAmount)} {getCurrency()}</b>
+                  {teamSupport != null && teamSupport > 0 && (
+                    <> · {t("teamSupport")}: <b className="text-gray-900" dir="ltr">{formatNumber(teamSupport)} {getCurrency()}</b></>
+                  )}
+                </p>
+              </div>
+              <div className="shrink-0 text-end">
+                <span className="block text-[11px] text-gray-500">{t("total")}</span>
+                <b className="text-lg font-black text-burgundy" dir="ltr">{totalAmount.toFixed(2)} {getCurrency()}</b>
+              </div>
+            </div>
             {/* ── Saved cards picker — shown when user has any saved card ──
                 Hidden when Albaraka's hosted page owns the card step: the donor
                 enters the card at the bank, so a stored PAN has nowhere to go. */}
@@ -1723,7 +1795,9 @@ const DonationDialog = ({
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                 ) : (
-                  confirmDonationLabel
+                  <span className="inline-flex items-center gap-1.5">
+                    {t("donateAmount", { amount: `${totalAmount.toFixed(2)} ${getCurrency()}` })}
+                  </span>
                 )}
               </Button>
             </div>
@@ -1907,6 +1981,7 @@ const DonationDialog = ({
       };
       const refCode = getReferralCode();
       if (refCode) donationData.referralCode = refCode;
+      if (note) donationData.note = note;
       if (isCategoryMode && categoryId) {
         donationData.categoryItems = [
           { categoryId, amount: donationAmount, amountUSD },

@@ -301,7 +301,8 @@ input[type="checkbox"]:checked::before {
 /* Homepage mobile give bar (MobileDonateBar): keep the floating live ticker
    above it instead of underneath. */
 @media (max-width: 1023px) {
-  .has-mobile-donate-bar [data-live-ticker] {
+  .has-mobile-donate-bar [data-live-ticker],
+  .has-mobile-donate-bar [data-floating-action] {
     bottom: 6rem;
   }
 }

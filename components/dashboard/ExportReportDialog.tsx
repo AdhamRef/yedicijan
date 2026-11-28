@@ -91,6 +91,8 @@ export interface ExportFormState {
   country: string;
   /** Classified donation source (Donation.sourceChannel); "all" or unset = no filter. */
   source?: string;
+  /** Payment gateway (Donation.provider): ALBARAKA, PAYFOR or __unset; "all" or unset = no filter. */
+  provider?: string;
   sortBy: "date" | "amount";
   sortOrder: "asc" | "desc";
   limit: number;
@@ -141,6 +143,7 @@ function buildQuery(endpoint: string, state: ExportFormState, fields: ExportRepo
   if (fields.locale && state.locale !== "all") params.set("locale", state.locale);
   if (fields.country && state.country !== "all") params.set("country", state.country);
   if (state.source && state.source !== "all") params.set("source", state.source);
+  if (state.provider && state.provider !== "all") params.set("provider", state.provider);
   if (fields.sort) {
     params.set("sortBy", state.sortBy);
     params.set("sortOrder", state.sortOrder);

@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { donationSourceWhere } from "@/lib/dashboard/donation-source-filter";
+import { donationProviderWhere } from "@/lib/dashboard/donation-provider-filter";
 import { donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere } from "@/lib/dashboard/donation-multi-filter";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/options";
@@ -88,6 +89,8 @@ export async function GET(request: NextRequest) {
     if (countryFilter) filters.push(countryFilter);
     const sourceFilter = donationSourceWhere(sp.get("source"));
     if (sourceFilter) filters.push(sourceFilter);
+    const providerFilter = donationProviderWhere(sp.get("provider"));
+    if (providerFilter) filters.push(providerFilter);
     const where: Prisma.DonationWhereInput = filters.length > 1 ? { AND: filters } : baseWhere;
 
     const orderBy: Prisma.DonationOrderByWithRelationInput =

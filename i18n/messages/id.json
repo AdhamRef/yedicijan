@@ -26,7 +26,8 @@
     "searchPlaceholder": "Cari...",
     "donate": "Donasi Sekarang",
     "signIn": "Masuk",
-    "bankAccounts": "Rekening Bank Kami"
+    "bankAccounts": "Rekening Bank Kami",
+    "whatsapp": "Hubungi kami via WhatsApp"
   },
   "BankTransfer": {
     "badge": "Donasi melalui Transfer Bank",
@@ -649,7 +650,9 @@
     "sslSecurePayment": "Enkripsi SSL 256-bit · Pembayaran aman",
     "certificateNoteTitle": "Dapatkan sertifikat donasi Anda ✨",
     "certificateNoteBody": "Masukkan email asli Anda agar kami dapat mengirimkan sertifikat donasi resmi dan kuitansi kepada Anda.",
-    "free": "Gratis"
+    "free": "Gratis",
+    "optionalShort": "Opsional",
+    "donateAmount": "Donasi {amount}"
   },
   "DonationSuccess": {
     "thankYou": "Terima kasih banyak",
@@ -1212,7 +1215,12 @@
     "calcStepPrices": "Harga hari ini dan nisab",
     "calcStepDebts": "Utang jatuh tempo",
     "rowNet": "Harta bersih",
-    "calcPending": "Masukkan harta Anda untuk menghitung"
+    "calcPending": "Masukkan harta Anda untuk menghitung",
+    "addToCart": "Tambah ke keranjang",
+    "addedToCart": "Masuk keranjang — selesaikan atau tambah lagi",
+    "addToCartFailed": "Gagal menambah ke keranjang",
+    "multiOk": "Bisa pilih lebih dari satu",
+    "splitEach": "Dibagi rata: {amount} per negara"
   },
   "Waqf": {
     "navLabel": "Dana wakaf",
@@ -1303,6 +1311,9 @@
     "fund_energy": "Dana energi",
     "fund_energy_d": "Panel surya yang menerangi rumah dan sekolah bertahun-tahun",
     "fund_orphans": "Dana anak yatim",
-    "fund_orphans_d": "Dukungan berkelanjutan untuk anak yatim dan keluarganya"
+    "fund_orphans_d": "Dukungan berkelanjutan untuk anak yatim dan keluarganya",
+    "addToCart": "Tambah ke keranjang",
+    "addedToCart": "Masuk keranjang — selesaikan atau tambah lagi",
+    "addToCartFailed": "Gagal menambah ke keranjang"
   }
 }

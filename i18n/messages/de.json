@@ -157,7 +157,8 @@
     "searchPlaceholder": "Suchen...",
     "donate": "Jetzt spenden",
     "signIn": "Anmelden",
-    "bankAccounts": "Unsere Bankkonten"
+    "bankAccounts": "Unsere Bankkonten",
+    "whatsapp": "Schreiben Sie uns auf WhatsApp"
   },
   "HomePage": {
     "donationCategories": "Spendenbereiche",
@@ -649,7 +650,9 @@
     "sslSecurePayment": "256-Bit-SSL-verschlüsselt · Sichere Zahlung",
     "certificateNoteTitle": "Erhalte deine Spendenbescheinigung ✨",
     "certificateNoteBody": "Gib deine echte E-Mail-Adresse an, damit wir dir die offizielle Spendenbescheinigung und Quittung des Vereins zusenden können.",
-    "free": "Kostenlos"
+    "free": "Kostenlos",
+    "optionalShort": "Optional",
+    "donateAmount": "{amount} spenden"
   },
   "DonationSuccess": {
     "thankYou": "Vielen Dank",
@@ -1212,7 +1215,12 @@
     "calcStepPrices": "Tagespreise und Nisab",
     "calcStepDebts": "Fällige Schulden",
     "rowNet": "Nettovermögen",
-    "calcPending": "Vermögen eingeben, um zu berechnen"
+    "calcPending": "Vermögen eingeben, um zu berechnen",
+    "addToCart": "In den Warenkorb",
+    "addedToCart": "Im Warenkorb — abschließen oder mehr hinzufügen",
+    "addToCartFailed": "Konnte nicht hinzugefügt werden",
+    "multiOk": "Mehrfachauswahl möglich",
+    "splitEach": "Gleich aufgeteilt: {amount} pro Land"
   },
   "Waqf": {
     "navLabel": "Waqf-Fonds",
@@ -1303,6 +1311,9 @@
     "fund_energy": "Energie-Fonds",
     "fund_energy_d": "Solaranlagen, die Häuser und Schulen jahrelang mit Strom versorgen",
     "fund_orphans": "Waisen-Fonds",
-    "fund_orphans_d": "Dauerhafte Hilfe für Waisen und ihre Familien"
+    "fund_orphans_d": "Dauerhafte Hilfe für Waisen und ihre Familien",
+    "addToCart": "In den Warenkorb",
+    "addedToCart": "Im Warenkorb — abschließen oder mehr hinzufügen",
+    "addToCartFailed": "Konnte nicht hinzugefügt werden"
   }
 }

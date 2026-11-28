@@ -4,6 +4,8 @@ import type { Locale } from "@/lib/seo";
 import { Suspense } from "react";
 import Navbar from "@/components/Navbar";
 import CartReminder from "@/components/CartReminder";
+import WhatsAppButton from "@/components/WhatsAppButton";
+import PreloadCheckout from "@/components/PreloadCheckout";
 import DonationPauseBanner from "@/components/DonationPauseBanner";
 import FieldGallery from "@/components/FieldGallery";
 import { CurrencyFromUrlSync } from "@/components/CurrencyFromUrlSync";
@@ -106,6 +108,8 @@ export default async function Rootlayout({
               <FieldGallery locale={locale} />
               <Footer />
               <CartReminder />
+              <WhatsAppButton />
+              <PreloadCheckout />
               <ConfettiProvider />
               <Toaster position="top-center" />
             </SessionProvider>

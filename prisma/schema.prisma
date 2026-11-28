@@ -263,6 +263,7 @@ model Category {
   donationItems          DonationCategoryItem[]
   subscriptionCategoryItems SubscriptionCategoryItem[]
   translations           CategoryTranslation[]
+  cartItems              CartItem[]
 }
 
 model CategoryTranslation {
@@ -663,7 +664,12 @@ model Comment {
 
 model CartItem {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  campaignId String   @db.ObjectId
+  /// A project line. Exactly one of campaignId / categoryId is set.
+  campaignId String?  @db.ObjectId
+  /// A category line (zakat for a country, given through the country's category).
+  categoryId String?  @db.ObjectId
+  /// What the line is for, shown in the cart (e.g. "زكاة المال — فلسطين · الغذاء").
+  label      String?
   userId     String   @db.ObjectId
 
   amount     Float
@@ -672,8 +678,9 @@ model CartItem {
   /// Optional: number of سهوم shares for this line (display / receipt)
   shareCount Int?
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 }

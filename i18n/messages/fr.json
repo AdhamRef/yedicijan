@@ -29,7 +29,8 @@
     "searchPlaceholder": "Rechercher...",
     "donate": "Faire un don",
     "signIn": "Connexion",
-    "bankAccounts": "Nos comptes bancaires"
+    "bankAccounts": "Nos comptes bancaires",
+    "whatsapp": "Écrivez-nous sur WhatsApp"
   },
   "BankTransfer": {
     "badge": "Don par virement bancaire",
@@ -649,7 +650,9 @@
     "sslSecurePayment": "Chiffrement SSL 256 bits · Paiement sécurisé",
     "certificateNoteTitle": "Recevez votre certificat de don ✨",
     "certificateNoteBody": "Indiquez votre vraie adresse e-mail afin que nous puissions vous envoyer le certificat officiel de don et votre reçu.",
-    "free": "Gratuit"
+    "free": "Gratuit",
+    "optionalShort": "Facultatif",
+    "donateAmount": "Donner {amount}"
   },
   "DonationSuccess": {
     "thankYou": "Merci beaucoup",
@@ -1212,7 +1215,12 @@
     "calcStepPrices": "Prix du jour et nisab",
     "calcStepDebts": "Dettes exigibles",
     "rowNet": "Patrimoine net",
-    "calcPending": "Saisissez vos biens pour calculer"
+    "calcPending": "Saisissez vos biens pour calculer",
+    "addToCart": "Ajouter au panier",
+    "addedToCart": "Ajouté au panier — finalisez ou ajoutez-en",
+    "addToCartFailed": "Impossible d’ajouter au panier",
+    "multiOk": "Plusieurs choix possibles",
+    "splitEach": "Réparti à parts égales : {amount} par pays"
   },
   "Waqf": {
     "navLabel": "Fonds de waqf",
@@ -1303,6 +1311,9 @@
     "fund_energy": "Fonds de l’énergie",
     "fund_energy_d": "Des panneaux solaires qui éclairent maisons et écoles pendant des années",
     "fund_orphans": "Fonds des orphelins",
-    "fund_orphans_d": "Un soutien durable aux orphelins et à leurs familles"
+    "fund_orphans_d": "Un soutien durable aux orphelins et à leurs familles",
+    "addToCart": "Ajouter au panier",
+    "addedToCart": "Ajouté au panier — finalisez ou ajoutez-en",
+    "addToCartFailed": "Impossible d’ajouter au panier"
   }
 }

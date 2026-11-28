@@ -21,7 +21,7 @@ import axios from "axios";
 import { useConfettiStore } from "@/hooks/use-confetti-store";
 import { getCurrency } from "@/hooks/useCampaignValue";
 import { useCart } from "@/hooks/useCart";
-import { resolveShareUnit, type ShareLabelsConfig } from "@/lib/campaign/share-labels";
+import { resolveShareUnit } from "@/lib/campaign/share-labels";
 import {
   resolveFinalTeamSupportAmounts,
   type SuggestedTeamSupportConfig,
@@ -44,25 +44,13 @@ import { PhoneInput } from "react-international-phone";
 import "react-international-phone/style.css";
 import { useIpCountry } from "@/hooks/useIpCountry";
 import InlineBold from "@/components/InlineBold";
+import { lineImage, linePayload, lineTargetId, lineTitle, type CartLineView } from "@/lib/cart/line";
 import { stripBoldMarkers } from "@/lib/text/inline-bold";
 
 const CART_CHECKOUT_RESUME_KEY = "alafiya:cart-checkout-resume:v1";
 const CHECKOUT_RESUME_TTL_MS = 30 * 60 * 1000;
 
-interface CartItem {
-  id: string;
-  amount: number;
-  amountUSD?: number;
-  shareCount?: number | null;
-  campaign: {
-    id: string;
-    title: string;
-    images: string[];
-    /** Per-campaign custom unit names ("sheep" / "meal" / etc.) keyed by locale. */
-    shareLabels?: ShareLabelsConfig | null;
-    translations?: { locale: string; title: string }[];
-  };
-}
+type CartItem = CartLineView;
 
 interface CartPaymentDialogProps {
   isOpen: boolean;
@@ -202,7 +190,7 @@ const CartPaymentDialog = ({
   useEffect(() => {
     if (!isOpen || !tracking || cartItems.length === 0 || checkoutTrackedRef.current) return;
     checkoutTrackedRef.current = true;
-    const ids = cartItems.map((i) => i.campaign?.id).filter(Boolean) as string[];
+    const ids = cartItems.map((i) => lineTargetId(i)).filter(Boolean) as string[];
     tracking.trackInitiateCheckout({ value: totalAmount, currency: getCurrency(), numItems: cartItems.length, contentIds: ids.length ? ids : undefined });
   }, [isOpen, tracking, cartItems, totalAmount]);
 
@@ -446,14 +434,13 @@ const CartPaymentDialog = ({
 
       // Build items with USD amounts
       const items = await Promise.all(
-        cartItems.map(async (item) => ({
-          campaignId: item.campaign.id,
-          amount: item.amount,
-          amountUSD: item.amountUSD != null && item.amountUSD > 0
-            ? item.amountUSD
-            : convertToUSD(item.amount, payCurrencyCode()),
-          ...(item.shareCount != null && item.shareCount > 0 ? { shareCount: item.shareCount } : {}),
-        }))
+        // Project lines and category lines (zakat per country) go to the same checkout.
+        cartItems.map(async (item) =>
+          linePayload(
+            item,
+            item.amountUSD != null && item.amountUSD > 0 ? item.amountUSD : convertToUSD(item.amount, payCurrencyCode()),
+          ),
+        )
       );
 
       const basePayload: Record<string, unknown> = {
@@ -756,11 +743,12 @@ const CartPaymentDialog = ({
         </div>
         <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-xl space-y-4 border border-gray-200 w-full overflow-hidden">
           {cartItems.map((item) => {
-            const title = item.campaign.translations?.find((tr) => tr.locale === locale)?.title ?? item.campaign.title;
+            const title = lineTitle(item, locale);
+            const image = lineImage(item);
             return (
               <div key={item.id} className={`flex items-center gap-2 w-full min-w-0 ${locale === "ar" ? "flex-row-reverse" : ""}`}>
                 <div className={`flex items-center gap-2 flex-1 min-w-0 overflow-hidden ${locale === "ar" ? "flex-row-reverse" : ""}`}>
-                  <Image src={item.campaign.images[0]} alt={stripBoldMarkers(title)} width={80} height={80} className="w-14 h-14 sm:w-20 sm:h-20 rounded-lg object-cover flex-shrink-0 shadow-sm" />
+                  {image && <Image src={image} alt={stripBoldMarkers(title)} width={80} height={80} className="w-14 h-14 sm:w-20 sm:h-20 rounded-lg object-cover flex-shrink-0 shadow-sm" />}
                   <div className={`min-w-0 max-w-48 ${locale === "ar" ? "text-right" : "text-left"}`}>
                     <span className="text-gray-900 font-medium text-sm block line-clamp-3" title={stripBoldMarkers(title)}><InlineBold text={title} /></span>
                     {item.shareCount != null && item.shareCount > 0 && (() => {

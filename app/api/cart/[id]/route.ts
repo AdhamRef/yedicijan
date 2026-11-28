@@ -9,8 +9,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const { id } = await params;
     const session = await getServerSession(authOptions);
-    const denied = requireAdminOrDashboardPermission(session, "revenue");
-    if (denied) return denied;
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!/^[a-f\d]{24}$/i.test(id)) return NextResponse.json({ error: "Cart item not found" }, { status: 404 });
 
     const cartItem = await prisma.cartItem.findUnique({
       where: { id },
@@ -22,6 +22,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         { status: 404 }
       );
     }
+
+    // The donor removes a line from their own cart. This used to require the dashboard's
+    // revenue permission, so a donor's "remove" silently failed and the line stayed.
+    if (cartItem.userId === session.user.id) {
+      await prisma.cartItem.delete({ where: { id } });
+      return NextResponse.json({ message: "Cart item deleted successfully" }, { status: 200 });
+    }
+
+    const denied = requireAdminOrDashboardPermission(session, "revenue");
+    if (denied) return denied;
 
     await prisma.cartItem.delete({
       where: { id },

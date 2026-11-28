@@ -193,11 +193,29 @@ export async function POST(request: NextRequest) {
     }
 
     type CartItemIn = {
-      campaignId: string;
+      campaignId?: string;
+      categoryId?: string;
       amount: number;
       amountUSD?: number;
       shareCount?: number;
     };
+    // A cart holds project lines and category lines (zakat for a country through the
+    // country's category). Each kind is saved the way a single donation already saves it.
+    const OBJECT_ID = /^[a-f\d]{24}$/i;
+    const lines = items as CartItemIn[];
+    const isProject = (l: CartItemIn) => typeof l.campaignId === "string" && OBJECT_ID.test(l.campaignId);
+    const isCategory = (l: CartItemIn) => typeof l.categoryId === "string" && OBJECT_ID.test(l.categoryId);
+    // Exactly one target per line (a line with neither would be paid for but saved nowhere).
+    if (lines.some((l) => !(Number(l.amount) > 0) || isProject(l) === isCategory(l))) {
+      return NextResponse.json({ error: "Each cart line needs an amount and exactly one of campaignId or categoryId" }, { status: 400 });
+    }
+    const projectLines = lines.filter(isProject);
+    const categoryLines = lines.filter(isCategory);
+    // What the lines are for (e.g. "زكاة المال — فلسطين · الغذاء"), kept on the donation so the
+    // team sees the chosen countries and fields; a category alone records only the country.
+    const lineNotes = (lines as Array<CartItemIn & { label?: unknown }>)
+      .map((l) => (typeof l.label === "string" ? l.label.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 140) : ""))
+      .filter(Boolean);
 
     let itemsResolved: Array<{
       campaignId: string;
@@ -205,11 +223,19 @@ export async function POST(request: NextRequest) {
       amountUSD: number;
       shareCount?: number;
     }>;
+    let categoryItemsResolved: Array<{ categoryId: string; amount: number; amountUSD: number }>;
 
     try {
+      categoryItemsResolved = await Promise.all(
+        categoryLines.map(async (item) => ({
+          categoryId: item.categoryId!,
+          amount: item.amount,
+          amountUSD: await convertAmountInCurrencyToUsd(item.amount, currencyNorm),
+        }))
+      );
       itemsResolved = await Promise.all(
-        (items as CartItemIn[]).map(async (item) => ({
-          campaignId: item.campaignId,
+        projectLines.map(async (item) => ({
+          campaignId: item.campaignId!,
           amount: item.amount,
           amountUSD: await convertAmountInCurrencyToUsd(item.amount, currencyNorm),
           ...(item.shareCount != null && item.shareCount > 0
@@ -225,13 +251,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify all campaigns exist and are active
-    const campaignIds = (items as { campaignId: string }[]).map((item) => item.campaignId);
-    const campaigns = await prisma.campaign.findMany({
-      where: { id: { in: campaignIds } },
-    });
+    // Verify all categories exist and are active
+    if (categoryLines.length) {
+      const catIds = [...new Set(categoryLines.map((l) => l.categoryId!))];
+      const cats = await prisma.category.findMany({ where: { id: { in: catIds } }, select: { id: true, isActive: true } });
+      if (cats.length !== catIds.length) {
+        return NextResponse.json({ error: "One or more categories not found" }, { status: 404 });
+      }
+      if (cats.some((c: { isActive: boolean | null }) => c.isActive === false)) {
+        return NextResponse.json({ error: "One or more categories are not active" }, { status: 400 });
+      }
+    }
 
-    if (campaigns.length !== items.length) {
+    // Verify all campaigns exist and are active
+    const campaignIds = [...new Set(projectLines.map((item) => item.campaignId!))];
+    const campaigns = campaignIds.length
+      ? await prisma.campaign.findMany({
+          where: { id: { in: campaignIds } },
+        })
+      : [];
+
+    if (campaigns.length !== campaignIds.length) {
       return NextResponse.json(
         { error: "One or more campaigns not found" },
         { status: 404 }
@@ -269,6 +309,7 @@ export async function POST(request: NextRequest) {
           referralId: referralId ?? undefined,
           paymentMethod,
           cardDetails: null,
+          ...(lineNotes.length ? { comment: lineNotes.join(" | ").slice(0, 1000) } : {}),
           items: {
             create: itemsResolved.map((item) => ({
               campaignId: item.campaignId,
@@ -279,6 +320,9 @@ export async function POST(request: NextRequest) {
                 : {}),
             })),
           },
+          ...(categoryItemsResolved.length
+            ? { categoryItems: { create: categoryItemsResolved } }
+            : {}),
         },
         include: {
           donor: { select: { name: true, email: true } },

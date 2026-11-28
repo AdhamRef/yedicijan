@@ -102,7 +102,12 @@ export async function GET(request: NextRequest) {
     const sourceParams = (searchParams.get("source") ?? "").split(",").map((v) => v.trim()).filter((v) => DONATION_SOURCE_CHANNELS.includes(v));
     const sourceWhere = !isAdmin || sourceParams.length === 0 ? null
       : sourceParams.length === 1 ? { sourceChannel: sourceParams[0] } : { sourceChannel: { in: [...new Set(sourceParams)] } };
-    const extraFilters = [searchWhere, localeWhere, countryWhere, sourceWhere].filter((w) => w != null);
+    // Payment gateway (stored metadata only). Inline for the same reason as above.
+    const providerParams = [...new Set((searchParams.get("provider") ?? "").split(",").map((v) => v.trim()).filter((v) => ["ALBARAKA", "PAYFOR", "__unset"].includes(v)))];
+    const providerOne = (v: string) => (v === "__unset" ? { OR: [{ provider: null }, { provider: "" }, { provider: { isSet: false } }] } : { provider: v });
+    const providerWhere = !isAdmin || providerParams.length === 0 ? null
+      : providerParams.length === 1 ? providerOne(providerParams[0]) : { OR: providerParams.map(providerOne) };
+    const extraFilters = [searchWhere, localeWhere, countryWhere, sourceWhere, providerWhere].filter((w) => w != null);
     const where: Record<string, unknown> =
       extraFilters.length > 0 ? { AND: [baseWhere, ...extraFilters] } : baseWhere;
 
@@ -186,6 +191,7 @@ export async function POST(request: NextRequest) {
       type = "ONE_TIME",
       paymentMethod,
       referralCode,
+      note,
       referralId: bodyReferralId,
       locale: donationLocale,
       guest,
@@ -386,6 +392,8 @@ export async function POST(request: NextRequest) {
           referralId: referralId ?? undefined,
           paymentMethod,
           cardDetails: null,
+          // What the donor chose on the page (zakat: country and fields), for the team.
+          ...(typeof note === "string" && note.trim() ? { comment: note.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 500) } : {}),
           items: hasCampaignItems
             ? {
                 create: campaignItemsResolved.map((item) => ({
