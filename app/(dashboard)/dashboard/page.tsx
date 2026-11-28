@@ -1,5 +1,6 @@
 "use client";
 
+import { DONATION_PROVIDER_OPTIONS } from "@/lib/dashboard/donation-provider-filter";
 import { useLiveDonationRefresh } from "@/hooks/useLiveDonationRefresh";
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useLocale } from "next-intl";
@@ -330,6 +331,8 @@ export default function DashboardPage() {
   const [donationLocaleFilter, setDonationLocaleFilter] = useState<string>("all");
   const [donationCountryFilter, setDonationCountryFilter] = useState<string>("all");
   const [donationSourceFilter, setDonationSourceFilter] = useState("all");
+  // Payment gateway (البركة / PayFor / without a gateway) — stored metadata only.
+  const [donationProviderFilter, setDonationProviderFilter] = useState("all");
 
   // Saved filter sets: the author's own, plus those shared with the team (#283).
   type SavedView = { id: string; name: string; filters: Record<string, string>; shared: boolean; mine: boolean; ownerName: string | null };
@@ -338,12 +341,13 @@ export default function DashboardPage() {
     fetch("/api/admin/dashboard-views", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d?.views) setSavedViews(d.views as SavedView[]); }).catch(() => {});
   }, []);
   useEffect(() => { loadViews(); }, [loadViews]);
-  const currentFilters = (): Record<string, string> => ({ selectedCategory, selectedCampaign, donationSourceFilter, donationLocaleFilter, donationCountryFilter, donationsStatusFilter, chartPeriod, dateFrom, dateTo });
+  const currentFilters = (): Record<string, string> => ({ selectedCategory, selectedCampaign, donationSourceFilter, donationProviderFilter, donationLocaleFilter, donationCountryFilter, donationsStatusFilter, chartPeriod, dateFrom, dateTo });
   const applyView = (v: SavedView) => {
     const vf = v.filters;
     if (vf.selectedCategory) setSelectedCategory(vf.selectedCategory);
     if (vf.selectedCampaign) setSelectedCampaign(vf.selectedCampaign);
     if (vf.donationSourceFilter) setDonationSourceFilter(vf.donationSourceFilter);
+    setDonationProviderFilter(vf.donationProviderFilter || "all");
     if (vf.donationLocaleFilter) setDonationLocaleFilter(vf.donationLocaleFilter);
     if (vf.donationCountryFilter) setDonationCountryFilter(vf.donationCountryFilter);
     if (vf.donationsStatusFilter === "all" || vf.donationsStatusFilter === "PAID" || vf.donationsStatusFilter === "FAILED") setDonationsStatusFilter(vf.donationsStatusFilter);
@@ -514,6 +518,7 @@ export default function DashboardPage() {
       if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
       if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
       if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
+      if (donationProviderFilter !== "all") params.set("provider", donationProviderFilter);
       const response = await axios.get(`/api/admin/donations/chart?${params}`);
       setChartData(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
@@ -523,7 +528,7 @@ export default function DashboardPage() {
     } finally {
       setChartLoading(false);
     }
-  }, [selectedCategory, selectedCampaign, selectedUserId, searchParams, chartPeriod, dateFrom, dateTo, showFailed, donationLocaleFilter, donationCountryFilter, donationSourceFilter]);
+  }, [selectedCategory, selectedCampaign, selectedUserId, searchParams, chartPeriod, dateFrom, dateTo, showFailed, donationLocaleFilter, donationCountryFilter, donationSourceFilter, donationProviderFilter]);
 
   useEffect(() => {
     fetchChartData();
@@ -544,6 +549,7 @@ export default function DashboardPage() {
       if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
       if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
       if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
+      if (donationProviderFilter !== "all") params.set("provider", donationProviderFilter);
       const response = await fetch(`/api/admin/stats?${params}`);
       const data = await response.json();
       if (!response.ok) {
@@ -558,7 +564,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter, donationSourceFilter]);
+  }, [chartPeriod, dateFrom, dateTo, selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter, donationSourceFilter, donationProviderFilter]);
 
   useEffect(() => {
     fetchStats();
@@ -576,6 +582,7 @@ export default function DashboardPage() {
       if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
       if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
       if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
+      if (donationProviderFilter !== "all") params.set("provider", donationProviderFilter);
       const response = await fetch(`/api/admin/stats?${params}`);
       const data = await response.json();
       if (requestId !== todayRequestId.current) return;
@@ -586,7 +593,7 @@ export default function DashboardPage() {
       console.error("Error fetching today's stats:", error);
       setTodayError(true);
     }
-  }, [selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter, donationSourceFilter]);
+  }, [selectedCategory, selectedCampaign, donationLocaleFilter, donationCountryFilter, donationSourceFilter, donationProviderFilter]);
 
   useEffect(() => {
     fetchTodayStats();
@@ -613,6 +620,7 @@ export default function DashboardPage() {
         if (donationLocaleFilter !== "all") params.set("locale", donationLocaleFilter);
         if (donationCountryFilter !== "all") params.set("country", donationCountryFilter);
         if (donationSourceFilter !== "all") params.set("source", donationSourceFilter);
+      if (donationProviderFilter !== "all") params.set("provider", donationProviderFilter);
         if (donationsSearch) params.set("search", donationsSearch);
         const res = await fetch(`/api/donations?${params}`);
         const data = await res.json();
@@ -644,6 +652,7 @@ export default function DashboardPage() {
       donationLocaleFilter,
       donationCountryFilter,
       donationSourceFilter,
+      donationProviderFilter,
       donationsSearch,
     ]
   );
@@ -719,6 +728,7 @@ export default function DashboardPage() {
       locale: donationLocaleFilter === "all" ? "all" : String(donationLocaleFilter),
       country: donationCountryFilter,
       source: donationSourceFilter,
+      provider: donationProviderFilter,
       sortBy: donationsSortBy,
       sortOrder: donationsSortOrder,
     };
@@ -732,6 +742,7 @@ export default function DashboardPage() {
     donationLocaleFilter,
     donationCountryFilter,
     donationSourceFilter,
+    donationProviderFilter,
     donationsSortBy,
     donationsSortOrder,
   ]);
@@ -1704,6 +1715,10 @@ export default function DashboardPage() {
   {/* Donation source (classified attribution) — several at once */}
   <MultiPick label="مصدر التبرع" allLabel="كل المصادر" selected={pickList(donationSourceFilter)} onChange={(next) => setDonationSourceFilter(pickValue(next))}
     options={[["facebook", "فيسبوك"], ["instagram", "إنستغرام"], ["whatsapp", "واتساب"], ["email", "البريد الإلكتروني"], ["google_ads", "إعلانات Google"], ["google_search", "بحث Google"], ["tiktok", "تيك توك"], ["direct", "مباشر"], ["other", "أخرى"], ["unknown", "غير معروف"]].map(([value, label]) => ({ value, label }))} />
+
+  {/* Payment gateway — several at once (stored metadata; no gateway is called) */}
+  <MultiPick label="بوابة الدفع" allLabel="كل البوابات" selected={pickList(donationProviderFilter)} onChange={(next) => setDonationProviderFilter(pickValue(next))}
+    options={DONATION_PROVIDER_OPTIONS.map(({ value, label }) => ({ value, label }))} />
 
   {/* Site language (donation row locale) — several at once */}
   <MultiPick label="لغة الموقع (التبرع)" allLabel="كل اللغات" selected={pickList(donationLocaleFilter)} onChange={(next) => setDonationLocaleFilter(pickValue(next))}

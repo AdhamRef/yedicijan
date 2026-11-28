@@ -157,7 +157,8 @@
     "searchPlaceholder": "Search...",
     "donate": "Donate Now",
     "signIn": "Sign In",
-    "bankAccounts": "Our Bank Accounts"
+    "bankAccounts": "Our Bank Accounts",
+    "whatsapp": "Chat with us on WhatsApp"
   },
   "HomePage": {
     "donationCategories": "Donation Areas",
@@ -649,7 +650,9 @@
     "sslSecurePayment": "256-bit SSL encrypted · Secure payment",
     "certificateNoteTitle": "Get your donation certificate ✨",
     "certificateNoteBody": "Add your real email address so we can send you the official donation certificate and receipt.",
-    "free": "Free"
+    "free": "Free",
+    "optionalShort": "Optional",
+    "donateAmount": "Donate {amount}"
   },
   "DonationSuccess": {
     "thankYou": "Thank you very much",
@@ -1212,7 +1215,12 @@
     "calcStepPrices": "Today’s prices and nisab",
     "calcStepDebts": "Debts due",
     "rowNet": "Net wealth",
-    "calcPending": "Enter your wealth to calculate"
+    "calcPending": "Enter your wealth to calculate",
+    "addToCart": "Add to cart",
+    "addedToCart": "Added to cart — check out or add more",
+    "addToCartFailed": "Could not add to cart",
+    "multiOk": "You can pick several",
+    "splitEach": "Shared equally: {amount} per country"
   },
   "Waqf": {
     "navLabel": "Waqf funds",
@@ -1303,6 +1311,9 @@
     "fund_energy": "Energy fund",
     "fund_energy_d": "Solar panels that light homes and schools for years",
     "fund_orphans": "Orphan care fund",
-    "fund_orphans_d": "Lasting support for orphans and their families"
+    "fund_orphans_d": "Lasting support for orphans and their families",
+    "addToCart": "Add to cart",
+    "addedToCart": "Added to cart — check out or add more",
+    "addToCartFailed": "Could not add to cart"
   }
 }

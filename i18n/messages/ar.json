@@ -157,7 +157,8 @@
     "searchPlaceholder": "ابحث...",
     "donate": "تبرع الآن",
     "signIn": "تسجيل الدخول",
-    "bankAccounts": "حساباتنا البنكية"
+    "bankAccounts": "حساباتنا البنكية",
+    "whatsapp": "تواصل معنا عبر واتساب"
   },
   "HomePage": {
     "donationCategories": "مجالات التبرع",
@@ -649,7 +650,9 @@
     "sslSecurePayment": "تشفير SSL 256-بت · دفع آمن",
     "certificateNoteTitle": "احصل على شهادة تبرعك ✨",
     "certificateNoteBody": "أدخل بريدك الإلكتروني الصحيح حتى نتمكن من إرسال شهادة التبرع الرسمية والإيصال إليك.",
-    "free": "مجاني"
+    "free": "مجاني",
+    "optionalShort": "اختياري",
+    "donateAmount": "تبرّع بـ {amount}"
   },
   "DonationSuccess": {
     "thankYou": "شكرًا جزيلًا",
@@ -1212,7 +1215,12 @@
     "calcStepPrices": "أسعار اليوم والنصاب",
     "calcStepDebts": "الديون الحالّة",
     "rowNet": "صافي المال",
-    "calcPending": "أدخل أموالك لحساب الزكاة"
+    "calcPending": "أدخل أموالك لحساب الزكاة",
+    "addToCart": "أضف إلى السلة",
+    "addedToCart": "أُضيف إلى السلة — أكمل وقفك أو أضف المزيد",
+    "addToCartFailed": "تعذّرت الإضافة إلى السلة",
+    "multiOk": "يمكن اختيار أكثر من دولة",
+    "splitEach": "يُقسَّم بالتساوي: {amount} لكل دولة"
   },
   "Waqf": {
     "navLabel": "الصناديق الوقفية",
@@ -1303,6 +1311,9 @@
     "fund_energy": "صندوق الطاقة",
     "fund_energy_d": "ألواح شمسية تُنير البيوت والمدارس سنوات",
     "fund_orphans": "صندوق رعاية الأيتام",
-    "fund_orphans_d": "ريعٌ دائم يسند الأيتام وأسرهم"
+    "fund_orphans_d": "ريعٌ دائم يسند الأيتام وأسرهم",
+    "addToCart": "أضف إلى السلة",
+    "addedToCart": "أُضيف إلى السلة — أكمل وقفك أو أضف المزيد",
+    "addToCartFailed": "تعذّرت الإضافة إلى السلة"
   }
 }

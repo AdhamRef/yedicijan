@@ -37,6 +37,13 @@ const DonationSidebar = ({ campaign, isMobileSticky = false }: DonationSidebarPr
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isDonationOpen, setIsDonationOpen] = useState(false);
 
+  // The phone sticky bar lifts the floating cart and WhatsApp buttons above it (globals.css).
+  useEffect(() => {
+    if (!isMobileSticky) return;
+    document.documentElement.classList.add("has-mobile-donate-bar");
+    return () => document.documentElement.classList.remove("has-mobile-donate-bar");
+  }, [isMobileSticky]);
+
   // After sign-in redirect: open donation dialog once and clean URL (only one instance handles it)
   useEffect(() => {
     if (searchParams.get("openDonation") !== "1") {

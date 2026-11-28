@@ -26,7 +26,8 @@
     "searchPlaceholder": "Pesquisar...",
     "donate": "Doar agora",
     "signIn": "Entrar",
-    "bankAccounts": "Nossas contas bancárias"
+    "bankAccounts": "Nossas contas bancárias",
+    "whatsapp": "Fale connosco no WhatsApp"
   },
   "BankTransfer": {
     "badge": "Doação por transferência bancária",
@@ -649,7 +650,9 @@
     "sslSecurePayment": "Criptografia SSL de 256 bits · Pagamento seguro",
     "certificateNoteTitle": "Receba seu certificado de doação ✨",
     "certificateNoteBody": "Informe seu e-mail real para que possamos enviar o certificado oficial de doação e o recibo.",
-    "free": "Grátis"
+    "free": "Grátis",
+    "optionalShort": "Opcional",
+    "donateAmount": "Doar {amount}"
   },
   "DonationSuccess": {
     "thankYou": "Muito obrigado",
@@ -1212,7 +1215,12 @@
     "calcStepPrices": "Preços de hoje e nisab",
     "calcStepDebts": "Dívidas vencidas",
     "rowNet": "Património líquido",
-    "calcPending": "Introduza os seus bens para calcular"
+    "calcPending": "Introduza os seus bens para calcular",
+    "addToCart": "Adicionar ao carrinho",
+    "addedToCart": "Adicionado ao carrinho — conclua ou adicione mais",
+    "addToCartFailed": "Não foi possível adicionar",
+    "multiOk": "Pode escolher vários",
+    "splitEach": "Dividido por igual: {amount} por país"
   },
   "Waqf": {
     "navLabel": "Fundos de waqf",
@@ -1303,6 +1311,9 @@
     "fund_energy": "Fundo de energia",
     "fund_energy_d": "Painéis solares que iluminam casas e escolas durante anos",
     "fund_orphans": "Fundo dos órfãos",
-    "fund_orphans_d": "Apoio duradouro aos órfãos e às suas famílias"
+    "fund_orphans_d": "Apoio duradouro aos órfãos e às suas famílias",
+    "addToCart": "Adicionar ao carrinho",
+    "addedToCart": "Adicionado ao carrinho — conclua ou adicione mais",
+    "addToCartFailed": "Não foi possível adicionar"
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { mergeDonationSourceFilter } from '@/lib/dashboard/donation-source-filter';
+import { mergeDonationProviderFilter } from '@/lib/dashboard/donation-provider-filter';
 import { campaignCategoryWhere, donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere, idOrIn } from '@/lib/dashboard/donation-multi-filter';
 import { prisma } from '@/lib/prisma';
 import { getCurrentCalendarMonthIstanbulRange } from '@/lib/admin/current-calendar-month-utc';
@@ -84,10 +85,12 @@ function mergeFilters(
   where: Record<string, unknown>,
   locale: string | null,
   country: string | null,
-  source: string | null = null
+  source: string | null = null,
+  provider: string | null = null
 ) {
   // source: the donation-source filter — the chart, list and export applied it; the KPIs did not (#287).
-  return mergeDonationSourceFilter(mergeCountryFilter(mergeLocaleFilter(where, locale), country), source);
+  // provider: the payment-gateway filter (stored metadata only; no gateway is called).
+  return mergeDonationProviderFilter(mergeDonationSourceFilter(mergeCountryFilter(mergeLocaleFilter(where, locale), country), source), provider);
 }
 
 function buildDonationItemWhere(
@@ -97,14 +100,16 @@ function buildDonationItemWhere(
   campaignId: string | null,
   locale: string | null,
   country: string | null,
-  source: string | null = null
+  source: string | null = null,
+  provider: string | null = null
 ) {
   const base: Record<string, unknown> = {
     donation: mergeFilters(
       { createdAt: { gte: startDate, lte: endDate }, ...PAID_DONATION_FILTER },
       locale,
       country,
-      source
+      source,
+      provider
     ),
   };
   const campaignIds = idOrIn(campaignId);
@@ -123,14 +128,16 @@ function buildDonationCategoryItemWhere(
   categoryId: string | null,
   locale: string | null,
   country: string | null,
-  source: string | null = null
+  source: string | null = null,
+  provider: string | null = null
 ) {
   const base: Record<string, unknown> = {
     donation: mergeFilters(
       { createdAt: { gte: startDate, lte: endDate }, ...PAID_DONATION_FILTER },
       locale,
       country,
-      source
+      source,
+      provider
     ),
   };
   const categoryIds = idOrIn(categoryId);
@@ -155,19 +162,22 @@ export async function GET(request: NextRequest) {
     const locale = searchParams.get('locale')?.trim() ?? null;
     const country = searchParams.get('country')?.trim() ?? null;
     const source = searchParams.get('source')?.trim() ?? null;
+    const provider = searchParams.get('provider')?.trim() ?? null;
 
     const { startDate, endDate } = getDateRange(period, startParam, endParam);
     const donationWhere = mergeFilters(
       buildDonationWhere(startDate, endDate, categoryId, campaignId),
       locale,
       country,
-      source
+      source,
+      provider
     );
     const donationWhereAllTime = mergeFilters(
       buildDonationWhereAllTime(categoryId, campaignId),
       locale,
       country,
-      source
+      source,
+      provider
     );
 
     // Revenue counts settled donations only — see lib/dashboard/donation-usd-revenue.ts.
@@ -184,7 +194,8 @@ export async function GET(request: NextRequest) {
       buildDonationWhere(monthStart, monthEnd, categoryId, campaignId),
       locale,
       country,
-      source
+      source,
+      provider
     );
     const thisMonthPaidWhere = donationWhereAll(thisMonthDonationWhere, PAID_DONATION_FILTER);
 
@@ -241,12 +252,12 @@ export async function GET(request: NextRequest) {
       prisma.donationItem.aggregate({
         _sum: { amountUSD: true, amount: true },
         _count: { id: true },
-        where: buildDonationItemWhere(startDate, endDate, categoryId, campaignId, locale, country, source),
+        where: buildDonationItemWhere(startDate, endDate, categoryId, campaignId, locale, country, source, provider),
       }),
       prisma.donationCategoryItem.aggregate({
         _sum: { amountUSD: true, amount: true },
         _count: { id: true },
-        where: buildDonationCategoryItemWhere(startDate, endDate, categoryId, locale, country, source),
+        where: buildDonationCategoryItemWhere(startDate, endDate, categoryId, locale, country, source, provider),
       }),
       prisma.donation.findMany({
         take: 10,

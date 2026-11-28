@@ -1,4 +1,5 @@
 import { mergeDonationSourceFilter } from '@/lib/dashboard/donation-source-filter';
+import { mergeDonationProviderFilter } from '@/lib/dashboard/donation-provider-filter';
 import { donationCampaignWhere, donationCategoryWhere, donationCountryWhere, donationLocaleWhere } from '@/lib/dashboard/donation-multi-filter';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
       innerWhere.AND = [categoryScope];
     }
 
-    const baseWhere = mergeDonationSourceFilter(mergeCountryFilter(mergeLocaleFilter(innerWhere, locale), country), searchParams.get('source'));
+    const baseWhere = mergeDonationProviderFilter(mergeDonationSourceFilter(mergeCountryFilter(mergeLocaleFilter(innerWhere, locale), country), searchParams.get('source')), searchParams.get('provider'));
 
     // Always fetch both paid and failed donations
     const donations = await prisma.donation.findMany({

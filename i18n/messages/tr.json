@@ -26,7 +26,8 @@
     "searchPlaceholder": "Ara...",
     "donate": "Şimdi Bağış Yap",
     "signIn": "Giriş Yap",
-    "bankAccounts": "Banka Hesaplarımız"
+    "bankAccounts": "Banka Hesaplarımız",
+    "whatsapp": "WhatsApp üzerinden yazın"
   },
   "BankTransfer": {
     "badge": "Banka Havalesi ile Bağış",
@@ -649,7 +650,9 @@
     "sslSecurePayment": "256 bit SSL şifreli · Güvenli ödeme",
     "certificateNoteTitle": "Bağış sertifikanızı alın ✨",
     "certificateNoteBody": "Resmi bağış sertifikanızı ve makbuzunuzu gönderebilmemiz için gerçek e-posta adresinizi girin.",
-    "free": "Ücretsiz"
+    "free": "Ücretsiz",
+    "optionalShort": "İsteğe bağlı",
+    "donateAmount": "{amount} bağışla"
   },
   "DonationSuccess": {
     "thankYou": "Çok teşekkür ederiz",
@@ -1212,7 +1215,12 @@
     "calcStepPrices": "Günün fiyatları ve nisap",
     "calcStepDebts": "Vadesi gelen borçlar",
     "rowNet": "Net varlık",
-    "calcPending": "Hesaplamak için mallarınızı girin"
+    "calcPending": "Hesaplamak için mallarınızı girin",
+    "addToCart": "Sepete ekle",
+    "addedToCart": "Sepete eklendi — tamamlayın ya da ekleyin",
+    "addToCartFailed": "Sepete eklenemedi",
+    "multiOk": "Birden fazla seçebilirsiniz",
+    "splitEach": "Eşit bölünür: ülke başına {amount}"
   },
   "Waqf": {
     "navLabel": "Vakıf fonları",
@@ -1303,6 +1311,9 @@
     "fund_energy": "Enerji fonu",
     "fund_energy_d": "Evleri ve okulları yıllarca aydınlatan güneş panelleri",
     "fund_orphans": "Yetim fonu",
-    "fund_orphans_d": "Yetimlere ve ailelerine kalıcı destek"
+    "fund_orphans_d": "Yetimlere ve ailelerine kalıcı destek",
+    "addToCart": "Sepete ekle",
+    "addedToCart": "Sepete eklendi — tamamlayın ya da ekleyin",
+    "addToCartFailed": "Sepete eklenemedi"
   }
 }

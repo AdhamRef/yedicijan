@@ -16,7 +16,7 @@ import axios from "axios";
 import { useLocale, useTranslations } from "next-intl";
 import {
   Baby, BadgeCheck, Calculator, Coins, Gem, Store, TrendingUp, Wallet, Camera, ClipboardCheck, Droplets, Globe2, HandCoins, Heart, HeartHandshake, House,
-  Landmark, Lock, LockOpen, Luggage, MapPin, MessageCircle, Receipt, ShieldCheck, Shirt, Sprout, Stethoscope, Tent, Truck, Wheat,
+  Landmark, Lock, LockOpen, Luggage, MapPin, MessageCircle, Receipt, ShieldCheck, Shirt, ShoppingCart, Sprout, Stethoscope, Tent, Truck, Wheat,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "@/i18n/routing";
@@ -24,6 +24,11 @@ import CategoryIcon from "@/components/CategoryIcon";
 import SectionHeading from "@/components/brand/SectionHeading";
 import { useCurrency } from "@/context/CurrencyContext";
 import { getCurrency, getCurrencySymbol } from "@/hooks/useCampaignValue";
+import { useSession } from "next-auth/react";
+import { toast } from "react-hot-toast";
+import { addLineToCart } from "@/lib/cart/client";
+import { CART_OPEN_EVENT } from "@/components/CartReminder";
+import { stripBoldMarkers } from "@/lib/text/inline-bold";
 import { formatNumber } from "@/hooks/formatNumber";
 import { isolateLtr } from "@/lib/campaign/funding";
 import { computeZakat, KARAT_PURITY, NISAB_GRAMS, type Karat, type NisabStandard } from "@/lib/zakat/calc";
@@ -155,13 +160,32 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
   }, [locale]);
 
   // ── Pay band ──
-  const [destPick, setDest] = useState<string>(DESTS[0].key);
+  // Several countries and fields can be chosen; the amount is shared equally between countries.
+  const [destPicks, setDestPicks] = useState<string[]>([DESTS[0].key]);
   // Countries that can be paid on the site: a zakat campaign/category, or the country's own category.
   const payable = (key: string) =>
     Boolean(category) || Boolean(countryCats[key]) || programmes.some((p: CampaignLite) => p.slug === `zakat-${key}` || COUNTRY_WORDS[key]?.test(p.title ?? ""));
   const dests = DESTS.filter((d) => !catsLoaded || payable(d.key));
-  const dest = dests.some((d) => d.key === destPick) ? destPick : dests[0]?.key ?? DESTS[0].key;
-  const [fieldKey, setFieldKey] = useState<string>("any");
+  const pickedDests = destPicks.filter((k) => dests.some((d) => d.key === k));
+  const selectedDests = pickedDests.length ? pickedDests : [dests[0]?.key ?? DESTS[0].key];
+  const dest = selectedDests[0];
+  const multi = selectedDests.length > 1;
+  const toggleDest = (key: string) =>
+    setDestPicks((cur) => {
+      const now = cur.filter((k) => dests.some((d) => d.key === k));
+      if (now.includes(key)) return now.length > 1 ? now.filter((k) => k !== key) : now;
+      return [...now, key];
+    });
+  const [fieldKeys, setFieldKeys] = useState<string[]>(["any"]);
+  // "The most in need" stands alone; any other field replaces it.
+  const toggleField = (key: string) =>
+    setFieldKeys((cur) => {
+      if (key === "any") return ["any"];
+      const rest = cur.filter((k) => k !== "any");
+      const next = rest.includes(key) ? rest.filter((k) => k !== key) : [...rest, key];
+      return next.length ? next : ["any"];
+    });
+  const fieldsText = fieldKeys.map((k) => t(`field_${k}`)).join("، ");
   // The country's campaign in the zakat category: slug `zakat-<country>`, else its name in the title.
   const chosen =
     programmes.find((p: CampaignLite) => p.slug === `zakat-${dest}`) ??
@@ -178,8 +202,55 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
   const canPay = payAmount > 0 && Boolean(chosen || payCategory);
   const canPress = canPay;
   const [dialogOpen, setDialogOpen] = useState(false);
-  const pay = () => {
-    if (canPay) setDialogOpen(true);
+  // Where each chosen country's share is recorded (same order as for one country).
+  const targetFor = (key: string) => {
+    const camp =
+      programmes.find((p: CampaignLite) => p.slug === `zakat-${key}`) ??
+      programmes.find((p: CampaignLite) => COUNTRY_WORDS[key]?.test(p.title ?? "")) ??
+      null;
+    if (camp) return { campaign: { id: camp.id as string, title: stripBoldMarkers(camp.title as string), image: camp.images?.[0] as string | undefined } };
+    const cat = category ?? countryCats[key];
+    // A country category often has no photo; the cart then shows the page's own zakat photo.
+    return cat ? { category: { id: cat.id, name: cat.name, image: cat.image || heroImage || null } } : null;
+  };
+  const perCountry = Math.floor((payAmount / selectedDests.length) * 100) / 100;
+  const { data: session } = useSession();
+  const [adding, setAdding] = useState(false);
+  /** Puts one line per chosen country in the cart. Returns false if nothing could be added. */
+  const addAllToCart = async () => {
+    if (!(payAmount > 0) || adding) return false;
+    setAdding(true);
+    try {
+      let added = 0;
+      for (let i = 0; i < selectedDests.length; i++) {
+        const key = selectedDests[i];
+        const target = targetFor(key);
+        if (!target) continue;
+        // The last country takes the cents left by the even split, so the lines add up to the total.
+        const amount = i === selectedDests.length - 1 ? Math.round((payAmount - perCountry * (selectedDests.length - 1)) * 100) / 100 : perCountry;
+        await addLineToCart(
+          { ...target, amount, amountUSD: Math.round((amount / rate) * 100) / 100, currency: currencyCode, label: `${t("navLabel")} — ${t(`dest_${key}`)} · ${fieldsText}` },
+          Boolean(session?.user),
+        );
+        added++;
+      }
+      if (added) toast.success(t("addedToCart"));
+      return added > 0;
+    } catch {
+      toast.error(t("addToCartFailed"));
+      return false;
+    } finally {
+      setAdding(false);
+    }
+  };
+  const pay = async () => {
+    if (!canPay) return;
+    // One country: the donation dialog as before. Several: into the cart, then its checkout.
+    if (!multi) {
+      setDialogOpen(true);
+      return;
+    }
+    if (await addAllToCart()) window.dispatchEvent(new CustomEvent(CART_OPEN_EVENT));
   };
 
   // ── Calculator ──
@@ -314,12 +385,12 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
 
           <div className="grid gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-7">
             <fieldset className="min-w-0">
-              <legend className="contents">{bandLabel(1, t("step1"))}</legend>
+              <legend className="contents">{bandLabel(1, t("step1"), <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-ice/80">{t("multiOk")}</span>)}</legend>
               <div className={pillRow}>
                 {dests.map((d) => {
-                  const on = dest === d.key;
+                  const on = selectedDests.includes(d.key);
                   return (
-                    <button key={d.key} type="button" aria-pressed={on} onClick={() => setDest(d.key)} className={pill(on)}>
+                    <button key={d.key} type="button" aria-pressed={on} onClick={() => toggleDest(d.key)} className={pill(on)}>
                       <CategoryIcon name={d.icon} className={`h-3 w-4 ${d.icon === "Globe" ? (on ? "text-burgundy" : "text-gold") : ""}`} />
                       {t(`dest_${d.key}`)}
                     </button>
@@ -332,9 +403,9 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
               <legend className="contents">{bandLabel(2, t("stepField"), <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-ice/80">{t("optional")}</span>)}</legend>
               <div className={pillRow}>
                 {FIELDS.map(({ key, Icon }) => {
-                  const on = fieldKey === key;
+                  const on = fieldKeys.includes(key);
                   return (
-                    <button key={key} type="button" aria-pressed={on} onClick={() => setFieldKey(key)} className={pill(on)}>
+                    <button key={key} type="button" aria-pressed={on} onClick={() => toggleField(key)} className={pill(on)}>
                       <Icon className={`h-4 w-4 ${on ? "text-burgundy" : "text-gold"}`} strokeWidth={1.8} />
                       {t(`field_${key}`)}
                     </button>
@@ -366,13 +437,23 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
               </div>
             </fieldset>
             <div className="lg:min-w-[260px]">
-              <p className="mb-2 flex items-center justify-center gap-1.5 text-xs font-bold text-ice/80 lg:justify-start">
-                <CategoryIcon name={DESTS.find((d) => d.key === dest)?.icon} className={`h-3.5 w-5 ${dest === "africa" ? "text-gold" : ""}`} />
-                {t(`dest_${dest}`)}<span className="text-white/30">·</span>{t(`field_${fieldKey}`)}
+              <p className="mb-2 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 text-xs font-bold text-ice/80 lg:justify-start">
+                {selectedDests.map((k) => (
+                  <span key={k} className="inline-flex items-center gap-1">
+                    <CategoryIcon name={DESTS.find((d) => d.key === k)?.icon} className={`h-3.5 w-5 ${k === "africa" ? "text-gold" : ""}`} />
+                    {t(`dest_${k}`)}
+                  </span>
+                ))}
+                <span className="text-white/30">·</span>{fieldsText}
               </p>
+              {multi && <p className="mb-2 text-center text-[11.5px] text-gold lg:text-start">{t("splitEach", { amount: money(perCountry) })}</p>}
               <button type="button" disabled={!canPress} onClick={pay}
                 className="inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-gold px-7 text-base font-extrabold text-deep shadow-[0_16px_30px_-16px_rgba(246,188,81,.9)] transition-transform hover:-translate-y-0.5 disabled:opacity-50">
                 <Heart className="h-5 w-5" />{t("payWith", { amount: money(payAmount) })}
+              </button>
+              <button type="button" disabled={!canPress || adding} onClick={() => void addAllToCart()}
+                className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/[0.06] text-sm font-extrabold text-white transition-colors hover:bg-white/15 disabled:opacity-50">
+                <ShoppingCart className="h-4 w-4 text-gold" />{t("addToCart")}
               </button>
             </div>
           </div>
@@ -595,12 +676,13 @@ export default function ZakatPageContent({ prices }: { prices: MetalPriceQuote }
 
 
       {dialogOpen && !chosen && payCategory && (
-        <DonationDialog isOpen onClose={() => setDialogOpen(false)} categoryId={payCategory.id} categoryName={`${t("navLabel")} — ${t(`dest_${dest}`)}`} categoryImage={payCategory.image ?? undefined} initialDonationAmount={payAmount} />
+        <DonationDialog isOpen onClose={() => setDialogOpen(false)} categoryId={payCategory.id} categoryName={`${t("navLabel")} — ${t(`dest_${dest}`)}`} categoryImage={payCategory.image ?? undefined} initialDonationAmount={payAmount} note={`${t("navLabel")} — ${t(`dest_${dest}`)} · ${fieldsText}`} />
       )}
       {dialogOpen && chosen && (
         <DonationDialog
           isOpen
           onClose={() => setDialogOpen(false)}
+          note={`${t("navLabel")} — ${t(`dest_${dest}`)} · ${fieldsText}`}
           campaignId={chosen.id}
           campaignTitle={chosen.title}
           campaignImage={chosen.images?.[0]}

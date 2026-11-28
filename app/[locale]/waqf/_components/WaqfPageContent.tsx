@@ -17,14 +17,17 @@ import axios from "axios";
 import { useLocale, useTranslations } from "next-intl";
 import {
   BadgeCheck, Baby, Building2, Check, Droplet, GraduationCap, Heart, House, Infinity as InfinityIcon, Landmark, Lock, Minus, Plus,
-  ScrollText, ShieldCheck, Sparkles, Sun, type LucideIcon,
+  ScrollText, ShieldCheck, ShoppingCart, Sparkles, Sun, type LucideIcon,
 } from "lucide-react";
 import { Link } from "@/i18n/routing";
 import SectionHeading from "@/components/brand/SectionHeading";
 import InlineBold from "@/components/InlineBold";
 import MosqueIcon from "@/app/[locale]/_components/homepage/MosqueIcon";
 import { useCurrency } from "@/context/CurrencyContext";
-import { getCurrencySymbol } from "@/hooks/useCampaignValue";
+import { getCurrency, getCurrencySymbol } from "@/hooks/useCampaignValue";
+import { useSession } from "next-auth/react";
+import { toast } from "react-hot-toast";
+import { addLineToCart } from "@/lib/cart/client";
 import { formatNumber } from "@/hooks/formatNumber";
 import { isolateLtr } from "@/lib/campaign/funding";
 import { stripBoldMarkers } from "@/lib/text/inline-bold";
@@ -206,8 +209,44 @@ export default function WaqfPageContent() {
   const unitUSD = target ? shareUSD(target) : fund?.shareUSD ?? pageShareUSD;
   const total = conv(unitUSD * q);
   const canGive = Boolean(giveCampaign || giveCategory);
+  // Saved with the donation so the team sees which fund (or designated waqf) and how many shares.
+  const waqfNote = `${t("eyebrow")} — ${mode === "general" && fund ? fund.name : t("mode_pick")} · ${q} ${t("sharesWord", { count: q })}`;
+
+  // Add to cart, so several waqfs (funds or projects) go through one checkout.
+  const { data: session } = useSession();
+  const [adding, setAdding] = useState(false);
+  const addToCart = async () => {
+    if (!canGive || adding) return;
+    setAdding(true);
+    try {
+      const amount = Math.round(total * 100) / 100;
+      const amountUSD = Math.round(unitUSD * q * 100) / 100;
+      const sharesText = t("sharesWord", { count: q });
+      if (mode === "general" && fund) {
+        const label = `${fund.name} — ${q} ${sharesText}`;
+        if (fund.project) {
+          await addLineToCart({ campaign: { id: fund.project.id, title: stripBoldMarkers(fund.project.title), image: fund.project.images?.[0] }, amount, amountUSD, currency: getCurrency(), shareCount: q, label }, Boolean(session?.user));
+        } else if (category) {
+          await addLineToCart({ category: { id: category.id, name: category.name, image: fund.image }, amount, amountUSD, currency: getCurrency(), label }, Boolean(session?.user));
+        }
+      } else if (target) {
+        await addLineToCart({ campaign: { id: target.id, title: stripBoldMarkers(target.title), image: target.images?.[0] }, amount, amountUSD, currency: getCurrency(), shareCount: q }, Boolean(session?.user));
+      }
+      toast.success(t("addedToCart"));
+    } catch {
+      toast.error(t("addToCartFailed"));
+    } finally {
+      setAdding(false);
+    }
+  };
   const [open, setOpen] = useState(false);
   const inGive = useInView("give");
+  const barShown = inGive && canGive && !open;
+  // The phone bar lifts the floating cart and WhatsApp buttons above it (globals.css).
+  useEffect(() => {
+    document.documentElement.classList.toggle("has-mobile-donate-bar", barShown);
+    return () => document.documentElement.classList.remove("has-mobile-donate-bar");
+  }, [barShown]);
   const word = (n: number) => t("shares", { count: n });
 
   const minShareUSD = pageShareUSD;
@@ -398,6 +437,10 @@ export default function WaqfPageContent() {
               className="mt-4 inline-flex h-[54px] w-full items-center justify-center gap-2 rounded-2xl bg-gold text-base font-extrabold text-deep shadow-[0_16px_30px_-16px_rgba(246,188,81,.9)] transition-transform hover:-translate-y-0.5 disabled:opacity-50">
               <Heart className="h-5 w-5" />{t("ctaShares", { shares: word(q), amount: money(total) })}
             </button>
+            <button type="button" disabled={!canGive || adding} onClick={addToCart}
+              className="mt-2.5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/[0.06] text-sm font-extrabold text-white transition-colors hover:bg-white/15 disabled:opacity-50">
+              <ShoppingCart className="h-4 w-4 text-gold" />{t("addToCart")}
+            </button>
             <ul className="mt-4 space-y-1.5 text-[12.5px] text-ice/75">
               <li className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-gold" />{tZ("secure")}</li>
               <li className="flex items-center gap-1.5"><InfinityIcon className="h-4 w-4 text-gold" />{t("trustForever")}</li>
@@ -407,7 +450,7 @@ export default function WaqfPageContent() {
       </section>
 
       {/* Mobile: one bar with the stepper and the button */}
-      {inGive && canGive && !open && (
+      {barShown && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-3 py-2.5 shadow-[0_-12px_30px_-18px_rgba(18,35,57,.45)] backdrop-blur lg:hidden">
           <div className="mx-auto flex max-w-xl items-center gap-2">
             <div className="flex items-center rounded-2xl bg-sand p-1">
@@ -415,6 +458,7 @@ export default function WaqfPageContent() {
               <span className="w-8 text-center text-lg font-black tabular-nums text-deep">{q}</span>
               <button type="button" aria-label={t("more")} onClick={() => setQty(q + 1)} className="grid h-10 w-10 place-items-center rounded-xl bg-gold text-deep"><Plus className="h-5 w-5" /></button>
             </div>
+            <button type="button" aria-label={t("addToCart")} disabled={adding} onClick={addToCart} className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-line bg-white text-deep disabled:opacity-50"><ShoppingCart className="h-5 w-5" /></button>
             <button type="button" onClick={() => setOpen(true)} className="h-12 flex-1 rounded-2xl bg-burgundy px-3 text-sm font-extrabold text-white">{t("cta", { amount: money(total) })}</button>
           </div>
         </div>
@@ -491,12 +535,13 @@ export default function WaqfPageContent() {
       </section>
 
       {open && giveCategory && (
-        <DonationDialog isOpen onClose={() => setOpen(false)} categoryId={giveCategory.id} categoryName={fund ? t(`fund_${fund.key}`) : giveCategory.name} categoryImage={giveCategory.image ?? undefined} initialDonationAmount={Math.round(total * 100) / 100} />
+        <DonationDialog isOpen onClose={() => setOpen(false)} categoryId={giveCategory.id} categoryName={fund ? fund.name : giveCategory.name} categoryImage={giveCategory.image ?? undefined} initialDonationAmount={Math.round(total * 100) / 100} note={waqfNote} />
       )}
       {open && giveCampaign && (
         <DonationDialog
           isOpen
           onClose={() => setOpen(false)}
+          note={waqfNote}
           campaignId={giveCampaign.id}
           campaignTitle={giveCampaign.title}
           campaignImage={giveCampaign.images?.[0]}

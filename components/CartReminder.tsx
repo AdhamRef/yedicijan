@@ -64,6 +64,7 @@ export default function CartReminder() {
       aria-label={label}
       title={label}
       onClick={() => window.dispatchEvent(new CustomEvent(CART_OPEN_EVENT))}
+      data-floating-action
       style={{ marginBottom: "env(safe-area-inset-bottom, 0px)" }}
       className="cart-reminder-in group fixed bottom-5 end-5 z-40 inline-flex items-center justify-center w-14 h-14 rounded-full bg-burgundy text-white shadow-lg shadow-gold/40 ring-1 ring-white/20 hover:bg-burgundyDark hover:shadow-xl hover:shadow-gold/50 hover:scale-[1.06] active:scale-95 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gold"
     >
